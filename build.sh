@@ -19,6 +19,10 @@ JNILIBS_DIR="android/app/src/main/jniLibs"
 ALL_ABIS=("arm64-v8a" "x86_64")
 DEFAULT_ABI="arm64-v8a"
 
+# ─── Version from pubspec.yaml (format: "1.0.0+5002") ───
+VERSION=$(grep "^version:" pubspec.yaml | head -1 | cut -d' ' -f2 | cut -d'+' -f1)
+VERSION_CODE=$(grep "^version:" pubspec.yaml | head -1 | cut -d' ' -f2 | cut -d'+' -f2)
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -84,7 +88,6 @@ download_abi_binaries() {
 
   local xray_abi=$abi
   [[ "$abi" == "x86_64" ]] && xray_abi="amd64"
-  [[ "$abi" == "armeabi-v7a" ]] && xray_abi="arm32-v7a"
 
   log "Скачиваем xray-core ($abi)..."
   local TMP_XRAY=$(mktemp -d)
@@ -103,7 +106,6 @@ download_abi_binaries() {
 
   log "Скачиваем tun2socks ($abi)..."
   local tun_file="tun2socks-linux-arm64"
-  [[ "$abi" == "armeabi-v7a" ]] && tun_file="tun2socks-linux-armv7"
   [[ "$abi" == "x86_64" ]] && tun_file="tun2socks-linux-amd64"
 
   local TMP_TUN=$(mktemp -d)
@@ -144,7 +146,31 @@ download_binaries() {
   log "Геоданные в $ASSETS_BIN"
 }
 
+rename_apks() {
+  local dir="build/app/outputs/flutter-apk"
+
+  # Remove broken armeabi-v7a (no xray binary for 32-bit ARM)
+  rm -f "$dir"/app-armeabi-v7a-release.apk*
+
+  echo ""
+  if ls "$dir"/app-arm64-v8a-release.apk 1>/dev/null 2>&1; then
+    for abi in arm64-v8a x86_64; do
+      local src="$dir/app-$abi-release.apk"
+      if [[ -f "$src" ]]; then
+        local dst="$dir/teapod-stream-$abi-release-$VERSION.apk"
+        mv "$src" "$dst"
+        ok "$dst"
+      fi
+    done
+  elif [[ -f "$dir/app-release.apk" ]]; then
+    local dst="$dir/teapod-stream-universal-release-$VERSION.apk"
+    mv "$dir/app-release.apk" "$dst"
+    ok "$dst"
+  fi
+}
+
 case "${1:-help}" in
+
   debug)
     log "Сборка DEBUG APK..."
     accept_sdk_licenses
@@ -155,13 +181,11 @@ case "${1:-help}" in
     ;;
 
   release)
-    log "Сборка RELEASE APK (all ABIs)..."
-    flutter clean >/dev/null 2>&1 || true
+    log "Сборка RELEASE APK (arm64 + x86_64)..."
     accept_sdk_licenses
     check_binaries true || true
-    flutter build apk --release --split-per-abi
-    ok "Release APKs:"
-    ls -lh build/app/outputs/flutter-apk/app-*-release.apk 2>/dev/null || true
+    flutter build apk --release --split-per-abi --target-platform android-arm64,android-x64
+    rename_apks
     ;;
 
   aab)
@@ -188,6 +212,43 @@ case "${1:-help}" in
     download_binaries
     ;;
 
+  push)
+    dir="build/app/outputs/flutter-apk"
+    tag="v$VERSION"
+
+    # Find APK files
+    apks=("$dir"/teapod-stream-*-release-"$VERSION".apk)
+    if [[ ! -f "${apks[0]}" ]]; then
+      err "APK не найдены! Сначала выполните: ./build.sh release"
+    fi
+
+    # Check if gh is installed
+    if ! command -v gh &>/dev/null; then
+      err "gh CLI не найден! Установите: brew install gh && gh auth login"
+    fi
+
+    # Check if authenticated
+    if ! gh auth status &>/dev/null; then
+      err "Не авторизован в gh! Выполните: gh auth login"
+    fi
+
+    log "Создаю релиз $tag ($VERSION)..."
+
+    # Check if tag already exists
+    if gh release view "$tag" &>/dev/null; then
+      warn "Релиз $tag уже существует, обновляю..."
+      gh release upload "$tag" "${apks[@]}" --clobber
+    else
+      gh release create "$tag" \
+        --title "TeapodStream $VERSION" \
+        --generate-notes \
+        "${apks[@]}"
+    fi
+
+    ok "Релиз $tag опубликован:"
+    gh release view "$tag" --json url --jq '.url'
+    ;;
+
   clean)
     log "Очистка..."
     flutter clean
@@ -205,6 +266,7 @@ case "${1:-help}" in
     echo "    ./build.sh aab          Собрать AAB"
     echo "    ./build.sh run          Запустить debug на устройстве"
     echo "    ./build.sh run-release  Запустить release на устройстве"
+    echo "    ./build.sh push          Опубликовать релиз на GitHub"
     echo "    ./build.sh clean        Очистить артефакты"
     echo ""
     ;;

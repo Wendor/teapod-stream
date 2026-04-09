@@ -34,16 +34,6 @@ android {
         versionName = flutter.versionName
     }
 
-    splits {
-        abi {
-            isEnable = true
-            reset()
-            // xray-core doesn't provide armeabi-v7a binaries
-            include("arm64-v8a", "x86_64")
-            isUniversalApk = false
-        }
-    }
-
     buildFeatures {
         buildConfig = true
     }

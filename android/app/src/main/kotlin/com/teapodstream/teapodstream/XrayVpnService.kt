@@ -359,8 +359,8 @@ class XrayVpnService : VpnService() {
                 }
 
                 override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
-                    // Network type changed, update
-                    updateUnderlyingNetworks(cm)
+                    // Ignored: fires too frequently on some devices (Huawei)
+                    // and repeated setUnderlyingNetworks() breaks xray TCP connections
                 }
             }
             val request = NetworkRequest.Builder()

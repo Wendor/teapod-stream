@@ -8,7 +8,7 @@ class XrayConfigBuilder {
     final dnsBlock = _buildDnsBlock(options);
 
     return {
-      'log': {'loglevel': 'warning'},
+      'log': {'loglevel': options.logLevel.name},
       'dns': dnsBlock,
       'inbounds': [
         {

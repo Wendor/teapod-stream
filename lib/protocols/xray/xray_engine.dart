@@ -139,6 +139,7 @@ class XrayEngine implements VpnEngine {
   }
 
   void _startStatsPolling() {
+    _stopStatsPolling(); // Cancel any existing timer first
     _statsTimer = Timer.periodic(
       const Duration(milliseconds: AppConstants.statsUpdateInterval),
       (_) => _fetchStats(),
@@ -148,6 +149,14 @@ class XrayEngine implements VpnEngine {
   void _stopStatsPolling() {
     _statsTimer?.cancel();
     _statsTimer = null;
+  }
+
+  /// Restarts stream subscriptions after app wake from background.
+  /// Called by vpn_provider when syncNativeState detects connected state.
+  Future<void> reconnectStreams() async {
+    _startStatsPolling();
+    // Fetch stats immediately instead of waiting for next tick
+    await _fetchStats();
   }
 
   Future<void> _fetchStats() async {
@@ -170,9 +179,14 @@ class XrayEngine implements VpnEngine {
     _setState(VpnState.connecting);
     _addLog(VpnLogEntry.info(
         'Connecting to ${config.name} (${config.address}:${config.port})'));
+    _addLog(VpnLogEntry.debug(
+        'SOCKS port: ${options.socksPort}, UDP: ${options.enableUdp}'));
+    _addLog(VpnLogEntry.debug(
+        'DNS mode: ${options.dnsMode}, server: ${options.dnsServer.address}'));
 
     try {
       final xrayConfig = XrayConfigBuilder.buildJson(config, options);
+      _addLog(VpnLogEntry.debug('Xray config generated (${xrayConfig.length} bytes)'));
 
       await _channel.invokeMethod('connect', {
         'xrayConfig': xrayConfig,

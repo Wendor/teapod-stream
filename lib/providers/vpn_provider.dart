@@ -159,6 +159,12 @@ class VpnNotifier extends Notifier<VpnState2> {
       if (state.connectionState != mappedState) {
         state = state.copyWith(connectionState: mappedState);
       }
+
+      // If native says we're connected but stats aren't flowing,
+      // restart the engine's internal polling
+      if (mappedState == VpnState.connected) {
+        await _engine.reconnectStreams();
+      }
     } catch (_) {
       // If sync fails, leave the state as-is
     }

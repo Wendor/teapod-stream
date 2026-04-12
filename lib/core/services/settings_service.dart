@@ -3,10 +3,18 @@ import '../models/vpn_log_entry.dart';
 import '../models/dns_config.dart';
 import '../constants/app_constants.dart';
 
+/// Режим работы VPN
+enum VpnMode {
+  allExcept,    // Все через VPN, кроме выбранных
+  onlySelected, // Только выбранные через VPN, остальные мимо
+}
+
 class AppSettings {
   final int socksPort;
   final LogLevel logLevel;
   final Set<String> excludedPackages;
+  final Set<String> includedPackages;
+  final VpnMode vpnMode;
   final bool splitTunnelingEnabled;
   final bool randomPort;
   final bool autoConnect;
@@ -21,6 +29,8 @@ class AppSettings {
     this.socksPort = AppConstants.defaultSocksPort,
     this.logLevel = LogLevel.info,
     this.excludedPackages = const {},
+    this.includedPackages = const {},
+    this.vpnMode = VpnMode.allExcept,
     this.splitTunnelingEnabled = false,
     this.randomPort = true,
     this.autoConnect = false,
@@ -36,6 +46,8 @@ class AppSettings {
     int? socksPort,
     LogLevel? logLevel,
     Set<String>? excludedPackages,
+    Set<String>? includedPackages,
+    VpnMode? vpnMode,
     bool? splitTunnelingEnabled,
     bool? randomPort,
     bool? autoConnect,
@@ -50,8 +62,9 @@ class AppSettings {
       socksPort: socksPort ?? this.socksPort,
       logLevel: logLevel ?? this.logLevel,
       excludedPackages: excludedPackages ?? this.excludedPackages,
-      splitTunnelingEnabled:
-          splitTunnelingEnabled ?? this.splitTunnelingEnabled,
+      includedPackages: includedPackages ?? this.includedPackages,
+      vpnMode: vpnMode ?? this.vpnMode,
+      splitTunnelingEnabled: splitTunnelingEnabled ?? this.splitTunnelingEnabled,
       randomPort: randomPort ?? this.randomPort,
       autoConnect: autoConnect ?? this.autoConnect,
       dnsMode: dnsMode ?? this.dnsMode,
@@ -83,10 +96,13 @@ class SettingsService {
   static const _customDnsTypeKey = 'custom_dns_type';
   static const _enableUdpKey = 'enable_udp';
   static const _randomCredentialsKey = 'random_credentials';
+  static const _vpnModeKey = 'vpn_mode';
+  static const _includedPackagesKey = 'included_packages';
 
   Future<AppSettings> load() async {
     final prefs = await SharedPreferences.getInstance();
     final excluded = (prefs.getStringList(_excludedPackagesKey) ?? []).toSet();
+    final included = (prefs.getStringList(_includedPackagesKey) ?? []).toSet();
     return AppSettings(
       socksPort: prefs.getInt(_socksPortKey) ?? AppConstants.defaultSocksPort,
       logLevel: LogLevel.values.firstWhere(
@@ -94,6 +110,11 @@ class SettingsService {
         orElse: () => LogLevel.info,
       ),
       excludedPackages: excluded,
+      includedPackages: included,
+      vpnMode: VpnMode.values.firstWhere(
+        (e) => e.name == prefs.getString(_vpnModeKey),
+        orElse: () => VpnMode.allExcept,
+      ),
       splitTunnelingEnabled: prefs.getBool(_splitTunnelingKey) ?? false,
       randomPort: prefs.getBool(_randomPortKey) ?? true,
       autoConnect: prefs.getBool(_autoConnectKey) ?? false,
@@ -115,6 +136,9 @@ class SettingsService {
     await prefs.setString(_logLevelKey, settings.logLevel.name);
     await prefs.setStringList(
         _excludedPackagesKey, settings.excludedPackages.toList());
+    await prefs.setStringList(
+        _includedPackagesKey, settings.includedPackages.toList());
+    await prefs.setString(_vpnModeKey, settings.vpnMode.name);
     await prefs.setBool(_splitTunnelingKey, settings.splitTunnelingEnabled);
     await prefs.setBool(_randomPortKey, settings.randomPort);
     await prefs.setBool(_autoConnectKey, settings.autoConnect);

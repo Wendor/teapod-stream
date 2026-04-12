@@ -33,7 +33,7 @@ class _AppShell extends ConsumerStatefulWidget {
   ConsumerState<_AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends ConsumerState<_AppShell> {
+class _AppShellState extends ConsumerState<_AppShell> with WidgetsBindingObserver {
   int _currentIndex = 0;
   bool _autoConnectAttempted = false;
 
@@ -47,11 +47,26 @@ class _AppShellState extends ConsumerState<_AppShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_autoConnectAttempted) return;
       _autoConnectAttempted = true;
       _tryAutoConnect();
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Sync VPN state with native service when app resumes
+      ref.read(vpnProvider.notifier).syncNativeState();
+    }
   }
 
   Future<void> _tryAutoConnect() async {

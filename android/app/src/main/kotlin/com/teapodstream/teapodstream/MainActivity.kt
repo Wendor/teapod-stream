@@ -44,6 +44,8 @@ class MainActivity : FlutterActivity() {
                         val socksUser = call.argument<String>("socksUser") ?: ""
                         val socksPassword = call.argument<String>("socksPassword") ?: ""
                         val excludedPackages = call.argument<List<String>>("excludedPackages") ?: emptyList()
+                        val includedPackages = call.argument<List<String>>("includedPackages") ?: emptyList()
+                        val vpnMode = call.argument<String>("vpnMode") ?: "allExcept"
                         val tunAddress = call.argument<String>("tunAddress") ?: "198.18.0.1"
                         val tunNetmask = call.argument<String>("tunNetmask") ?: "255.255.0.0"
                         val tunMtu = call.argument<Int>("tunMtu") ?: 1500
@@ -53,8 +55,8 @@ class MainActivity : FlutterActivity() {
                         requestVpnPermission(result) {
                             startVpnService(
                                 xrayConfig, socksPort, socksUser, socksPassword,
-                                excludedPackages, tunAddress, tunNetmask, tunMtu,
-                                tunDns, enableUdp
+                                excludedPackages, includedPackages, vpnMode,
+                                tunAddress, tunNetmask, tunMtu, tunDns, enableUdp
                             )
                             result.success(null)
                         }
@@ -119,6 +121,10 @@ class MainActivity : FlutterActivity() {
                         }.start()
                     }
 
+                    "getState" -> {
+                        result.success(XrayVpnService.getNativeState())
+                    }
+
                     else -> result.notImplemented()
                 }
             }
@@ -161,6 +167,8 @@ class MainActivity : FlutterActivity() {
         socksUser: String,
         socksPassword: String,
         excludedPackages: List<String>,
+        includedPackages: List<String>,
+        vpnMode: String,
         tunAddress: String,
         tunNetmask: String,
         tunMtu: Int,
@@ -174,6 +182,8 @@ class MainActivity : FlutterActivity() {
             putExtra(XrayVpnService.EXTRA_SOCKS_USER, socksUser)
             putExtra(XrayVpnService.EXTRA_SOCKS_PASSWORD, socksPassword)
             putExtra(XrayVpnService.EXTRA_EXCLUDED_PACKAGES, ArrayList(excludedPackages))
+            putExtra(XrayVpnService.EXTRA_INCLUDED_PACKAGES, ArrayList(includedPackages))
+            putExtra(XrayVpnService.EXTRA_VPN_MODE, vpnMode)
             putExtra(XrayVpnService.EXTRA_TUN_ADDRESS, tunAddress)
             putExtra(XrayVpnService.EXTRA_TUN_NETMASK, tunNetmask)
             putExtra(XrayVpnService.EXTRA_TUN_MTU, tunMtu)

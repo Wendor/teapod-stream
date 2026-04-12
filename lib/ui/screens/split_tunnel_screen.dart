@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/app_info.dart';
+import '../../core/services/settings_service.dart';
 import '../../providers/apps_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../theme/app_colors.dart';
@@ -15,17 +17,50 @@ class SplitTunnelScreen extends ConsumerStatefulWidget {
 class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
   String _search = '';
 
+  void _togglePackage(String pkg, bool isOnlySelected, WidgetRef ref) {
+    final settings = ref.read(settingsProvider).maybeWhen(
+      data: (d) => d,
+      orElse: () => null,
+    );
+    if (settings == null) return;
+
+    if (isOnlySelected) {
+      final newIncluded = Set<String>.from(settings.includedPackages);
+      if (newIncluded.contains(pkg)) {
+        newIncluded.remove(pkg);
+      } else {
+        newIncluded.add(pkg);
+      }
+      ref.read(settingsProvider.notifier).save(
+        settings.copyWith(includedPackages: newIncluded),
+      );
+    } else {
+      final newExcluded = Set<String>.from(settings.excludedPackages);
+      if (newExcluded.contains(pkg)) {
+        newExcluded.remove(pkg);
+      } else {
+        newExcluded.add(pkg);
+      }
+      ref.read(settingsProvider.notifier).save(
+        settings.copyWith(excludedPackages: newExcluded),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final appsAsync = ref.watch(installedAppsProvider);
     final settings = ref.watch(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
-    final excluded = settings?.excludedPackages ?? {};
+    final isOnlySelected = settings?.vpnMode == VpnMode.onlySelected;
+    final packages = isOnlySelected
+        ? (settings?.includedPackages ?? {})
+        : (settings?.excludedPackages ?? {});
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Исключения'),
+        title: Text(isOnlySelected ? 'Выбранные приложения' : 'Исключения'),
         actions: [
-          if (excluded.isNotEmpty)
+          if (packages.isNotEmpty)
             Center(
               child: Container(
                 margin: const EdgeInsets.only(right: 16),
@@ -35,7 +70,7 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  '${excluded.length}',
+                  '${packages.length}',
                   style: const TextStyle(
                     color: AppColors.primary,
                     fontWeight: FontWeight.w600,
@@ -47,7 +82,7 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
       ),
       body: Column(
         children: [
-          // Info banner
+          // Mode toggle
           Container(
             padding: const EdgeInsets.all(14),
             margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -55,19 +90,56 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
               color: AppColors.surfaceElevated,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Row(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.info_outline, color: AppColors.primary, size: 18),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Выбранные приложения будут выходить напрямую в интернет, '
-                    'минуя VPN-туннель.',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 13,
+                Row(
+                  children: [
+                    Icon(Icons.tune_rounded, color: AppColors.primary, size: 18),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text(
+                        'Режим VPN',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SegmentedButton<VpnMode>(
+                  segments: const [
+                    ButtonSegment(
+                      value: VpnMode.allExcept,
+                      label: Text('Все, кроме'),
+                      icon: Icon(Icons.block_rounded, size: 16),
+                    ),
+                    ButtonSegment(
+                      value: VpnMode.onlySelected,
+                      label: Text('Выбранные'),
+                      icon: Icon(Icons.check_circle_rounded, size: 16),
+                    ),
+                  ],
+                  selected: {settings?.vpnMode ?? VpnMode.allExcept},
+                  onSelectionChanged: (modes) {
+                    if (modes.isNotEmpty) {
+                      ref.read(settingsProvider.notifier).save(
+                        settings!.copyWith(vpnMode: modes.first),
+                      );
+                    }
+                  },
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  isOnlySelected
+                      ? 'Через VPN пойдут только выбранные приложения'
+                      : 'Все приложения идут через VPN, кроме выбранных',
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
                   ),
                 ),
               ],
@@ -114,12 +186,10 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
                   itemCount: filtered.length,
                   itemBuilder: (context, i) {
                     final app = filtered[i];
-                    final isExcluded = excluded.contains(app.packageName);
+                    final isIncluded = packages.contains(app.packageName);
                     return _AppListTile(
-                      app: app.copyWith(isExcluded: isExcluded),
-                      onToggle: () => ref
-                          .read(settingsProvider.notifier)
-                          .toggleExcludedPackage(app.packageName),
+                      app: app.copyWith(isExcluded: isIncluded),
+                      onToggle: () => _togglePackage(app.packageName, isOnlySelected, ref),
                     );
                   },
                 );

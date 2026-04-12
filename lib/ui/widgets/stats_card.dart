@@ -32,14 +32,14 @@ class _StatsCardState extends State<StatsCard> {
         children: [
           // Stats rows
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            padding: const EdgeInsets.all(16),
             child: Column(
               children: [
                 Row(
                   children: [
                     _StatItem(
                       icon: Icons.arrow_upward_rounded,
-                      label: 'Скорость отдачи',
+                      label: 'Отдача',
                       value: isActive
                           ? VpnStats.formatSpeed(widget.stats.uploadSpeedBps)
                           : '—',
@@ -48,7 +48,7 @@ class _StatsCardState extends State<StatsCard> {
                     const SizedBox(width: 12),
                     _StatItem(
                       icon: Icons.arrow_downward_rounded,
-                      label: 'Скорость загрузки',
+                      label: 'Загрузка',
                       value: isActive
                           ? VpnStats.formatSpeed(
                               widget.stats.downloadSpeedBps)
@@ -71,7 +71,7 @@ class _StatsCardState extends State<StatsCard> {
                     const SizedBox(width: 12),
                     _StatItem(
                       icon: Icons.cloud_download_outlined,
-                      label: 'Получено',
+                      label: 'Загружено',
                       value: isActive
                           ? VpnStats.formatBytes(widget.stats.downloadBytes)
                           : '—',

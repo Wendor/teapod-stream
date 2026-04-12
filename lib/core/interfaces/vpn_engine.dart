@@ -2,6 +2,7 @@ import '../models/vpn_config.dart';
 import '../models/vpn_stats.dart';
 import '../models/vpn_log_entry.dart';
 import '../models/dns_config.dart';
+import '../services/settings_service.dart';
 
 enum VpnState { disconnected, connecting, connected, disconnecting, error }
 
@@ -28,10 +29,12 @@ class VpnEngineOptions {
   final String socksUser;
   final String socksPassword;
   final Set<String> excludedPackages;
+  final Set<String> includedPackages;
   final LogLevel logLevel;
   final bool enableUdp;
   final DnsMode dnsMode;
   final DnsServerConfig dnsServer;
+  final VpnMode vpnMode;
 
   const VpnEngineOptions({
     required this.socksPort,
@@ -39,9 +42,11 @@ class VpnEngineOptions {
     required this.socksUser,
     required this.socksPassword,
     this.excludedPackages = const {},
+    this.includedPackages = const {},
     this.logLevel = LogLevel.info,
     this.enableUdp = true,
     this.dnsMode = DnsMode.proxy,
     this.dnsServer = const DnsServerConfig(type: DnsType.udp, address: '1.1.1.1'),
+    this.vpnMode = VpnMode.allExcept,
   });
 }

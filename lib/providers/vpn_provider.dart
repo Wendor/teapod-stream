@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../core/interfaces/vpn_engine.dart';
@@ -109,12 +110,20 @@ class VpnNotifier extends Notifier<VpnState2> {
       socksUser: _socksCredentials!.user,
       socksPassword: _socksCredentials!.password,
       excludedPackages: settings.splitTunnelingEnabled
-          ? settings.excludedPackages
+          ? (settings.vpnMode == VpnMode.allExcept
+              ? settings.excludedPackages
+              : <String>{})
+          : {},
+      includedPackages: settings.splitTunnelingEnabled
+          ? (settings.vpnMode == VpnMode.onlySelected
+              ? settings.includedPackages
+              : <String>{})
           : {},
       logLevel: settings.logLevel,
       enableUdp: settings.enableUdp,
       dnsMode: settings.dnsMode,
       dnsServer: settings.dnsServer,
+      vpnMode: settings.vpnMode,
     );
 
     await _engine.connect(config, options);
@@ -122,6 +131,37 @@ class VpnNotifier extends Notifier<VpnState2> {
 
   Future<void> disconnect() async {
     await _engine.disconnect();
+  }
+
+  /// Syncs the Flutter VPN state with the native service state.
+  /// Called when the app resumes from background.
+  Future<void> syncNativeState() async {
+    try {
+      const channel = MethodChannel('com.teapodstream/vpn');
+      final nativeState = await channel.invokeMethod<String>('getState');
+      if (nativeState == null) return;
+
+      final VpnState mappedState;
+      switch (nativeState) {
+        case 'connected':
+          mappedState = VpnState.connected;
+          break;
+        case 'connecting':
+          mappedState = VpnState.connecting;
+          break;
+        case 'error':
+          mappedState = VpnState.error;
+          break;
+        default:
+          mappedState = VpnState.disconnected;
+      }
+
+      if (state.connectionState != mappedState) {
+        state = state.copyWith(connectionState: mappedState);
+      }
+    } catch (_) {
+      // If sync fails, leave the state as-is
+    }
   }
 
   Future<void> toggle() async {

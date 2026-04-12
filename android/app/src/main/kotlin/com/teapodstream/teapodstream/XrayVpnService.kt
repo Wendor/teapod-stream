@@ -36,11 +36,17 @@ class XrayVpnService : VpnService() {
         const val EXTRA_SOCKS_USER = "socks_user"
         const val EXTRA_SOCKS_PASSWORD = "socks_password"
         const val EXTRA_EXCLUDED_PACKAGES = "excluded_packages"
+        const val EXTRA_INCLUDED_PACKAGES = "included_packages"
+        const val EXTRA_VPN_MODE = "vpn_mode"
         const val EXTRA_TUN_ADDRESS = "tun_address"
         const val EXTRA_TUN_NETMASK = "tun_netmask"
         const val EXTRA_TUN_MTU = "tun_mtu"
         const val EXTRA_TUN_DNS = "tun_dns"
         const val EXTRA_ENABLE_UDP = "enable_udp"
+
+        // Static state tracker for querying from Dart
+        @Volatile private var currentNativeState: String = "disconnected"
+        @JvmStatic fun getNativeState(): String = currentNativeState
 
         private const val NOTIFICATION_CHANNEL_ID = "vpn_service"
         private const val NOTIFICATION_ID = 1
@@ -83,6 +89,8 @@ class XrayVpnService : VpnService() {
     private var statsThread: Thread? = null
     private var isRunning = false
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private var lastNetworkUpdate: Long = 0
+    private val networkUpdateDebounceMs = 5000L // 5 seconds
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_DISCONNECT) {
@@ -97,20 +105,37 @@ class XrayVpnService : VpnService() {
             val socksUser = intent.getStringExtra(EXTRA_SOCKS_USER) ?: ""
             val socksPassword = intent.getStringExtra(EXTRA_SOCKS_PASSWORD) ?: ""
             val excludedPackages = intent.getStringArrayListExtra(EXTRA_EXCLUDED_PACKAGES) ?: arrayListOf()
+            val includedPackages = intent.getStringArrayListExtra(EXTRA_INCLUDED_PACKAGES) ?: arrayListOf()
+            val vpnMode = intent.getStringExtra(EXTRA_VPN_MODE) ?: "allExcept"
             val tunAddress = intent.getStringExtra(EXTRA_TUN_ADDRESS) ?: "10.0.0.1"
             val tunNetmask = intent.getStringExtra(EXTRA_TUN_NETMASK) ?: "255.255.255.0"
             val tunMtu = intent.getIntExtra(EXTRA_TUN_MTU, 1500)
             val tunDns = intent.getStringExtra(EXTRA_TUN_DNS) ?: "1.1.1.1"
-            startVpn(xrayConfig, socksPort, socksUser, socksPassword, excludedPackages, tunAddress, tunNetmask, tunMtu, tunDns)
+            startVpn(xrayConfig, socksPort, socksUser, socksPassword,
+                excludedPackages, includedPackages, vpnMode,
+                tunAddress, tunNetmask, tunMtu, tunDns)
             return START_STICKY
         }
         return START_NOT_STICKY
     }
 
-    private fun startVpn(xrayConfig: String, socksPort: Int, socksUser: String, socksPassword: String, excludedPackages: List<String>, tunAddress: String, tunNetmask: String, tunMtu: Int, tunDns: String) {
+    private fun startVpn(
+        xrayConfig: String,
+        socksPort: Int,
+        socksUser: String,
+        socksPassword: String,
+        excludedPackages: List<String>,
+        includedPackages: List<String>,
+        vpnMode: String,
+        tunAddress: String,
+        tunNetmask: String,
+        tunMtu: Int,
+        tunDns: String,
+    ) {
         if (isRunning) return
         isRunning = true
-        VpnEventStreamHandler.sendStateEvent("connecting")
+        currentNativeState = "connecting"
+            VpnEventStreamHandler.sendStateEvent("connecting")
         log("info", "Starting VPN")
 
         try {
@@ -137,10 +162,33 @@ class XrayVpnService : VpnService() {
                 }
             }
 
-            builder.addDisallowedApplication(packageName)
-            for (pkg in excludedPackages) {
-                try { builder.addDisallowedApplication(pkg) } catch (_: Exception) {}
+            // Apply split tunneling based on VPN mode
+            if (vpnMode == "onlySelected") {
+                // Only selected apps go through VPN (addAllowedApplication)
+                // Requires Android 10+ (API 29)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    for (pkg in includedPackages) {
+                        try {
+                            builder.addAllowedApplication(pkg)
+                            log("info", "Allowed: $pkg")
+                        } catch (e: Exception) {
+                            log("warning", "Failed to allow $pkg: ${e.message}")
+                        }
+                    }
+                } else {
+                    log("warning", "onlySelected mode requires Android 10+, falling back to allExcept")
+                    for (pkg in excludedPackages) {
+                        try { builder.addDisallowedApplication(pkg) } catch (_: Exception) {}
+                    }
+                }
+            } else {
+                // All apps go through VPN, except excluded (default behavior)
+                for (pkg in excludedPackages) {
+                    try { builder.addDisallowedApplication(pkg) } catch (_: Exception) {}
+                }
             }
+            // Always exclude own app to prevent routing loops
+            builder.addDisallowedApplication(packageName)
 
             // Raise fd limit - done in child process via native code
             val fdResult = nativeSetMaxFds(65536)
@@ -208,10 +256,12 @@ class XrayVpnService : VpnService() {
 
             startStatsMonitoring()
             registerNetworkCallback()
+            currentNativeState = "connected"
             VpnEventStreamHandler.sendStateEvent("connected")
             log("info", "VPN connected successfully")
         } catch (e: Exception) {
             log("error", "Start failed: ${e.message}")
+            currentNativeState = "error"
             VpnEventStreamHandler.sendStateEvent("error")
             stopVpn()
         }
@@ -243,6 +293,7 @@ class XrayVpnService : VpnService() {
         xrayProcess?.destroy()
         tunInterface?.close()
         tunInterface = null
+        currentNativeState = "disconnected"
         VpnEventStreamHandler.sendStateEvent("disconnected")
     }
 
@@ -318,6 +369,12 @@ class XrayVpnService : VpnService() {
     }
 
     private fun updateUnderlyingNetworks(cm: ConnectivityManager) {
+        val now = System.currentTimeMillis()
+        if (now - lastNetworkUpdate < networkUpdateDebounceMs) {
+            return // Debounce: skip updates within 5 seconds
+        }
+        lastNetworkUpdate = now
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val activeNetwork = cm.activeNetwork
             if (activeNetwork != null) {

@@ -180,6 +180,8 @@ class XrayEngine implements VpnEngine {
         'socksUser': options.socksUser,
         'socksPassword': options.socksPassword,
         'excludedPackages': options.excludedPackages.toList(),
+        'includedPackages': options.includedPackages.toList(),
+        'vpnMode': options.vpnMode.name,
         'tunAddress': AppConstants.tunAddress,
         'tunNetmask': AppConstants.tunNetmask,
         'tunMtu': AppConstants.tunMtu,

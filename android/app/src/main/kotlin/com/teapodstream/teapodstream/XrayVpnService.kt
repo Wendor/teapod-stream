@@ -100,6 +100,8 @@ class XrayVpnService : VpnService() {
 
     override fun onCreate() {
         super.onCreate()
+        // Контекст для обновления Quick Settings плитки
+        VpnEventStreamHandler.appContext = applicationContext
         // Register VPN socket protector so xray-core sockets bypass the tunnel (prevents routing loop).
         // Done once at service creation — protect() is always valid while service is alive.
         Teapodcore.registerVpnProtector(object : VpnProtector {
@@ -161,6 +163,7 @@ class XrayVpnService : VpnService() {
                 return START_STICKY
             }
             ACTION_CONNECT_QUICK -> {
+                ensureForeground()
                 val params = loadConnectionParams()
                 val configFile = File(filesDir, "xray_config.json")
                 if (params != null && configFile.exists()) {
@@ -517,6 +520,13 @@ class XrayVpnService : VpnService() {
             log("warning", "Failed to start prefix proxy: ${e.message}")
             null
         }
+    }
+
+    override fun onRevoke() {
+        // Вызывается Android, когда VPN отключен извне (системные настройки, другой VPN)
+        log("info", "VPN revoked by system")
+        stopVpn()
+        stopSelf()
     }
 
     private fun stopVpn(resultState: String = "disconnected") {

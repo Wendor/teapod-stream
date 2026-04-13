@@ -141,6 +141,11 @@ class XrayVpnService : VpnService() {
         try {
             val configFile = File(filesDir, "xray_config.json")
             configFile.writeText(xrayConfig)
+            // Ограничиваем доступ к файлу конфигурации (содержит секреты)
+            configFile.setReadable(false, false)
+            configFile.setReadable(true, true)
+            configFile.setWritable(false, false)
+            configFile.setWritable(true, true)
             prepareBinaries(this)
 
             val builder = Builder()
@@ -246,7 +251,13 @@ class XrayVpnService : VpnService() {
                 "-tcp-rcvbuf", "524288",
                 "-tcp-auto-tuning",
             )
-            log("info", "Starting tun2socks (native): ${t2sArgs.joinToString(" ")}")
+            // Маскируем учётные данные в логах для безопасности
+            val safeArgs = t2sArgs.map { arg ->
+                if (arg.startsWith("socks5://") && arg.contains("@")) {
+                    arg.replace(Regex("://[^@]+@"), "://***:***@")
+                } else arg
+            }
+            log("info", "Starting tun2socks (native): ${safeArgs.joinToString(" ")}")
             tun2socksPid = nativeStartProcessWithFd(tun2socksBin.absolutePath, t2sArgs, emptyArray(), emptyArray(), tunFd, 65536)
             if (tun2socksPid < 0) {
                 throw IllegalStateException("nativeStartProcessWithFd failed: errno=${-tun2socksPid}")

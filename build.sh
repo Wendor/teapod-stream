@@ -39,16 +39,36 @@ warn() { echo -e "${YELLOW}⚠ $*${NC}"; }
 err()  { echo -e "${RED}✗ $*${NC}"; exit 1; }
 
 accept_sdk_licenses() {
-  log "Проверяем лицензии Android SDK..."
   export JAVA_HOME="/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home"
   export ANDROID_HOME="/opt/homebrew/share/android-commandlinetools"
   export ANDROID_SDK_ROOT="/opt/homebrew/share/android-commandlinetools"
 
+  # Android SDK лицензии хранятся в $ANDROID_HOME/licenses/. Если папка существует
+  # и не пустая — лицензии уже приняты, пропускаем. Запускать flutter doctor
+  # при каждом билде дорого (~5-10 сек).
+  local licenses_dir="$ANDROID_HOME/licenses"
+  if [[ -d "$licenses_dir" ]] && [[ -n "$(ls -A "$licenses_dir" 2>/dev/null)" ]]; then
+    return 0
+  fi
+
+  log "Принимаем лицензии Android SDK (первый раз)..."
   local sdk_manager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
   if [[ -x "$sdk_manager" ]]; then
     yes | "$sdk_manager" --licenses >/dev/null 2>&1 || true
   fi
   yes | flutter doctor --android-licenses >/dev/null 2>&1 || true
+}
+
+ensure_pub() {
+  # Запускаем pub get только если pubspec.yaml или pubspec.lock изменились
+  # с момента последнего успешного pub get (смотрим на .dart_tool/package_config.json).
+  local pkg_config=".dart_tool/package_config.json"
+  if [[ ! -f "$pkg_config" ]] \
+      || [[ "pubspec.yaml" -nt "$pkg_config" ]] \
+      || [[ "pubspec.lock" -nt "$pkg_config" ]]; then
+    log "pubspec изменился, запускаем flutter pub get..."
+    flutter pub get
+  fi
 }
 
 check_binaries() {
@@ -278,7 +298,8 @@ case "${1:-help}" in
     log "Сборка DEBUG APK..."
     accept_sdk_licenses
     check_binaries || true
-    flutter build apk --debug
+    ensure_pub
+    flutter build apk --debug --no-pub
     APK="build/app/outputs/flutter-apk/app-debug.apk"
     ok "Debug APK: $APK ($(du -sh "$APK" | cut -f1))"
     ;;
@@ -287,22 +308,20 @@ case "${1:-help}" in
     log "Сборка RELEASE APK (arm64 + x86_64)..."
     accept_sdk_licenses
     check_binaries true || true
-    
-    # Сборка по очереди для каждой архитектуры, чтобы избежать конфликта AAR в Gradle
-    # (каждый AAR содержит те же Kotlin-классы, что вызывает ошибку Duplicate class в Gradle)
+    ensure_pub
+
+    # Каждый AAR содержит те же Kotlin-классы → Duplicate class в Gradle,
+    # поэтому собираем по одной архитектуре за раз с --no-pub.
     dir="build/app/outputs/flutter-apk"
-    
-    # Удаляем старые APK перед сборкой
     rm -f "$dir"/app-*-release.apk
-    
+
     for plat in android-arm64 android-x64; do
       abi="arm64-v8a"
       [[ "$plat" == "android-x64" ]] && abi="x86_64"
-      
+
       log "Сборка архитектуры: $abi ($plat)..."
       flutter build apk --release --target-platform "$plat" --no-pub
-      
-      # Flutter создает файл app-release.apk. Переименуем его в формат, ожидаемый rename_apks
+
       if [[ -f "$dir/app-release.apk" ]]; then
         mv "$dir/app-release.apk" "$dir/app-$abi-release.apk"
         ok "Сборка $abi завершена"
@@ -318,20 +337,23 @@ case "${1:-help}" in
     log "Сборка RELEASE AAB..."
     accept_sdk_licenses
     check_binaries || warn "Продолжаем без бинарников"
-    flutter build appbundle --release
+    ensure_pub
+    flutter build appbundle --release --no-pub
     ok "AAB: build/app/outputs/bundle/release/app-release.aab"
     ;;
 
   run)
     log "Запуск DEBUG..."
     check_binaries || true
-    flutter run --debug
+    ensure_pub
+    flutter run --debug --no-pub
     ;;
 
   run-release)
     log "Запуск RELEASE..."
     check_binaries || warn "Бинарники отсутствуют"
-    flutter run --release
+    ensure_pub
+    flutter run --release --no-pub
     ;;
 
   binaries)

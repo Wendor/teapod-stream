@@ -45,6 +45,7 @@ class XrayVpnService : VpnService() {
         const val EXTRA_TUN_DNS = "tun_dns"
         const val EXTRA_ENABLE_UDP = "enable_udp"
         const val EXTRA_SS_PREFIX = "ss_prefix" // hex-encoded Outline prefix bytes
+        const val EXTRA_PROXY_ONLY = "proxy_only" // start only SOCKS proxy, no VPN tunnel
 
         // Static state tracker for querying from Dart
         @Volatile private var currentNativeState: String = "disconnected"
@@ -115,9 +116,10 @@ class XrayVpnService : VpnService() {
             val tunMtu = intent.getIntExtra(EXTRA_TUN_MTU, 1500)
             val tunDns = intent.getStringExtra(EXTRA_TUN_DNS) ?: "1.1.1.1"
             val ssPrefix = intent.getStringExtra(EXTRA_SS_PREFIX)
+            val proxyOnly = intent.getBooleanExtra(EXTRA_PROXY_ONLY, false)
             startVpn(xrayConfig, socksPort, socksUser, socksPassword,
                 excludedPackages, includedPackages, vpnMode,
-                tunAddress, tunNetmask, tunMtu, tunDns, ssPrefix)
+                tunAddress, tunNetmask, tunMtu, tunDns, ssPrefix, proxyOnly)
             return START_STICKY
         }
         return START_NOT_STICKY
@@ -136,6 +138,7 @@ class XrayVpnService : VpnService() {
         tunMtu: Int,
         tunDns: String,
         ssPrefix: String? = null,
+        proxyOnly: Boolean = false,
     ) {
         if (isRunning) return
         isRunning = true
@@ -156,150 +159,174 @@ class XrayVpnService : VpnService() {
             configFile.writeText(finalConfig)
             prepareBinaries(this)
 
-            val builder = Builder()
-                .setSession("TeapodStream")
-                .setMtu(tunMtu)
-                .addAddress(tunAddress, subnetMaskToPrefix(tunNetmask))
-                .addRoute("0.0.0.0", 0)
-                .addDnsServer(tunDns)
-                .allowFamily(OsConstants.AF_INET)
-                .setBlocking(true)
+            if (proxyOnly) {
+                // Proxy-only mode: start Xray SOCKS proxy without TUN tunnel or tun2socks
+                log("info", "Proxy-only mode: skipping TUN tunnel")
 
-            // On Android 8+, set underlying networks for better routing
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
-                val activeNetwork = connectivityManager.activeNetwork
-                if (activeNetwork != null) {
-                    builder.setUnderlyingNetworks(arrayOf(activeNetwork))
-                    log("info", "Underlying network set: $activeNetwork")
-                }
-            }
+                val xrayBin = File(applicationInfo.nativeLibraryDir, "libxray.so")
+                val xrayPb = ProcessBuilder(xrayBin.absolutePath, "run", "-c", configFile.absolutePath)
+                xrayPb.environment()["XRAY_LOCATION_ASSET"] = filesDir.absolutePath
+                xrayPb.redirectErrorStream(true)
+                xrayProcess = xrayPb.start()
 
-            // Apply split tunneling based on VPN mode
-            if (vpnMode == "onlySelected") {
-                // Only selected apps go through VPN (addAllowedApplication)
-                // Requires Android 10+ (API 29)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    for (pkg in includedPackages) {
-                        try {
-                            builder.addAllowedApplication(pkg)
-                            log("info", "Allowed: $pkg")
-                        } catch (e: Exception) {
-                            log("warning", "Failed to allow $pkg: ${e.message}")
+                Thread {
+                    try {
+                        xrayProcess?.inputStream?.bufferedReader()?.forEachLine { line ->
+                            log("debug", "[xray] $line")
                         }
+                    } catch (_: Exception) {}
+                }.also { it.isDaemon = true; it.name = "xray-log"; it.start() }
+
+                Thread.sleep(800)
+
+                if (!isProcessAlive(xrayProcess)) {
+                    throw IllegalStateException("xray process died on startup")
+                }
+                log("info", "xray started (proxy-only, SOCKS on port $socksPort)")
+
+                startStatsMonitoring()
+                currentNativeState = "connected"
+                VpnEventStreamHandler.sendStateEvent("connected")
+                log("info", "Proxy-only mode active")
+            } else {
+                // Full VPN tunnel mode
+                val builder = Builder()
+                    .setSession("TeapodStream")
+                    .setMtu(tunMtu)
+                    .addAddress(tunAddress, subnetMaskToPrefix(tunNetmask))
+                    .addRoute("0.0.0.0", 0)
+                    .addDnsServer(tunDns)
+                    .allowFamily(OsConstants.AF_INET)
+                    .setBlocking(true)
+
+                // On Android 8+, set underlying networks for better routing
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+                    val activeNetwork = connectivityManager.activeNetwork
+                    if (activeNetwork != null) {
+                        builder.setUnderlyingNetworks(arrayOf(activeNetwork))
+                        log("info", "Underlying network set: $activeNetwork")
                     }
-                    // NOTE: When using addAllowedApplication, all other apps
-                    // (including our own) are automatically excluded.
-                    // We CANNOT call addDisallowedApplication after addAllowedApplication.
+                }
+
+                // Apply split tunneling based on VPN mode
+                if (vpnMode == "onlySelected") {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        for (pkg in includedPackages) {
+                            try {
+                                builder.addAllowedApplication(pkg)
+                                log("info", "Allowed: $pkg")
+                            } catch (e: Exception) {
+                                log("warning", "Failed to allow $pkg: ${e.message}")
+                            }
+                        }
+                    } else {
+                        log("warning", "onlySelected mode requires Android 10+, falling back to allExcept")
+                        for (pkg in excludedPackages) {
+                            try { builder.addDisallowedApplication(pkg) } catch (_: Exception) {}
+                        }
+                        try { builder.addDisallowedApplication(packageName) } catch (_: Exception) {}
+                    }
                 } else {
-                    log("warning", "onlySelected mode requires Android 10+, falling back to allExcept")
                     for (pkg in excludedPackages) {
                         try { builder.addDisallowedApplication(pkg) } catch (_: Exception) {}
                     }
                     try { builder.addDisallowedApplication(packageName) } catch (_: Exception) {}
                 }
-            } else {
-                // All apps go through VPN, except excluded (default behavior)
-                for (pkg in excludedPackages) {
-                    try { builder.addDisallowedApplication(pkg) } catch (_: Exception) {}
+
+                val fdResult = nativeSetMaxFds(65536)
+                log("info", "nativeSetMaxFds result (parent): $fdResult")
+
+                tunInterface = builder.establish() ?: throw IllegalStateException("Failed to establish TUN")
+
+                log("info", "TUN established")
+
+                // 1. Start Xray directly (FD limit set by parent process)
+                val xrayBin = File(applicationInfo.nativeLibraryDir, "libxray.so")
+                val xrayPb = ProcessBuilder(xrayBin.absolutePath, "run", "-c", configFile.absolutePath)
+                xrayPb.environment()["XRAY_LOCATION_ASSET"] = filesDir.absolutePath
+                xrayPb.redirectErrorStream(true)
+                xrayProcess = xrayPb.start()
+
+                Thread {
+                    try {
+                        xrayProcess?.inputStream?.bufferedReader()?.forEachLine { line ->
+                            log("debug", "[xray] $line")
+                        }
+                    } catch (_: Exception) {}
+                }.also { it.isDaemon = true; it.name = "xray-log"; it.start() }
+
+                Thread.sleep(800)
+
+                if (!isProcessAlive(xrayProcess)) {
+                    throw IllegalStateException("xray process died on startup")
                 }
-                // Always exclude own app to prevent routing loops
-                try { builder.addDisallowedApplication(packageName) } catch (_: Exception) {}
-            }
+                log("info", "xray started")
 
-            // Raise fd limit - done in child process via native code
-            val fdResult = nativeSetMaxFds(65536)
-            log("info", "nativeSetMaxFds result (parent): $fdResult")
+                // 2. Start teapod-tun2socks (with strict split-tunneling UID validation)
+                teapodVpnManager = TeapodVpnManager(this)
 
-            tunInterface = builder.establish() ?: throw IllegalStateException("Failed to establish TUN")
-
-            log("info", "TUN established")
-
-            // 1. Start Xray directly (FD limit set by parent process)
-            val xrayBin = File(applicationInfo.nativeLibraryDir, "libxray.so")
-            val xrayPb = ProcessBuilder(xrayBin.absolutePath, "run", "-c", configFile.absolutePath)
-            xrayPb.environment()["XRAY_LOCATION_ASSET"] = filesDir.absolutePath
-            xrayPb.redirectErrorStream(true)
-            xrayProcess = xrayPb.start()
-
-            Thread {
-                try {
-                    xrayProcess?.inputStream?.bufferedReader()?.forEachLine { line ->
-                        log("debug", "[xray] $line")
+                // Convert package names to UIDs for split tunneling
+                val allowedUids = mutableSetOf<Int>()
+                val whitelistMode = when (vpnMode) {
+                    "onlySelected" -> {
+                        // Only selected apps go through VPN
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            for (pkg in includedPackages) {
+                                try {
+                                    val uid = packageManager.getPackageUid(pkg, PackageManager.GET_META_DATA)
+                                    allowedUids.add(uid)
+                                    log("info", "Allowed UID for $pkg: $uid")
+                                } catch (e: Exception) {
+                                    log("warning", "Failed to get UID for $pkg: ${e.message}")
+                                }
+                            }
+                        }
+                        WhitelistMode.ALLOW_ONLY
                     }
-                } catch (_: Exception) {}
-            }.also { it.isDaemon = true; it.name = "xray-log"; it.start() }
-
-            Thread.sleep(800)
-
-            if (!isProcessAlive(xrayProcess)) {
-                throw IllegalStateException("xray process died on startup")
-            }
-            log("info", "xray started")
-
-            // 2. Start teapod-tun2socks (with strict split-tunneling UID validation)
-            teapodVpnManager = TeapodVpnManager(this)
-
-            // Convert package names to UIDs for split tunneling
-            val allowedUids = mutableSetOf<Int>()
-            val whitelistMode = when (vpnMode) {
-                "onlySelected" -> {
-                    // Only selected apps go through VPN
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                        for (pkg in includedPackages) {
+                    else -> {
+                        // All apps go through VPN, except excluded
+                        for (pkg in excludedPackages) {
                             try {
                                 val uid = packageManager.getPackageUid(pkg, PackageManager.GET_META_DATA)
                                 allowedUids.add(uid)
-                                log("info", "Allowed UID for $pkg: $uid")
+                                log("info", "Excluded UID for $pkg: $uid")
                             } catch (e: Exception) {
                                 log("warning", "Failed to get UID for $pkg: ${e.message}")
                             }
                         }
-                    }
-                    WhitelistMode.ALLOW_ONLY
-                }
-                else -> {
-                    // All apps go through VPN, except excluded
-                    for (pkg in excludedPackages) {
+                        // Always exclude own app to prevent routing loops
                         try {
-                            val uid = packageManager.getPackageUid(pkg, PackageManager.GET_META_DATA)
+                            val uid = packageManager.getPackageUid(packageName, PackageManager.GET_META_DATA)
                             allowedUids.add(uid)
-                            log("info", "Excluded UID for $pkg: $uid")
+                            log("info", "Excluded own UID ($packageName): $uid")
                         } catch (e: Exception) {
-                            log("warning", "Failed to get UID for $pkg: ${e.message}")
+                            log("warning", "Failed to get own UID: ${e.message}")
                         }
+                        WhitelistMode.DENY_ONLY
                     }
-                    // Always exclude own app to prevent routing loops
-                    try {
-                        val uid = packageManager.getPackageUid(packageName, PackageManager.GET_META_DATA)
-                        allowedUids.add(uid)
-                        log("info", "Excluded own UID ($packageName): $uid")
-                    } catch (e: Exception) {
-                        log("warning", "Failed to get own UID: ${e.message}")
-                    }
-                    WhitelistMode.DENY_ONLY
                 }
+
+                log("info", "Starting teapod-tun2socks: mode=$whitelistMode uids=${allowedUids.size}")
+
+                teapodVpnManager!!.start(
+                    tunFd = tunInterface!!,
+                    socksHost = "127.0.0.1",
+                    socksPort = socksPort,
+                    socksUsername = socksUser,
+                    socksPassword = socksPassword,
+                    allowedUids = allowedUids,
+                    whitelistMode = whitelistMode
+                )
+
+                log("info", "teapod-tun2socks started successfully")
+
+                startStatsMonitoring()
+                registerNetworkCallback()
+                currentNativeState = "connected"
+                VpnEventStreamHandler.sendStateEvent("connected")
+                log("info", "VPN connected successfully")
             }
-
-            log("info", "Starting teapod-tun2socks: mode=$whitelistMode uids=${allowedUids.size}")
-
-            teapodVpnManager!!.start(
-                tunFd = tunInterface!!,
-                socksHost = "127.0.0.1",
-                socksPort = socksPort,
-                socksUsername = socksUser,
-                socksPassword = socksPassword,
-                allowedUids = allowedUids,
-                whitelistMode = whitelistMode
-            )
-
-            log("info", "teapod-tun2socks started successfully")
-
-            startStatsMonitoring()
-            registerNetworkCallback()
-            currentNativeState = "connected"
-            VpnEventStreamHandler.sendStateEvent("connected")
-            log("info", "VPN connected successfully")
         } catch (e: Exception) {
             log("error", "Start failed: ${e.message}")
             currentNativeState = "error"

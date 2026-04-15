@@ -96,7 +96,7 @@ class VpnNotifier extends Notifier<VpnState2> {
     if (settings.randomCredentials) {
       _socksCredentials = XrayEngine.generateSocksCredentials();
     } else {
-      _socksCredentials = (user: '', password: '');
+      _socksCredentials = (user: settings.socksUser, password: settings.socksPassword);
     }
 
     // Use random port or configured port
@@ -124,6 +124,7 @@ class VpnNotifier extends Notifier<VpnState2> {
       dnsMode: settings.dnsMode,
       dnsServer: settings.dnsServer,
       vpnMode: settings.vpnMode,
+      proxyOnly: settings.proxyOnly,
     );
 
     await _engine.connect(config, options);

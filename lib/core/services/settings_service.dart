@@ -24,6 +24,9 @@ class AppSettings {
   final String customDnsType;
   final bool enableUdp;
   final bool randomCredentials;
+  final String socksUser;
+  final String socksPassword;
+  final bool proxyOnly;
 
   const AppSettings({
     this.socksPort = AppConstants.defaultSocksPort,
@@ -40,6 +43,9 @@ class AppSettings {
     this.customDnsType = 'udp',
     this.enableUdp = true,
     this.randomCredentials = true,
+    this.socksUser = '',
+    this.socksPassword = '',
+    this.proxyOnly = false,
   });
 
   AppSettings copyWith({
@@ -57,6 +63,9 @@ class AppSettings {
     String? customDnsType,
     bool? enableUdp,
     bool? randomCredentials,
+    String? socksUser,
+    String? socksPassword,
+    bool? proxyOnly,
   }) {
     return AppSettings(
       socksPort: socksPort ?? this.socksPort,
@@ -73,6 +82,9 @@ class AppSettings {
       customDnsType: customDnsType ?? this.customDnsType,
       enableUdp: enableUdp ?? this.enableUdp,
       randomCredentials: randomCredentials ?? this.randomCredentials,
+      socksUser: socksUser ?? this.socksUser,
+      socksPassword: socksPassword ?? this.socksPassword,
+      proxyOnly: proxyOnly ?? this.proxyOnly,
     );
   }
 
@@ -96,6 +108,9 @@ class SettingsService {
   static const _customDnsTypeKey = 'custom_dns_type';
   static const _enableUdpKey = 'enable_udp';
   static const _randomCredentialsKey = 'random_credentials';
+  static const _socksUserKey = 'socks_user';
+  static const _socksPasswordKey = 'socks_password';
+  static const _proxyOnlyKey = 'proxy_only';
   static const _vpnModeKey = 'vpn_mode';
   static const _includedPackagesKey = 'included_packages';
 
@@ -127,6 +142,9 @@ class SettingsService {
       customDnsType: prefs.getString(_customDnsTypeKey) ?? 'udp',
       enableUdp: prefs.getBool(_enableUdpKey) ?? true,
       randomCredentials: prefs.getBool(_randomCredentialsKey) ?? true,
+      socksUser: prefs.getString(_socksUserKey) ?? '',
+      socksPassword: prefs.getString(_socksPasswordKey) ?? '',
+      proxyOnly: prefs.getBool(_proxyOnlyKey) ?? false,
     );
   }
 
@@ -148,5 +166,8 @@ class SettingsService {
     await prefs.setString(_customDnsTypeKey, settings.customDnsType);
     await prefs.setBool(_enableUdpKey, settings.enableUdp);
     await prefs.setBool(_randomCredentialsKey, settings.randomCredentials);
+    await prefs.setString(_socksUserKey, settings.socksUser);
+    await prefs.setString(_socksPasswordKey, settings.socksPassword);
+    await prefs.setBool(_proxyOnlyKey, settings.proxyOnly);
   }
 }

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import '../constants/app_constants.dart';
 import '../models/vpn_config.dart';
 import '../../protocols/xray/vless_parser.dart';
 
@@ -49,7 +50,7 @@ class SubscriptionService {
     String body;
     try {
       final request = await httpClient.getUrl(uri);
-      request.headers.set('User-Agent', 'TeapodStream/1.0');
+      request.headers.set('User-Agent', AppConstants.subscriptionUserAgent);
       final response =
           await request.close().timeout(const Duration(seconds: 15));
 

@@ -35,6 +35,7 @@ class VpnEngineOptions {
   final DnsMode dnsMode;
   final DnsServerConfig dnsServer;
   final VpnMode vpnMode;
+  final bool proxyOnly;
 
   const VpnEngineOptions({
     required this.socksPort,
@@ -48,5 +49,6 @@ class VpnEngineOptions {
     this.dnsMode = DnsMode.proxy,
     this.dnsServer = const DnsServerConfig(type: DnsType.udp, address: '1.1.1.1'),
     this.vpnMode = VpnMode.allExcept,
+    this.proxyOnly = false,
   });
 }

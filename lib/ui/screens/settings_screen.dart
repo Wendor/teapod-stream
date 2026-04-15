@@ -106,17 +106,25 @@ class _SettingsBody extends StatefulWidget {
 
 class _SettingsBodyState extends State<_SettingsBody> {
   late final TextEditingController _socksPortCtrl;
+  late final TextEditingController _socksUserCtrl;
+  late final TextEditingController _socksPasswordCtrl;
 
   @override
   void initState() {
     super.initState();
     _socksPortCtrl =
         TextEditingController(text: widget.settings.socksPort.toString());
+    _socksUserCtrl =
+        TextEditingController(text: widget.settings.socksUser);
+    _socksPasswordCtrl =
+        TextEditingController(text: widget.settings.socksPassword);
   }
 
   @override
   void dispose() {
     _socksPortCtrl.dispose();
+    _socksUserCtrl.dispose();
+    _socksPasswordCtrl.dispose();
     super.dispose();
   }
 
@@ -127,6 +135,13 @@ class _SettingsBodyState extends State<_SettingsBody> {
         socksPort: socks.clamp(1024, 65535),
       ));
     }
+  }
+
+  void _updateCredentials() {
+    widget.onUpdate(widget.settings.copyWith(
+      socksUser: _socksUserCtrl.text,
+      socksPassword: _socksPasswordCtrl.text,
+    ));
   }
 
   @override
@@ -208,6 +223,41 @@ class _SettingsBodyState extends State<_SettingsBody> {
                   ? null
                   : (v) => widget.onUpdate(
                       widget.settings.copyWith(randomCredentials: v)),
+            ),
+            if (!widget.settings.randomCredentials) ...[
+              const _Divider(),
+              _TextField(
+                label: 'Логин SOCKS',
+                hint: 'Оставьте пустым для работы без пароля',
+                controller: _socksUserCtrl,
+                enabled: !widget.isConnected,
+                onChanged: (_) => _updateCredentials(),
+              ),
+              const _Divider(),
+              _TextField(
+                label: 'Пароль SOCKS',
+                hint: 'Оставьте пустым для работы без пароля',
+                controller: _socksPasswordCtrl,
+                enabled: !widget.isConnected,
+                obscureText: true,
+                onChanged: (_) => _updateCredentials(),
+              ),
+            ],
+            const _Divider(),
+            SwitchListTile(
+              title: const Text(
+                'Только прокси',
+                style: TextStyle(color: AppColors.textPrimary, fontSize: 15),
+              ),
+              subtitle: const Text(
+                'Запустить SOCKS прокси без VPN-туннеля',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+              ),
+              value: widget.settings.proxyOnly,
+              onChanged: widget.isConnected
+                  ? null
+                  : (v) => widget.onUpdate(
+                      widget.settings.copyWith(proxyOnly: v)),
             ),
             const _Divider(),
             SwitchListTile(
@@ -475,6 +525,66 @@ class _PortField extends StatelessWidget {
               style: const TextStyle(color: AppColors.textPrimary),
               decoration: InputDecoration(
                 hintText: hint,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                isDense: true,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TextField extends StatelessWidget {
+  final String label;
+  final String hint;
+  final TextEditingController controller;
+  final bool enabled;
+  final bool obscureText;
+  final void Function(String) onChanged;
+
+  const _TextField({
+    required this.label,
+    required this.hint,
+    required this.controller,
+    required this.enabled,
+    required this.onChanged,
+    this.obscureText = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: enabled ? AppColors.textPrimary : AppColors.textDisabled,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: TextField(
+              controller: controller,
+              enabled: enabled,
+              obscureText: obscureText,
+              textAlign: TextAlign.end,
+              onChanged: onChanged,
+              onEditingComplete: () => FocusScope.of(context).unfocus(),
+              style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+              decoration: InputDecoration(
+                hintText: hint,
+                hintStyle: const TextStyle(
+                  color: AppColors.textDisabled,
+                  fontSize: 12,
+                ),
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 isDense: true,

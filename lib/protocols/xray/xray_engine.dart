@@ -202,6 +202,7 @@ class XrayEngine implements VpnEngine {
         'tunMtu': AppConstants.tunMtu,
         'tunDns': AppConstants.tunDns,
         'enableUdp': options.enableUdp,
+        'proxyOnly': options.proxyOnly,
         if (config.ssPrefix != null) 'ssPrefix': config.ssPrefix,
       });
     } on PlatformException catch (e) {

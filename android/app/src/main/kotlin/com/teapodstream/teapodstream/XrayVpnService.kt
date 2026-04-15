@@ -44,6 +44,7 @@ class XrayVpnService : VpnService() {
         const val EXTRA_TUN_MTU = "tun_mtu"
         const val EXTRA_TUN_DNS = "tun_dns"
         const val EXTRA_ENABLE_UDP = "enable_udp"
+        const val EXTRA_SS_PREFIX = "ss_prefix" // hex-encoded Outline prefix bytes
 
         // Static state tracker for querying from Dart
         @Volatile private var currentNativeState: String = "disconnected"
@@ -92,6 +93,7 @@ class XrayVpnService : VpnService() {
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var lastNetworkUpdate: Long = 0
     private val networkUpdateDebounceMs = 5000L // 5 seconds
+    private var prefixProxy: PrefixTcpProxy? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_DISCONNECT) {
@@ -112,9 +114,10 @@ class XrayVpnService : VpnService() {
             val tunNetmask = intent.getStringExtra(EXTRA_TUN_NETMASK) ?: "255.255.255.0"
             val tunMtu = intent.getIntExtra(EXTRA_TUN_MTU, 1500)
             val tunDns = intent.getStringExtra(EXTRA_TUN_DNS) ?: "1.1.1.1"
+            val ssPrefix = intent.getStringExtra(EXTRA_SS_PREFIX)
             startVpn(xrayConfig, socksPort, socksUser, socksPassword,
                 excludedPackages, includedPackages, vpnMode,
-                tunAddress, tunNetmask, tunMtu, tunDns)
+                tunAddress, tunNetmask, tunMtu, tunDns, ssPrefix)
             return START_STICKY
         }
         return START_NOT_STICKY
@@ -132,6 +135,7 @@ class XrayVpnService : VpnService() {
         tunNetmask: String,
         tunMtu: Int,
         tunDns: String,
+        ssPrefix: String? = null,
     ) {
         if (isRunning) return
         isRunning = true
@@ -140,8 +144,16 @@ class XrayVpnService : VpnService() {
         log("info", "Starting VPN")
 
         try {
+            // Enable prefix proxy only when the ss:// URL contains ?prefix=.
+            // That parameter signals the server supports Outline prefix-stripping.
+            val finalConfig = if (ssPrefix != null) {
+                injectPrefixProxy(xrayConfig, ssPrefix) ?: xrayConfig
+            } else {
+                xrayConfig
+            }
+
             val configFile = File(filesDir, "xray_config.json")
-            configFile.writeText(xrayConfig)
+            configFile.writeText(finalConfig)
             prepareBinaries(this)
 
             val builder = Builder()
@@ -307,11 +319,56 @@ class XrayVpnService : VpnService() {
         }
     }
 
+    /**
+     * Parses [xrayConfig] JSON, finds the first proxy Shadowsocks server address,
+     * starts a [PrefixTcpProxy] that sends [prefixHex] bytes before forwarding,
+     * and returns a modified config pointing Xray to the local proxy.
+     */
+    private fun injectPrefixProxy(xrayConfig: String, prefixHex: String): String? {
+        return try {
+            val prefixBytes = prefixHex.chunked(2)
+                .map { it.toInt(16).toByte() }
+                .toByteArray()
+
+            val json = org.json.JSONObject(xrayConfig)
+            val outbounds = json.getJSONArray("outbounds")
+            var proxyOutbound: org.json.JSONObject? = null
+            for (i in 0 until outbounds.length()) {
+                val ob = outbounds.getJSONObject(i)
+                if (ob.optString("tag") == "proxy") { proxyOutbound = ob; break }
+            }
+            if (proxyOutbound == null) return null
+
+            val settings = proxyOutbound.getJSONObject("settings")
+            val servers = settings.getJSONArray("servers")
+            val server = servers.getJSONObject(0)
+            val realHost = server.getString("address")
+            val realPort = server.getInt("port")
+
+            val proxy = PrefixTcpProxy(realHost, realPort, prefixBytes)
+            proxy.start()
+            prefixProxy = proxy
+
+            // Redirect Xray to the local proxy
+            server.put("address", "127.0.0.1")
+            server.put("port", proxy.localPort)
+
+            log("info", "Prefix proxy: 127.0.0.1:${proxy.localPort} → $realHost:$realPort (${prefixBytes.size} prefix bytes)")
+            json.toString()
+        } catch (e: Exception) {
+            log("warning", "Failed to start prefix proxy: ${e.message}")
+            null
+        }
+    }
+
     private fun stopVpn() {
         isRunning = false
         unregisterNetworkCallback()
         statsThread?.interrupt()
-        
+
+        prefixProxy?.stop()
+        prefixProxy = null
+
         // Stop teapod-tun2socks
         try {
             teapodVpnManager?.stop()

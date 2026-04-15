@@ -23,6 +23,7 @@ class VpnConfig {
   final String? publicKey; // for Reality
   final String? shortId; // for Reality
   final String? spiderX; // for Reality
+  final String? postQuantumKey; // for Reality post-quantum (pqv)
   final String? flow;
   final String? encryption; // for VLESS: "none"
   final String? alterId; // for VMess
@@ -32,6 +33,7 @@ class VpnConfig {
   final String? rawUri;
   final int? latencyMs;
   final String? subscriptionId; // ID of the subscription this config came from
+  final String? ssPrefix; // hex-encoded prefix bytes for Outline Shadowsocks (e.g. "160301...")
 
   const VpnConfig({
     required this.id,
@@ -50,6 +52,7 @@ class VpnConfig {
     this.publicKey,
     this.shortId,
     this.spiderX,
+    this.postQuantumKey,
     this.flow,
     this.encryption,
     this.alterId,
@@ -59,6 +62,7 @@ class VpnConfig {
     this.rawUri,
     this.latencyMs,
     this.subscriptionId,
+    this.ssPrefix,
   });
 
   VpnConfig copyWith({
@@ -84,6 +88,7 @@ class VpnConfig {
       publicKey: publicKey,
       shortId: shortId,
       spiderX: spiderX,
+      postQuantumKey: postQuantumKey,
       flow: flow,
       encryption: encryption,
       alterId: alterId,
@@ -93,6 +98,7 @@ class VpnConfig {
       rawUri: rawUri ?? this.rawUri,
       latencyMs: latencyMs ?? this.latencyMs,
       subscriptionId: subscriptionId ?? this.subscriptionId,
+      ssPrefix: ssPrefix,
     );
   }
 
@@ -113,6 +119,7 @@ class VpnConfig {
         'publicKey': publicKey,
         'shortId': shortId,
         'spiderX': spiderX,
+        'postQuantumKey': postQuantumKey,
         'flow': flow,
         'encryption': encryption,
         'alterId': alterId,
@@ -122,6 +129,7 @@ class VpnConfig {
         'rawUri': rawUri,
         'latencyMs': latencyMs,
         'subscriptionId': subscriptionId,
+        'ssPrefix': ssPrefix,
       };
 
   factory VpnConfig.fromJson(Map<String, dynamic> json) => VpnConfig(
@@ -150,6 +158,7 @@ class VpnConfig {
         publicKey: json['publicKey'] as String?,
         shortId: json['shortId'] as String?,
         spiderX: json['spiderX'] as String?,
+        postQuantumKey: json['postQuantumKey'] as String?,
         flow: json['flow'] as String?,
         encryption: json['encryption'] as String?,
         alterId: json['alterId'] as String?,
@@ -159,6 +168,7 @@ class VpnConfig {
         rawUri: json['rawUri'] as String?,
         latencyMs: json['latencyMs'] as int?,
         subscriptionId: json['subscriptionId'] as String?,
+        ssPrefix: json['ssPrefix'] as String?,
       );
 
   String toJsonString() => jsonEncode(toJson());

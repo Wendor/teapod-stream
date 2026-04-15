@@ -51,12 +51,13 @@ class MainActivity : FlutterActivity() {
                         val tunMtu = call.argument<Int>("tunMtu") ?: 1500
                         val tunDns = call.argument<String>("tunDns") ?: "1.1.1.1"
                         val enableUdp = call.argument<Boolean>("enableUdp") ?: true
+                        val ssPrefix = call.argument<String>("ssPrefix")
 
                         requestVpnPermission(result) {
                             startVpnService(
                                 xrayConfig, socksPort, socksUser, socksPassword,
                                 excludedPackages, includedPackages, vpnMode,
-                                tunAddress, tunNetmask, tunMtu, tunDns, enableUdp
+                                tunAddress, tunNetmask, tunMtu, tunDns, enableUdp, ssPrefix
                             )
                             result.success(null)
                         }
@@ -173,6 +174,7 @@ class MainActivity : FlutterActivity() {
         tunMtu: Int,
         tunDns: String,
         enableUdp: Boolean,
+        ssPrefix: String? = null,
     ) {
         val intent = Intent(this, XrayVpnService::class.java).apply {
             action = XrayVpnService.ACTION_CONNECT
@@ -188,6 +190,7 @@ class MainActivity : FlutterActivity() {
             putExtra(XrayVpnService.EXTRA_TUN_MTU, tunMtu)
             putExtra(XrayVpnService.EXTRA_TUN_DNS, tunDns)
             putExtra(XrayVpnService.EXTRA_ENABLE_UDP, enableUdp)
+            if (ssPrefix != null) putExtra(XrayVpnService.EXTRA_SS_PREFIX, ssPrefix)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent)

@@ -147,8 +147,27 @@ class XrayConfigBuilder {
             }
           ]
         };
-      default:
-        return {};
+      case VpnProtocol.trojan:
+        return {
+          'servers': [
+            {
+              'address': config.address,
+              'port': config.port,
+              'password': config.password ?? '',
+            }
+          ]
+        };
+      case VpnProtocol.shadowsocks:
+        return {
+          'servers': [
+            {
+              'address': config.address,
+              'port': config.port,
+              'method': config.method ?? 'chacha20-ietf-poly1305',
+              'password': config.password ?? '',
+            }
+          ]
+        };
     }
   }
 
@@ -163,6 +182,8 @@ class XrayConfigBuilder {
           'publicKey': config.publicKey ?? '',
           'shortId': config.shortId ?? '',
           'spiderX': config.spiderX ?? '',
+          if (config.postQuantumKey != null && config.postQuantumKey!.isNotEmpty)
+            'mldsa65Verify': config.postQuantumKey,
         },
       if (config.security == VpnSecurity.tls)
         'tlsSettings': {

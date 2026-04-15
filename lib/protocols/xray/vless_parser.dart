@@ -56,6 +56,7 @@ class VlessParser {
         spiderX: params['spx'] != null
             ? Uri.decodeComponent(params['spx']!)
             : null,
+        postQuantumKey: params['pqv'],
         flow: params['flow'],
         encryption: params['encryption'] ?? 'none',
         createdAt: DateTime.now(),
@@ -147,7 +148,7 @@ class VlessParser {
     }
   }
 
-  // ss://base64(method:password)@host:port#name  OR  ss://base64(method:password@host:port)#name
+  // ss://base64(method:password)@host:port[/?query][#name]  OR  ss://base64(method:password@host:port)[#name]
   static VpnConfig? _parseShadowsocks(String uri) {
     try {
       final withoutScheme = uri.substring('ss://'.length);
@@ -161,10 +162,20 @@ class VlessParser {
       String method, password, host;
       int port;
 
+      String queryStr = '';
+
       if (main.contains('@')) {
         final atIdx = main.lastIndexOf('@');
         final userInfo = main.substring(0, atIdx);
         final hostPart = main.substring(atIdx + 1);
+
+        // Strip query string and trailing slash from host:port
+        final qIdx = hostPart.indexOf('?');
+        final hostPortRaw = qIdx >= 0 ? hostPart.substring(0, qIdx) : hostPart;
+        final hostPortClean = hostPortRaw.endsWith('/')
+            ? hostPortRaw.substring(0, hostPortRaw.length - 1)
+            : hostPortRaw;
+        if (qIdx >= 0) queryStr = hostPart.substring(qIdx + 1);
 
         String decoded;
         try {
@@ -176,7 +187,7 @@ class VlessParser {
         final colonIdx = decoded.indexOf(':');
         method = decoded.substring(0, colonIdx);
         password = decoded.substring(colonIdx + 1);
-        (host, port) = _parseHostPort(hostPart, 8388);
+        (host, port) = _parseHostPort(hostPortClean, 8388);
       } else {
         final decoded =
             utf8.decode(base64Decode(_padBase64(main)));
@@ -184,10 +195,31 @@ class VlessParser {
         if (atIdx < 0) return null;
         final userInfo = decoded.substring(0, atIdx);
         final hostPart = decoded.substring(atIdx + 1);
+        final qIdx = hostPart.indexOf('?');
+        final hostPortClean = qIdx >= 0 ? hostPart.substring(0, qIdx) : hostPart;
+        if (qIdx >= 0) queryStr = hostPart.substring(qIdx + 1);
         final colonIdx = userInfo.indexOf(':');
         method = userInfo.substring(0, colonIdx);
         password = userInfo.substring(colonIdx + 1);
-        (host, port) = _parseHostPort(hostPart, 8388);
+        (host, port) = _parseHostPort(hostPortClean, 8388);
+      }
+
+      // Parse Outline prefix bytes (raw percent-encoded bytes, not UTF-8 characters)
+      String? ssPrefix;
+      if (queryStr.isNotEmpty) {
+        for (final param in queryStr.split('&')) {
+          final eqIdx = param.indexOf('=');
+          if (eqIdx < 0) continue;
+          if (param.substring(0, eqIdx) == 'prefix') {
+            final prefixBytes = _decodePercentBytes(param.substring(eqIdx + 1));
+            if (prefixBytes.isNotEmpty) {
+              ssPrefix = prefixBytes
+                  .map((b) => b.toRadixString(16).padLeft(2, '0'))
+                  .join();
+            }
+            break;
+          }
+        }
       }
 
       return VpnConfig(
@@ -201,6 +233,7 @@ class VlessParser {
         password: password,
         security: VpnSecurity.none,
         transport: VpnTransport.tcp,
+        ssPrefix: ssPrefix,
         createdAt: DateTime.now(),
         rawUri: uri,
       );
@@ -264,5 +297,27 @@ class VlessParser {
     final mod = s.length % 4;
     if (mod == 0) return s;
     return s + '=' * (4 - mod);
+  }
+
+  // Decode percent-encoded string as raw bytes (not UTF-8 characters).
+  // Handles sequences like %C2%A8 as two separate bytes [0xC2, 0xA8].
+  static List<int> _decodePercentBytes(String encoded) {
+    final bytes = <int>[];
+    var i = 0;
+    while (i < encoded.length) {
+      final c = encoded[i];
+      if (c == '%' && i + 2 < encoded.length) {
+        final hex = encoded.substring(i + 1, i + 3);
+        bytes.add(int.parse(hex, radix: 16));
+        i += 3;
+      } else if (c == '+') {
+        bytes.add(0x20);
+        i++;
+      } else {
+        bytes.add(c.codeUnitAt(0));
+        i++;
+      }
+    }
+    return bytes;
   }
 }

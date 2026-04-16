@@ -373,11 +373,13 @@ class _SettingsBodyState extends State<_SettingsBody> {
               const _Divider(),
               ListTile(
                 title: const Text(
-                  'Исключённые приложения',
+                  'Выбрать приложения',
                   style: TextStyle(color: AppColors.textPrimary, fontSize: 15),
                 ),
                 subtitle: Text(
-                  '${widget.settings.excludedPackages.length} приложений исключено',
+                  widget.settings.vpnMode == VpnMode.onlySelected
+                      ? '${widget.settings.includedPackages.length} приложений выбрано'
+                      : '${widget.settings.excludedPackages.length} приложений исключено',
                   style: const TextStyle(
                       color: AppColors.textSecondary, fontSize: 12),
                 ),

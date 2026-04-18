@@ -159,10 +159,10 @@ download_binaries() {
 
   mkdir -p "$ASSETS_BIN"
   log "Скачиваем geoip.dat..."
-  curl -L --progress-bar "https://github.com/v2fly/geoip/releases/latest/download/geoip.dat" -o "$ASSETS_BIN/geoip.dat" && ok "geoip.dat"
+  curl -L --progress-bar "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat" -o "$ASSETS_BIN/geoip.dat" && ok "geoip.dat"
 
   log "Скачиваем geosite.dat..."
-  curl -L --progress-bar "https://github.com/v2fly/domain-list-community/releases/latest/download/dlc.dat" -o "$ASSETS_BIN/geosite.dat" && ok "geosite.dat"
+  curl -L --progress-bar "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat" -o "$ASSETS_BIN/geosite.dat" && ok "geosite.dat"
 
   echo ""
   log "Бинарники в $JNILIBS_DIR"

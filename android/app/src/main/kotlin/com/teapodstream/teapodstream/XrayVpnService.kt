@@ -13,6 +13,8 @@ import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.VpnService
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.os.PowerManager
 import android.system.OsConstants
@@ -51,6 +53,14 @@ class XrayVpnService : VpnService() {
         // Static state tracker for querying from Dart
         @Volatile private var currentNativeState: String = "disconnected"
         @JvmStatic fun getNativeState(): String = currentNativeState
+
+        // Active SOCKS credentials — stored so onListen can replay them with "connected"
+        @Volatile var activeSocksPort: Int = 0
+            private set
+        @Volatile var activeSocksUser: String = ""
+            private set
+        @Volatile var activeSocksPassword: String = ""
+            private set
 
         private const val NOTIFICATION_CHANNEL_ID = "vpn_service"
         private const val NOTIFICATION_CHANNEL_MINIMAL_ID = "vpn_service_minimal"
@@ -94,13 +104,15 @@ class XrayVpnService : VpnService() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var killSwitchEnabled = false
     private var proxyOnlyMode = false
+    private val networkChangeHandler = Handler(Looper.getMainLooper())
+    private var pendingNetworkRunnable: Runnable? = null
 
     // TUN parameters — always the same fixed values; defined once here to avoid
     // scattering magic strings across the file. The Dart side uses the same constants
     // (AppConstants.tunAddress / tunNetmask / tunMtu / tunDns).
     private val tunAddress = "10.120.230.1"
     private val tunNetmask = "255.255.255.0"
-    private val tunMtu    = 9000
+    private val tunMtu    = 1500
     private val tunDns    = "1.1.1.1"
 
     override fun onCreate() {
@@ -354,7 +366,10 @@ class XrayVpnService : VpnService() {
                 startStatsMonitoring()
                 acquireWakeLock()
                 currentNativeState = "connected"
-                VpnEventStreamHandler.sendStateEvent("connected")
+                activeSocksPort = socksPort
+                activeSocksUser = socksUser
+                activeSocksPassword = socksPassword
+                VpnEventStreamHandler.sendConnectedEvent(socksPort, socksUser, socksPassword)
                 log("info", "Proxy-only mode active")
             } else {
                 // Full VPN tunnel mode
@@ -421,6 +436,7 @@ class XrayVpnService : VpnService() {
 
                 val tunErr = Teapodcore.startTun2Socks(
                     tunInterface!!.fd.toLong(),
+                    tunMtu.toLong(),
                     socksPort.toLong(),
                     socksUser,
                     socksPassword,
@@ -434,7 +450,10 @@ class XrayVpnService : VpnService() {
                 registerNetworkCallback()
                 acquireWakeLock()
                 currentNativeState = "connected"
-                VpnEventStreamHandler.sendStateEvent("connected")
+                activeSocksPort = socksPort
+                activeSocksUser = socksUser
+                activeSocksPassword = socksPassword
+                VpnEventStreamHandler.sendConnectedEvent(socksPort, socksUser, socksPassword)
                 log("info", "VPN connected successfully")
             }
         } catch (e: Exception) {
@@ -585,6 +604,8 @@ class XrayVpnService : VpnService() {
         if (!isRunning) return  // idempotent — safe to call multiple times
         isRunning = false
         lastUnderlyingNetwork = null
+        pendingNetworkRunnable?.let { networkChangeHandler.removeCallbacks(it) }
+        pendingNetworkRunnable = null
 
         try { wakeLock?.release() } catch (_: Exception) {}
         wakeLock = null
@@ -692,15 +713,28 @@ class XrayVpnService : VpnService() {
             networkCallback = object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
                     log("info", "Network available: $network")
+                    val prev = lastUnderlyingNetwork
                     updateUnderlyingNetworks(cm)
+                    val current = lastUnderlyingNetwork
+                    // Trigger if network changed (prev→current) OR if prev was null but we now
+                    // have a network (covers WiFi→LTE when onLost fired before onAvailable).
+                    if (current != null && prev != current) {
+                        scheduleNetworkChanged()
+                    }
                 }
 
                 override fun onLost(network: Network) {
                     log("info", "Network lost: $network")
+                    // Snapshot BEFORE clearing — needed for smooth-handover case where
+                    // onAvailable(LTE) fires before onLost(WiFi): prev=wifi, after=LTE → trigger.
+                    val prev = lastUnderlyingNetwork
                     if (lastUnderlyingNetwork == network) {
                         lastUnderlyingNetwork = null
                     }
                     updateUnderlyingNetworks(cm)
+                    if (prev != null && lastUnderlyingNetwork != null && prev != lastUnderlyingNetwork) {
+                        scheduleNetworkChanged()
+                    }
                 }
 
                 override fun onCapabilitiesChanged(
@@ -768,6 +802,16 @@ class XrayVpnService : VpnService() {
                 log("info", "Underlying network updated: $activeNetwork")
             }
         }
+    }
+
+    private fun scheduleNetworkChanged() {
+        // Only reconnect when fully connected — prevents spurious reconnects during the
+        // initial startVpn() phase when onAvailable fires right after registration.
+        if (currentNativeState != "connected") return
+        pendingNetworkRunnable?.let { networkChangeHandler.removeCallbacks(it) }
+        val r = Runnable { VpnEventStreamHandler.sendEvent(mapOf("type" to "network_changed")) }
+        pendingNetworkRunnable = r
+        networkChangeHandler.postDelayed(r, 2000L)
     }
 
     private fun unregisterNetworkCallback() {

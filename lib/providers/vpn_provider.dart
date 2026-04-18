@@ -70,6 +70,7 @@ class VpnNotifier extends Notifier<VpnState2> {
   String _heartbeatUser = '';
   String _heartbeatPassword = '';
   bool _heartbeatProxyOnly = false;
+  DateTime? _lastNetworkReconnect;
 
   @override
   VpnState2 build() {
@@ -103,7 +104,31 @@ class VpnNotifier extends Notifier<VpnState2> {
     switch (type) {
       case 'state':
         final newState = _parseState(event['value'] as String?);
+        if (newState == VpnState.connected) {
+          final port = event['socksPort'] as int?;
+          if (port != null && port > 0) {
+            final user = event['socksUser'] as String? ?? '';
+            final pass = event['socksPassword'] as String? ?? '';
+            state = state.copyWith(
+              activeSocksPort: port,
+              activeSocksUser: user,
+              activeSocksPassword: pass,
+            );
+            _heartbeatSocksPort = port;
+            _heartbeatUser = user;
+            _heartbeatPassword = pass;
+          }
+        }
         _onNativeState(newState);
+      case 'network_changed':
+        if (state.isConnected) {
+          final now = DateTime.now();
+          if (_lastNetworkReconnect == null ||
+              now.difference(_lastNetworkReconnect!).inSeconds > 30) {
+            _lastNetworkReconnect = now;
+            unawaited(_reconnect());
+          }
+        }
       case 'log':
         final level = event['level'] as String? ?? 'info';
         final msg = event['message'] as String? ?? '';

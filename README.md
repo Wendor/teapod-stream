@@ -74,8 +74,8 @@ VPN-клиент для Android с поддержкой протокола Xray 
 
 Бинарные файлы загружаются автоматически при выполнении `./build.sh binaries`:
 - [teapod-core](https://github.com/Wendor/teapod-core) (xray-core + teapod-tun2socks)
-- [geoip.dat](https://github.com/v2fly/geoip)
-- [geosite.dat](https://github.com/v2fly/domain-list-community)
+- [geoip.dat](https://github.com/Loyalsoldier/v2ray-rules-dat)
+- [geosite.dat](https://github.com/Loyalsoldier/v2ray-rules-dat)
 
 AAR-зависимости подключаются через Gradle:
 - [teapod-tun2socks](https://github.com/Wendor/teapod-tun2socks)

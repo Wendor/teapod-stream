@@ -6,6 +6,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import '../core/services/update_service.dart';
 import '../core/constants/app_constants.dart';
+import 'vpn_provider.dart';
 
 sealed class UpdateState {}
 
@@ -60,7 +61,14 @@ class UpdateNotifier extends Notifier<UpdateState> {
       final currentVersion = info.version;
       final abi =
           await _channel.invokeMethod<String>('getAbi') ?? 'arm64-v8a';
-      final update = await _service.checkForUpdate(currentVersion, abi);
+      final vpn = ref.read(vpnProvider);
+      final update = await _service.checkForUpdate(
+        currentVersion,
+        abi,
+        socksPort: vpn.isConnected ? vpn.activeSocksPort : null,
+        socksUser: vpn.activeSocksUser,
+        socksPassword: vpn.activeSocksPassword,
+      );
       if (update == null) {
         state = UpdateUpToDate();
         Future.delayed(const Duration(seconds: 3), () {
@@ -85,8 +93,14 @@ class UpdateNotifier extends Notifier<UpdateState> {
         downloaded: File(path).existsSync() ? File(path).lengthSync() : 0,
         total: info.totalBytes ?? -1);
 
-    _dlSub =
-        _service.downloadApk(info.downloadUrl, path).listen(
+    final vpn = ref.read(vpnProvider);
+    _dlSub = _service.downloadApk(
+      info.downloadUrl,
+      path,
+      socksPort: vpn.isConnected ? vpn.activeSocksPort : null,
+      socksUser: vpn.activeSocksUser,
+      socksPassword: vpn.activeSocksPassword,
+    ).listen(
       (progress) {
         if (progress.done) {
           state = UpdateDownloaded(info, path);

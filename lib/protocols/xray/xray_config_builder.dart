@@ -2,11 +2,12 @@ import 'dart:convert';
 import '../../core/interfaces/vpn_engine.dart';
 import '../../core/models/vpn_config.dart';
 import '../../core/models/dns_config.dart';
-import '../../core/models/routing_config.dart';
+import '../../core/models/routing_settings.dart';
 
 class XrayConfigBuilder {
   static Map<String, dynamic> build(VpnConfig config, VpnEngineOptions options) {
     final dnsBlock = _buildDnsBlock(options);
+    final routing = options.routing;
 
     return {
       'log': {'loglevel': options.logLevel.name},
@@ -30,9 +31,9 @@ class XrayConfigBuilder {
             'destOverride': ['http', 'tls', 'quic'],
             // routeOnly: true preserves original IP for geoip matching — without it xray
             // re-resolves the domain via VPN DNS and may get CDN IPs outside the target geo
-            'routeOnly': options.routingMode != RoutingMode.global,
+            'routeOnly': routing.isActive && routing.geoEnabled && routing.geoCodes.isNotEmpty,
           },
-        }
+        },
       ],
       'outbounds': [
         _buildOutbound(config),
@@ -63,11 +64,13 @@ class XrayConfigBuilder {
               'outboundTag': 'direct',
             },
           ],
-          ..._buildGeoRules(options.routingMode),
+          ..._buildGeoRules(routing),
           {
             'type': 'field',
             'inboundTag': ['socks-in'],
-            'outboundTag': options.routingMode == RoutingMode.onlyRU ? 'direct' : 'proxy',
+            'outboundTag': routing.direction == RoutingDirection.onlySelected
+                ? 'direct'
+                : 'proxy',
           }
         ],
       },
@@ -88,27 +91,38 @@ class XrayConfigBuilder {
     };
   }
 
-  static List<Map<String, dynamic>> _buildGeoRules(RoutingMode mode) {
-    return switch (mode) {
-      RoutingMode.global => [],
-      RoutingMode.bypassLocal => [
-          {'type': 'field', 'ip': ['geoip:private'], 'outboundTag': 'direct'},
-        ],
-      // domain:ru / domain:xn--p1ai (.рф) match without DNS resolution — reliable even via VPN
-      RoutingMode.bypassRU => [
-          {'type': 'field', 'domain': ['domain:ru', 'domain:xn--p1ai'], 'outboundTag': 'direct'},
-          {'type': 'field', 'ip': ['geoip:ru', 'geoip:private'], 'outboundTag': 'direct'},
-        ],
-      RoutingMode.bypassCN => [
-          {'type': 'field', 'domain': ['domain:cn', 'domain:com.cn', 'domain:net.cn', 'domain:org.cn'], 'outboundTag': 'direct'},
-          {'type': 'field', 'ip': ['geoip:cn', 'geoip:private'], 'outboundTag': 'direct'},
-        ],
-      // onlyRU: RU traffic → proxy, catch-all (socks-in) → direct (handled in routing rules)
-      RoutingMode.onlyRU => [
-          {'type': 'field', 'domain': ['domain:ru', 'domain:xn--p1ai'], 'outboundTag': 'proxy'},
-          {'type': 'field', 'ip': ['geoip:ru'], 'outboundTag': 'proxy'},
-        ],
-    };
+  static List<Map<String, dynamic>> _buildGeoRules(RoutingSettings routing) {
+    if (!routing.isActive) return [];
+
+    final rules = <Map<String, dynamic>>[];
+
+    // Private IPs always bypass regardless of direction
+    if (routing.bypassLocal) {
+      rules.add({'type': 'field', 'ip': ['geoip:private'], 'outboundTag': 'direct'});
+    }
+
+    if (!routing.geoEnabled && !routing.domainEnabled) return rules;
+
+    final selectedOut =
+        routing.direction == RoutingDirection.bypass ? 'direct' : 'proxy';
+
+    if (routing.domainEnabled && routing.domainZones.isNotEmpty) {
+      rules.add({
+        'type': 'field',
+        'domain': routing.domainZones.map((z) => 'domain:$z').toList(),
+        'outboundTag': selectedOut,
+      });
+    }
+
+    if (routing.geoEnabled && routing.geoCodes.isNotEmpty) {
+      rules.add({
+        'type': 'field',
+        'ip': routing.geoCodes.map((c) => 'geoip:${c.toLowerCase()}').toList(),
+        'outboundTag': selectedOut,
+      });
+    }
+
+    return rules;
   }
 
   static Map<String, dynamic> _buildDnsBlock(VpnEngineOptions options) {

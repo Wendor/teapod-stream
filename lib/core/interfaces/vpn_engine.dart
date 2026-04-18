@@ -1,7 +1,7 @@
 import '../models/vpn_config.dart';
 import '../models/vpn_log_entry.dart';
 import '../models/dns_config.dart';
-import '../models/routing_config.dart';
+import '../models/routing_settings.dart';
 import '../services/settings_service.dart';
 
 enum VpnState { disconnected, connecting, connected, disconnecting, error }
@@ -31,7 +31,7 @@ class VpnEngineOptions {
   final bool proxyOnly;
   final bool showNotification;
   final bool killSwitch;
-  final RoutingMode routingMode;
+  final RoutingSettings routing;
 
   const VpnEngineOptions({
     required this.socksPort,
@@ -48,6 +48,6 @@ class VpnEngineOptions {
     this.proxyOnly = false,
     this.showNotification = true,
     this.killSwitch = false,
-    this.routingMode = RoutingMode.global,
+    this.routing = const RoutingSettings(),
   });
 }

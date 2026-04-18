@@ -39,6 +39,7 @@ dependencies:
   url_launcher_android: ^6.3.29
   url_launcher: ^6.3.2
   path_provider: ^2.1.5
+  socks5_proxy: ^2.1.1
 
 dev_dependencies:
   flutter_test:

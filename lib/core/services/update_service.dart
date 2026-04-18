@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+import 'package:socks5_proxy/socks.dart';
 
 class UpdateInfo {
   final String version;
@@ -29,11 +30,36 @@ class UpdateService {
   static const _githubApi =
       'https://api.github.com/repos/Wendor/teapod-stream/releases/latest';
 
-  /// Returns null if already up to date or no matching APK asset found.
-  Future<UpdateInfo?> checkForUpdate(String currentVersion, String abi) async {
+  HttpClient _makeClient({int? socksPort, String? user, String? password}) {
     final client = HttpClient();
+    if (socksPort != null && socksPort > 0) {
+      SocksTCPClient.assignToHttpClient(client, [
+        ProxySettings(
+          InternetAddress.loopbackIPv4,
+          socksPort,
+          username: (user != null && user.isNotEmpty) ? user : null,
+          password: (user != null && user.isNotEmpty) ? password : null,
+        ),
+      ]);
+    }
+    return client;
+  }
+
+  /// Returns null if already up to date or no matching APK asset found.
+  /// Pass [socksPort] to route through the active VPN SOCKS5 proxy.
+  Future<UpdateInfo?> checkForUpdate(
+    String currentVersion,
+    String abi, {
+    int? socksPort,
+    String? socksUser,
+    String? socksPassword,
+  }) async {
+    final client = _makeClient(
+        socksPort: socksPort, user: socksUser, password: socksPassword);
     try {
-      final req = await client.getUrl(Uri.parse(_githubApi));
+      final req = await client
+          .getUrl(Uri.parse(_githubApi))
+          .timeout(const Duration(seconds: 15));
       req.headers.set('User-Agent', 'TeapodStream');
       req.headers.set('Accept', 'application/vnd.github+json');
       final resp = await req.close().timeout(const Duration(seconds: 15));
@@ -51,7 +77,8 @@ class UpdateService {
           final url = asset['browser_download_url'] as String?;
           final size = asset['size'] as int?;
           if (url != null) {
-            return UpdateInfo(version: tagName, downloadUrl: url, totalBytes: size);
+            return UpdateInfo(
+                version: tagName, downloadUrl: url, totalBytes: size);
           }
         }
       }
@@ -62,10 +89,18 @@ class UpdateService {
   }
 
   /// Resumable download. Sends Range header if destPath already has bytes.
-  Stream<DownloadProgress> downloadApk(String url, String destPath) async* {
+  /// Pass [socksPort] to route through the active VPN SOCKS5 proxy.
+  Stream<DownloadProgress> downloadApk(
+    String url,
+    String destPath, {
+    int? socksPort,
+    String? socksUser,
+    String? socksPassword,
+  }) async* {
     final file = File(destPath);
     final existing = file.existsSync() ? file.lengthSync() : 0;
-    final client = HttpClient();
+    final client = _makeClient(
+        socksPort: socksPort, user: socksUser, password: socksPassword);
     IOSink? sink;
     try {
       final req = await client.getUrl(Uri.parse(url));
@@ -73,8 +108,6 @@ class UpdateService {
       if (existing > 0) req.headers.set('Range', 'bytes=$existing-');
       final resp = await req.close();
       if (resp.statusCode == 416) {
-        // File already fully downloaded — treat as completion
-        client.close();
         yield DownloadProgress(downloaded: existing, total: existing, done: true);
         return;
       }
@@ -82,10 +115,7 @@ class UpdateService {
         throw Exception('HTTP ${resp.statusCode}');
       }
       final isResume = resp.statusCode == 206;
-      if (!isResume && existing > 0) {
-        // Server didn't honor Range — start fresh
-        await file.delete();
-      }
+      if (!isResume && existing > 0) await file.delete();
       final contentLength = resp.headers.contentLength;
       final total = contentLength > 0
           ? (isResume ? existing + contentLength : contentLength)

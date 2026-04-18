@@ -17,11 +17,17 @@ class VpnState2 {
   final VpnState connectionState;
   final VpnStats stats;
   final String? error;
+  final int activeSocksPort;
+  final String activeSocksUser;
+  final String activeSocksPassword;
 
   const VpnState2({
     this.connectionState = VpnState.disconnected,
     this.stats = const VpnStats(),
     this.error,
+    this.activeSocksPort = 0,
+    this.activeSocksUser = '',
+    this.activeSocksPassword = '',
   });
 
   bool get isConnected => connectionState == VpnState.connected;
@@ -33,11 +39,17 @@ class VpnState2 {
     VpnState? connectionState,
     VpnStats? stats,
     String? error,
+    int? activeSocksPort,
+    String? activeSocksUser,
+    String? activeSocksPassword,
   }) {
     return VpnState2(
       connectionState: connectionState ?? this.connectionState,
       stats: stats ?? this.stats,
       error: error,
+      activeSocksPort: activeSocksPort ?? this.activeSocksPort,
+      activeSocksUser: activeSocksUser ?? this.activeSocksUser,
+      activeSocksPassword: activeSocksPassword ?? this.activeSocksPassword,
     );
   }
 }
@@ -388,12 +400,17 @@ class VpnNotifier extends Notifier<VpnState2> {
       proxyOnly: settings.proxyOnly,
       showNotification: settings.showNotification,
       killSwitch: settings.killSwitchEnabled,
-      routingMode: settings.routingMode,
+      routing: settings.routing,
     );
     _heartbeatSocksPort = actualSocksPort;
     _heartbeatUser = socksCredentials.user;
     _heartbeatPassword = socksCredentials.password;
     _heartbeatProxyOnly = settings.proxyOnly;
+    state = state.copyWith(
+      activeSocksPort: actualSocksPort,
+      activeSocksUser: socksCredentials.user,
+      activeSocksPassword: socksCredentials.password,
+    );
 
     try {
       await _engine.connect(config, options);

@@ -1,7 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/vpn_log_entry.dart';
 import '../models/dns_config.dart';
-import '../models/routing_config.dart';
+import '../models/routing_settings.dart';
 import '../constants/app_constants.dart';
 import 'storage_secure_service.dart';
 import 'storage_migration_service.dart';
@@ -32,7 +32,7 @@ class AppSettings {
   final bool proxyOnly;
   final bool showNotification;
   final bool killSwitchEnabled;
-  final RoutingMode routingMode;
+  final RoutingSettings routing;
 
   const AppSettings({
     this.socksPort = AppConstants.defaultSocksPort,
@@ -54,7 +54,7 @@ class AppSettings {
     this.proxyOnly = false,
     this.showNotification = true,
     this.killSwitchEnabled = false,
-    this.routingMode = RoutingMode.global,
+    this.routing = const RoutingSettings(),
   });
 
   AppSettings copyWith({
@@ -77,7 +77,7 @@ class AppSettings {
     bool? proxyOnly,
     bool? showNotification,
     bool? killSwitchEnabled,
-    RoutingMode? routingMode,
+    RoutingSettings? routing,
   }) {
     return AppSettings(
       socksPort: socksPort ?? this.socksPort,
@@ -99,7 +99,7 @@ class AppSettings {
       proxyOnly: proxyOnly ?? this.proxyOnly,
       showNotification: showNotification ?? this.showNotification,
       killSwitchEnabled: killSwitchEnabled ?? this.killSwitchEnabled,
-      routingMode: routingMode ?? this.routingMode,
+      routing: routing ?? this.routing,
     );
   }
 
@@ -128,7 +128,12 @@ class SettingsService {
   static const _vpnModeKey = 'vpn_mode';
   static const _includedPackagesKey = 'included_packages';
   static const _killSwitchKey = 'kill_switch';
-  static const _routingModeKey = 'routing_mode';
+  static const _routingDirectionKey = 'routing_direction';
+  static const _routingBypassLocalKey = 'routing_bypass_local';
+  static const _routingGeoEnabledKey = 'routing_geo_enabled';
+  static const _routingGeoCodesKey = 'routing_geo_codes';
+  static const _routingDomainEnabledKey = 'routing_domain_enabled';
+  static const _routingDomainZonesKey = 'routing_domain_zones';
 
   final _secure = StorageSecureService();
 
@@ -167,10 +172,21 @@ class SettingsService {
       proxyOnly: prefs.getBool(_proxyOnlyKey) ?? false,
       showNotification: prefs.getBool(_showNotificationKey) ?? true,
       killSwitchEnabled: prefs.getBool(_killSwitchKey) ?? false,
-      routingMode: RoutingMode.values.firstWhere(
-        (e) => e.name == prefs.getString(_routingModeKey),
-        orElse: () => RoutingMode.global,
+      routing: _loadRouting(prefs),
+    );
+  }
+
+  static RoutingSettings _loadRouting(SharedPreferences prefs) {
+    return RoutingSettings(
+      direction: RoutingDirection.values.firstWhere(
+        (e) => e.name == prefs.getString(_routingDirectionKey),
+        orElse: () => RoutingDirection.global,
       ),
+      bypassLocal: prefs.getBool(_routingBypassLocalKey) ?? false,
+      geoEnabled: prefs.getBool(_routingGeoEnabledKey) ?? false,
+      geoCodes: prefs.getStringList(_routingGeoCodesKey) ?? [],
+      domainEnabled: prefs.getBool(_routingDomainEnabledKey) ?? false,
+      domainZones: prefs.getStringList(_routingDomainZonesKey) ?? [],
     );
   }
 
@@ -195,7 +211,12 @@ class SettingsService {
     await prefs.setBool(_proxyOnlyKey, settings.proxyOnly);
     await prefs.setBool(_showNotificationKey, settings.showNotification);
     await prefs.setBool(_killSwitchKey, settings.killSwitchEnabled);
-    await prefs.setString(_routingModeKey, settings.routingMode.name);
+    await prefs.setString(_routingDirectionKey, settings.routing.direction.name);
+    await prefs.setBool(_routingBypassLocalKey, settings.routing.bypassLocal);
+    await prefs.setBool(_routingGeoEnabledKey, settings.routing.geoEnabled);
+    await prefs.setStringList(_routingGeoCodesKey, settings.routing.geoCodes);
+    await prefs.setBool(_routingDomainEnabledKey, settings.routing.domainEnabled);
+    await prefs.setStringList(_routingDomainZonesKey, settings.routing.domainZones);
     // SOCKS credentials go to encrypted storage
     await _secure.writeSocksCredentials(settings.socksUser, settings.socksPassword);
   }

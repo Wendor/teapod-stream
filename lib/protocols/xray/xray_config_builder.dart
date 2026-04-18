@@ -292,6 +292,8 @@ class XrayConfigBuilder {
           'path': config.wsPath ?? '/',
           if (config.wsHost != null && config.wsHost!.isNotEmpty)
             'host': config.wsHost,
+          if (config.xhttpMode != null && config.xhttpMode!.isNotEmpty)
+            'mode': config.xhttpMode,
         },
       if (config.transport == VpnTransport.splithttp)
         'splithttpSettings': {

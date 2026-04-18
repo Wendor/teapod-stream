@@ -35,6 +35,7 @@ class VpnConfig {
   final String? subscriptionId; // ID of the subscription this config came from
   final String? ssPrefix; // hex-encoded prefix bytes for Outline Shadowsocks (e.g. "160301...")
   final String? obfsPassword; // for Hysteria2 salamander obfuscation
+  final String? xhttpMode; // for xhttp transport: "auto", "packet-up", "stream-up", "stream-one"
 
   const VpnConfig({
     required this.id,
@@ -65,6 +66,7 @@ class VpnConfig {
     this.subscriptionId,
     this.ssPrefix,
     this.obfsPassword,
+    this.xhttpMode,
   });
 
   VpnConfig copyWith({
@@ -102,6 +104,7 @@ class VpnConfig {
       subscriptionId: subscriptionId ?? this.subscriptionId,
       ssPrefix: ssPrefix,
       obfsPassword: obfsPassword,
+      xhttpMode: xhttpMode,
     );
   }
 
@@ -134,6 +137,7 @@ class VpnConfig {
         'subscriptionId': subscriptionId,
         'ssPrefix': ssPrefix,
         'obfsPassword': obfsPassword,
+        'xhttpMode': xhttpMode,
       };
 
   factory VpnConfig.fromJson(Map<String, dynamic> json) => VpnConfig(
@@ -174,6 +178,7 @@ class VpnConfig {
         subscriptionId: json['subscriptionId'] as String?,
         ssPrefix: json['ssPrefix'] as String?,
         obfsPassword: json['obfsPassword'] as String?,
+        xhttpMode: json['xhttpMode'] as String?,
       );
 
   String toJsonString() => jsonEncode(toJson());

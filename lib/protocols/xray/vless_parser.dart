@@ -60,6 +60,7 @@ class VlessParser {
         postQuantumKey: params['pqv'],
         flow: params['flow'],
         encryption: params['encryption'] ?? 'none',
+        xhttpMode: params['mode'],
         createdAt: DateTime.now(),
         rawUri: uri,
       );
@@ -96,6 +97,7 @@ class VlessParser {
         wsHost: json['host'] as String?,
         grpcServiceName: json['path'] as String?,
         alterId: json['aid']?.toString() ?? '0',
+        xhttpMode: json['mode'] as String?,
         createdAt: DateTime.now(),
         rawUri: uri,
       );
@@ -141,6 +143,7 @@ class VlessParser {
         wsPath: params['path'],
         wsHost: params['host'],
         fingerprint: params['fp'],
+        xhttpMode: params['mode'],
         createdAt: DateTime.now(),
         rawUri: uri,
       );

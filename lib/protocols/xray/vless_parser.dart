@@ -12,13 +12,21 @@ class VlessParser {
     return null;
   }
 
+  static String _decodeName(String raw) {
+    try {
+      return Uri.decodeComponent(raw);
+    } catch (_) {
+      return raw;
+    }
+  }
+
   // vless://uuid@host:port?params#name
   static VpnConfig? _parseVless(String uri) {
     try {
       final withoutScheme = uri.substring('vless://'.length);
       final hashIdx = withoutScheme.indexOf('#');
       final name = hashIdx >= 0
-          ? Uri.decodeComponent(withoutScheme.substring(hashIdx + 1))
+          ? _decodeName(withoutScheme.substring(hashIdx + 1))
           : 'VLESS Server';
       final main =
           hashIdx >= 0 ? withoutScheme.substring(0, hashIdx) : withoutScheme;
@@ -112,7 +120,7 @@ class VlessParser {
       final withoutScheme = uri.substring('trojan://'.length);
       final hashIdx = withoutScheme.indexOf('#');
       final name = hashIdx >= 0
-          ? Uri.decodeComponent(withoutScheme.substring(hashIdx + 1))
+          ? _decodeName(withoutScheme.substring(hashIdx + 1))
           : 'Trojan Server';
       final main =
           hashIdx >= 0 ? withoutScheme.substring(0, hashIdx) : withoutScheme;
@@ -158,7 +166,7 @@ class VlessParser {
       final withoutScheme = uri.substring('ss://'.length);
       final hashIdx = withoutScheme.indexOf('#');
       final name = hashIdx >= 0
-          ? Uri.decodeComponent(withoutScheme.substring(hashIdx + 1))
+          ? _decodeName(withoutScheme.substring(hashIdx + 1))
           : 'Shadowsocks Server';
       final main =
           hashIdx >= 0 ? withoutScheme.substring(0, hashIdx) : withoutScheme;
@@ -254,7 +262,7 @@ class VlessParser {
       final withoutScheme = uri.substring(scheme.length);
       final hashIdx = withoutScheme.indexOf('#');
       final name = hashIdx >= 0
-          ? Uri.decodeComponent(withoutScheme.substring(hashIdx + 1))
+          ? _decodeName(withoutScheme.substring(hashIdx + 1))
           : 'Hysteria2 Server';
       final main =
           hashIdx >= 0 ? withoutScheme.substring(0, hashIdx) : withoutScheme;

@@ -20,6 +20,28 @@ class UntrustedCertificateException implements Exception {
   String toString() => 'UntrustedCertificateException: $host — $subject (issued by $issuer)';
 }
 
+class SubscriptionFetchResult {
+  final List<VpnConfig> configs;
+  final String? profileTitle;
+  final DateTime? expireAt;
+  final int? uploadBytes;
+  final int? downloadBytes;
+  final int? totalBytes;
+  final String? announce;
+  final String? announceUrl;
+
+  const SubscriptionFetchResult({
+    required this.configs,
+    this.profileTitle,
+    this.expireAt,
+    this.uploadBytes,
+    this.downloadBytes,
+    this.totalBytes,
+    this.announce,
+    this.announceUrl,
+  });
+}
+
 class SubscriptionService {
   /// Fetch and parse a subscription URL.
   ///
@@ -27,7 +49,7 @@ class SubscriptionService {
   /// untrusted certificate, throws [UntrustedCertificateException] with
   /// certificate details so the caller can decide whether to retry.
   /// If [allowSelfSigned] is true, certificate validation is skipped.
-  Future<List<VpnConfig>> fetchSubscription(
+  Future<SubscriptionFetchResult> fetchSubscription(
     String url, {
     bool allowSelfSigned = false,
   }) async {
@@ -48,6 +70,7 @@ class SubscriptionService {
     };
 
     String body;
+    HttpHeaders responseHeaders;
     try {
       final request = await httpClient.getUrl(uri);
       request.headers.set('User-Agent', AppConstants.subscriptionUserAgent);
@@ -58,6 +81,7 @@ class SubscriptionService {
         throw Exception('Failed to fetch subscription: ${response.statusCode}');
       }
 
+      responseHeaders = response.headers;
       body = await response.transform(utf8.decoder).join();
     } on HandshakeException {
       if (certError != null) throw certError!;
@@ -65,6 +89,8 @@ class SubscriptionService {
     } finally {
       httpClient.close();
     }
+
+    final meta = _parseHeaders(responseHeaders);
 
     body = body.trim();
     List<String> lines;
@@ -93,6 +119,107 @@ class SubscriptionService {
         // Skip unparseable lines
       }
     }
-    return configs;
+
+    return SubscriptionFetchResult(
+      configs: configs,
+      profileTitle: meta.profileTitle,
+      expireAt: meta.expireAt,
+      uploadBytes: meta.uploadBytes,
+      downloadBytes: meta.downloadBytes,
+      totalBytes: meta.totalBytes,
+      announce: meta.announce,
+      announceUrl: meta.announceUrl,
+    );
   }
+
+  _HeaderMeta _parseHeaders(HttpHeaders headers) {
+    String? profileTitle;
+    DateTime? expireAt;
+    int? uploadBytes;
+    int? downloadBytes;
+    int? totalBytes;
+    String? announce;
+    String? announceUrl;
+
+    // profile-title: plain text or "base64:<encoded>"
+    final rawTitle = headers.value('profile-title');
+    if (rawTitle != null) {
+      profileTitle = _decodeHeaderValue(rawTitle);
+    }
+
+    // subscription-userinfo: upload=N; download=N; total=N; expire=N
+    final userInfo = headers.value('subscription-userinfo');
+    if (userInfo != null) {
+      for (final part in userInfo.split(';')) {
+        final kv = part.trim().split('=');
+        if (kv.length != 2) continue;
+        final key = kv[0].trim();
+        final val = int.tryParse(kv[1].trim());
+        if (val == null) continue;
+        switch (key) {
+          case 'upload':
+            uploadBytes = val;
+          case 'download':
+            downloadBytes = val;
+          case 'total':
+            totalBytes = val;
+          case 'expire':
+            expireAt = DateTime.fromMillisecondsSinceEpoch(val * 1000);
+        }
+      }
+    }
+
+    // announce: plain text or "base64:<encoded>"
+    final rawAnnounce = headers.value('announce');
+    if (rawAnnounce != null) {
+      announce = _decodeHeaderValue(rawAnnounce);
+    }
+
+    // announce-url
+    announceUrl = headers.value('announce-url');
+
+    return _HeaderMeta(
+      profileTitle: profileTitle,
+      expireAt: expireAt,
+      uploadBytes: uploadBytes,
+      downloadBytes: downloadBytes,
+      totalBytes: totalBytes,
+      announce: announce,
+      announceUrl: announceUrl,
+    );
+  }
+
+  /// Decodes a header value that may be prefixed with "base64:".
+  String _decodeHeaderValue(String value) {
+    if (value.startsWith('base64:')) {
+      try {
+        final encoded = value.substring(7);
+        final padded = encoded.padRight((encoded.length + 3) ~/ 4 * 4, '=');
+        return utf8.decode(base64Decode(padded));
+      } catch (_) {
+        return value.substring(7);
+      }
+    }
+    return value;
+  }
+}
+
+class _HeaderMeta {
+  final String? profileTitle;
+  final DateTime? expireAt;
+  final int? uploadBytes;
+  final int? downloadBytes;
+  final int? totalBytes;
+  final String? announce;
+  final String? announceUrl;
+
+  const _HeaderMeta({
+    this.profileTitle,
+    this.expireAt,
+    this.uploadBytes,
+    this.downloadBytes,
+    this.totalBytes,
+    this.announce,
+    this.announceUrl,
+  });
 }

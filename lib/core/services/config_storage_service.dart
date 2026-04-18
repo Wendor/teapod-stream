@@ -9,6 +9,12 @@ class Subscription {
   final String url;
   final DateTime createdAt;
   final DateTime? lastFetchedAt;
+  final DateTime? expireAt;
+  final int? uploadBytes;
+  final int? downloadBytes;
+  final int? totalBytes;
+  final String? announce;
+  final String? announceUrl;
 
   const Subscription({
     required this.id,
@@ -16,6 +22,12 @@ class Subscription {
     required this.url,
     required this.createdAt,
     this.lastFetchedAt,
+    this.expireAt,
+    this.uploadBytes,
+    this.downloadBytes,
+    this.totalBytes,
+    this.announce,
+    this.announceUrl,
   });
 
   Map<String, dynamic> toJson() => {
@@ -24,6 +36,12 @@ class Subscription {
         'url': url,
         'createdAt': createdAt.toIso8601String(),
         'lastFetchedAt': lastFetchedAt?.toIso8601String(),
+        'expireAt': expireAt?.toIso8601String(),
+        'uploadBytes': uploadBytes,
+        'downloadBytes': downloadBytes,
+        'totalBytes': totalBytes,
+        'announce': announce,
+        'announceUrl': announceUrl,
       };
 
   factory Subscription.fromJson(Map<String, dynamic> json) => Subscription(
@@ -34,15 +52,38 @@ class Subscription {
         lastFetchedAt: json['lastFetchedAt'] != null
             ? DateTime.parse(json['lastFetchedAt'] as String)
             : null,
+        expireAt: json['expireAt'] != null
+            ? DateTime.parse(json['expireAt'] as String)
+            : null,
+        uploadBytes: json['uploadBytes'] as int?,
+        downloadBytes: json['downloadBytes'] as int?,
+        totalBytes: json['totalBytes'] as int?,
+        announce: json['announce'] as String?,
+        announceUrl: json['announceUrl'] as String?,
       );
 
-  Subscription copyWith({String? name}) {
+  Subscription copyWith({
+    String? name,
+    DateTime? lastFetchedAt,
+    DateTime? expireAt,
+    int? uploadBytes,
+    int? downloadBytes,
+    int? totalBytes,
+    String? announce,
+    String? announceUrl,
+  }) {
     return Subscription(
       id: id,
       name: name ?? this.name,
       url: url,
       createdAt: createdAt,
-      lastFetchedAt: lastFetchedAt,
+      lastFetchedAt: lastFetchedAt ?? this.lastFetchedAt,
+      expireAt: expireAt ?? this.expireAt,
+      uploadBytes: uploadBytes ?? this.uploadBytes,
+      downloadBytes: downloadBytes ?? this.downloadBytes,
+      totalBytes: totalBytes ?? this.totalBytes,
+      announce: announce ?? this.announce,
+      announceUrl: announceUrl ?? this.announceUrl,
     );
   }
 }

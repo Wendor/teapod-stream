@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/models/vpn_config.dart';
 import '../core/services/config_storage_service.dart';
-import '../core/services/subscription_service.dart';
+import '../core/services/subscription_service.dart' show SubscriptionService, SubscriptionFetchResult;
 
 class ConfigState {
   final List<VpnConfig> configs;
@@ -118,10 +118,19 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
       for (final old in oldConfigs) {
         await storage.removeConfig(old.id);
       }
-      newConfigs = await _fetchAndTagConfigs(url, subId, allowSelfSigned: allowSelfSigned);
+      final (tagged, fetchResult) = await _fetchAndTagConfigs(url, subId, allowSelfSigned: allowSelfSigned);
+      newConfigs = tagged;
 
-      final updatedSub = existing.first.copyWith(name: name ?? existing.first.name);
-      // lastFetchedAt updated in fetch
+      final updatedSub = existing.first.copyWith(
+        name: name ?? existing.first.name,
+        lastFetchedAt: DateTime.now(),
+        expireAt: fetchResult.expireAt,
+        uploadBytes: fetchResult.uploadBytes,
+        downloadBytes: fetchResult.downloadBytes,
+        totalBytes: fetchResult.totalBytes,
+        announce: fetchResult.announce,
+        announceUrl: fetchResult.announceUrl,
+      );
       await storage.updateSubscription(updatedSub);
 
       final newConfigsList = [
@@ -129,15 +138,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
         ...newConfigs,
       ];
       final newSubs = current.subscriptions
-          .map((s) => s.id == subId
-              ? Subscription(
-                  id: s.id,
-                  name: name ?? s.name,
-                  url: s.url,
-                  createdAt: s.createdAt,
-                  lastFetchedAt: DateTime.now(),
-                )
-              : s)
+          .map((s) => s.id == subId ? updatedSub : s)
           .toList();
 
       state = AsyncData(current.copyWith(
@@ -149,14 +150,21 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     } else {
       // New subscription
       subId = 'sub_${DateTime.now().millisecondsSinceEpoch}';
-      newConfigs = await _fetchAndTagConfigs(url, subId, allowSelfSigned: allowSelfSigned);
+      final (tagged, fetchResult) = await _fetchAndTagConfigs(url, subId, allowSelfSigned: allowSelfSigned);
+      newConfigs = tagged;
 
       final sub = Subscription(
         id: subId,
-        name: name ?? Uri.parse(url).host,
+        name: name ?? fetchResult.profileTitle ?? Uri.parse(url).host,
         url: url,
         createdAt: DateTime.now(),
         lastFetchedAt: DateTime.now(),
+        expireAt: fetchResult.expireAt,
+        uploadBytes: fetchResult.uploadBytes,
+        downloadBytes: fetchResult.downloadBytes,
+        totalBytes: fetchResult.totalBytes,
+        announce: fetchResult.announce,
+        announceUrl: fetchResult.announceUrl,
       );
       await storage.addSubscription(sub);
 
@@ -172,10 +180,10 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     }
   }
 
-  Future<List<VpnConfig>> _fetchAndTagConfigs(String url, String subId, {bool allowSelfSigned = false}) async {
+  Future<(List<VpnConfig>, SubscriptionFetchResult)> _fetchAndTagConfigs(String url, String subId, {bool allowSelfSigned = false}) async {
     final svc = SubscriptionService();
-    final rawConfigs = await svc.fetchSubscription(url, allowSelfSigned: allowSelfSigned);
-    final tagged = rawConfigs.map((c) => VpnConfig(
+    final result = await svc.fetchSubscription(url, allowSelfSigned: allowSelfSigned);
+    final tagged = result.configs.map((c) => VpnConfig(
       id: c.id,
       name: c.name,
       protocol: c.protocol,
@@ -208,7 +216,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     for (final c in tagged) {
       await storage.addConfig(c);
     }
-    return tagged;
+    return (tagged, result);
   }
 
   Future<void> removeSubscription(String subId) async {

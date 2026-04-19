@@ -223,7 +223,6 @@ push_release() {
   fi
 
   ok "Релиз $tag опубликован!"
-  gh release view "$tag" --json url --jq '.url'
 }
 
 case "${1:-help}" in

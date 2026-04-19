@@ -114,9 +114,24 @@ class ConfigStorageService {
     await saveConfigs(configs);
   }
 
+  Future<void> addConfigsBatch(List<VpnConfig> newConfigs) async {
+    if (newConfigs.isEmpty) return;
+    final configs = await loadConfigs();
+    configs.addAll(newConfigs);
+    await saveConfigs(configs);
+  }
+
   Future<void> removeConfig(String id) async {
     final configs = await loadConfigs();
     configs.removeWhere((c) => c.id == id);
+    await saveConfigs(configs);
+  }
+
+  Future<void> removeConfigsBatch(List<String> ids) async {
+    if (ids.isEmpty) return;
+    final idSet = ids.toSet();
+    final configs = await loadConfigs();
+    configs.removeWhere((c) => idSet.contains(c.id));
     await saveConfigs(configs);
   }
 

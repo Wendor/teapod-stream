@@ -29,9 +29,13 @@ class XrayConfigBuilder {
           'sniffing': {
             'enabled': true,
             'destOverride': ['http', 'tls', 'quic'],
-            // routeOnly: true preserves original IP for geoip matching — without it xray
-            // re-resolves the domain via VPN DNS and may get CDN IPs outside the target geo
-            'routeOnly': routing.isActive && routing.geoEnabled && routing.geoCodes.isNotEmpty,
+            // routeOnly: true preserves sniffed domain/IP for routing — without it xray
+            // re-resolves the domain via DNS before applying rules, which adds latency and
+            // may fail for CDN domains or when DNS is unreliable during network transitions.
+            'routeOnly': routing.isActive && (
+              (routing.geoEnabled && routing.geoCodes.isNotEmpty) ||
+              (routing.domainEnabled && routing.domainZones.isNotEmpty)
+            ),
           },
         },
       ],

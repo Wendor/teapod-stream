@@ -673,33 +673,6 @@ class _TextField extends StatelessWidget {
   }
 }
 
-class _DisabledNote extends StatelessWidget {
-  final String text;
-  const _DisabledNote(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Row(
-        children: [
-          const Icon(Icons.info_outline, color: AppColors.connecting, size: 14),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              text,
-              style: const TextStyle(
-                color: AppColors.connecting,
-                fontSize: 12,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _ComponentRow extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -947,16 +920,20 @@ class _DnsSettingsScreenState extends ConsumerState<_DnsSettingsScreen> {
         children: [
           const Text('Выберите DNS сервер:', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
           const SizedBox(height: 8),
-          ...DnsServerConfig.presets.map((p) {
-            final val = p['value'] as String;
-            final label = p['label'] as String;
-            return RadioListTile<String>(
-              title: Text(label, style: const TextStyle(fontSize: 14)),
-              value: val,
-              groupValue: _selectedPreset,
-              onChanged: (v) => setState(() => _selectedPreset = v!),
-            );
-          }),
+          RadioGroup<String>(
+            groupValue: _selectedPreset,
+            onChanged: (v) => setState(() => _selectedPreset = v!),
+            child: Column(
+              children: DnsServerConfig.presets.map((p) {
+                final val = p['value'] as String;
+                final label = p['label'] as String;
+                return RadioListTile<String>(
+                  title: Text(label, style: const TextStyle(fontSize: 14)),
+                  value: val,
+                );
+              }).toList(),
+            ),
+          ),
           if (isCustom) ...[
             const SizedBox(height: 12),
             Container(

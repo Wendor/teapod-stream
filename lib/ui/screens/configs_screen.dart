@@ -152,6 +152,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
     );
 
     if (result == null) return;
+    if (!context.mounted) return;
     switch (result) {
       case 'rename':
         await _renameConfig(context, ref, config);
@@ -405,16 +406,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
       ),
     );
     if (ok == true && controller.text.trim().isNotEmpty) {
-      final updated = sub.copyWith(name: controller.text.trim());
-      await ConfigNotifier.storage.updateSubscription(updated);
-      final current = ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
-      if (current != null) {
-        ref.read(configProvider.notifier).state = AsyncData(
-          current.copyWith(
-            subscriptions: current.subscriptions.map((s) => s.id == sub.id ? updated : s).toList(),
-          ),
-        );
-      }
+      await ref.read(configProvider.notifier).renameSubscription(sub.id, controller.text.trim());
     }
   }
 

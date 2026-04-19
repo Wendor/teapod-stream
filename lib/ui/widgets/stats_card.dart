@@ -239,19 +239,19 @@ class _SpeedChartPainter extends CustomPainter {
     final n = ratios.length;
     final xStep = size.width / (n - 1);
 
-    double _y(int i) {
+    double y(int i) {
       final v = ratios[i].clamp(0.0, 1.0) * amplitude;
       return isUp ? mid - v : mid + v;
     }
 
     final fillPath = Path()..moveTo(0, mid);
-    final linePath = Path()..moveTo(0, _y(0));
+    final linePath = Path()..moveTo(0, y(0));
 
     for (int i = 0; i < n - 1; i++) {
       final x0 = i * xStep;
       final x1 = (i + 1) * xStep;
-      final y0 = _y(i);
-      final y1 = _y(i + 1);
+      final y0 = y(i);
+      final y1 = y(i + 1);
       final cpx = (x0 + x1) / 2;
       fillPath.cubicTo(cpx, y0, cpx, y1, x1, y1);
       linePath.cubicTo(cpx, y0, cpx, y1, x1, y1);

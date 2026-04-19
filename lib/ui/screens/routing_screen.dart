@@ -56,22 +56,30 @@ class _RoutingBody extends StatelessWidget {
         _label('РЕЖИМ'),
         const SizedBox(height: 8),
         _card([
-          _radioTile(
-            RoutingDirection.global,
-            'Глобальный',
-            'Весь трафик через VPN',
-          ),
-          _divider(),
-          _radioTile(
-            RoutingDirection.bypass,
-            'Обход',
-            'Выбранные адреса — напрямую, остальное через VPN',
-          ),
-          _divider(),
-          _radioTile(
-            RoutingDirection.onlySelected,
-            'Только выбранное',
-            'Только выбранные адреса — через VPN, остальное напрямую',
+          RadioGroup<RoutingDirection>(
+            groupValue: routing.direction,
+            onChanged: (v) {
+              if (!isConnected && v != null) onUpdate(routing.copyWith(direction: v));
+            },
+            child: Column(children: [
+              _radioTile(
+                RoutingDirection.global,
+                'Глобальный',
+                'Весь трафик через VPN',
+              ),
+              _divider(),
+              _radioTile(
+                RoutingDirection.bypass,
+                'Обход',
+                'Выбранные адреса — напрямую, остальное через VPN',
+              ),
+              _divider(),
+              _radioTile(
+                RoutingDirection.onlySelected,
+                'Только выбранное',
+                'Только выбранные адреса — через VPN, остальное напрямую',
+              ),
+            ]),
           ),
         ]),
         if (routing.isActive) ...[
@@ -215,7 +223,6 @@ class _RoutingBody extends StatelessWidget {
   Widget _radioTile(RoutingDirection value, String title, String subtitle) =>
       RadioListTile<RoutingDirection>(
         value: value,
-        groupValue: routing.direction,
         title: Text(
           title,
           style: TextStyle(
@@ -226,9 +233,6 @@ class _RoutingBody extends StatelessWidget {
         subtitle: Text(subtitle,
             style:
                 const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-        onChanged: isConnected
-            ? null
-            : (v) => v != null ? onUpdate(routing.copyWith(direction: v)) : null,
       );
 
   Widget _chipSection(
@@ -333,8 +337,8 @@ class _RoutingBody extends StatelessWidget {
                         ),
                         value: selected.contains(code),
                         onChanged: (v) => setState(() {
-                          if (v == true) selected.add(code);
-                          else selected.remove(code);
+                          if (v == true) { selected.add(code); }
+                          else { selected.remove(code); }
                         }),
                         checkColor: AppColors.surface,
                         activeColor: AppColors.primary,
@@ -456,8 +460,8 @@ class _RoutingBody extends StatelessWidget {
                           ),
                           value: selected.contains(zone),
                           onChanged: (v) => setState(() {
-                            if (v == true) selected.add(zone);
-                            else selected.remove(zone);
+                            if (v == true) { selected.add(zone); }
+                            else { selected.remove(zone); }
                           }),
                           checkColor: AppColors.surface,
                           activeColor: AppColors.primary,

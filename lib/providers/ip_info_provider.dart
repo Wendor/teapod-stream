@@ -36,6 +36,7 @@ class IpInfoNotifier extends AsyncNotifier<IpInfo?> {
     required String socksUser,
     required String socksPassword,
   }) async {
+    if (socksPort <= 0) return null;
     final client = HttpClient();
     if (socksPort > 0) {
       SocksTCPClient.assignToHttpClient(client, [

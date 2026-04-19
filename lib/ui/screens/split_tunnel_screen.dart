@@ -278,13 +278,13 @@ class _AppListTile extends ConsumerWidget {
               borderRadius: BorderRadius.circular(10),
               child: iconAsync.when(
                 loading: () => _FallbackIcon(isExcluded: app.isExcluded, isOnlySelected: isOnlySelected),
-                error: (_, __) => _FallbackIcon(isExcluded: app.isExcluded, isOnlySelected: isOnlySelected),
+                error: (_, _) => _FallbackIcon(isExcluded: app.isExcluded, isOnlySelected: isOnlySelected),
                 data: (Uint8List? bytes) => bytes != null
                     ? Image.memory(
                         bytes,
                         width: 40,
                         height: 40,
-                        errorBuilder: (_, __, ___) =>
+                        errorBuilder: (_, _, _) =>
                             _FallbackIcon(isExcluded: app.isExcluded, isOnlySelected: isOnlySelected),
                       )
                     : _FallbackIcon(isExcluded: app.isExcluded, isOnlySelected: isOnlySelected),

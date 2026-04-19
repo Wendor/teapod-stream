@@ -64,9 +64,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
   Future<void> addConfigs(List<VpnConfig> newConfigs) async {
     final current = state.maybeWhen(data: (d) => d, orElse: () => null) ?? const ConfigState();
     final configs = [...current.configs, ...newConfigs];
-    for (final c in newConfigs) {
-      await storage.addConfig(c);
-    }
+    await storage.addConfigsBatch(newConfigs);
     state = AsyncData(current.copyWith(configs: configs));
   }
 
@@ -121,9 +119,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
       for (final old in oldConfigs) {
         if (old.latencyMs != null) latencyMap['${old.address}:${old.port}'] = old.latencyMs!;
       }
-      for (final old in oldConfigs) {
-        await storage.removeConfig(old.id);
-      }
+      await storage.removeConfigsBatch(oldConfigs.map((c) => c.id).toList());
       final (tagged, fetchResult) = await _fetchAndTagConfigs(url, subId, allowSelfSigned: allowSelfSigned);
       newConfigs = tagged.map((c) {
         final ms = latencyMap['${c.address}:${c.port}'];
@@ -195,40 +191,19 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
   Future<(List<VpnConfig>, SubscriptionFetchResult)> _fetchAndTagConfigs(String url, String subId, {bool allowSelfSigned = false}) async {
     final svc = SubscriptionService();
     final result = await svc.fetchSubscription(url, allowSelfSigned: allowSelfSigned);
-    final tagged = result.configs.map((c) => VpnConfig(
-      id: c.id,
-      name: c.name,
-      protocol: c.protocol,
-      address: c.address,
-      port: c.port,
-      uuid: c.uuid,
-      security: c.security,
-      transport: c.transport,
-      sni: c.sni,
-      wsPath: c.wsPath,
-      wsHost: c.wsHost,
-      grpcServiceName: c.grpcServiceName,
-      fingerprint: c.fingerprint,
-      publicKey: c.publicKey,
-      shortId: c.shortId,
-      spiderX: c.spiderX,
-      postQuantumKey: c.postQuantumKey,
-      flow: c.flow,
-      encryption: c.encryption,
-      alterId: c.alterId,
-      method: c.method,
-      password: c.password,
-      createdAt: c.createdAt,
-      rawUri: c.rawUri,
-      latencyMs: c.latencyMs,
-      subscriptionId: subId,
-      ssPrefix: c.ssPrefix,
-    )).toList();
-
-    for (final c in tagged) {
-      await storage.addConfig(c);
-    }
+    final tagged = result.configs.map((c) => c.copyWith(subscriptionId: subId)).toList();
+    await storage.addConfigsBatch(tagged);
     return (tagged, result);
+  }
+
+  Future<void> renameSubscription(String id, String newName) async {
+    final current = state.maybeWhen(data: (d) => d, orElse: () => null) ?? const ConfigState();
+    final sub = current.subscriptions.firstWhere((s) => s.id == id);
+    final renamed = sub.copyWith(name: newName);
+    await storage.updateSubscription(renamed);
+    state = AsyncData(current.copyWith(
+      subscriptions: current.subscriptions.map((s) => s.id == id ? renamed : s).toList(),
+    ));
   }
 
   Future<void> removeSubscription(String subId) async {

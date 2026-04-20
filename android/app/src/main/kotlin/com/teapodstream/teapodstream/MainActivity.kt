@@ -165,7 +165,18 @@ class MainActivity : FlutterActivity() {
                     }
 
                     "getState" -> {
-                        result.success(XrayVpnService.getNativeState())
+                        val state = XrayVpnService.getNativeState()
+                        val socks = if (state == "connected") {
+                            XrayVpnService.getSocksCredentials()
+                        } else {
+                            mapOf("port" to 0, "user" to "", "password" to "")
+                        }
+                        result.success(mapOf(
+                            "state" to state,
+                            "socksPort" to socks["port"],
+                            "socksUser" to socks["user"],
+                            "socksPassword" to socks["password"]
+                        ))
                     }
 
                     "installApk" -> {

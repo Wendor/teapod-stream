@@ -20,14 +20,14 @@ object VpnEventStreamHandler : EventChannel.StreamHandler {
         // Activity is recreated (e.g. config change, memory reclaim) while the
         // VPN service is still running in the foreground.
         val state = XrayVpnService.getNativeState()
-        if (state == "connected") {
-            sendConnectedEvent(
+        when (state) {
+            "connected" -> sendConnectedEvent(
                 XrayVpnService.activeSocksPort,
                 XrayVpnService.activeSocksUser,
                 XrayVpnService.activeSocksPassword,
             )
-        } else {
-            sendStateEvent(state)
+            "connecting", "disconnecting" -> sendStateEvent(state)
+            else -> sendStateEvent("disconnected")
         }
     }
 

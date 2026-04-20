@@ -67,6 +67,12 @@ class XrayVpnService : VpnService() {
         @Volatile var activeSocksPassword: String = ""
             private set
 
+        @JvmStatic fun getSocksCredentials(): Map<String, Any> = mapOf(
+            "port" to activeSocksPort,
+            "user" to activeSocksUser,
+            "password" to activeSocksPassword
+        )
+
         private const val NOTIFICATION_CHANNEL_ID = "vpn_service"
         private const val NOTIFICATION_CHANNEL_MINIMAL_ID = "vpn_service_minimal"
         private const val NOTIFICATION_ID = 1
@@ -874,8 +880,7 @@ class XrayVpnService : VpnService() {
         if (!isRunning.get()) return
         networkChangeHandler.post {
             if (userRequestedDisconnect.get() || !isRunning.get()) return@post
-            currentNativeState = "connecting"
-            VpnEventStreamHandler.sendStateEvent("connecting")
+            // Don't send "connecting" here — ACTION_CONNECT_QUICK will do it
             Thread {
                 stopVpn(resultState = "connecting", reconnecting = true)
                 val intent = Intent(this@XrayVpnService, XrayVpnService::class.java)

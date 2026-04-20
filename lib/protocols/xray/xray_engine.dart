@@ -76,4 +76,32 @@ class XrayEngine implements VpnEngine {
       password: randomString(AppConstants.socksAuthPasswordLength),
     );
   }
+
+  /// Get current VPN state with SOCKS credentials (for sync on app start).
+  Future<({VpnState state, int socksPort, String socksUser, String socksPassword})>
+      getVpnState() async {
+    try {
+      final result =
+          await _channel.invokeMethod<Map<Object?, Object?>>('getState');
+      if (result != null) {
+        final stateStr = result['state'] as String? ?? 'disconnected';
+        return (
+          state: _parseState(stateStr),
+          socksPort: result['socksPort'] as int? ?? 0,
+          socksUser: result['socksUser'] as String? ?? '',
+          socksPassword: result['socksPassword'] as String? ?? '',
+        );
+      }
+    } catch (_) {}
+    return (state: VpnState.disconnected, socksPort: 0, socksUser: '', socksPassword: '');
+  }
+
+  VpnState _parseState(String s) => switch (s) {
+        'connecting' => VpnState.connecting,
+        'connected' => VpnState.connected,
+        'disconnecting' => VpnState.disconnecting,
+        'disconnected' => VpnState.disconnected,
+        'error' => VpnState.error,
+        _ => VpnState.disconnected,
+      };
 }

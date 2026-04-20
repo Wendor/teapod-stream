@@ -8,6 +8,7 @@ import '../core/models/vpn_stats.dart';
 import '../core/models/vpn_log_entry.dart';
 import '../core/services/log_service.dart';
 import '../core/services/settings_service.dart';
+import 'ip_info_provider.dart';
 import '../protocols/xray/xray_engine.dart';
 import 'settings_provider.dart';
 import 'config_provider.dart';
@@ -85,6 +86,22 @@ class VpnNotifier extends Notifier<VpnState2> {
       _eventSub?.cancel();
       _connectTimeout?.cancel();
       _disconnectTimeout?.cancel();
+    });
+
+    // Sync state on init (for case when VPN is already running from tile/notification)
+    Future.microtask(() async {
+      final vpnState = await _engine.getVpnState();
+      if (vpnState.state == VpnState.connected && vpnState.socksPort > 0) {
+        state = VpnState2(
+          connectionState: VpnState.connected,
+          activeSocksPort: vpnState.socksPort,
+          activeSocksUser: vpnState.socksUser,
+          activeSocksPassword: vpnState.socksPassword,
+        );
+        // ipInfoProvider is AsyncNotifier, needs refresh to rebuild
+        // ignore: unused_result
+        ref.refresh(ipInfoProvider);
+      }
     });
 
     return const VpnState2();

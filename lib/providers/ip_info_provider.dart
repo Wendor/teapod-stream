@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:socks5_proxy/socks.dart';
 import '../core/interfaces/vpn_engine.dart';
+import '../protocols/xray/xray_engine.dart';
 import 'vpn_provider.dart';
 
 class IpInfo {
@@ -20,15 +21,26 @@ class IpInfo {
 class IpInfoNotifier extends AsyncNotifier<IpInfo?> {
   @override
   Future<IpInfo?> build() async {
-    // Watch only connection state — stats ticks must not retrigger a fetch
-    final connectionState = ref.watch(vpnConnectionStateProvider);
-    if (connectionState != VpnState.connected) return null;
+    // First, try to get state directly from native (handles case when VPN was started from tile)
+    final engine = XrayEngine();
+    final nativeState = await engine.getVpnState();
+    if (nativeState.state == VpnState.connected && nativeState.socksPort > 0) {
+      return _fetch(
+        socksPort: nativeState.socksPort,
+        socksUser: nativeState.socksUser,
+        socksPassword: nativeState.socksPassword,
+      );
+    }
+    // Fallback: check Flutter state (for when VPN was started from app)
     final vpnState = ref.read(vpnProvider);
-    return _fetch(
-      socksPort: vpnState.activeSocksPort,
-      socksUser: vpnState.activeSocksUser,
-      socksPassword: vpnState.activeSocksPassword,
-    );
+    if (vpnState.connectionState == VpnState.connected && vpnState.activeSocksPort > 0) {
+      return _fetch(
+        socksPort: vpnState.activeSocksPort,
+        socksUser: vpnState.activeSocksUser,
+        socksPassword: vpnState.activeSocksPassword,
+      );
+    }
+    return null;
   }
 
   Future<IpInfo?> _fetch({

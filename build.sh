@@ -182,9 +182,22 @@ rename_apks() {
         ok "$dst"
       fi
     done
+  elif ls "$dir"/app-arm64-v8a-debug.apk 1>/dev/null 2>&1; then
+    for abi in arm64-v8a armeabi-v7a x86_64; do
+      local src="$dir/app-$abi-debug.apk"
+      if [[ -f "$src" ]]; then
+        local dst="$dir/teapod-stream-$abi-debug-$VERSION.apk"
+        mv "$src" "$dst"
+        ok "$dst"
+      fi
+    done
   elif [[ -f "$dir/app-release.apk" ]]; then
     local dst="$dir/teapod-stream-universal-release-$VERSION.apk"
     mv "$dir/app-release.apk" "$dst"
+    ok "$dst"
+  elif [[ -f "$dir/app-debug.apk" ]]; then
+    local dst="$dir/teapod-stream-universal-debug-$VERSION.apk"
+    mv "$dir/app-debug.apk" "$dst"
     ok "$dst"
   fi
 }
@@ -232,9 +245,8 @@ case "${1:-help}" in
     accept_sdk_licenses
     check_binaries || true
     ensure_pub
-    flutter build apk --debug --no-pub
-    APK="build/app/outputs/flutter-apk/app-debug.apk"
-    ok "Debug APK: $APK ($(du -sh "$APK" | cut -f1))"
+    flutter build apk --debug --split-per-abi --no-pub
+    rename_apks
     ;;
 
   release)

@@ -431,15 +431,9 @@ class XrayVpnService : VpnService() {
                     .setBlocking(true)
                     .setMetered(false)
 
-                // On Android 8+, set underlying networks for better routing
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
-                    val activeNetwork = connectivityManager.activeNetwork
-                    if (activeNetwork != null) {
-                        builder.setUnderlyingNetworks(arrayOf(activeNetwork))
-                        log("info", "Underlying network set: $activeNetwork")
-                    }
-                }
+                // Don't call setUnderlyingNetworks here — Android sets VPN as activeNetwork
+                // after establish(). The correct physical network will be set via network callback.
+                // Setting it here may cause glitches when activeNetwork is still WiFi but becomes VPN later.
 
                 // Apply split tunneling based on VPN mode
                 if (vpnMode == "onlySelected") {
@@ -822,6 +816,37 @@ class XrayVpnService : VpnService() {
         }
     }
 
+    private fun findPhysicalNetwork(): Network? {
+        val cm = getSystemService(ConnectivityManager::class.java)
+        val activeNetwork = cm.activeNetwork ?: return null
+
+        val caps = cm.getNetworkCapabilities(activeNetwork)
+        if (caps == null || caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) {
+            // Active is VPN — find WiFi first (preferred over LTE)
+            val wifiNetwork = try {
+                cm.allNetworks.firstOrNull { n ->
+                    val c = cm.getNetworkCapabilities(n)
+                    c?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true &&
+                    c?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+                }
+            } catch (e: Exception) { null }
+
+            if (wifiNetwork != null) return wifiNetwork
+
+            // No WiFi — try any other internet network
+            return try {
+                cm.allNetworks.firstOrNull { n ->
+                    val c = cm.getNetworkCapabilities(n)
+                    c?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true &&
+                    !c.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+                }
+            } catch (e: Exception) { null }
+        }
+
+        // Active is not VPN — use it (WiFi or LTE)
+        return activeNetwork
+    }
+
     private fun updateUnderlyingNetworks(cm: ConnectivityManager) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val activeNetwork = cm.activeNetwork ?: run {
@@ -830,42 +855,21 @@ class XrayVpnService : VpnService() {
                 return
             }
 
-            // In Android 10+, cm.activeNetwork returns the VPN network itself if active.
-            // We must set the REAL underlying network (WiFi/LTE) to avoid status bar glitches.
-            val caps = cm.getNetworkCapabilities(activeNetwork)
-            if (caps == null || caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) {
-                // Active is VPN or unknown — look for the best physical internet network
-                val allNetworks = try { cm.allNetworks } catch (e: Exception) { emptyArray<Network>() }
-                var physicalNetwork: Network? = null
-                for (nw in allNetworks) {
-                    val c = cm.getNetworkCapabilities(nw) ?: continue
-                    if (c.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-                        !c.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) {
-                        physicalNetwork = nw
-                        break
-                    }
+            // Use findPhysicalNetwork to get WiFi/LTE (not VPN)
+            val physicalNetwork = findPhysicalNetwork()
+            if (physicalNetwork == null) {
+                if (lastUnderlyingNetwork != null) {
+                    setUnderlyingNetworks(null)
+                    lastUnderlyingNetwork = null
+                    log("info", "All underlying networks lost")
                 }
-
-                if (physicalNetwork == null) {
-                    if (lastUnderlyingNetwork != null) {
-                        setUnderlyingNetworks(null)
-                        lastUnderlyingNetwork = null
-                        log("info", "All underlying networks lost")
-                    }
-                    return
-                }
-
-                if (physicalNetwork == lastUnderlyingNetwork) return
-                lastUnderlyingNetwork = physicalNetwork
-                setUnderlyingNetworks(arrayOf(physicalNetwork))
-                log("info", "Underlying network set to physical: $physicalNetwork")
-            } else {
-                // Active is already physical
-                if (activeNetwork == lastUnderlyingNetwork) return
-                lastUnderlyingNetwork = activeNetwork
-                setUnderlyingNetworks(arrayOf(activeNetwork))
-                log("info", "Underlying network updated: $activeNetwork")
+                return
             }
+
+            if (physicalNetwork == lastUnderlyingNetwork) return
+            lastUnderlyingNetwork = physicalNetwork
+            setUnderlyingNetworks(arrayOf(physicalNetwork))
+            log("info", "Underlying network set to physical: $physicalNetwork")
         }
     }
 

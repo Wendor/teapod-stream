@@ -21,7 +21,18 @@ class IpInfo {
 class IpInfoNotifier extends AsyncNotifier<IpInfo?> {
   @override
   Future<IpInfo?> build() async {
-    // First, try to get state directly from native (handles case when VPN was started from tile)
+    final connectionState = ref.watch(vpnConnectionStateProvider);
+    if (connectionState == VpnState.connected) {
+      final vpnState = ref.read(vpnProvider);
+      if (vpnState.activeSocksPort > 0) {
+        return _fetch(
+          socksPort: vpnState.activeSocksPort,
+          socksUser: vpnState.activeSocksUser,
+          socksPassword: vpnState.activeSocksPassword,
+        );
+      }
+    }
+    // Fallback: Quick Tile started VPN — native state may be ahead of Flutter state
     final engine = XrayEngine();
     final nativeState = await engine.getVpnState();
     if (nativeState.state == VpnState.connected && nativeState.socksPort > 0) {
@@ -29,15 +40,6 @@ class IpInfoNotifier extends AsyncNotifier<IpInfo?> {
         socksPort: nativeState.socksPort,
         socksUser: nativeState.socksUser,
         socksPassword: nativeState.socksPassword,
-      );
-    }
-    // Fallback: check Flutter state (for when VPN was started from app)
-    final vpnState = ref.read(vpnProvider);
-    if (vpnState.connectionState == VpnState.connected && vpnState.activeSocksPort > 0) {
-      return _fetch(
-        socksPort: vpnState.activeSocksPort,
-        socksUser: vpnState.activeSocksUser,
-        socksPassword: vpnState.activeSocksPassword,
       );
     }
     return null;

@@ -176,9 +176,10 @@ class XrayConfigBuilder {
         ];
         break;
       case DnsType.dot:
-        // xray DoT format: tls://address:port
+        // xray DoT format: address and port must be separate fields;
+        // combining them as tls://host:port causes xray to append default port 53 → "tls://host:port:53"
         servers = [
-          {'address': 'tls://${server.address}:${server.port}'},
+          {'address': 'tls://${server.address}', 'port': server.port},
         ];
         break;
     }

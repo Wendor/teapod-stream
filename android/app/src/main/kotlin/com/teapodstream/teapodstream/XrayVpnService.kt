@@ -159,7 +159,11 @@ class XrayVpnService : VpnService() {
         VpnEventStreamHandler.appContext = applicationContext
         migrateConnectionParamsIfNeeded()
         Teapodcore.registerVpnProtector(object : VpnProtector {
-            override fun protect(fd: Long): Boolean = this@XrayVpnService.protect(fd.toInt())
+            override fun protect(fd: Long): Boolean {
+                val result = this@XrayVpnService.protect(fd.toInt())
+                android.util.Log.i("TeapodVPN", "[protect] fd=$fd result=$result")
+                return result
+            }
         })
     }
 

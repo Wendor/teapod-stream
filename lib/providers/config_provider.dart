@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/models/vpn_config.dart';
 import '../core/services/config_storage_service.dart';
-import '../core/services/subscription_service.dart' show SubscriptionService, SubscriptionFetchResult;
+import '../core/services/subscription_service.dart' show SubscriptionService, SubscriptionFetchResult, HwidDeviceInfo;
+import '../core/services/device_service.dart';
+import 'settings_provider.dart';
 
 class ConfigState {
   final List<VpnConfig> configs;
@@ -107,6 +109,11 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     final current = state.maybeWhen(data: (d) => d, orElse: () => null) ?? const ConfigState();
     final existing = current.subscriptions.where((s) => s.url == url).toList();
 
+    final settingsAsync = ref.read(settingsProvider);
+    final settings = settingsAsync.maybeWhen(data: (d) => d, orElse: () => null);
+    final hwidEnabled = settings?.hwidEnabled ?? false;
+    final hwid = hwidEnabled ? await DeviceService.getHwidInfo() : null;
+
     String subId;
     List<VpnConfig> newConfigs;
 
@@ -120,7 +127,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
         if (old.latencyMs != null) latencyMap['${old.address}:${old.port}'] = old.latencyMs!;
       }
       await storage.removeConfigsBatch(oldConfigs.map((c) => c.id).toList());
-      final (tagged, fetchResult) = await _fetchAndTagConfigs(url, subId, allowSelfSigned: allowSelfSigned);
+      final (tagged, fetchResult) = await _fetchAndTagConfigs(url, subId, allowSelfSigned: allowSelfSigned, hwid: hwid);
       newConfigs = tagged.map((c) {
         final ms = latencyMap['${c.address}:${c.port}'];
         return ms != null ? c.copyWith(latencyMs: ms) : c;
@@ -158,7 +165,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     } else {
       // New subscription
       subId = 'sub_${DateTime.now().millisecondsSinceEpoch}';
-      final (tagged, fetchResult) = await _fetchAndTagConfigs(url, subId, allowSelfSigned: allowSelfSigned);
+      final (tagged, fetchResult) = await _fetchAndTagConfigs(url, subId, allowSelfSigned: allowSelfSigned, hwid: hwid);
       newConfigs = tagged;
 
       final sub = Subscription(
@@ -188,9 +195,9 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     }
   }
 
-  Future<(List<VpnConfig>, SubscriptionFetchResult)> _fetchAndTagConfigs(String url, String subId, {bool allowSelfSigned = false}) async {
+  Future<(List<VpnConfig>, SubscriptionFetchResult)> _fetchAndTagConfigs(String url, String subId, {bool allowSelfSigned = false, HwidDeviceInfo? hwid}) async {
     final svc = SubscriptionService();
-    final result = await svc.fetchSubscription(url, allowSelfSigned: allowSelfSigned);
+    final result = await svc.fetchSubscription(url, allowSelfSigned: allowSelfSigned, hwid: hwid);
     final tagged = result.configs.map((c) => c.copyWith(subscriptionId: subId)).toList();
     await storage.addConfigsBatch(tagged);
     return (tagged, result);

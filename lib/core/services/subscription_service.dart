@@ -29,6 +29,7 @@ class SubscriptionFetchResult {
   final int? totalBytes;
   final String? announce;
   final String? announceUrl;
+  final HwidStatus? hwidStatus;
 
   const SubscriptionFetchResult({
     required this.configs,
@@ -39,7 +40,38 @@ class SubscriptionFetchResult {
     this.totalBytes,
     this.announce,
     this.announceUrl,
+    this.hwidStatus,
   });
+}
+
+class HwidStatus {
+  final bool isActive;
+  final bool notSupported;
+  final bool maxDevicesReached;
+
+  const HwidStatus({
+    required this.isActive,
+    required this.notSupported,
+    required this.maxDevicesReached,
+  });
+}
+
+class HwidDeviceInfo {
+  final String deviceId;
+  final String deviceModel;
+  final int osVersion;
+
+  const HwidDeviceInfo({
+    required this.deviceId,
+    required this.deviceModel,
+    required this.osVersion,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'deviceId': deviceId,
+    'deviceModel': deviceModel,
+    'osVersion': osVersion,
+  };
 }
 
 class SubscriptionService {
@@ -49,9 +81,11 @@ class SubscriptionService {
   /// untrusted certificate, throws [UntrustedCertificateException] with
   /// certificate details so the caller can decide whether to retry.
   /// If [allowSelfSigned] is true, certificate validation is skipped.
+  /// If [hwidEnabled] is true, HWID headers are sent to support device limits.
   Future<SubscriptionFetchResult> fetchSubscription(
     String url, {
     bool allowSelfSigned = false,
+    HwidDeviceInfo? hwid,
   }) async {
     final uri = Uri.parse(url);
     final httpClient = HttpClient();
@@ -74,6 +108,14 @@ class SubscriptionService {
     try {
       final request = await httpClient.getUrl(uri);
       request.headers.set('User-Agent', AppConstants.subscriptionUserAgent);
+
+      if (hwid != null) {
+        request.headers.set('X-Hwid', hwid.deviceId);
+        request.headers.set('X-Device-Os', 'Android');
+        request.headers.set('X-Device-Model', hwid.deviceModel);
+        request.headers.set('X-Ver-Os', hwid.osVersion.toString());
+      }
+
       final response =
           await request.close().timeout(const Duration(seconds: 15));
 
@@ -129,6 +171,7 @@ class SubscriptionService {
       totalBytes: meta.totalBytes,
       announce: meta.announce,
       announceUrl: meta.announceUrl,
+      hwidStatus: meta.hwidStatus,
     );
   }
 
@@ -140,6 +183,19 @@ class SubscriptionService {
     int? totalBytes;
     String? announce;
     String? announceUrl;
+    HwidStatus? hwidStatus;
+
+    final hwidActive = headers.value('x-hwid-active');
+    final hwidNotSupported = headers.value('x-hwid-not-supported');
+    final hwidMaxDevices = headers.value('x-hwid-max-devices-reached');
+
+    if (hwidActive != null || hwidNotSupported != null || hwidMaxDevices != null) {
+      hwidStatus = HwidStatus(
+        isActive: hwidActive == 'true',
+        notSupported: hwidNotSupported == 'true',
+        maxDevicesReached: hwidMaxDevices == 'true',
+      );
+    }
 
     // profile-title: plain text or "base64:<encoded>"
     final rawTitle = headers.value('profile-title');
@@ -186,6 +242,7 @@ class SubscriptionService {
       totalBytes: totalBytes,
       announce: announce,
       announceUrl: announceUrl,
+      hwidStatus: hwidStatus,
     );
   }
 
@@ -212,6 +269,7 @@ class _HeaderMeta {
   final int? totalBytes;
   final String? announce;
   final String? announceUrl;
+  final HwidStatus? hwidStatus;
 
   const _HeaderMeta({
     this.profileTitle,
@@ -221,5 +279,6 @@ class _HeaderMeta {
     this.totalBytes,
     this.announce,
     this.announceUrl,
+    this.hwidStatus,
   });
 }

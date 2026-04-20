@@ -144,6 +144,23 @@ class MainActivity : FlutterActivity() {
                         }.start()
                     }
 
+                    "getDeviceId" -> {
+                        val deviceId = android.provider.Settings.Secure.getString(
+                            contentResolver,
+                            android.provider.Settings.Secure.ANDROID_ID
+                        )
+                        result.success(deviceId)
+                    }
+
+                    "getDeviceInfo" -> {
+                        val deviceModel = android.os.Build.MODEL
+                        val osVersion = android.os.Build.VERSION.SDK_INT
+                        result.success(mapOf(
+                            "model" to deviceModel,
+                            "osVersion" to osVersion
+                        ))
+                    }
+
                     "getState" -> {
                         result.success(XrayVpnService.getNativeState())
                     }

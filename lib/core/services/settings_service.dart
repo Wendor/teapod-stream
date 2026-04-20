@@ -33,6 +33,7 @@ class AppSettings {
   final bool proxyOnly;
   final bool showNotification;
   final bool killSwitchEnabled;
+  final bool hwidEnabled;
   final RoutingSettings routing;
   final UpdateChannel updateChannel;
 
@@ -56,6 +57,7 @@ class AppSettings {
     this.proxyOnly = false,
     this.showNotification = true,
     this.killSwitchEnabled = false,
+    this.hwidEnabled = false,
     this.routing = const RoutingSettings(),
     this.updateChannel = UpdateChannel.stable,
   });
@@ -80,6 +82,7 @@ class AppSettings {
     bool? proxyOnly,
     bool? showNotification,
     bool? killSwitchEnabled,
+    bool? hwidEnabled,
     RoutingSettings? routing,
     UpdateChannel? updateChannel,
   }) {
@@ -103,6 +106,7 @@ class AppSettings {
       proxyOnly: proxyOnly ?? this.proxyOnly,
       showNotification: showNotification ?? this.showNotification,
       killSwitchEnabled: killSwitchEnabled ?? this.killSwitchEnabled,
+      hwidEnabled: hwidEnabled ?? this.hwidEnabled,
       routing: routing ?? this.routing,
       updateChannel: updateChannel ?? this.updateChannel,
     );
@@ -133,6 +137,7 @@ class SettingsService {
   static const _vpnModeKey = 'vpn_mode';
   static const _includedPackagesKey = 'included_packages';
   static const _killSwitchKey = 'kill_switch';
+  static const _hwidEnabledKey = 'hwid_enabled';
   static const _routingDirectionKey = 'routing_direction';
   static const _routingBypassLocalKey = 'routing_bypass_local';
   static const _routingGeoEnabledKey = 'routing_geo_enabled';
@@ -181,6 +186,7 @@ class SettingsService {
       proxyOnly: prefs.getBool(_proxyOnlyKey) ?? false,
       showNotification: prefs.getBool(_showNotificationKey) ?? true,
       killSwitchEnabled: prefs.getBool(_killSwitchKey) ?? false,
+      hwidEnabled: prefs.getBool(_hwidEnabledKey) ?? false,
       routing: _loadRouting(prefs),
       updateChannel: UpdateChannel.values.firstWhere(
         (e) => e.name == prefs.getString(_updateChannelKey),
@@ -227,6 +233,7 @@ class SettingsService {
     await prefs.setBool(_proxyOnlyKey, settings.proxyOnly);
     await prefs.setBool(_showNotificationKey, settings.showNotification);
     await prefs.setBool(_killSwitchKey, settings.killSwitchEnabled);
+    await prefs.setBool(_hwidEnabledKey, settings.hwidEnabled);
     await prefs.setString(_routingDirectionKey, settings.routing.direction.name);
     await prefs.setBool(_routingBypassLocalKey, settings.routing.bypassLocal);
     await prefs.setBool(_routingGeoEnabledKey, settings.routing.geoEnabled);

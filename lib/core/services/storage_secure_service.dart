@@ -12,6 +12,8 @@ class StorageSecureService {
   static const _subscriptionsKey = 'subscriptions_v2';
   static const _socksUserKey = 'socks_user_v2';
   static const _socksPasswordKey = 'socks_password_v2';
+  static const _deviceIdKey = 'device_id_v2';
+  static const _deviceInfoKey = 'device_info_v2';
 
   Future<String?> readConfigsRaw() => _storage.read(key: _configsKey);
   Future<void> writeConfigsRaw(String json) =>
@@ -37,4 +39,13 @@ class StorageSecureService {
     await _storage.write(key: _socksUserKey, value: user);
     await _storage.write(key: _socksPasswordKey, value: password);
   }
+
+  Future<String?> readDeviceId() => _storage.read(key: _deviceIdKey);
+  Future<void> writeDeviceId(String? id) => id == null
+      ? _storage.delete(key: _deviceIdKey)
+      : _storage.write(key: _deviceIdKey, value: id);
+
+  Future<String?> readDeviceInfoRaw() => _storage.read(key: _deviceInfoKey);
+  Future<void> writeDeviceInfoRaw(String json) =>
+      _storage.write(key: _deviceInfoKey, value: json);
 }

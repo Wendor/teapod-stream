@@ -225,6 +225,22 @@ class _SettingsBodyState extends State<_SettingsBody> {
                   : (v) => widget.onUpdate(
                       widget.settings.copyWith(killSwitchEnabled: v)),
             ),
+            const _Divider(),
+            SwitchListTile(
+              title: const Text(
+                'HWID',
+                style: TextStyle(color: AppColors.textPrimary, fontSize: 15),
+              ),
+              subtitle: const Text(
+                'Отправлять ID устройства для привязки подписки',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+              ),
+              value: widget.settings.hwidEnabled,
+              onChanged: widget.isConnected
+                  ? null
+                  : (v) => widget.onUpdate(
+                      widget.settings.copyWith(hwidEnabled: v)),
+            ),
           ],
         ),
         const SizedBox(height: 20),

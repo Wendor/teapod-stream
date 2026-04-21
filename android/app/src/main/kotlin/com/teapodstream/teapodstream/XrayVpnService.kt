@@ -392,21 +392,29 @@ class XrayVpnService : VpnService() {
         VpnEventStreamHandler.sendStateEvent("connecting")
         log("info", "Starting VPN")
 
-        // Workaround: flush stale uid-based ip rules from previous install/uninstall.
-        // Try multiple methods to force netd to reset.
+        // Workaround: Aggressive flush of stale uid-based ip rules from previous install/uninstall.
         try {
-            // Method 1: Try to set empty VPN — clears old profile
-            val empty = Builder()
-                .addAddress("10.255.255.1", 32)
+            val dummyBuilder = Builder()
+                .setSession("Teapod-Flush")
+                .addAddress("10.255.255.2", 32)
                 .addRoute("0.0.0.0", 0)
                 .setBlocking(false)
-                .establish()
-            if (empty != null) {
-                empty.close()
-                log("info", "VPN profile cleared")
+                
+            // FORCE the kernel to query the NEW UID for this package
+            dummyBuilder.addAllowedApplication(packageName)
+            
+            // Unbind from all physical networks to force ConnectivityService to rebuild routing graphs
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                dummyBuilder.setUnderlyingNetworks(emptyArray())
             }
+
+            dummyBuilder.establish()?.close()
+            log("info", "Aggressive TUN flush completed")
+            
+            // Give netd a moment to process the teardown and clear caches
+            Thread.sleep(500)
         } catch (e: Exception) {
-            log("warning", "Method 1 failed: ${e.message}")
+            log("warning", "Aggressive TUN flush failed (ignored): ${e.message}")
         }
 
         try {
@@ -442,10 +450,19 @@ class XrayVpnService : VpnService() {
                 log("info", "Proxy-only mode active")
             } else {
                 // Full VPN tunnel mode
+                
+                // Hack: Randomize IP and Session to bypass aggressive kernel routing cache
+                val randomSubnet1 = (2..250).random()
+                val randomSubnet2 = (2..250).random()
+                val randomSubnet3 = (2..250).random()
+                val dynamicTunIp = "10.$randomSubnet1.$randomSubnet2.$randomSubnet3"
+                val dynamicSession = "Teapod-${System.currentTimeMillis() % 10000}"
+
                 val builder = Builder()
-                    .setSession("TeapodStream")
+                    .setSession(dynamicSession)
                     .setMtu(tunMtu)
-                    .addAddress(tunAddress, subnetMaskToPrefix(tunNetmask))
+                    // Use dynamic IP instead of static tunAddress to force new rule creation
+                    .addAddress(dynamicTunIp, 32)
                     .addRoute("0.0.0.0", 0)
                     .addDnsServer(tunDns)
                     .allowFamily(OsConstants.AF_INET)
@@ -485,7 +502,7 @@ class XrayVpnService : VpnService() {
                 log("info", "nativeSetMaxFds result: $fdResult")
 
                 tunInterface = builder.establish() ?: throw IllegalStateException("Failed to establish TUN")
-                log("info", "TUN established")
+                log("info", "TUN established with IP $dynamicTunIp")
 
                 // 1. Start xray-core (in-process library, not subprocess)
                 startXrayAndWait(finalConfig)
@@ -1103,8 +1120,8 @@ class XrayVpnService : VpnService() {
 
     private fun log(level: String, message: String) {
         android.util.Log.i("TeapodVPN", "[$level] $message")
-        // Send logs to Flutter UI
-        if (level == "error" || level == "info" || (BuildConfig.DEBUG && level == "debug")) {
+        // Send logs to Flutter UI (all levels except debug in release)
+        if (level != "debug" || BuildConfig.DEBUG) {
             VpnEventStreamHandler.sendLogEvent(level, message)
         }
     }

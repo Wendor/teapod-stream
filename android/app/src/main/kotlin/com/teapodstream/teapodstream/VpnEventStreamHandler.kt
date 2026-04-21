@@ -11,11 +11,19 @@ import io.flutter.plugin.common.EventChannel
 object VpnEventStreamHandler : EventChannel.StreamHandler {
     private var eventSink: EventChannel.EventSink? = null
     private val handler = Handler(Looper.getMainLooper())
+    private val eventBuffer = mutableListOf<Map<String, Any?>>()
     // Контекст приложения для обновления Quick Settings плитки
     @Volatile var appContext: android.content.Context? = null
 
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
         eventSink = events
+        // Flush buffered events
+        synchronized(eventBuffer) {
+            for (event in eventBuffer) {
+                sendEventInternal(event)
+            }
+            eventBuffer.clear()
+        }
         // Replay current state immediately so Flutter is never stale after the
         // Activity is recreated (e.g. config change, memory reclaim) while the
         // VPN service is still running in the foreground.
@@ -37,11 +45,23 @@ object VpnEventStreamHandler : EventChannel.StreamHandler {
 
     fun sendEvent(event: Map<String, Any?>) {
         handler.post {
-            try {
-                eventSink?.success(event)
-            } catch (e: Exception) {
-                android.util.Log.e("VpnEventStreamHandler", "Error sending event: ${e.message}")
+            if (eventSink != null) {
+                sendEventInternal(event)
+            } else {
+                synchronized(eventBuffer) {
+                    if (eventBuffer.size < 100) {
+                        eventBuffer.add(event)
+                    }
+                }
             }
+        }
+    }
+
+    private fun sendEventInternal(event: Map<String, Any?>) {
+        try {
+            eventSink?.success(event)
+        } catch (e: Exception) {
+            android.util.Log.e("VpnEventStreamHandler", "Error sending event: ${e.message}")
         }
     }
 

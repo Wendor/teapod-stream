@@ -44,7 +44,6 @@ class XrayConfigBuilder {
       'outbounds': [
         _buildOutbound(config),
         {'tag': 'direct', 'protocol': 'freedom'},
-        {'tag': 'block', 'protocol': 'blackhole'},
         {'tag': 'dns-out', 'protocol': 'dns'}
       ],
       'routing': {
@@ -107,15 +106,7 @@ class XrayConfigBuilder {
       rules.add({'type': 'field', 'ip': ['geoip:private'], 'outboundTag': 'direct'});
     }
 
-    if (routing.adBlockEnabled) {
-      rules.add({
-        'type': 'field',
-        'domain': ['geosite:category-ads-all'],
-        'outboundTag': 'block',
-      });
-    }
-
-    if (!routing.isActive) return rules;
+if (!routing.isActive) return rules;
 
     if (!routing.geoEnabled && !routing.domainEnabled && !routing.geositeEnabled) return rules;
 
@@ -151,7 +142,8 @@ class XrayConfigBuilder {
 
   static Map<String, dynamic> _buildDnsBlock(VpnEngineOptions options) {
     final server = options.dnsServer;
-    List<dynamic> servers;
+    final routing = options.routing;
+    List<dynamic> servers = [];
 
     if (options.dnsMode == DnsMode.direct) {
       // Direct mode: DNS queries bypass the VPN via the 'direct' routing rule above.
@@ -163,24 +155,24 @@ class XrayConfigBuilder {
     }
 
     // Proxy mode: DNS queries are intercepted and handled by xray's DNS module.
+    // Add adblock first - returns empty response for matched domains
+    if (routing.adBlockEnabled) {
+      servers.add({
+        'address': 'rcode://success',
+        'domains': ['geosite:category-ads-all'],
+      });
+    }
+
+    // Add main DNS server
     switch (server.type) {
       case DnsType.udp:
-        servers = [
-          {'address': server.address, 'port': server.port},
-        ];
+        servers.add({'address': server.address, 'port': server.port});
         break;
       case DnsType.doh:
-        // xray expects full HTTPS URL for DoH
-        servers = [
-          {'address': server.address},
-        ];
+        servers.add({'address': server.address});
         break;
       case DnsType.dot:
-        // xray DoT format: address and port must be separate fields;
-        // combining them as tls://host:port causes xray to append default port 53 → "tls://host:port:53"
-        servers = [
-          {'address': 'tls://${server.address}', 'port': server.port},
-        ];
+        servers.add({'address': 'tls://${server.address}', 'port': server.port});
         break;
     }
 

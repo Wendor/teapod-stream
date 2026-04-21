@@ -17,28 +17,30 @@ class DnsServerConfig {
   final String address;
   final int port;
   final String? domain; // Для DoH/DoT (SNI)
+  final String? fallbackIp; // IP fallback если DNS недоступен (для DoH/DoT доменов)
 
   const DnsServerConfig({
     required this.type,
     required this.address,
     this.port = 53,
     this.domain,
+    this.fallbackIp,
   });
 
   /// Предустановленные DNS сервера
   static const cloudflare = DnsServerConfig(type: DnsType.udp, address: '1.1.1.1');
-  static const cloudflareDoH = DnsServerConfig(type: DnsType.doh, address: 'https://cloudflare-dns.com/dns-query', domain: 'cloudflare-dns.com');
-  static const cloudflareDoT = DnsServerConfig(type: DnsType.dot, address: '1.1.1.1', port: 853, domain: 'cloudflare-dns.com');
+  static const cloudflareDoH = DnsServerConfig(type: DnsType.doh, address: 'https://cloudflare-dns.com/dns-query', domain: 'cloudflare-dns.com', fallbackIp: '1.1.1.1');
+  static const cloudflareDoT = DnsServerConfig(type: DnsType.dot, address: '1.1.1.1', port: 853, domain: 'cloudflare-dns.com', fallbackIp: '1.1.1.1');
 
   static const google = DnsServerConfig(type: DnsType.udp, address: '8.8.8.8');
-  static const googleDoH = DnsServerConfig(type: DnsType.doh, address: 'https://dns.google/dns-query', domain: 'dns.google');
-  static const googleDoT = DnsServerConfig(type: DnsType.dot, address: '8.8.8.8', port: 853, domain: 'dns.google');
+  static const googleDoH = DnsServerConfig(type: DnsType.doh, address: 'https://dns.google/dns-query', domain: 'dns.google', fallbackIp: '8.8.8.8');
+  static const googleDoT = DnsServerConfig(type: DnsType.dot, address: '8.8.8.8', port: 853, domain: 'dns.google', fallbackIp: '8.8.8.8');
 
   static const quad9 = DnsServerConfig(type: DnsType.udp, address: '9.9.9.9');
-  static const quad9DoH = DnsServerConfig(type: DnsType.doh, address: 'https://dns.quad9.net/dns-query', domain: 'dns.quad9.net');
+  static const quad9DoH = DnsServerConfig(type: DnsType.doh, address: 'https://dns.quad9.net/dns-query', domain: 'dns.quad9.net', fallbackIp: '9.9.9.9');
 
   static const adguard = DnsServerConfig(type: DnsType.udp, address: '94.140.14.14');
-  static const adguardDoH = DnsServerConfig(type: DnsType.doh, address: 'https://dns.adguard.com/dns-query', domain: 'dns.adguard.com');
+  static const adguardDoH = DnsServerConfig(type: DnsType.doh, address: 'https://dns.adguard.com/dns-query', domain: 'dns.adguard.com', fallbackIp: '94.140.14.14');
 
   /// Все предустановленные сервера для UI
   static const List<Map<String, dynamic>> presets = [

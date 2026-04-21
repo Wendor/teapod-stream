@@ -176,8 +176,13 @@ if (!routing.isActive) return rules;
         break;
     }
 
+    final hosts = <String, String>{};
+    if (server.domain != null && server.fallbackIp != null) {
+      hosts[server.domain!] = server.fallbackIp!;
+    }
+
     return {
-      'hosts': {},
+      'hosts': hosts,
       'servers': servers,
       'queryStrategy': 'UseIPv4',
     };

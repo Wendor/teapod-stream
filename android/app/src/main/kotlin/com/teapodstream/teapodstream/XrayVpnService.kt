@@ -20,8 +20,12 @@ import android.os.PowerManager
 import android.system.OsConstants
 import androidx.core.app.NotificationCompat
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.net.Proxy
 import java.net.Socket
+import java.net.URL
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import teapodcore.Teapodcore
@@ -908,12 +912,8 @@ class XrayVpnService : VpnService() {
                     if (!isRunning.get()) break
                     val port = activeSocksPort
                     if (port <= 0) continue
-                    Socket().use { s ->
-                        s.soTimeout = 5000
-                        s.connect(InetSocketAddress("127.0.0.1", port), 5000)
-                    }
-                    heartbeatFailures.set(0)
-                    log("debug", "Heartbeat OK")
+
+                    checkTunnelConnectivity(port)
                 } catch (_: InterruptedException) {
                     break
                 } catch (e: Exception) {
@@ -933,6 +933,50 @@ class XrayVpnService : VpnService() {
         heartbeatThread?.interrupt()
         heartbeatThread = null
         heartbeatFailures.set(0)
+    }
+
+    private fun checkTunnelConnectivity(port: Int) {
+        val socket = Socket()
+        try {
+            socket.soTimeout = 5000
+            socket.connect(InetSocketAddress("127.0.0.1", port), 5000)
+            val out = socket.getOutputStream()
+            val inp = socket.getInputStream()
+
+            // SOCKS5 greeting
+            out.write(byteArrayOf(5, 2, 0, 2))
+            val resp = ByteArray(2)
+            inp.read(resp)
+            if (resp[0] != 5.toByte()) throw Exception("SOCKS ver mismatch")
+
+            when (resp[1].toInt()) {
+                0 -> {}
+                2 -> {
+                    if (activeSocksUser.isNotEmpty()) {
+                        val u = activeSocksUser.toByteArray()
+                        val p = activeSocksPassword.toByteArray()
+                        out.write(byteArrayOf(1, u.size.toByte()) + u + byteArrayOf(p.size.toByte()) + p)
+                        inp.read(resp)
+                        if (resp[1] != 0.toByte()) throw Exception("SOCKS auth failed")
+                    }
+                }
+                else -> throw Exception("SOCKS auth not supported")
+            }
+
+            // Connect to 8.8.8.8:53 (Google DNS)
+            val dnsIP = InetAddress.getByName("8.8.8.8").address
+            out.write(byteArrayOf(5, 1, 0, 1) + dnsIP + byteArrayOf(0, 53))
+            inp.read(resp)
+            if (resp[1] != 0.toByte()) throw Exception("SOCKS connect failed")
+
+            heartbeatFailures.set(0)
+            log("debug", "Heartbeat OK")
+        } catch (e: Exception) {
+            log("warning", "Heartbeat check failed: ${e.message}")
+            throw e
+        } finally {
+            socket.close()
+        }
     }
 
     private fun unregisterNetworkCallback() {

@@ -96,47 +96,7 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
         color: AppColors.surface,
         child: Column(
           children: [
-          // Stats bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: AppColors.surface,
-            child: Row(
-              children: [
-                _LevelCount(
-                  logs: logs,
-                  level: LogLevel.error,
-                  color: AppColors.logError,
-                ),
-                const SizedBox(width: 16),
-                _LevelCount(
-                  logs: logs,
-                  level: LogLevel.warning,
-                  color: AppColors.logWarning,
-                ),
-                const SizedBox(width: 16),
-                _LevelCount(
-                  logs: logs,
-                  level: LogLevel.info,
-                  color: AppColors.logInfo,
-                ),
-                const SizedBox(width: 16),
-                _LevelCount(
-                  logs: logs,
-                  level: LogLevel.debug,
-                  color: AppColors.textSecondary,
-                ),
-                const Spacer(),
-                Text(
-                  '${filtered.length} записей',
-                  style: const TextStyle(
-                    color: AppColors.textDisabled,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Filter chips
+          // Filter chips with counts
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             color: AppColors.surface,
@@ -146,6 +106,7 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
                 children: [
                   _FilterChip(
                     label: 'ERROR',
+                    count: logs.where((e) => e.level == LogLevel.error).length,
                     selected: _selectedLevels.contains(LogLevel.error),
                     onTap: () => setState(() {
                       if (_selectedLevels.contains(LogLevel.error)) {
@@ -159,6 +120,7 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
                   const SizedBox(width: 8),
                   _FilterChip(
                     label: 'WARN',
+                    count: logs.where((e) => e.level == LogLevel.warning).length,
                     selected: _selectedLevels.contains(LogLevel.warning),
                     onTap: () => setState(() {
                       if (_selectedLevels.contains(LogLevel.warning)) {
@@ -172,6 +134,7 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
                   const SizedBox(width: 8),
                   _FilterChip(
                     label: 'INFO',
+                    count: logs.where((e) => e.level == LogLevel.info).length,
                     selected: _selectedLevels.contains(LogLevel.info),
                     onTap: () => setState(() {
                       if (_selectedLevels.contains(LogLevel.info)) {
@@ -185,6 +148,7 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
                   const SizedBox(width: 8),
                   _FilterChip(
                     label: 'DEBUG',
+                    count: logs.where((e) => e.level == LogLevel.debug).length,
                     selected: _selectedLevels.contains(LogLevel.debug),
                     onTap: () => setState(() {
                       if (_selectedLevels.contains(LogLevel.debug)) {
@@ -252,45 +216,16 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
   }
 }
 
-class _LevelCount extends StatelessWidget {
-  final List<VpnLogEntry> logs;
-  final LogLevel level;
-  final Color color;
-
-  const _LevelCount({
-    required this.logs,
-    required this.level,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final count = logs.where((e) => e.level == level).length;
-    return Row(
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          '$count',
-          style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
-        ),
-      ],
-    );
-  }
-}
-
 class _FilterChip extends StatelessWidget {
   final String label;
+  final int count;
   final bool selected;
   final VoidCallback onTap;
   final Color? color;
 
   const _FilterChip({
     required this.label,
+    required this.count,
     required this.selected,
     required this.onTap,
     this.color,
@@ -318,7 +253,7 @@ class _FilterChip extends StatelessWidget {
           ),
         ),
         child: Text(
-          label,
+          count > 0 ? '$label ($count)' : label,
           style: TextStyle(
             color: textColor,
             fontSize: 12,

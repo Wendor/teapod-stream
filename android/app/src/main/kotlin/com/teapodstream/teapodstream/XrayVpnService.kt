@@ -20,7 +20,9 @@ import android.os.PowerManager
 import android.system.OsConstants
 import android.util.LruCache
 import androidx.core.app.NotificationCompat
+import java.io.BufferedReader
 import java.io.File
+import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -977,7 +979,7 @@ class XrayVpnService : VpnService() {
                     var immediateRetries = 0
                     while (immediateRetries < 2 && !Thread.currentThread().isInterrupted) {
                         try {
-                            Thread.sleep(1000)
+                            Thread.sleep(3000)
                             checkTunnelConnectivity(activeSocksPort)
                             heartbeatFailures.set(0)
                             break
@@ -1006,8 +1008,8 @@ class XrayVpnService : VpnService() {
     private fun checkTunnelConnectivity(port: Int) {
         val socket = Socket()
         try {
-            socket.soTimeout = 5000
-            socket.connect(InetSocketAddress("127.0.0.1", port), 5000)
+            socket.soTimeout = 10000
+            socket.connect(InetSocketAddress("127.0.0.1", port), 10000)
             val out = socket.getOutputStream()
             val inp = socket.getInputStream()
 
@@ -1031,11 +1033,42 @@ class XrayVpnService : VpnService() {
                 else -> throw Exception("SOCKS auth not supported")
             }
 
-            // Connect to 8.8.8.8:53 (Google DNS)
-            val dnsIP = InetAddress.getByName("8.8.8.8").address
-            out.write(byteArrayOf(5, 1, 0, 1) + dnsIP + byteArrayOf(0, 53))
-            inp.read(resp)
-            if (resp[1] != 0.toByte()) throw Exception("SOCKS connect failed")
+            // Connect to cp.cloudflare.com:80
+            val destHost = "cp.cloudflare.com"
+            val destPort = 80
+            val domainBytes = destHost.toByteArray()
+            out.write(
+                byteArrayOf(5, 1, 0, 3, domainBytes.size.toByte()) + 
+                domainBytes + 
+                byteArrayOf((destPort shr 8).toByte(), destPort.toByte())
+            )
+            
+            val replyVer = inp.read()
+            val replyRep = inp.read()
+            val replyRsv = inp.read()
+            val replyAtyp = inp.read()
+            if (replyVer != 5 || replyRep != 0) throw Exception("SOCKS connect failed: $replyRep")
+            if (replyAtyp == 1) {
+                val buf = ByteArray(6)
+                var read = 0; while (read < buf.size) read += inp.read(buf, read, buf.size - read)
+            } else if (replyAtyp == 4) {
+                val buf = ByteArray(18)
+                var read = 0; while (read < buf.size) read += inp.read(buf, read, buf.size - read)
+            } else if (replyAtyp == 3) {
+                val len = inp.read()
+                val buf = ByteArray(len + 2)
+                var read = 0; while (read < buf.size) read += inp.read(buf, read, buf.size - read)
+            }
+
+            val request = "GET /generate_204 HTTP/1.1\r\nHost: $destHost\r\nConnection: close\r\n\r\n"
+            out.write(request.toByteArray())
+            out.flush()
+
+            val reader = BufferedReader(InputStreamReader(inp))
+            val line = reader.readLine()
+            if (line == null || !line.contains("204")) {
+                throw Exception("Invalid HTTP response: $line")
+            }
 
             heartbeatFailures.set(0)
             log("debug", "Heartbeat OK")

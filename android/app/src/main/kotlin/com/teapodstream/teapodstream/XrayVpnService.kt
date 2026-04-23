@@ -610,18 +610,21 @@ class XrayVpnService : VpnService() {
                     threwException = true
                 }
 
-                // Strict Firewall & Smart Fallback only for UDP QUIC
-                if (uid < 0 && protocol.toInt() == OsConstants.IPPROTO_UDP) {
-                    val cachedTime = trustedIpCache.get(dstIP)
-                    if (cachedTime != null && System.currentTimeMillis() - cachedTime < cacheTtlMs) {
-                        trustedIpCache.put(dstIP, System.currentTimeMillis())
-                        return true
-                    }
-                    return false
-                }
-
                 if (threwException) {
                     return true // allow on lookup failure (original logic)
+                }
+
+                if (uid < 0) {
+                    // Smart Fallback only for UDP QUIC
+                    if (protocol.toInt() == OsConstants.IPPROTO_UDP) {
+                        val cachedTime = trustedIpCache.get(dstIP)
+                        if (cachedTime != null && System.currentTimeMillis() - cachedTime < cacheTtlMs) {
+                            trustedIpCache.put(dstIP, System.currentTimeMillis())
+                            return true
+                        }
+                    }
+                    // Fallback to original logic for uid < 0 without exception
+                    return if (vpnMode == "onlySelected") -1 in allowedUids else -1 !in allowedUids
                 }
 
                 val isAllowed = if (vpnMode == "onlySelected") uid in allowedUids else uid !in allowedUids

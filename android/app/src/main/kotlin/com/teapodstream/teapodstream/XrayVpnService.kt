@@ -18,6 +18,7 @@ import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.os.PowerManager
 import android.system.OsConstants
+import android.util.LruCache
 import androidx.core.app.NotificationCompat
 import java.io.File
 import java.net.HttpURLConnection
@@ -583,18 +584,16 @@ class XrayVpnService : VpnService() {
         return uids
     }
 
-    /**
-     * Builds a TunValidator that enforces split tunneling using
-     * ConnectivityManager.getConnectionOwnerUid (requires API 29+).
-     */
     private fun buildTunValidator(allowedUids: Set<Int>, vpnMode: String): TunValidator {
         if (allowedUids.isEmpty()) {
-            // No UID filtering — allow everything
             return object : TunValidator {
                 override fun onValidate(srcIP: String, srcPort: Long, dstIP: String, dstPort: Long, protocol: Long) = true
             }
         }
         val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+        val trustedIpCache = LruCache<String, Long>(1000)
+        val cacheTtlMs = 300_000L
+
         return object : TunValidator {
             override fun onValidate(srcIP: String, srcPort: Long, dstIP: String, dstPort: Long, protocol: Long): Boolean {
                 return try {
@@ -603,9 +602,26 @@ class XrayVpnService : VpnService() {
                         InetSocketAddress(srcIP, srcPort.toInt()),
                         InetSocketAddress(dstIP, dstPort.toInt())
                     )
-                    if (vpnMode == "onlySelected") uid in allowedUids else uid !in allowedUids
+
+                    if (uid < 0) {
+                        if (protocol.toInt() == OsConstants.IPPROTO_UDP) {
+                            val cachedTime = trustedIpCache.get(dstIP)
+                            if (cachedTime != null && System.currentTimeMillis() - cachedTime < cacheTtlMs) {
+                                return true
+                            }
+                        }
+                        return false
+                    }
+
+                    val isAllowed = if (vpnMode == "onlySelected") uid in allowedUids else uid !in allowedUids
+
+                    if (isAllowed && protocol.toInt() == OsConstants.IPPROTO_TCP) {
+                        trustedIpCache.put(dstIP, System.currentTimeMillis())
+                    }
+
+                    isAllowed
                 } catch (_: Exception) {
-                    true // allow on lookup failure
+                    false
                 }
             }
         }

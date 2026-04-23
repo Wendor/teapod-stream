@@ -607,6 +607,7 @@ class XrayVpnService : VpnService() {
                         if (protocol.toInt() == OsConstants.IPPROTO_UDP) {
                             val cachedTime = trustedIpCache.get(dstIP)
                             if (cachedTime != null && System.currentTimeMillis() - cachedTime < cacheTtlMs) {
+                                trustedIpCache.put(dstIP, System.currentTimeMillis())
                                 return true
                             }
                         }

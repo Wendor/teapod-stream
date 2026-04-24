@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../core/models/vpn_config.dart';
 import '../../core/services/config_storage_service.dart';
 import '../../core/services/subscription_service.dart';
@@ -11,7 +10,7 @@ import '../../providers/config_provider.dart';
 import '../../providers/vpn_provider.dart';
 import '../../core/interfaces/vpn_engine.dart';
 import '../theme/app_colors.dart';
-import '../widgets/config_card.dart';
+import '../theme/app_theme.dart';
 import 'add_config_screen.dart';
 
 class ConfigsScreen extends ConsumerStatefulWidget {
@@ -24,90 +23,147 @@ class ConfigsScreen extends ConsumerStatefulWidget {
 class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
   final Set<String> _expandedSubs = {};
   bool _isPinging = false;
+  bool _isRefreshingAll = false;
+
+  // ── Build ──────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final configStateAsync = ref.watch(configProvider);
     final vpnState = ref.watch(vpnProvider);
+    final t = Theme.of(context).extension<TeapodTokens>()!;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Конфигурации'),
-        actions: [
-          if (_isPinging)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Console header strip
+            _CfgHeaderStrip(
+              t: t,
+              total: configStateAsync.maybeWhen(
+                data: (d) => d.configs.length + d.subscriptions.length,
+                orElse: () => 0,
               ),
-            )
-          else
-            IconButton(
-              icon: const Icon(Icons.network_ping_rounded),
-              tooltip: 'Проверить пинг',
-              onPressed: configStateAsync.maybeWhen(
-                data: (s) => s.configs.isNotEmpty ? () => _pingAll(s.configs) : null,
+              isPinging: _isPinging,
+              onPing: configStateAsync.maybeWhen(
+                data: (s) =>
+                    s.configs.isNotEmpty ? () => _pingAll(s.configs) : null,
                 orElse: () => null,
               ),
             ),
-          IconButton(
-            icon: const Icon(Icons.add_rounded),
-            onPressed: () => _openAddConfig(context),
-          ),
-        ],
-      ),
-      body: configStateAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Ошибка: $e')),
-        data: (configState) {
-          if (configState.configs.isEmpty && configState.subscriptions.isEmpty) {
-            return _EmptyState(onAdd: () => _openAddConfig(context));
-          }
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: configState.subscriptions.length + (configState.standaloneConfigs.isNotEmpty ? 1 : 0),
-            separatorBuilder: (_, _) => const SizedBox(height: 16),
-            itemBuilder: (context, i) {
-              if (i < configState.subscriptions.length) {
-                final sub = configState.subscriptions[i];
-                final subConfigs = configState.configsBySubscription[sub.id] ?? [];
-                final isExpanded = _expandedSubs.contains(sub.id);
-                return _SubscriptionGroup(
-                  subscription: sub,
-                  configs: subConfigs,
-                  activeConfigId: configState.activeConfigId,
-                  isExpanded: isExpanded,
-                  vpnState: vpnState.connectionState,
-                  onToggle: () => setState(() {
-                    if (isExpanded) {
-                      _expandedSubs.remove(sub.id);
-                    } else {
-                      _expandedSubs.add(sub.id);
+
+            // Title panel
+            _CfgTitlePanel(
+              t: t,
+              onAdd: () => _openAddConfig(context),
+              onRefreshAll: configStateAsync.maybeWhen(
+                data: (s) => s.subscriptions.isNotEmpty ? _refreshAllSubscriptions : null,
+                orElse: () => null,
+              ),
+              isRefreshing: _isRefreshingAll,
+            ),
+
+            // List body
+            Expanded(
+              child: configStateAsync.when(
+                loading: () => Center(
+                  child: CircularProgressIndicator(
+                    color: t.accent,
+                    strokeWidth: 1.5,
+                  ),
+                ),
+                error: (e, _) => Center(
+                  child: Text('Ошибка: $e',
+                      style: AppTheme.mono(size: 12, color: t.danger)),
+                ),
+                data: (configState) {
+                  if (configState.configs.isEmpty &&
+                      configState.subscriptions.isEmpty) {
+                    return _EmptyState(onAdd: () => _openAddConfig(context));
+                  }
+
+                  final items = <Widget>[];
+
+                  // [subs] section
+                  if (configState.subscriptions.isNotEmpty) {
+                    items.add(_SectionHeader(
+                      t: t,
+                      label: '[subs]',
+                      count: configState.subscriptions.length,
+                    ));
+                    for (var i = 0; i < configState.subscriptions.length; i++) {
+                      final sub = configState.subscriptions[i];
+                      final subConfigs =
+                          configState.configsBySubscription[sub.id] ?? [];
+                      final isExpanded = _expandedSubs.contains(sub.id);
+                      items.add(_SubRow(
+                        t: t,
+                        sub: sub,
+                        configs: subConfigs,
+                        addr: i + 1,
+                        activeConfigId: configState.activeConfigId,
+                        isExpanded: isExpanded,
+                        vpnState: vpnState.connectionState,
+                        onToggle: () => setState(() {
+                          if (isExpanded) {
+                            _expandedSubs.remove(sub.id);
+                          } else {
+                            _expandedSubs.add(sub.id);
+                          }
+                        }),
+                        onRefresh: () =>
+                            _refreshSubscription(context, ref, sub),
+                        onRename: () =>
+                            _renameSubscription(context, ref, sub),
+                        onEditUrl: () =>
+                            _editSubscriptionUrl(context, ref, sub),
+                        onDelete: () =>
+                            _deleteSubscription(context, ref, sub),
+                        onSelectConfig: (c) => _selectConfig(ref, c),
+                        onConfigLongPress: (c) =>
+                            _showConfigMenu(context, ref, c),
+                      ));
                     }
-                  }),
-                  onRefresh: () => _refreshSubscription(context, ref, sub),
-                  onRename: () => _renameSubscription(context, ref, sub),
-                  onEditUrl: () => _editSubscriptionUrl(context, ref, sub),
-                  onDelete: () => _deleteSubscription(context, ref, sub),
-                  onSelectConfig: (config) => _selectConfig(ref, config),
-                  onConfigLongPress: (config) => _showConfigMenu(context, ref, config),
-                );
-              }
-              return _StandaloneSection(
-                configs: configState.standaloneConfigs,
-                activeConfigId: configState.activeConfigId,
-                vpnState: vpnState.connectionState,
-                onSelectConfig: (config) => _selectConfig(ref, config),
-                onConfigLongPress: (config) => _showConfigMenu(context, ref, config),
-              );
-            },
-          );
-        },
+                  }
+
+                  // [standalone] section
+                  if (configState.standaloneConfigs.isNotEmpty) {
+                    items.add(_SectionHeader(
+                      t: t,
+                      label: '[standalone]',
+                      count: configState.standaloneConfigs.length,
+                    ));
+                    final offset = configState.subscriptions.length + 1;
+                    for (var i = 0;
+                        i < configState.standaloneConfigs.length;
+                        i++) {
+                      final c = configState.standaloneConfigs[i];
+                      items.add(_ConfigRow(
+                        t: t,
+                        config: c,
+                        addr: offset + i,
+                        isActive: c.id == configState.activeConfigId,
+                        onTap: () => _selectConfig(ref, c),
+                        onLongPress: () =>
+                            _showConfigMenu(context, ref, c),
+                      ));
+                    }
+                  }
+
+                  return ListView(
+                    padding: EdgeInsets.zero,
+                    children: items,
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
+
+  // ── Actions (unchanged logic) ──────────────────────────────────
 
   void _selectConfig(WidgetRef ref, VpnConfig config) {
     ref.read(configProvider.notifier).setActiveConfig(config.id);
@@ -128,27 +184,30 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
   }
 
   Future<void> _showConfigMenu(
-    BuildContext context, WidgetRef ref, VpnConfig config) async {
+      BuildContext context, WidgetRef ref, VpnConfig config) async {
+    final t = Theme.of(context).extension<TeapodTokens>()!;
     final items = <PopupMenuEntry<String>>[
-      const PopupMenuItem(value: 'rename', child: _MenuRow(Icons.edit_rounded, 'Переименовать')),
-      const PopupMenuItem(value: 'edit', child: _MenuRow(Icons.code_rounded, 'Редактировать URI')),
+      PopupMenuItem(value: 'rename', child: _MenuRow(Icons.edit_rounded, 'Переименовать')),
+      PopupMenuItem(value: 'edit', child: _MenuRow(Icons.code_rounded, 'Редактировать URI')),
       const PopupMenuDivider(),
-      const PopupMenuItem(value: 'copy', child: _MenuRow(Icons.copy_rounded, 'Копировать URL')),
-      const PopupMenuItem(value: 'share', child: _MenuRow(Icons.share_rounded, 'Поделиться')),
+      PopupMenuItem(value: 'copy', child: _MenuRow(Icons.copy_rounded, 'Копировать URL')),
+      PopupMenuItem(value: 'share', child: _MenuRow(Icons.share_rounded, 'Поделиться')),
       const PopupMenuDivider(),
-      const PopupMenuItem(value: 'delete', child: _MenuRow(Icons.delete_rounded, 'Удалить', color: AppColors.error)),
+      PopupMenuItem(
+          value: 'delete',
+          child: _MenuRow(Icons.delete_rounded, 'Удалить',
+              color: t.danger)),
     ];
 
     final result = await showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
         MediaQuery.of(context).size.width - 200,
-        MediaQuery.of(context).padding.top + kToolbarHeight + 56,
+        MediaQuery.of(context).padding.top + 80,
         20,
         0,
       ),
       items: items,
-      color: AppColors.surfaceElevated,
     );
 
     if (result == null) return;
@@ -161,16 +220,16 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
         await _editConfig(context, ref, config);
         break;
       case 'share':
-        if (config.rawUri != null) {
-          await Share.share(config.rawUri!);
-        }
+        if (config.rawUri != null) await Share.share(config.rawUri!);
         break;
       case 'copy':
         if (config.rawUri != null) {
           await Clipboard.setData(ClipboardData(text: config.rawUri!));
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('URL скопирован'), duration: Duration(seconds: 1)),
+              const SnackBar(
+                  content: Text('URL скопирован'),
+                  duration: Duration(seconds: 1)),
             );
           }
         }
@@ -182,12 +241,11 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
   }
 
   Future<void> _renameConfig(
-    BuildContext context, WidgetRef ref, VpnConfig config) async {
+      BuildContext context, WidgetRef ref, VpnConfig config) async {
     final controller = TextEditingController(text: config.name);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surfaceElevated,
         title: const Text('Переименовать'),
         content: TextField(
           controller: controller,
@@ -199,29 +257,26 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
-          ),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена')),
           TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Сохранить', style: TextStyle(color: AppColors.primary)),
-          ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Сохранить')),
         ],
       ),
     );
     if (ok == true && controller.text.trim().isNotEmpty) {
-      final updated = config.copyWith(name: controller.text.trim());
-      ref.read(configProvider.notifier).updateConfig(updated);
+      ref.read(configProvider.notifier)
+          .updateConfig(config.copyWith(name: controller.text.trim()));
     }
   }
 
   Future<void> _editConfig(
-    BuildContext context, WidgetRef ref, VpnConfig config) async {
+      BuildContext context, WidgetRef ref, VpnConfig config) async {
     final controller = TextEditingController(text: config.rawUri ?? '');
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surfaceElevated,
         title: const Text('Редактировать URI'),
         content: SizedBox(
           width: MediaQuery.of(context).size.width * 0.8,
@@ -238,13 +293,11 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
-          ),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена')),
           TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Сохранить', style: TextStyle(color: AppColors.primary)),
-          ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Сохранить')),
         ],
       ),
     );
@@ -284,23 +337,21 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
   }
 
   Future<void> _deleteConfig(
-    BuildContext context, WidgetRef ref, VpnConfig config) async {
+      BuildContext context, WidgetRef ref, VpnConfig config) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surfaceElevated,
         title: const Text('Удалить?'),
         content: Text('Конфигурация "${config.name}" будет удалена.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
-          ),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена')),
           TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Удалить'),
-          ),
+              onPressed: () => Navigator.pop(ctx, true),
+              style: TextButton.styleFrom(
+                  foregroundColor: AppColors.danger),
+              child: const Text('Удалить')),
         ],
       ),
     );
@@ -310,19 +361,19 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
   }
 
   Future<void> _refreshSubscription(
-    BuildContext context, WidgetRef ref, Subscription sub, {bool allowSelfSigned = false}) async {
+      BuildContext context, WidgetRef ref, Subscription sub,
+      {bool allowSelfSigned = false}) async {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => const Center(child: CircularProgressIndicator()),
     );
-
     try {
       await ref.read(configProvider.notifier).addSubscriptionFromUrl(
-        sub.url,
-        name: sub.name,
-        allowSelfSigned: allowSelfSigned,
-      );
+            sub.url,
+            name: sub.name,
+            allowSelfSigned: allowSelfSigned,
+          );
       if (context.mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -331,7 +382,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
       }
     } on UntrustedCertificateException catch (e) {
       if (!context.mounted) return;
-      Navigator.pop(context); // close loading spinner
+      Navigator.pop(context);
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -341,26 +392,29 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Сервер использует самоподписанный или неизвестный сертификат. '
-                'Соединение может быть небезопасным.',
-              ),
+                  'Сервер использует самоподписанный или неизвестный сертификат. '
+                  'Соединение может быть небезопасным.'),
               const SizedBox(height: 12),
-              Text('Сервер: ${e.host}', style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
-              Text('Сертификат: ${e.subject}', style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
-              Text('Издатель: ${e.issuer}', style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+              Text('Сервер: ${e.host}',
+                  style: const TextStyle(
+                      fontFamily: 'monospace', fontSize: 12)),
+              Text('Сертификат: ${e.subject}',
+                  style: const TextStyle(
+                      fontFamily: 'monospace', fontSize: 12)),
+              Text('Издатель: ${e.issuer}',
+                  style: const TextStyle(
+                      fontFamily: 'monospace', fontSize: 12)),
               const SizedBox(height: 12),
               const Text('Продолжить всё равно?'),
             ],
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Отмена'),
-            ),
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Отмена')),
             TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Продолжить'),
-            ),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Продолжить')),
           ],
         ),
       );
@@ -378,45 +432,41 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
   }
 
   Future<void> _renameSubscription(
-    BuildContext context, WidgetRef ref, Subscription sub) async {
+      BuildContext context, WidgetRef ref, Subscription sub) async {
     final controller = TextEditingController(text: sub.name);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surfaceElevated,
         title: const Text('Переименовать подписку'),
         content: TextField(
           controller: controller,
           autofocus: true,
           decoration: const InputDecoration(
-            labelText: 'Имя',
-            border: OutlineInputBorder(),
-          ),
+              labelText: 'Имя', border: OutlineInputBorder()),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
-          ),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена')),
           TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Сохранить', style: TextStyle(color: AppColors.primary)),
-          ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Сохранить')),
         ],
       ),
     );
     if (ok == true && controller.text.trim().isNotEmpty) {
-      await ref.read(configProvider.notifier).renameSubscription(sub.id, controller.text.trim());
+      await ref
+          .read(configProvider.notifier)
+          .renameSubscription(sub.id, controller.text.trim());
     }
   }
 
   Future<void> _editSubscriptionUrl(
-    BuildContext context, WidgetRef ref, Subscription sub) async {
+      BuildContext context, WidgetRef ref, Subscription sub) async {
     final controller = TextEditingController(text: sub.url);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surfaceElevated,
         title: const Text('Изменить URL подписки'),
         content: SizedBox(
           width: MediaQuery.of(context).size.width * 0.8,
@@ -434,27 +484,25 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
-          ),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена')),
           TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Сохранить и обновить', style: TextStyle(color: AppColors.primary)),
-          ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Сохранить и обновить')),
         ],
       ),
     );
     if (ok == true && controller.text.trim().isNotEmpty) {
-      // Update subscription URL and re-fetch
       final updatedUrl = controller.text.trim();
-      // Remove old configs
       await ConfigNotifier.storage.removeSubscription(sub.id);
-      // Re-add with new URL
       try {
-        await ref.read(configProvider.notifier).addSubscriptionFromUrl(updatedUrl, name: sub.name);
+        await ref
+            .read(configProvider.notifier)
+            .addSubscriptionFromUrl(updatedUrl, name: sub.name);
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Подписка обновлена по новому URL')),
+            const SnackBar(
+                content: Text('Подписка обновлена по новому URL')),
           );
         }
       } catch (e) {
@@ -468,28 +516,46 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
   }
 
   Future<void> _deleteSubscription(
-    BuildContext context, WidgetRef ref, Subscription sub) async {
+      BuildContext context, WidgetRef ref, Subscription sub) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surfaceElevated,
         title: const Text('Удалить подписку?'),
-        content: Text('Подписка "${sub.name}" и все её конфигурации будут удалены.'),
+        content: Text(
+            'Подписка "${sub.name}" и все её конфигурации будут удалены.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
-          ),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена')),
           TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Удалить'),
-          ),
+              onPressed: () => Navigator.pop(ctx, true),
+              style: TextButton.styleFrom(
+                  foregroundColor: AppColors.danger),
+              child: const Text('Удалить')),
         ],
       ),
     );
     if (confirmed == true) {
       ref.read(configProvider.notifier).removeSubscription(sub.id);
+    }
+  }
+
+  Future<void> _refreshAllSubscriptions() async {
+    if (_isRefreshingAll) return;
+    setState(() => _isRefreshingAll = true);
+    try {
+      final configState = ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
+      if (configState == null) return;
+      for (final sub in configState.subscriptions) {
+        try {
+          await ref.read(configProvider.notifier).addSubscriptionFromUrl(
+            sub.url,
+            name: sub.name,
+          );
+        } catch (_) {}
+      }
+    } finally {
+      if (mounted) setState(() => _isRefreshingAll = false);
     }
   }
 
@@ -501,11 +567,202 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
   }
 }
 
-// ─── Subscription Group ─────────────────────────────────────────
+// ── Console header strip ──────────────────────────────────────────
 
-class _SubscriptionGroup extends StatelessWidget {
-  final Subscription subscription;
+class _CfgHeaderStrip extends StatelessWidget {
+  final TeapodTokens t;
+  final int total;
+  final bool isPinging;
+  final VoidCallback? onPing;
+
+  const _CfgHeaderStrip({
+    required this.t,
+    required this.total,
+    required this.isPinging,
+    this.onPing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final totalStr = total.toString().padLeft(2, '0');
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      decoration:
+          BoxDecoration(border: Border(bottom: BorderSide(color: t.line))),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text('teapod.stream // configs',
+              style: AppTheme.mono(
+                  size: 10, color: t.textMuted, letterSpacing: 1)),
+          Row(
+            children: [
+              if (isPinging)
+                SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(
+                      color: t.accent, strokeWidth: 1.2),
+                )
+              else if (onPing != null)
+                GestureDetector(
+                  onTap: onPing,
+                  child: Text('ping',
+                      style: AppTheme.mono(
+                          size: 10, color: t.accent, letterSpacing: 1)),
+                ),
+              const SizedBox(width: 12),
+              Text('total [$totalStr]',
+                  style: AppTheme.mono(
+                      size: 10, color: t.textMuted, letterSpacing: 1)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Title panel ───────────────────────────────────────────────────
+
+class _CfgTitlePanel extends StatelessWidget {
+  final TeapodTokens t;
+  final VoidCallback onAdd;
+  final VoidCallback? onRefreshAll;
+  final bool isRefreshing;
+
+  const _CfgTitlePanel({
+    required this.t,
+    required this.onAdd,
+    this.onRefreshAll,
+    this.isRefreshing = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
+      decoration:
+          BoxDecoration(border: Border(bottom: BorderSide(color: t.line))),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('CONFIGS',
+                    style: AppTheme.sans(
+                        size: 28,
+                        weight: FontWeight.w500,
+                        color: t.text,
+                        letterSpacing: -1,
+                        height: 1)),
+                const SizedBox(height: 4),
+                Text('subs · standalone · imported',
+                    style: AppTheme.mono(
+                        size: 10, color: t.textMuted, letterSpacing: 1)),
+              ],
+            ),
+          ),
+          Row(
+            children: [
+              if (isRefreshing)
+                SizedBox(
+                  width: 32, height: 32,
+                  child: Center(
+                    child: SizedBox(
+                      width: 14, height: 14,
+                      child: CircularProgressIndicator(
+                          color: t.textDim, strokeWidth: 1.2),
+                    ),
+                  ),
+                )
+              else
+                _IconBtn(
+                    t: t,
+                    icon: Icons.refresh_rounded,
+                    accent: false,
+                    onTap: onRefreshAll),
+              const SizedBox(width: 6),
+              _IconBtn(t: t, icon: Icons.add_rounded, accent: true, onTap: onAdd),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IconBtn extends StatelessWidget {
+  final TeapodTokens t;
+  final IconData icon;
+  final bool accent;
+  final VoidCallback? onTap;
+
+  const _IconBtn({
+    required this.t,
+    required this.icon,
+    required this.accent,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: accent ? t.accent : Colors.transparent,
+          border: Border.all(color: accent ? t.accent : t.line),
+        ),
+        child: Icon(icon,
+            size: 14, color: accent ? t.bg : t.textDim),
+      ),
+    );
+  }
+}
+
+// ── Section header ────────────────────────────────────────────────
+
+class _SectionHeader extends StatelessWidget {
+  final TeapodTokens t;
+  final String label;
+  final int count;
+
+  const _SectionHeader(
+      {required this.t, required this.label, required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+      decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: t.lineSoft))),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label,
+              style: AppTheme.mono(
+                  size: 10, color: t.textMuted, letterSpacing: 1)),
+          Text('${count.toString().padLeft(2, '0')} rows',
+              style: AppTheme.mono(
+                  size: 10, color: t.textMuted, letterSpacing: 1)),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Subscription row ──────────────────────────────────────────────
+
+class _SubRow extends StatelessWidget {
+  final TeapodTokens t;
+  final Subscription sub;
   final List<VpnConfig> configs;
+  final int addr;
   final String? activeConfigId;
   final bool isExpanded;
   final VpnState vpnState;
@@ -517,9 +774,11 @@ class _SubscriptionGroup extends StatelessWidget {
   final void Function(VpnConfig) onSelectConfig;
   final void Function(VpnConfig) onConfigLongPress;
 
-  const _SubscriptionGroup({
-    required this.subscription,
+  const _SubRow({
+    required this.t,
+    required this.sub,
     required this.configs,
+    required this.addr,
     required this.activeConfigId,
     required this.isExpanded,
     required this.vpnState,
@@ -533,7 +792,7 @@ class _SubscriptionGroup extends StatelessWidget {
   });
 
   String get _lastRefresh {
-    final at = subscription.lastFetchedAt;
+    final at = sub.lastFetchedAt;
     if (at == null) return 'Не обновлялась';
     final diff = DateTime.now().difference(at);
     if (diff.inMinutes < 1) return 'Только что';
@@ -543,257 +802,335 @@ class _SubscriptionGroup extends StatelessWidget {
   }
 
   String? get _expireLabel {
-    final exp = subscription.expireAt;
+    final exp = sub.expireAt;
     if (exp == null) return null;
     final days = exp.difference(DateTime.now()).inDays;
     if (days < 0) return 'Истёк';
-    if (days == 0) return 'Истекает сегодня';
-    return 'Ещё $days д';
-  }
-
-  Color get _expireColor {
-    final exp = subscription.expireAt;
-    if (exp == null) return AppColors.textSecondary;
-    final days = exp.difference(DateTime.now()).inDays;
-    if (days < 0) return AppColors.error;
-    if (days <= 7) return AppColors.error;
-    if (days <= 14) return AppColors.connecting;
-    return AppColors.connected;
-  }
-
-  String _formatBytes(int bytes) {
-    if (bytes >= 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} ГБ';
-    }
-    if (bytes >= 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(0)} МБ';
-    }
-    return '${(bytes / 1024).toStringAsFixed(0)} КБ';
+    if (days == 0) return 'expires:today';
+    return null;
   }
 
   @override
   Widget build(BuildContext context) {
+    final hexAddr = '0x${addr.toString().padLeft(2, '0')}';
     final expireLabel = _expireLabel;
-    final hasTraffic = subscription.totalBytes != null;
-    final announce = subscription.announce;
-    final announceUrl = subscription.announceUrl;
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Header
+        // Sub header row
         GestureDetector(
           onTap: onToggle,
-          onLongPress: () => _showSubSubMenu(context),
+          onLongPress: () => _showSubMenu(context),
           child: Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(20, 11, 20, 11),
             decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+                border: Border(bottom: BorderSide(color: t.lineSoft))),
+            child: Row(
               children: [
-                Row(
-                  children: [
-                    Icon(
-                      isExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                      color: AppColors.textSecondary,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    const Icon(Icons.rss_feed_rounded, color: AppColors.primary, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                // Addr
+                SizedBox(
+                  width: 32,
+                  child: Text(hexAddr,
+                      style: AppTheme.mono(
+                          size: 10, color: t.textMuted)),
+                ),
+                const SizedBox(width: 10),
+                // Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(sub.name,
+                          style: AppTheme.sans(
+                              size: 13,
+                              weight: FontWeight.w500,
+                              color: t.text,
+                              letterSpacing: -0.2)),
+                      const SizedBox(height: 2),
+                      Row(
                         children: [
-                          Text(
-                            subscription.name,
-                            style: const TextStyle(
-                              color: AppColors.textPrimary,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                          ),
-                          Text(
-                            '${configs.length} конф. • $_lastRefresh',
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 11,
-                            ),
-                          ),
+                          Text('cnt=${configs.length}',
+                              style: AppTheme.mono(
+                                  size: 10, color: t.textMuted)),
+                          Text(' · $_lastRefresh',
+                              style: AppTheme.mono(
+                                  size: 10, color: t.textMuted)),
+                          if (expireLabel != null) ...[
+                            Text(' · ',
+                                style: AppTheme.mono(
+                                    size: 10, color: t.textMuted)),
+                            Text(expireLabel,
+                                style: AppTheme.mono(
+                                    size: 10, color: t.danger)),
+                          ],
                         ],
                       ),
-                    ),
-                    if (expireLabel != null) ...[
-                      const SizedBox(width: 6),
-                      _ExpiryBadge(label: expireLabel, color: _expireColor),
                     ],
-                    const SizedBox(width: 4),
-                    _SubAction(Icons.refresh_rounded, onRefresh),
-                    const SizedBox(width: 4),
-                    _SubAction(Icons.more_vert_rounded, () => _showSubSubMenu(context)),
-                  ],
+                  ),
                 ),
-                // Traffic bar
-                if (hasTraffic) ...[
-                  const SizedBox(height: 8),
-                  _TrafficBar(
-                    upload: subscription.uploadBytes ?? 0,
-                    download: subscription.downloadBytes ?? 0,
-                    total: subscription.totalBytes!,
-                    formatBytes: _formatBytes,
+                // Refresh + chevron
+                GestureDetector(
+                  onTap: onRefresh,
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 18),
+                    child: Icon(Icons.refresh_rounded,
+                        size: 16, color: t.textMuted),
                   ),
-                ],
-                // Announce message + link
-                if (announce != null && announce.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  _AnnounceBanner(
-                    message: announce,
-                    url: announceUrl,
-                  ),
-                ],
+                ),
+                Icon(
+                  isExpanded
+                      ? Icons.expand_less_rounded
+                      : Icons.expand_more_rounded,
+                  size: 16,
+                  color: t.textMuted,
+                ),
               ],
             ),
           ),
         ),
-        // Configs
-        if (isExpanded) ...[
-          const SizedBox(height: 8),
-          ...configs.map((c) {
-            final isActive = c.id == activeConfigId;
-            final isConnected = vpnState == VpnState.connected && isActive;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: ConfigCard(
-                config: c,
-                isActive: isActive,
-                isConnected: isConnected,
-                onTap: () => onSelectConfig(c),
-                onLongPress: () => onConfigLongPress(c),
-              ),
-            );
-          }),
-        ],
+
+        // Expanded: sub configs + optional renew footer
+        if (isExpanded)
+          Container(
+            color: t.bgSunken,
+            child: Column(
+              children: [
+                if (sub.expireAt != null &&
+                    sub.expireAt!.difference(DateTime.now()).inDays <= 0)
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(52, 10, 20, 12),
+                    decoration: BoxDecoration(
+                        border: Border(top: BorderSide(color: t.lineSoft))),
+                    child: Row(
+                      children: [
+                        Icon(Icons.bolt_rounded, size: 11, color: t.accent),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text('trial // renew subscription',
+                              style: AppTheme.mono(
+                                  size: 11, color: t.textDim)),
+                        ),
+                        GestureDetector(
+                          onTap: onRefresh,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 5),
+                            color: t.line,
+                            child: Text('RENEW',
+                                style: AppTheme.mono(
+                                    size: 10, color: t.textDim, letterSpacing: 1)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ...configs.asMap().entries.map((e) {
+                  final c = e.value;
+                  return _ConfigRow(
+                    t: t,
+                    config: c,
+                    addr: addr * 100 + e.key + 1,
+                    isActive: c.id == activeConfigId,
+                    indent: false,
+                    onTap: () => onSelectConfig(c),
+                    onLongPress: () => onConfigLongPress(c),
+                  );
+                })
+                ],
+            ),
+          ),
       ],
     );
   }
 
-  Future<void> _showSubSubMenu(BuildContext context) async {
+  Future<void> _showSubMenu(BuildContext context) async {
     final result = await showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
         MediaQuery.of(context).size.width - 220,
-        MediaQuery.of(context).padding.top + kToolbarHeight,
+        MediaQuery.of(context).padding.top + 80,
         20,
         0,
       ),
       items: const [
-        PopupMenuItem(value: 'rename', child: _MenuRow(Icons.edit_rounded, 'Переименовать')),
-        PopupMenuItem(value: 'edit_url', child: _MenuRow(Icons.link_rounded, 'Изменить URL')),
+        PopupMenuItem(
+            value: 'rename',
+            child: _MenuRow(Icons.edit_rounded, 'Переименовать')),
+        PopupMenuItem(
+            value: 'edit_url',
+            child: _MenuRow(Icons.link_rounded, 'Изменить URL')),
         PopupMenuDivider(),
-        PopupMenuItem(value: 'copy_url', child: _MenuRow(Icons.copy_rounded, 'Копировать URL')),
+        PopupMenuItem(
+            value: 'copy_url',
+            child: _MenuRow(Icons.copy_rounded, 'Копировать URL')),
         PopupMenuDivider(),
-        PopupMenuItem(value: 'refresh', child: _MenuRow(Icons.refresh_rounded, 'Обновить')),
-        PopupMenuItem(value: 'delete', child: _MenuRow(Icons.delete_rounded, 'Удалить', color: AppColors.error)),
+        PopupMenuItem(
+            value: 'refresh',
+            child: _MenuRow(Icons.refresh_rounded, 'Обновить')),
+        PopupMenuItem(
+            value: 'delete',
+            child: _MenuRow(Icons.delete_rounded, 'Удалить',
+                color: AppColors.danger)),
       ],
-      color: AppColors.surfaceElevated,
     );
 
     switch (result) {
-      case 'rename': onRename(); break;
-      case 'edit_url': onEditUrl(); break;
+      case 'rename':
+        onRename();
+        break;
+      case 'edit_url':
+        onEditUrl();
+        break;
       case 'copy_url':
-        await Clipboard.setData(ClipboardData(text: subscription.url));
+        await Clipboard.setData(ClipboardData(text: sub.url));
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('URL скопирован'), duration: Duration(seconds: 1)),
+            const SnackBar(
+                content: Text('URL скопирован'),
+                duration: Duration(seconds: 1)),
           );
         }
         break;
-      case 'refresh': onRefresh(); break;
-      case 'delete': onDelete(); break;
+      case 'refresh':
+        onRefresh();
+        break;
+      case 'delete':
+        onDelete();
+        break;
     }
   }
 }
 
-class _SubAction extends StatelessWidget {
-  final IconData icon;
+// ── Config row (standalone + sub-inner) ───────────────────────────
+
+class _ConfigRow extends StatelessWidget {
+  final TeapodTokens t;
+  final VpnConfig config;
+  final int addr;
+  final bool isActive;
+  final bool indent;
   final VoidCallback onTap;
-  const _SubAction(this.icon, this.onTap);
+  final VoidCallback onLongPress;
+
+  const _ConfigRow({
+    required this.t,
+    required this.config,
+    required this.addr,
+    required this.isActive,
+    required this.onTap,
+    required this.onLongPress,
+    this.indent = false,
+  });
+
+  String get _protoTag {
+    switch (config.protocol) {
+      case VpnProtocol.vless:       return 'VLESS';
+      case VpnProtocol.vmess:       return 'VMESS';
+      case VpnProtocol.trojan:      return 'TROJAN';
+      case VpnProtocol.shadowsocks: return 'SS';
+      case VpnProtocol.hysteria2:   return 'HY2';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final hexAddr =
+        '0x${addr.toString().padLeft(2, '0')}';
+    final ping = config.latencyMs;
+    final tagColor = isActive ? t.accent : t.textDim;
+    final tagBorder = isActive ? t.accent : t.line;
+    final leftPad = indent ? 52.0 : 20.0;
+
     return GestureDetector(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: Container(
-        padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
-          color: AppColors.surfaceHighlight,
-          borderRadius: BorderRadius.circular(6),
+          color: isActive ? t.accentFade : Colors.transparent,
+          border: Border(bottom: BorderSide(color: t.lineSoft)),
         ),
-        child: Icon(icon, size: 16, color: AppColors.textSecondary),
+        child: Stack(
+          children: [
+            // Active left bar
+            if (isActive)
+              Positioned(
+                left: 0, top: 0, bottom: 0,
+                child: Container(width: 2, color: t.accent),
+              ),
+
+            Padding(
+              padding: EdgeInsets.fromLTRB(leftPad, 11, 20, 11),
+              child: Row(
+                children: [
+                  // Addr
+                  SizedBox(
+                    width: 32,
+                    child: Text(hexAddr,
+                        style: AppTheme.mono(
+                            size: 10, color: t.textMuted)),
+                  ),
+                  const SizedBox(width: 10),
+
+                  // Proto tag
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 3),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: tagBorder),
+                    ),
+                    constraints: const BoxConstraints(minWidth: 44),
+                    child: Text(
+                      _protoTag,
+                      textAlign: TextAlign.center,
+                      style: AppTheme.mono(
+                          size: 10, color: tagColor, letterSpacing: 1),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+
+                  // Name + host
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          config.name,
+                          style: AppTheme.sans(
+                              size: 13,
+                              weight: FontWeight.w500,
+                              color: t.text,
+                              letterSpacing: -0.2),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${config.address}:${config.port}',
+                          style: AppTheme.mono(
+                              size: 10, color: t.textMuted),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Ping
+                  if (ping != null)
+                    Text(
+                      '${ping}ms',
+                      style: AppTheme.mono(
+                          size: 11, color: t.accent),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-// ─── Standalone Section ─────────────────────────────────────────
-
-class _StandaloneSection extends StatelessWidget {
-  final List<VpnConfig> configs;
-  final String? activeConfigId;
-  final VpnState vpnState;
-  final void Function(VpnConfig) onSelectConfig;
-  final void Function(VpnConfig) onConfigLongPress;
-
-  const _StandaloneSection({
-    required this.configs,
-    required this.activeConfigId,
-    required this.vpnState,
-    required this.onSelectConfig,
-    required this.onConfigLongPress,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.only(left: 4, bottom: 8),
-          child: Text(
-            'Отдельные конфигурации',
-            style: TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1,
-            ),
-          ),
-        ),
-        ...configs.map((c) {
-          final isActive = c.id == activeConfigId;
-          final isConnected = vpnState == VpnState.connected && isActive;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: ConfigCard(
-              config: c,
-              isActive: isActive,
-              isConnected: isConnected,
-              onTap: () => onSelectConfig(c),
-              onLongPress: () => onConfigLongPress(c),
-            ),
-          );
-        }),
-      ],
-    );
-  }
-}
-
-// ─── Helpers ────────────────────────────────────────────────────
+// ── Shared helpers ────────────────────────────────────────────────
 
 class _MenuRow extends StatelessWidget {
   final IconData icon;
@@ -803,137 +1140,13 @@ class _MenuRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = color ?? Theme.of(context).extension<TeapodTokens>()?.text;
     return Row(
       children: [
-        Icon(icon, size: 20, color: color ?? AppColors.textPrimary),
-        const SizedBox(width: 12),
-        Text(label, style: TextStyle(color: color ?? AppColors.textPrimary)),
+        Icon(icon, size: 18, color: c),
+        const SizedBox(width: 10),
+        Text(label, style: TextStyle(color: c, fontSize: 14)),
       ],
-    );
-  }
-}
-
-class _ExpiryBadge extends StatelessWidget {
-  final String label;
-  final Color color;
-  const _ExpiryBadge({required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha: 0.4), width: 0.5),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
-      ),
-    );
-  }
-}
-
-class _TrafficBar extends StatelessWidget {
-  final int upload;
-  final int download;
-  final int total;
-  final String Function(int) formatBytes;
-  const _TrafficBar({
-    required this.upload,
-    required this.download,
-    required this.total,
-    required this.formatBytes,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final used = upload + download;
-    final ratio = total > 0 ? (used / total).clamp(0.0, 1.0) : 0.0;
-    final barColor = ratio > 0.9
-        ? AppColors.error
-        : ratio > 0.75
-            ? AppColors.connecting
-            : AppColors.primary;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Трафик: ${formatBytes(used)} / ${formatBytes(total)}',
-              style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
-            ),
-            Text(
-              '${(ratio * 100).toStringAsFixed(0)}%',
-              style: TextStyle(color: barColor, fontSize: 11, fontWeight: FontWeight.w600),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(3),
-          child: LinearProgressIndicator(
-            value: ratio,
-            minHeight: 4,
-            backgroundColor: AppColors.surfaceHighlight,
-            valueColor: AlwaysStoppedAnimation<Color>(barColor),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _AnnounceBanner extends StatelessWidget {
-  final String message;
-  final String? url;
-  const _AnnounceBanner({required this.message, this.url});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceHighlight,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.info_outline_rounded, size: 14, color: AppColors.textSecondary),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-            ),
-          ),
-          if (url != null) ...[
-            const SizedBox(width: 6),
-            GestureDetector(
-              onTap: () {
-                final uri = Uri.tryParse(url!);
-                if (uri != null) launchUrl(uri, mode: LaunchMode.externalApplication);
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.4), width: 0.5),
-                ),
-                child: const Text(
-                  'Продлить',
-                  style: TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.w600),
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
     );
   }
 }
@@ -944,43 +1157,33 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = Theme.of(context).extension<TeapodTokens>()!;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: AppColors.surfaceElevated,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.vpn_key_outlined,
-              color: AppColors.textDisabled,
-              size: 36,
-            ),
-          ),
+          Text('[ no configs ]',
+              style: AppTheme.mono(size: 14, color: t.textMuted,
+                  letterSpacing: 1)),
           const SizedBox(height: 20),
-          const Text(
-            'Нет конфигураций',
-            style: TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Добавьте конфигурацию или подписку\nдля подключения',
+          Text(
+            'Добавьте конфигурацию\nили подписку',
             textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textSecondary),
+            style: AppTheme.sans(size: 14, color: t.textDim),
           ),
-          const SizedBox(height: 28),
-          ElevatedButton.icon(
-            onPressed: onAdd,
-            icon: const Icon(Icons.add_rounded),
-            label: const Text('Добавить'),
+          const SizedBox(height: 24),
+          GestureDetector(
+            onTap: onAdd,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 20, vertical: 10),
+              decoration: BoxDecoration(
+                color: t.accent,
+              ),
+              child: Text('+ ADD CONFIG',
+                  style: AppTheme.mono(
+                      size: 11, color: t.bg, letterSpacing: 1)),
+            ),
           ),
         ],
       ),

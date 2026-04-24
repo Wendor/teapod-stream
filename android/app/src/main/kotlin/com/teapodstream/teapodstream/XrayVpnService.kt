@@ -154,7 +154,7 @@ class XrayVpnService : VpnService() {
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     @Volatile private var lastUnderlyingNetwork: Network? = null
     private var prefixProxy: PrefixTcpProxy? = null
-    private var showNotification = true
+    @Volatile private var showNotification = true
     private var wakeLock: PowerManager.WakeLock? = null
     private var killSwitchEnabled = false
     private var proxyOnlyMode = false
@@ -262,11 +262,13 @@ class XrayVpnService : VpnService() {
                 return START_STICKY
             }
             ACTION_CONNECT_QUICK -> {
-                ensureForeground()
+                // Load params and set showNotification BEFORE ensureForeground so the
+                // correct notification type (full vs minimal) is shown from the start.
                 val params = loadConnectionParams()
+                if (params != null) showNotification = params.showNotification
+                ensureForeground()
                 val configFile = File(filesDir, "xray_config.json")
                 if (params != null && configFile.exists()) {
-                    showNotification = params.showNotification
                     val needsPermission = !params.proxyOnly && VpnService.prepare(this) != null
                     if (needsPermission) {
                         openApp()
@@ -292,9 +294,41 @@ class XrayVpnService : VpnService() {
                 return START_STICKY
             }
         }
-        // Service restarted by Android after being killed — must call startForeground() first
-        // (Android 8+ requires startForeground within 5s of startForegroundService)
+        // Service restarted by Android after being killed, or started by always-on VPN.
+        // Load params and set showNotification BEFORE ensureForeground (same fix as CONNECT_QUICK).
+        val params = loadConnectionParams()
+        if (params != null) showNotification = params.showNotification
         ensureForeground()
+        // Auto-connect if saved params exist and user didn't explicitly disconnect.
+        val configFile = File(filesDir, "xray_config.json")
+        if (params != null && configFile.exists()
+            && !userRequestedDisconnect.get()
+            && !isRunning.get()
+        ) {
+            val needsPermission = !params.proxyOnly && VpnService.prepare(this) != null
+            if (!needsPermission) {
+                userRequestedDisconnect.set(false)
+                currentNativeState = "connecting"
+                VpnEventStreamHandler.sendStateEvent("connecting")
+                try {
+                    val configText = configFile.readText()
+                    val (socksUser, socksPassword) = extractSocksFromConfig(configText)
+                    Thread {
+                        startVpn(
+                            configText,
+                            params.socksPort, socksUser, socksPassword,
+                            params.excludedPackages, params.includedPackages, params.vpnMode,
+                            params.ssPrefix, params.proxyOnly, params.killSwitch
+                        )
+                    }.start()
+                    return START_STICKY
+                } catch (e: Exception) {
+                    log("warning", "Auto-connect failed: ${e.message}")
+                    currentNativeState = "disconnected"
+                    VpnEventStreamHandler.sendStateEvent("disconnected")
+                }
+            }
+        }
         showDisconnectedNotification()
         return START_STICKY
     }
@@ -717,30 +751,47 @@ class XrayVpnService : VpnService() {
             }
             prefixProxy = null
 
+            // Close TUN fd early so tun2socks goroutines reading from it get EOF and
+            // unblock immediately. This is the main reason stopTun2Socks() was timing
+            // out — goroutines were blocked in a Read() with no pending data.
+            // Kill-switch path keeps TUN open intentionally (traffic sink).
+            val activateKillSwitch = killSwitchEnabled && !explicit && !reconnecting && !proxyOnlyMode
+                    && tunInterface != null
+                    && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+            if (!activateKillSwitch) {
+                try {
+                    tunInterface?.close()
+                } catch (e: Exception) {
+                    log("warning", "tunInterface.close (early) failed: ${e.message}")
+                }
+                tunInterface = null
+            }
+
             try { Teapodcore.stopTun2Socks() } catch (e: Exception) {
                 log("warning", "stopTun2Socks failed: ${e.message}")
             }
 
-            try { Teapodcore.stopXray() } catch (e: Exception) {
-                log("warning", "stopXray failed: ${e.message}")
+            // stopXray() can block indefinitely while Go goroutines drain open connections.
+            // Run it in a daemon thread with a 3s deadline so disconnect always completes.
+            val xrayStopThread = Thread {
+                try { Teapodcore.stopXray() } catch (e: Exception) {
+                    log("warning", "stopXray failed: ${e.message}")
+                }
+            }
+            xrayStopThread.isDaemon = true
+            xrayStopThread.start()
+            try {
+                xrayStopThread.join(3000)
+                if (xrayStopThread.isAlive) {
+                    log("warning", "stopXray timed out after 3s, forcing continuation")
+                }
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
             }
 
-            // Kill switch: on unexpected drop (non-explicit, non-reconnect), keep TUN open so
-            // all traffic is routed to the TUN but nobody reads it → effectively blocked.
-            // setUnderlyingNetworks(emptyArray) signals Android there is no real network.
-            val activateKillSwitch = killSwitchEnabled && !explicit && !reconnecting && !proxyOnlyMode
-                    && tunInterface != null
-                    && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
             if (activateKillSwitch) {
                 setUnderlyingNetworks(emptyArray())
                 log("info", "Kill switch active: TUN kept open, underlying networks cleared")
-            } else {
-                try {
-                    tunInterface?.close()
-                } catch (e: Exception) {
-                    log("warning", "tunInterface.close failed: ${e.message}")
-                }
-                tunInterface = null
             }
 
             // Keep xray_config.json for Quick Settings tile reconnect.

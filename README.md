@@ -14,6 +14,9 @@ VPN-клиент для Android с поддержкой протокола Xray 
 > 
 > Ближайшие планы: заморозка приложений через Shizuku и встроенный DNS-сервер с фильтрами AdGuard.
 
+<img src="screen1.png" alt="Темная тема" width="40%">
+<img src="screen2.png" alt="Светлая тема" width="40%">
+
 ## Возможности
 
 - Протоколы: **VLESS**, **VMess**, **Trojan**, **Shadowsocks**

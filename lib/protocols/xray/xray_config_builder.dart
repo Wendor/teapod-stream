@@ -81,9 +81,9 @@ class XrayConfigBuilder {
         'levels': {
           '0': {
             'handshake': 4,
-            'connIdle': 120,
-            'uplinkOnly': 5,
-            'downlinkOnly': 30,
+            'connIdle': 300,
+            'uplinkOnly': 60,
+            'downlinkOnly': 120,
           }
         },
         'system': {

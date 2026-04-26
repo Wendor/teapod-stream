@@ -524,6 +524,14 @@ class XrayVpnService : VpnService() {
                 tunInterface = builder.establish() ?: throw IllegalStateException("Failed to establish TUN")
                 log("info", "TUN established with IP $dynamicTunIp")
 
+                // Set underlying network BEFORE starting xray so its protected outbound
+                // sockets are bound to the correct physical network (WiFi/LTE) from the
+                // start.  Without this, xray sockets created during a reconnect may end up
+                // on a dying old network, leading to a zombie tunnel that looks connected
+                // but can't deliver any traffic (heartbeat fails with Read timed out).
+                val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+                updateUnderlyingNetworks(cm)
+
                 // 1. Start xray-core (in-process library, not subprocess)
                 startXrayAndWait(finalConfig)
                 log("info", "xray started")
@@ -914,6 +922,11 @@ class XrayVpnService : VpnService() {
                     network: Network,
                     networkCapabilities: NetworkCapabilities
                 ) {
+                    // If a reconnect is already scheduled, skip updating the underlying
+                    // network binding — otherwise onCapabilitiesChanged on a dying LTE
+                    // network can overwrite the WiFi binding set by onAvailable, rebinding
+                    // the TUN back to the dying network and breaking the tunnel.
+                    if (pendingNetworkRunnable != null) return
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                         if (cm.activeNetwork == network) {
                             updateUnderlyingNetworks(cm)
@@ -957,8 +970,18 @@ class XrayVpnService : VpnService() {
             } catch (e: Exception) { null }
         }
 
-        // Active is not VPN — use it (WiFi or LTE)
-        return activeNetwork
+        // Active is not VPN — still prefer WiFi if available, because during a
+        // mobile→WiFi handover the active network may still be LTE while WiFi
+        // is already up.  Binding xray to LTE at that moment produces a zombie
+        // tunnel that looks connected but can't forward traffic.
+        val anyWifi = try {
+            cm.allNetworks.firstOrNull { n ->
+                val c = cm.getNetworkCapabilities(n)
+                c?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true &&
+                c?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+            }
+        } catch (e: Exception) { null }
+        return anyWifi ?: activeNetwork
     }
 
     private fun updateUnderlyingNetworks(cm: ConnectivityManager) {

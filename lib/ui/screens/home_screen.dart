@@ -284,7 +284,7 @@ class _PowerCoreState extends State<_PowerCore> with SingleTickerProviderStateMi
     final t    = widget.t;
     final conn = widget.isConnected;
     final busy = widget.isBusy;
-    final actionLabel = conn ? 'отключить' : (busy ? 'одидание' : 'подключить');
+    final actionLabel = conn ? 'отключить' : (busy ? 'ожидание' : 'подключить');
 
     const coreSize  = 220.0;
     const outerSize = coreSize + 32.0;

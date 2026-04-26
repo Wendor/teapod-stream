@@ -214,14 +214,14 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
                         final e = filtered[i];
                         final lvlColor = _lvlColor(e.level, t);
                         return Container(
-                          padding: const EdgeInsets.fromLTRB(20, 6, 20, 6),
+                          padding: const EdgeInsets.fromLTRB(10, 6, 20, 6),
                           decoration: BoxDecoration(
                               border: Border(bottom: BorderSide(color: t.lineSoft))),
                           child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               SizedBox(
-                                width: 78,
+                                width: 56,
                                 child: Text(_fmtTs(e.timestamp),
                                     style: AppTheme.mono(size: 10, color: t.textMuted)),
                               ),

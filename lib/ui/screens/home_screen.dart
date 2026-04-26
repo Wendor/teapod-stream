@@ -646,7 +646,7 @@ class _MetricCell extends StatelessWidget {
         children: [
           Text(
             label.toUpperCase(),
-            style: AppTheme.mono(size: 9, color: t.textMuted, letterSpacing: 1),
+            style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1),
           ),
           const SizedBox(height: 3),
           Row(
@@ -658,7 +658,7 @@ class _MetricCell extends StatelessWidget {
               Text(
                 value,
                 style: AppTheme.mono(
-                  size: 18, weight: FontWeight.w500,
+                  size: 20, weight: FontWeight.w500,
                   color: t.text, letterSpacing: -0.5),
               ),
               if (unit != null) ...[

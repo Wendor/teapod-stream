@@ -177,6 +177,19 @@ if (!routing.isActive) return rules;
     final hosts = <String, String>{};
     if (server.domain != null && server.fallbackIp != null) {
       hosts[server.domain!] = server.fallbackIp!;
+    } else if (server.type == DnsType.doh || server.type == DnsType.dot) {
+      // Bootstrap for domain-based custom DoH/DoT: without a static hosts entry,
+      // xray can't resolve the server hostname (circular dependency).
+      final host = server.type == DnsType.doh
+          ? (Uri.tryParse(server.address)?.host ?? '')
+          : server.address;
+      if (host.isNotEmpty && !_isIpAddress(host)) {
+        servers.insert(servers.length - 1, {
+          'address': '8.8.8.8',
+          'port': 53,
+          'domains': [host],
+        });
+      }
     }
 
     return {
@@ -334,5 +347,11 @@ if (!routing.isActive) return rules;
 
   static String buildJson(VpnConfig config, VpnEngineOptions options) {
     return const JsonEncoder().convert(build(config, options));
+  }
+
+  static bool _isIpAddress(String host) {
+    if (RegExp(r'^\d+\.\d+\.\d+\.\d+$').hasMatch(host)) return true;
+    if (host.contains(':')) return true; // IPv6
+    return false;
   }
 }

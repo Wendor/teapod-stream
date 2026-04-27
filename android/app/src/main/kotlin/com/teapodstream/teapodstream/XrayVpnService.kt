@@ -832,9 +832,6 @@ class XrayVpnService : VpnService() {
         statsHistory.clear()
 
         statsThread = Thread {
-            var lastTotalBytes = 0L
-            var lastByteChangeTime = System.currentTimeMillis()
-
             while (isRunning.get()) {
                 try {
                     Thread.sleep(1000)
@@ -862,20 +859,6 @@ class XrayVpnService : VpnService() {
                     }
                     VpnEventStreamHandler.sendStatsEvent(totalUpload, totalDownload, lastUploadSpeed, lastDownloadSpeed)
                     updateNotification(lastUploadSpeed, lastDownloadSpeed)
-
-                    // Detect a hung tun2socks that hasn't crashed (IsRunning=true) but isn't
-                    // forwarding any packets. Only fire when heartbeat is healthy (failures=0)
-                    // so we don't double-reconnect alongside the heartbeat path.
-                    val currentTotal = currentTx + currentRx
-                    if (currentTotal != lastTotalBytes) {
-                        lastTotalBytes = currentTotal
-                        lastByteChangeTime = now
-                    }
-                    val staleMs = now - lastByteChangeTime
-                    if (staleMs > 60_000 && heartbeatFailures.get() == 0 && isRunning.get()) {
-                        log("warning", "No TUN traffic for ${staleMs / 1000}s with healthy heartbeat, reconnecting")
-                        reconnectInternal()
-                    }
                 } catch (_: InterruptedException) { break } catch (_: Exception) {}
             }
         }.also { it.isDaemon = true; it.start() }

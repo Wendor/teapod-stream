@@ -29,6 +29,8 @@ import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.Socket
 import java.net.URL
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import teapodcore.Teapodcore
@@ -559,31 +561,28 @@ class XrayVpnService : VpnService() {
             }
         } catch (e: Exception) {
             log("error", "Start failed: ${e.message}")
-            stopVpn(resultState = "error")
+            stopVpn(resultState = "error", explicit = true)
         }
     }
 
     /**
-     * Starts xray-core and blocks until it reports ready or fails (max 3 s).
+     * Starts xray-core and blocks until it signals ready or error via callback (max 30s safety timeout).
      * Throws IllegalStateException if xray reports an error status.
      */
     private fun startXrayAndWait(config: String) {
-        val ready = AtomicBoolean(false)
+        val latch = CountDownLatch(1)
         val failed = AtomicBoolean(false)
 
         Teapodcore.startXray(config, object : XrayCallback {
             override fun onStatus(status: Long, message: String) {
                 log("info", "[xray] $message")
-                if (status == 0L) ready.set(true) else failed.set(true)
+                if (status != 0L) failed.set(true)
+                latch.countDown()
             }
         })
 
-        val deadline = System.currentTimeMillis() + 3000
-        while (!ready.get() && !failed.get() && System.currentTimeMillis() < deadline) {
-            Thread.sleep(50)
-        }
+        if (!latch.await(30, TimeUnit.SECONDS)) throw IllegalStateException("xray start timeout (30s)")
         if (failed.get()) throw IllegalStateException("xray failed to start")
-        if (!ready.get()) throw IllegalStateException("xray start timeout (3s)")
     }
 
     /**

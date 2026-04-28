@@ -48,6 +48,33 @@ class RoutingSettings {
         adBlockEnabled: adBlockEnabled ?? this.adBlockEnabled,
       );
 
+  Map<String, dynamic> toJson() => {
+    'direction': direction.name,
+    'bypassLocal': bypassLocal,
+    'geoEnabled': geoEnabled,
+    'geoCodes': geoCodes,
+    'domainEnabled': domainEnabled,
+    'domainZones': domainZones,
+    'geositeEnabled': geositeEnabled,
+    'geositeCodes': geositeCodes,
+    'adBlockEnabled': adBlockEnabled,
+  };
+
+  static RoutingSettings fromJson(Map<String, dynamic> json) => RoutingSettings(
+    direction: RoutingDirection.values.firstWhere(
+      (e) => e.name == json['direction'],
+      orElse: () => RoutingDirection.global,
+    ),
+    bypassLocal: json['bypassLocal'] as bool? ?? false,
+    geoEnabled: json['geoEnabled'] as bool? ?? false,
+    geoCodes: (json['geoCodes'] as List<dynamic>?)?.cast<String>() ?? [],
+    domainEnabled: json['domainEnabled'] as bool? ?? false,
+    domainZones: (json['domainZones'] as List<dynamic>?)?.cast<String>() ?? [],
+    geositeEnabled: json['geositeEnabled'] as bool? ?? false,
+    geositeCodes: (json['geositeCodes'] as List<dynamic>?)?.cast<String>() ?? [],
+    adBlockEnabled: json['adBlockEnabled'] as bool? ?? false,
+  );
+
   String get summary {
     if (direction == RoutingDirection.global && !adBlockEnabled) return 'Глобальный';
     final parts = <String>[];

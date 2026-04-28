@@ -112,6 +112,63 @@ class AppSettings {
     );
   }
 
+  Map<String, dynamic> toJson() => {
+    'socksPort': socksPort,
+    'logLevel': logLevel.name,
+    'excludedPackages': excludedPackages.toList(),
+    'includedPackages': includedPackages.toList(),
+    'vpnMode': vpnMode.name,
+    'splitTunnelingEnabled': splitTunnelingEnabled,
+    'randomPort': randomPort,
+    'autoConnect': autoConnect,
+    'dnsMode': dnsMode.name,
+    'dnsPreset': dnsPreset,
+    'customDnsAddress': customDnsAddress,
+    'customDnsType': customDnsType,
+    'enableUdp': enableUdp,
+    'randomCredentials': randomCredentials,
+    'socksUser': socksUser,
+    'socksPassword': socksPassword,
+    'proxyOnly': proxyOnly,
+    'showNotification': showNotification,
+    'killSwitchEnabled': killSwitchEnabled,
+    'hwidEnabled': hwidEnabled,
+    'routing': routing.toJson(),
+    'updateChannel': updateChannel.name,
+  };
+
+  static AppSettings fromJson(Map<String, dynamic> json) {
+    final routingJson = json['routing'] as Map<String, dynamic>?;
+    return AppSettings(
+      socksPort: json['socksPort'] as int? ?? AppConstants.defaultSocksPort,
+      logLevel: LogLevel.values.firstWhere(
+        (e) => e.name == json['logLevel'], orElse: () => LogLevel.info),
+      excludedPackages: (json['excludedPackages'] as List<dynamic>?)?.cast<String>().toSet() ?? {},
+      includedPackages: (json['includedPackages'] as List<dynamic>?)?.cast<String>().toSet() ?? {},
+      vpnMode: VpnMode.values.firstWhere(
+        (e) => e.name == json['vpnMode'], orElse: () => VpnMode.onlySelected),
+      splitTunnelingEnabled: json['splitTunnelingEnabled'] as bool? ?? false,
+      randomPort: json['randomPort'] as bool? ?? true,
+      autoConnect: json['autoConnect'] as bool? ?? false,
+      dnsMode: DnsMode.values.firstWhere(
+        (e) => e.name == json['dnsMode'], orElse: () => DnsMode.proxy),
+      dnsPreset: json['dnsPreset'] as String? ?? 'cf_udp',
+      customDnsAddress: json['customDnsAddress'] as String? ?? '1.1.1.1',
+      customDnsType: json['customDnsType'] as String? ?? 'udp',
+      enableUdp: json['enableUdp'] as bool? ?? true,
+      randomCredentials: json['randomCredentials'] as bool? ?? true,
+      socksUser: json['socksUser'] as String? ?? '',
+      socksPassword: json['socksPassword'] as String? ?? '',
+      proxyOnly: json['proxyOnly'] as bool? ?? false,
+      showNotification: json['showNotification'] as bool? ?? true,
+      killSwitchEnabled: json['killSwitchEnabled'] as bool? ?? false,
+      hwidEnabled: json['hwidEnabled'] as bool? ?? false,
+      routing: routingJson != null ? RoutingSettings.fromJson(routingJson) : const RoutingSettings(),
+      updateChannel: UpdateChannel.values.firstWhere(
+        (e) => e.name == json['updateChannel'], orElse: () => UpdateChannel.stable),
+    );
+  }
+
   DnsServerConfig get dnsServer => DnsServerConfig.fromPreset(
     dnsPreset,
     customAddress: customDnsAddress,

@@ -8,9 +8,11 @@ import '../../core/services/update_service.dart' show UpdateChannel, UpdateInfo;
 import '../../core/models/dns_config.dart';
 import '../../core/services/settings_service.dart';
 import 'routing_screen.dart';
+import 'profiles_screen.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/vpn_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../providers/profile_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import 'split_tunnel_screen.dart';
@@ -51,16 +53,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final settingsAsync = ref.watch(settingsProvider);
     final vpnState = ref.watch(vpnProvider);
+    final profileState = ref.watch(profileProvider).maybeWhen(data: (d) => d, orElse: () => null);
     final version = ref.watch(appVersionProvider).maybeWhen(data: (v) => v, orElse: () => 'v?');
     final t = Theme.of(context).extension<TeapodTokens>()!;
-    final locked = vpnState.isConnected || vpnState.isConnecting;
+    final vpnLocked = vpnState.isConnected || vpnState.isConnecting;
+    final profileReadonly = profileState?.isReadonly ?? false;
+    final locked = vpnLocked || profileReadonly;
 
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
             _SetHeaderStrip(t: t, locked: locked),
-            _SetHeroPanel(t: t, locked: locked),
+            _SetHeroPanel(
+              t: t,
+              locked: locked,
+              profileName: profileState?.activeProfile?.name ?? 'default',
+              profileReadonly: profileReadonly,
+            ),
             Expanded(
               child: settingsAsync.when(
                 loading: () => Center(
@@ -70,7 +80,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         style: AppTheme.mono(size: 12, color: t.danger))),
                 data: (settings) => _SettingsBody(
                   settings: settings,
-                  isConnected: vpnState.isConnected,
+                  isConnected: vpnLocked,
+                  isProfileReadonly: profileReadonly,
                   version: version,
                   xrayVersion: _xrayVersion,
                   onUpdate: (s) => ref.read(settingsProvider.notifier).save(s),
@@ -114,7 +125,14 @@ class _SetHeaderStrip extends StatelessWidget {
 class _SetHeroPanel extends StatelessWidget {
   final TeapodTokens t;
   final bool locked;
-  const _SetHeroPanel({required this.t, required this.locked});
+  final String profileName;
+  final bool profileReadonly;
+  const _SetHeroPanel({
+    required this.t,
+    required this.locked,
+    required this.profileName,
+    required this.profileReadonly,
+  });
 
   static const Color _gold = AppColors.accentGold;
 
@@ -148,8 +166,10 @@ class _SetHeroPanel extends StatelessWidget {
                     const SizedBox(height: 6),
                     Text(
                       locked
-                          ? 'отключите VPN чтобы изменить параметры'
-                          : 'профиль: default · автосохранение',
+                          ? (profileReadonly
+                              ? 'профиль заблокирован · только чтение'
+                              : 'отключите VPN чтобы изменить параметры')
+                          : 'профиль: $profileName · автосохранение',
                       style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5),
                     ),
                   ],
@@ -334,6 +354,7 @@ class _SmallTickPainter extends CustomPainter {
 class _SettingsBody extends StatefulWidget {
   final AppSettings settings;
   final bool isConnected;
+  final bool isProfileReadonly;
   final String version;
   final String xrayVersion;
   final void Function(AppSettings) onUpdate;
@@ -341,6 +362,7 @@ class _SettingsBody extends StatefulWidget {
   const _SettingsBody({
     required this.settings,
     required this.isConnected,
+    required this.isProfileReadonly,
     required this.version,
     required this.xrayVersion,
     required this.onUpdate,
@@ -389,18 +411,20 @@ class _SettingsBodyState extends State<_SettingsBody> {
   Widget build(BuildContext context) {
     final t = Theme.of(context).extension<TeapodTokens>()!;
     final s = widget.settings;
-    final locked = widget.isConnected;
+    final locked = widget.isConnected || widget.isProfileReadonly;
 
     return Stack(
       children: [
-        AbsorbPointer(
-          absorbing: locked,
-          child: ListView(
+        ListView(
         padding: EdgeInsets.zero,
         children: [
           // ── 0x10 APPEARANCE ───────────────────────────────────
           _SetSectionHeader(t: t, addr: '0x10', label: 'appearance'),
           _AppearanceRows(t: t),
+
+          // ── 0x15 PROFILES ─────────────────────────────────────
+          _SetSectionHeader(t: t, addr: '0x15', label: 'profiles'),
+          _ProfilesRow(t: t),
 
           // ── 0x20 CONNECTION ───────────────────────────────────
           _SetSectionHeader(t: t, addr: '0x20', label: 'connection'),
@@ -630,11 +654,10 @@ class _SettingsBodyState extends State<_SettingsBody> {
           const SizedBox(height: 32),
         ],
       ),
-        ),
         if (locked)
           Positioned.fill(
             child: IgnorePointer(
-              child: Container(color: t.bg.withValues(alpha: 0.45)),
+              child: Container(color: t.bg.withValues(alpha: 0)),
             ),
           ),
       ],
@@ -1313,6 +1336,51 @@ class _UpdateVersionTile extends ConsumerWidget {
       ),
     );
 
+  }
+}
+
+// ── Profiles row ──────────────────────────────────────────────────
+
+class _ProfilesRow extends ConsumerWidget {
+  final TeapodTokens t;
+  const _ProfilesRow({required this.t});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profileState = ref.watch(profileProvider).maybeWhen(data: (d) => d, orElse: () => null);
+    final profile = profileState?.activeProfile;
+    final hint = profile == null
+        ? 'загрузка...'
+        : '${profile.name}${profile.readonly ? ' · только чтение' : ''}';
+
+    return GestureDetector(
+      onTap: () => Navigator.push(
+          context, MaterialPageRoute(builder: (_) => const ProfilesScreen())),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+        decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: t.line))),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Профили', style: AppTheme.sans(size: 14, color: t.text)),
+                  const SizedBox(height: 3),
+                  Text(hint,
+                      style: AppTheme.mono(
+                          size: 10, color: t.textMuted, letterSpacing: 0.5),
+                      overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text('›', style: AppTheme.mono(size: 16, color: t.textMuted)),
+          ],
+        ),
+      ),
+    );
   }
 }
 

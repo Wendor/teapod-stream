@@ -5,6 +5,7 @@ import '../../core/models/vpn_log_entry.dart';
 import '../../core/services/log_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
+import '../widgets/hero_panel.dart';
 
 class LogsScreen extends ConsumerStatefulWidget {
   const LogsScreen({super.key});
@@ -123,55 +124,30 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
             ),
 
             // ── Hero panel ──────────────────────────────────────
-            Container(
-              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.line))),
-              child: Stack(
+            HeroPanel(
+              t: t,
+              tagline: 'ЖУРНАЛ · XRAY · TUN2SOCKS',
+              title: 'LOGS',
+              subtitle: Row(
                 children: [
-                  _CornerTicksLogs(t: t),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('ЖУРНАЛ · XRAY · TUN2SOCKS',
-                                style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1.5)),
-                            const SizedBox(height: 8),
-                            Text('LOGS',
-                                style: AppTheme.sans(
-                                    size: 30, weight: FontWeight.w500,
-                                    color: t.text, letterSpacing: -1, height: 1)),
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                Text('last $lastTs · stream live',
-                                    style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5)),
-                                const SizedBox(width: 8),
-                                _PulseDot(color: t.accent),
-                              ],
-                            ),
-                          ],
-                        ),
-                        Row(
-                          children: [
-                            _IconBtn(
-                              t: t,
-                              icon: Icons.copy_rounded,
-                              onTap: logs.isEmpty ? null : () => _copyToClipboard(filtered),
-                            ),
-                            const SizedBox(width: 6),
-                            _IconBtn(
-                              t: t,
-                              icon: Icons.delete_sweep_rounded,
-                              onTap: () => ref.read(logServiceProvider.notifier).clear(),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                  Text('last $lastTs · stream live',
+                      style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5)),
+                  const SizedBox(width: 8),
+                  _PulseDot(color: t.accent),
+                ],
+              ),
+              trailing: Row(
+                children: [
+                  _IconBtn(
+                    t: t,
+                    icon: Icons.copy_rounded,
+                    onTap: logs.isEmpty ? null : () => _copyToClipboard(filtered),
+                  ),
+                  const SizedBox(width: 6),
+                  _IconBtn(
+                    t: t,
+                    icon: Icons.delete_sweep_rounded,
+                    onTap: () => ref.read(logServiceProvider.notifier).clear(),
                   ),
                 ],
               ),
@@ -399,70 +375,3 @@ class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixi
   }
 }
 
-// ── Corner ticks (reused pattern) ────────────────────────────────
-
-class _CornerTicksLogs extends StatelessWidget {
-  final TeapodTokens t;
-  const _CornerTicksLogs({required this.t});
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned.fill(
-      child: IgnorePointer(
-        child: Stack(
-          children: [
-            Positioned(top: 6, left: 6,   child: _Tick(color: t.textMuted, isTop: true,  isLeft: true)),
-            Positioned(top: 6, right: 6,  child: _Tick(color: t.textMuted, isTop: true,  isLeft: false)),
-            Positioned(bottom: 6, left: 6,  child: _Tick(color: t.textMuted, isTop: false, isLeft: true)),
-            Positioned(bottom: 6, right: 6, child: _Tick(color: t.textMuted, isTop: false, isLeft: false)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Tick extends StatelessWidget {
-  final Color color;
-  final bool isTop;
-  final bool isLeft;
-  const _Tick({required this.color, required this.isTop, required this.isLeft});
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      size: const Size(8, 8),
-      painter: _TickPainter(color: color, isTop: isTop, isLeft: isLeft),
-    );
-  }
-}
-
-class _TickPainter extends CustomPainter {
-  final Color color;
-  final bool isTop;
-  final bool isLeft;
-  const _TickPainter({required this.color, required this.isTop, required this.isLeft});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final p = Paint()..color = color..strokeWidth = 1..style = PaintingStyle.stroke;
-    final w = size.width;
-    final h = size.height;
-    if (isTop && isLeft) {
-      canvas.drawLine(Offset.zero, Offset(w, 0), p);
-      canvas.drawLine(Offset.zero, Offset(0, h), p);
-    } else if (isTop && !isLeft) {
-      canvas.drawLine(Offset(0, 0), Offset(w, 0), p);
-      canvas.drawLine(Offset(w, 0), Offset(w, h), p);
-    } else if (!isTop && isLeft) {
-      canvas.drawLine(Offset(0, h), Offset(w, h), p);
-      canvas.drawLine(Offset(0, 0), Offset(0, h), p);
-    } else {
-      canvas.drawLine(Offset(0, h), Offset(w, h), p);
-      canvas.drawLine(Offset(w, 0), Offset(w, h), p);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_TickPainter old) => old.color != color;
-}

@@ -929,7 +929,7 @@ class _SubRow extends StatelessWidget {
                   return _ConfigRow(
                     t: t,
                     config: c,
-                    addr: addr * 100 + e.key + 1,
+                    addr: e.key + 1,
                     isActive: c.id == activeConfigId,
                     indent: false,
                     onTap: () => onSelectConfig(c),

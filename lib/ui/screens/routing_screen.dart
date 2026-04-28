@@ -110,7 +110,7 @@ class _RoutingBody extends StatelessWidget {
           subtitle: Text(_modeHint,
               style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5)),
           trailing: Container(
-            width: 72,
+            width: 88,
             padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
             decoration: BoxDecoration(
               color: t.bgElev,

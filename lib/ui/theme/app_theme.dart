@@ -13,7 +13,7 @@ class AppTheme {
     double? height,
   }) =>
       GoogleFonts.jetBrainsMono(
-        fontSize: size,
+        fontSize: size < 11 ? 11 : size,
         fontWeight: weight,
         color: color,
         letterSpacing: letterSpacing,
@@ -29,7 +29,7 @@ class AppTheme {
     double? height,
   }) =>
       GoogleFonts.interTight(
-        fontSize: size,
+        fontSize: size < 11 ? 11 : size,
         fontWeight: weight,
         color: color,
         letterSpacing: letterSpacing,

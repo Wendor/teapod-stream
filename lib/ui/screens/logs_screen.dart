@@ -197,9 +197,10 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               SizedBox(
-                                width: 56,
+                                width: 70,
                                 child: Text(_fmtTs(e.timestamp),
-                                    style: AppTheme.mono(size: 10, color: t.textMuted)),
+                                    style: AppTheme.mono(size: 10, color: t.textMuted),
+                                    maxLines: 1),
                               ),
                               const SizedBox(width: 8),
                               SizedBox(

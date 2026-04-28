@@ -151,29 +151,31 @@ class _SetHeroPanel extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('ПАРАМЕТРЫ · ЛОКАЛЬНЫЙ ПРОФИЛЬ',
-                        style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1.5)),
-                    const SizedBox(height: 8),
-                    Text(locked ? 'LOCKED' : 'CONFIG',
-                        style: AppTheme.sans(
-                            size: 30, weight: FontWeight.w500,
-                            color: wordColor, letterSpacing: -1, height: 1)),
-                    const SizedBox(height: 6),
-                    Text(
-                      locked
-                          ? (profileReadonly
-                              ? 'профиль заблокирован · только чтение'
-                              : 'отключите VPN чтобы изменить параметры')
-                          : 'профиль: $profileName · автосохранение',
-                      style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5),
-                    ),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('ПАРАМЕТРЫ · ЛОКАЛЬНЫЙ ПРОФИЛЬ',
+                          style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1.5)),
+                      const SizedBox(height: 8),
+                      Text(locked ? 'LOCKED' : 'CONFIG',
+                          style: AppTheme.sans(
+                              size: 30, weight: FontWeight.w500,
+                              color: wordColor, letterSpacing: -1, height: 1)),
+                      const SizedBox(height: 6),
+                      Text(
+                        locked
+                            ? (profileReadonly
+                                ? 'профиль заблокирован · только чтение'
+                                : 'отключите VPN чтобы изменить параметры')
+                            : 'профиль: $profileName · автосохранение',
+                        style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5),
+                      ),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 12),
                 // Lock indicator
                 Container(
                   width: 54,
@@ -1055,6 +1057,7 @@ class _AppearanceRows extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
     final accent    = ref.watch(accentProvider);
+    final settings  = ref.watch(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
 
     return Column(
       children: [
@@ -1078,6 +1081,28 @@ class _AppearanceRows extends ConsumerWidget {
                   ref.read(themeModeProvider.notifier).set(m);
                 },
               ),
+            ],
+          ),
+        ),
+        // Font scale
+        Container(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.lineSoft))),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Размер шрифта', style: AppTheme.sans(size: 14, color: t.text)),
+              if (settings != null)
+                _SegSquare(
+                  t: t,
+                  value: settings.fontScale == FontScale.large ? 'large' : 'normal',
+                  opts: const [('normal', 'ОБЫЧНЫЙ'), ('large', 'КРУПНЫЙ')],
+                  locked: false,
+                  onChanged: (v) {
+                    final scale = v == 'large' ? FontScale.large : FontScale.normal;
+                    ref.read(settingsProvider.notifier).save(settings.copyWith(fontScale: scale));
+                  },
+                ),
             ],
           ),
         ),

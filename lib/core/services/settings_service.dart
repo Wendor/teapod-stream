@@ -13,6 +13,8 @@ enum VpnMode {
   onlySelected, // Только выбранные через VPN, остальные мимо
 }
 
+enum FontScale { normal, large }
+
 class AppSettings {
   final int socksPort;
   final LogLevel logLevel;
@@ -36,6 +38,7 @@ class AppSettings {
   final bool hwidEnabled;
   final RoutingSettings routing;
   final UpdateChannel updateChannel;
+  final FontScale fontScale;
 
   const AppSettings({
     this.socksPort = AppConstants.defaultSocksPort,
@@ -60,6 +63,7 @@ class AppSettings {
     this.hwidEnabled = false,
     this.routing = const RoutingSettings(),
     this.updateChannel = UpdateChannel.stable,
+    this.fontScale = FontScale.normal,
   });
 
   AppSettings copyWith({
@@ -85,6 +89,7 @@ class AppSettings {
     bool? hwidEnabled,
     RoutingSettings? routing,
     UpdateChannel? updateChannel,
+    FontScale? fontScale,
   }) {
     return AppSettings(
       socksPort: socksPort ?? this.socksPort,
@@ -109,6 +114,7 @@ class AppSettings {
       hwidEnabled: hwidEnabled ?? this.hwidEnabled,
       routing: routing ?? this.routing,
       updateChannel: updateChannel ?? this.updateChannel,
+      fontScale: fontScale ?? this.fontScale,
     );
   }
 
@@ -135,6 +141,7 @@ class AppSettings {
     'hwidEnabled': hwidEnabled,
     'routing': routing.toJson(),
     'updateChannel': updateChannel.name,
+    'fontScale': fontScale.name,
   };
 
   static AppSettings fromJson(Map<String, dynamic> json) {
@@ -166,6 +173,8 @@ class AppSettings {
       routing: routingJson != null ? RoutingSettings.fromJson(routingJson) : const RoutingSettings(),
       updateChannel: UpdateChannel.values.firstWhere(
         (e) => e.name == json['updateChannel'], orElse: () => UpdateChannel.stable),
+      fontScale: FontScale.values.firstWhere(
+        (e) => e.name == json['fontScale'], orElse: () => FontScale.normal),
     );
   }
 
@@ -205,6 +214,7 @@ class SettingsService {
   static const _routingGeositeCodesKey = 'routing_geosite_codes';
   static const _routingAdBlockEnabledKey = 'routing_adblock_enabled';
   static const _updateChannelKey = 'update_channel';
+  static const _fontScaleKey = 'font_scale';
 
   final _secure = StorageSecureService();
 
@@ -248,6 +258,10 @@ class SettingsService {
       updateChannel: UpdateChannel.values.firstWhere(
         (e) => e.name == prefs.getString(_updateChannelKey),
         orElse: () => UpdateChannel.stable,
+      ),
+      fontScale: FontScale.values.firstWhere(
+        (e) => e.name == prefs.getString(_fontScaleKey),
+        orElse: () => FontScale.normal,
       ),
     );
   }
@@ -301,6 +315,7 @@ class SettingsService {
     await prefs.setStringList(_routingGeositeCodesKey, settings.routing.geositeCodes);
     await prefs.setBool(_routingAdBlockEnabledKey, settings.routing.adBlockEnabled);
     await prefs.setString(_updateChannelKey, settings.updateChannel.name);
+    await prefs.setString(_fontScaleKey, settings.fontScale.name);
     // SOCKS credentials go to encrypted storage
     await _secure.writeSocksCredentials(settings.socksUser, settings.socksPassword);
   }

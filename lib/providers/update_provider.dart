@@ -109,13 +109,9 @@ class UpdateNotifier extends Notifier<UpdateState> {
         downloaded: File(path).existsSync() ? File(path).lengthSync() : 0,
         total: info.totalBytes ?? -1);
 
-    final vpn = ref.read(vpnProvider);
     _dlSub = _service.downloadApk(
       info.downloadUrl,
       path,
-      socksPort: vpn.isConnected ? vpn.activeSocksPort : null,
-      socksUser: vpn.activeSocksUser,
-      socksPassword: vpn.activeSocksPassword,
     ).listen(
       (progress) {
         if (progress.done) {
@@ -148,7 +144,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
   Future<void> installApk(String filePath) async {
     try {
       await _channel.invokeMethod<void>('installApk', {'filePath': filePath});
-      await _cleanOldApks(keepPath: null);
+      await _cleanOldApks(keepPath: filePath);
       state = UpdateIdle();
     } on PlatformException catch (e) {
       state = UpdateError(e.message ?? 'Ошибка установки');

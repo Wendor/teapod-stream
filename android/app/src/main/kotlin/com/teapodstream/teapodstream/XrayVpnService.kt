@@ -284,8 +284,28 @@ class XrayVpnService : VpnService() {
                         userRequestedDisconnect.set(false)
                         setState("connecting")
                         val configText = configFile.readText()
-                        // Extract SOCKS credentials from the saved xray config instead of storing them
-                        val (socksUser, socksPassword) = extractSocksFromConfig(configText)
+                        // Load SOCKS credentials from saved file (survives reconnect)
+                        var socksUser = ""
+                        var socksPassword = ""
+                        try {
+                            val credsFile = File(filesDir, "socks_creds.json")
+                            if (credsFile.exists()) {
+                                val json = org.json.JSONObject(credsFile.readText())
+                                socksUser = json.optString("user", "")
+                                socksPassword = json.optString("pass", "")
+                                log("debug", "CONNECT_QUICK: loaded creds from file, user=$socksUser")
+                            } else {
+                                // Fallback: extract from config
+                                val (u, p) = extractSocksFromConfig(configText)
+                                socksUser = u
+                                socksPassword = p
+                            }
+                        } catch (e: Exception) {
+                            log("warning", "Failed to load socks_creds: ${e.message}")
+                            val (u, p) = extractSocksFromConfig(configText)
+                            socksUser = u
+                            socksPassword = p
+                        }
                         Thread {
                             startVpn(
                                 configText,
@@ -407,7 +427,10 @@ class XrayVpnService : VpnService() {
                         ?.optJSONArray("accounts") ?: continue
                     if (accounts.length() > 0) {
                         val acc = accounts.getJSONObject(0)
-                        return acc.optString("user", "") to acc.optString("pass", "")
+                        val user = acc.optString("user", "")
+                        val pass = acc.optString("pass", "")
+                        log("debug", "extractSocksFromConfig: extracted user=$user")
+                        return user to pass
                     }
                 }
             }
@@ -772,6 +795,11 @@ class XrayVpnService : VpnService() {
                 log("warning", "stopTun2Socks failed: ${e.message}")
             }
 
+            // Clean up saved credentials on explicit disconnect
+            if (explicit) {
+                try { File(filesDir, "socks_creds.json").delete() } catch (_: Exception) {}
+            }
+
             // stopXray() can block indefinitely while Go goroutines drain open connections.
             // Run it in a daemon thread with a 3s deadline so disconnect always completes.
             val xrayStopThread = Thread {
@@ -804,6 +832,9 @@ class XrayVpnService : VpnService() {
             // Don't overwrite "connecting" state when doing internal reconnect
             if (!reconnecting) {
                 setState(resultState)
+            } else {
+                // Clear credentials so startVpn picks up fresh ones from configFile
+                _socksCredentials.set(SocksCredentials(0, "", ""))
             }
         }
     }
@@ -1266,6 +1297,13 @@ class XrayVpnService : VpnService() {
     private fun setConnected(socksPort: Int, socksUser: String, socksPassword: String) {
         currentNativeState = "connected"
         _socksCredentials.set(SocksCredentials(socksPort, socksUser, socksPassword))
+        // Save credentials to file for CONNECT_QUICK reconnect
+        try {
+            val credsFile = File(filesDir, "socks_creds.json")
+            credsFile.writeText("""{"port":$socksPort,"user":"$socksUser","pass":"$socksPassword"}""")
+        } catch (e: Exception) {
+            log("warning", "Failed to save socks_creds: ${e.message}")
+        }
         VpnEventStreamHandler.sendConnectedEvent(socksPort, socksUser, socksPassword)
         sendBroadcast(Intent("com.teapodstream.STATE_CHANGED").apply {
             putExtra("state", "connected")

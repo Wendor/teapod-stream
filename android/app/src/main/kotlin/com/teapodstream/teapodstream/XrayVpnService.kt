@@ -61,6 +61,7 @@ class XrayVpnService : VpnService() {
         const val EXTRA_PROXY_ONLY = "proxy_only" // start only SOCKS proxy, no VPN tunnel
         const val EXTRA_SHOW_NOTIFICATION = "show_notification" // show rich notification with speed
         const val EXTRA_KILL_SWITCH = "kill_switch" // block traffic when VPN drops unexpectedly
+        const val EXTRA_ALLOW_ICMP = "allow_icmp" // allow ICMP echo (ping) through the tunnel
 
         // Static state tracker for querying from Dart
         @Volatile private var currentNativeState: String = "disconnected"
@@ -167,6 +168,7 @@ class XrayVpnService : VpnService() {
     @Volatile private var showNotification = true
     private var wakeLock: PowerManager.WakeLock? = null
     private var killSwitchEnabled = false
+    @Volatile private var allowIcmpEnabled = true
     private var proxyOnlyMode = false
     private val networkChangeHandler = Handler(Looper.getMainLooper())
     private var pendingNetworkRunnable: Runnable? = null
@@ -258,14 +260,16 @@ class XrayVpnService : VpnService() {
                 val ssPrefix = intent.getStringExtra(EXTRA_SS_PREFIX)
                 val proxyOnly = intent.getBooleanExtra(EXTRA_PROXY_ONLY, false)
                 val killSwitch = intent.getBooleanExtra(EXTRA_KILL_SWITCH, false)
+                val allowIcmp = intent.getBooleanExtra(EXTRA_ALLOW_ICMP, true)
                 // Persist non-sensitive params for CONNECT_QUICK reconnect (no credentials)
                 saveConnectionParams(socksPort, excludedPackages, includedPackages,
-                    vpnMode, ssPrefix, proxyOnly, showNotification, killSwitch)
+                    vpnMode, ssPrefix, proxyOnly, showNotification, killSwitch, allowIcmp)
                 userRequestedDisconnect.set(false)
                 ensureForeground()
                 Thread {
                     startVpn(xrayConfig, socksPort, socksUser, socksPassword,
-                        excludedPackages, includedPackages, vpnMode, ssPrefix, proxyOnly, killSwitch)
+                        excludedPackages, includedPackages, vpnMode, ssPrefix, proxyOnly, killSwitch,
+                        allowIcmp)
                 }.start()
                 return START_STICKY
             }
@@ -311,7 +315,8 @@ class XrayVpnService : VpnService() {
                                 configText,
                                 params.socksPort, socksUser, socksPassword,
                                 params.excludedPackages, params.includedPackages, params.vpnMode,
-                                params.ssPrefix, params.proxyOnly, params.killSwitch
+                                params.ssPrefix, params.proxyOnly, params.killSwitch,
+                                params.allowIcmp
                             )
                         }.start()
                     }
@@ -344,7 +349,8 @@ class XrayVpnService : VpnService() {
                             configText,
                             params.socksPort, socksUser, socksPassword,
                             params.excludedPackages, params.includedPackages, params.vpnMode,
-                            params.ssPrefix, params.proxyOnly, params.killSwitch
+                            params.ssPrefix, params.proxyOnly, params.killSwitch,
+                            params.allowIcmp
                         )
                     }.start()
                     return START_STICKY
@@ -369,6 +375,7 @@ class XrayVpnService : VpnService() {
         val proxyOnly: Boolean,
         val showNotification: Boolean,
         val killSwitch: Boolean,
+        val allowIcmp: Boolean,
     )
 
     private fun saveConnectionParams(
@@ -376,6 +383,7 @@ class XrayVpnService : VpnService() {
         excludedPackages: List<String>, includedPackages: List<String>,
         vpnMode: String, ssPrefix: String?, proxyOnly: Boolean, showNotification: Boolean,
         killSwitch: Boolean,
+        allowIcmp: Boolean,
     ) {
         try {
             val json = org.json.JSONObject().apply {
@@ -387,6 +395,7 @@ class XrayVpnService : VpnService() {
                 put("proxyOnly", proxyOnly)
                 put("showNotification", showNotification)
                 put("killSwitch", killSwitch)
+                put("allowIcmp", allowIcmp)
             }
             File(filesDir, "last_connection_meta.json").writeText(json.toString())
         } catch (e: Exception) {
@@ -411,6 +420,7 @@ class XrayVpnService : VpnService() {
                 proxyOnly = json.optBoolean("proxyOnly", false),
                 showNotification = json.optBoolean("showNotification", true),
                 killSwitch = json.optBoolean("killSwitch", false),
+                allowIcmp = json.optBoolean("allowIcmp", true),
             )
         } catch (_: Exception) {
             null
@@ -457,11 +467,13 @@ class XrayVpnService : VpnService() {
         ssPrefix: String? = null,
         proxyOnly: Boolean = false,
         killSwitch: Boolean = false,
+        allowIcmp: Boolean = true,
     ) {
         if (!isRunning.compareAndSet(false, true)) return
         try { tunInterface?.close() } catch (_: Exception) {}
         tunInterface = null
         killSwitchEnabled = killSwitch
+        allowIcmpEnabled = allowIcmp
         proxyOnlyMode = proxyOnly
         setState("connecting")
         log("info", "Starting VPN (MTU: $tunMtu)")
@@ -563,6 +575,7 @@ class XrayVpnService : VpnService() {
                     socksPort.toLong(),
                     socksUser,
                     socksPassword,
+                    allowIcmpEnabled,
                     validator
                 )
                 if (tunErr.isNotEmpty()) throw IllegalStateException("tun2socks: $tunErr")
@@ -637,7 +650,7 @@ class XrayVpnService : VpnService() {
         } catch (e: Exception) {
             log("warning", "Failed to resolve own UID: ${e.message}")
         }
-        
+
         return uids
     }
 
@@ -1148,11 +1161,11 @@ class XrayVpnService : VpnService() {
             val destPort = 80
             val domainBytes = destHost.toByteArray()
             out.write(
-                byteArrayOf(5, 1, 0, 3, domainBytes.size.toByte()) + 
-                domainBytes + 
+                byteArrayOf(5, 1, 0, 3, domainBytes.size.toByte()) +
+                domainBytes +
                 byteArrayOf((destPort shr 8).toByte(), destPort.toByte())
             )
-            
+
             val replyVer = inp.read()
             val replyRep = inp.read()
             val replyRsv = inp.read()

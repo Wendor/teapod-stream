@@ -114,7 +114,7 @@ class VpnNotifier extends Notifier<VpnState2> {
   void _startStatsPolling() {
     // Prevent duplicate polling
     if (_statsPoller?.isActive == true) return;
-    
+
     _statsPoller = Timer.periodic(const Duration(seconds: 1), (_) async {
       if (state.connectionState != VpnState.connected) {
         return;
@@ -127,7 +127,7 @@ class VpnNotifier extends Notifier<VpnState2> {
           'uploadSpeed': stats.uploadSpeed,
           'downloadSpeed': stats.downloadSpeed,
         }));
-        
+
         // Also fetch stats history for chart
         final history = await _engine.getStatsHistory();
         if (history.isNotEmpty) {
@@ -340,6 +340,7 @@ class VpnNotifier extends Notifier<VpnState2> {
           : {},
       logLevel: settings.logLevel,
       enableUdp: settings.enableUdp,
+      allowIcmp: settings.allowIcmp,
       dnsMode: settings.dnsMode,
       dnsServer: settings.dnsServer,
       vpnMode: settings.vpnMode,

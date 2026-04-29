@@ -48,7 +48,7 @@ class XrayConfigBuilder {
         {'tag': 'dns-out', 'protocol': 'dns'}
       ],
       'routing': {
-        'domainStrategy': 'IPIfNonMatch',
+        'domainStrategy': 'AsIs',
         'rules': [
           if (options.dnsMode == DnsMode.proxy) ...[
             // Proxy mode: intercept DNS via xray's DNS module → queries go through VPN

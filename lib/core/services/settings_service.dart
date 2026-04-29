@@ -29,6 +29,7 @@ class AppSettings {
   final String customDnsAddress;
   final String customDnsType;
   final bool enableUdp;
+  final bool allowIcmp;
   final bool randomCredentials;
   final String socksUser;
   final String socksPassword;
@@ -54,6 +55,7 @@ class AppSettings {
     this.customDnsAddress = '1.1.1.1',
     this.customDnsType = 'udp',
     this.enableUdp = true,
+    this.allowIcmp = true,
     this.randomCredentials = true,
     this.socksUser = '',
     this.socksPassword = '',
@@ -80,6 +82,7 @@ class AppSettings {
     String? customDnsAddress,
     String? customDnsType,
     bool? enableUdp,
+    bool? allowIcmp,
     bool? randomCredentials,
     String? socksUser,
     String? socksPassword,
@@ -105,6 +108,7 @@ class AppSettings {
       customDnsAddress: customDnsAddress ?? this.customDnsAddress,
       customDnsType: customDnsType ?? this.customDnsType,
       enableUdp: enableUdp ?? this.enableUdp,
+      allowIcmp: allowIcmp ?? this.allowIcmp,
       randomCredentials: randomCredentials ?? this.randomCredentials,
       socksUser: socksUser ?? this.socksUser,
       socksPassword: socksPassword ?? this.socksPassword,
@@ -132,6 +136,7 @@ class AppSettings {
     'customDnsAddress': customDnsAddress,
     'customDnsType': customDnsType,
     'enableUdp': enableUdp,
+    'allowIcmp': allowIcmp,
     'randomCredentials': randomCredentials,
     'socksUser': socksUser,
     'socksPassword': socksPassword,
@@ -163,6 +168,7 @@ class AppSettings {
       customDnsAddress: json['customDnsAddress'] as String? ?? '1.1.1.1',
       customDnsType: json['customDnsType'] as String? ?? 'udp',
       enableUdp: json['enableUdp'] as bool? ?? true,
+      allowIcmp: json['allowIcmp'] as bool? ?? true,
       randomCredentials: json['randomCredentials'] as bool? ?? true,
       socksUser: json['socksUser'] as String? ?? '',
       socksPassword: json['socksPassword'] as String? ?? '',
@@ -197,6 +203,7 @@ class SettingsService {
   static const _customDnsAddressKey = 'custom_dns_address';
   static const _customDnsTypeKey = 'custom_dns_type';
   static const _enableUdpKey = 'enable_udp';
+  static const _allowIcmpKey = 'allow_icmp';
   static const _randomCredentialsKey = 'random_credentials';
   static const _proxyOnlyKey = 'proxy_only';
   static const _showNotificationKey = 'show_notification';
@@ -247,6 +254,7 @@ class SettingsService {
       customDnsAddress: prefs.getString(_customDnsAddressKey) ?? '1.1.1.1',
       customDnsType: prefs.getString(_customDnsTypeKey) ?? 'udp',
       enableUdp: prefs.getBool(_enableUdpKey) ?? true,
+      allowIcmp: prefs.getBool(_allowIcmpKey) ?? true,
       randomCredentials: prefs.getBool(_randomCredentialsKey) ?? true,
       socksUser: creds.user,
       socksPassword: creds.password,
@@ -300,6 +308,7 @@ class SettingsService {
     await prefs.setString(_customDnsAddressKey, settings.customDnsAddress);
     await prefs.setString(_customDnsTypeKey, settings.customDnsType);
     await prefs.setBool(_enableUdpKey, settings.enableUdp);
+    await prefs.setBool(_allowIcmpKey, settings.allowIcmp);
     await prefs.setBool(_randomCredentialsKey, settings.randomCredentials);
     await prefs.setBool(_proxyOnlyKey, settings.proxyOnly);
     await prefs.setBool(_showNotificationKey, settings.showNotification);

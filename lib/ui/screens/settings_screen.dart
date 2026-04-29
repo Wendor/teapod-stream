@@ -553,6 +553,14 @@ class _SettingsBodyState extends State<_SettingsBody> {
             locked: locked,
             onChange: (v) => widget.onUpdate(s.copyWith(enableUdp: v)),
           ),
+          _RowToggle(
+            t: t,
+            title: 'ICMP (ping)',
+            hint: 'Разрешить ping-запросы через туннель',
+            value: s.allowIcmp,
+            locked: locked,
+            onChange: (v) => widget.onUpdate(s.copyWith(allowIcmp: v)),
+          ),
           // DNS mode inline selector
           Container(
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),

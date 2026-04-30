@@ -433,7 +433,7 @@ class XrayVpnService : VpnService() {
                 proxyOnly = json.optBoolean("proxyOnly", false),
                 showNotification = json.optBoolean("showNotification", true),
                 killSwitch = json.optBoolean("killSwitch", false),
-                allowIcmp = json.optBoolean("allowIcmp", true),
+                allowIcmp = json.optBoolean("allowIcmp", false),
             )
         } catch (_: Exception) {
             null

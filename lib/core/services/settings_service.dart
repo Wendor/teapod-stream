@@ -55,7 +55,7 @@ class AppSettings {
     this.customDnsAddress = '1.1.1.1',
     this.customDnsType = 'udp',
     this.enableUdp = true,
-    this.allowIcmp = true,
+    this.allowIcmp = false,
     this.randomCredentials = true,
     this.socksUser = '',
     this.socksPassword = '',

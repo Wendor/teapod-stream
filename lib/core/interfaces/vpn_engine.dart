@@ -43,7 +43,7 @@ class VpnEngineOptions {
     this.includedPackages = const {},
     this.logLevel = LogLevel.info,
     this.enableUdp = true,
-    this.allowIcmp = true,
+    this.allowIcmp = false,
     this.dnsMode = DnsMode.proxy,
     this.dnsServer = const DnsServerConfig(type: DnsType.udp, address: '1.1.1.1'),
     this.vpnMode = VpnMode.allExcept,

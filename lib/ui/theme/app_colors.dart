@@ -9,7 +9,7 @@ class AppColors {
   static const lineSoftDark  = Color(0xFF12171A);
   static const textDark      = Color(0xFFE8ECEE);
   static const textDimDark   = Color(0xFF8A969D);
-  static const textMutedDark = Color(0xFF566168);
+  static const textMutedDark = Color(0xFF667178);
 
   // ── Light palette ─────────────────────────────────────────────
   static const bgLight        = Color(0xFFF2F4F5);

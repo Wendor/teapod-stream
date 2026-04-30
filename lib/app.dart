@@ -10,6 +10,7 @@ import 'ui/screens/logs_screen.dart';
 import 'ui/screens/settings_screen.dart';
 import 'providers/config_provider.dart';
 import 'providers/vpn_provider.dart';
+import 'core/services/settings_service.dart';
 import 'providers/settings_provider.dart';
 import 'providers/update_provider.dart';
 import 'providers/theme_provider.dart';
@@ -32,11 +33,21 @@ class _TeapodMaterialApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
     final accent    = ref.watch(accentProvider);
+    final fontScale = ref.watch(settingsProvider).maybeWhen(
+      data: (s) => s.fontScale == FontScale.large ? 1.2 : 1.0,
+      orElse: () => 1.0,
+    );
     return MaterialApp(
       title: 'TeapodStream',
       theme:     AppTheme.build(Brightness.light, accent),
       darkTheme:  AppTheme.build(Brightness.dark, accent),
       themeMode: themeMode,
+      builder: (ctx, child) => MediaQuery(
+        data: MediaQuery.of(ctx).copyWith(
+          textScaler: TextScaler.linear(fontScale),
+        ),
+        child: child!,
+      ),
       home: const _AppShell(),
       debugShowCheckedModeBanner: false,
     );

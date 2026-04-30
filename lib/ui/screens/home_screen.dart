@@ -1,45 +1,23 @@
 import 'dart:math' as math;
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import '../../core/models/vpn_stats.dart';
 import '../../providers/vpn_provider.dart';
 import '../../providers/config_provider.dart';
 import '../../providers/ip_info_provider.dart';
+import '../../providers/app_info_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/live_sparkline.dart';
 
-class HomeScreen extends ConsumerStatefulWidget {
+class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
-  ConsumerState<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends ConsumerState<HomeScreen> {
-  String _version = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _loadVersion();
-  }
-
-  Future<void> _loadVersion() async {
-    try {
-      final info = await PackageInfo.fromPlatform();
-      if (mounted) setState(() => _version = 'v${info.version}');
-    } catch (_) {
-      if (mounted) setState(() => _version = 'v?');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final vpnState    = ref.watch(vpnProvider);
     final configAsync = ref.watch(configProvider);
+    final version     = ref.watch(appVersionProvider).maybeWhen(data: (v) => v, orElse: () => 'v?');
     final t = Theme.of(context).extension<TeapodTokens>()!;
 
     final activeConfig = configAsync.maybeWhen(
@@ -66,7 +44,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _HeaderStrip(t: t, stateCode: stateCode, version: _version.isEmpty ? 'v?' : _version),
+            _HeaderStrip(t: t, stateCode: stateCode, version: version),
             _HeroPanel(
               t: t,
               vpnState: vpnState,

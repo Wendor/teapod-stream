@@ -13,6 +13,8 @@ enum VpnMode {
   onlySelected, // Только выбранные через VPN, остальные мимо
 }
 
+enum FontScale { normal, large }
+
 class AppSettings {
   final int socksPort;
   final LogLevel logLevel;
@@ -27,6 +29,7 @@ class AppSettings {
   final String customDnsAddress;
   final String customDnsType;
   final bool enableUdp;
+  final bool allowIcmp;
   final bool randomCredentials;
   final String socksUser;
   final String socksPassword;
@@ -36,6 +39,7 @@ class AppSettings {
   final bool hwidEnabled;
   final RoutingSettings routing;
   final UpdateChannel updateChannel;
+  final FontScale fontScale;
 
   const AppSettings({
     this.socksPort = AppConstants.defaultSocksPort,
@@ -51,6 +55,7 @@ class AppSettings {
     this.customDnsAddress = '1.1.1.1',
     this.customDnsType = 'udp',
     this.enableUdp = true,
+    this.allowIcmp = true,
     this.randomCredentials = true,
     this.socksUser = '',
     this.socksPassword = '',
@@ -60,6 +65,7 @@ class AppSettings {
     this.hwidEnabled = false,
     this.routing = const RoutingSettings(),
     this.updateChannel = UpdateChannel.stable,
+    this.fontScale = FontScale.normal,
   });
 
   AppSettings copyWith({
@@ -76,6 +82,7 @@ class AppSettings {
     String? customDnsAddress,
     String? customDnsType,
     bool? enableUdp,
+    bool? allowIcmp,
     bool? randomCredentials,
     String? socksUser,
     String? socksPassword,
@@ -85,6 +92,7 @@ class AppSettings {
     bool? hwidEnabled,
     RoutingSettings? routing,
     UpdateChannel? updateChannel,
+    FontScale? fontScale,
   }) {
     return AppSettings(
       socksPort: socksPort ?? this.socksPort,
@@ -100,6 +108,7 @@ class AppSettings {
       customDnsAddress: customDnsAddress ?? this.customDnsAddress,
       customDnsType: customDnsType ?? this.customDnsType,
       enableUdp: enableUdp ?? this.enableUdp,
+      allowIcmp: allowIcmp ?? this.allowIcmp,
       randomCredentials: randomCredentials ?? this.randomCredentials,
       socksUser: socksUser ?? this.socksUser,
       socksPassword: socksPassword ?? this.socksPassword,
@@ -109,6 +118,69 @@ class AppSettings {
       hwidEnabled: hwidEnabled ?? this.hwidEnabled,
       routing: routing ?? this.routing,
       updateChannel: updateChannel ?? this.updateChannel,
+      fontScale: fontScale ?? this.fontScale,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'socksPort': socksPort,
+    'logLevel': logLevel.name,
+    'excludedPackages': excludedPackages.toList(),
+    'includedPackages': includedPackages.toList(),
+    'vpnMode': vpnMode.name,
+    'splitTunnelingEnabled': splitTunnelingEnabled,
+    'randomPort': randomPort,
+    'autoConnect': autoConnect,
+    'dnsMode': dnsMode.name,
+    'dnsPreset': dnsPreset,
+    'customDnsAddress': customDnsAddress,
+    'customDnsType': customDnsType,
+    'enableUdp': enableUdp,
+    'allowIcmp': allowIcmp,
+    'randomCredentials': randomCredentials,
+    'socksUser': socksUser,
+    'socksPassword': socksPassword,
+    'proxyOnly': proxyOnly,
+    'showNotification': showNotification,
+    'killSwitchEnabled': killSwitchEnabled,
+    'hwidEnabled': hwidEnabled,
+    'routing': routing.toJson(),
+    'updateChannel': updateChannel.name,
+    'fontScale': fontScale.name,
+  };
+
+  static AppSettings fromJson(Map<String, dynamic> json) {
+    final routingJson = json['routing'] as Map<String, dynamic>?;
+    return AppSettings(
+      socksPort: json['socksPort'] as int? ?? AppConstants.defaultSocksPort,
+      logLevel: LogLevel.values.firstWhere(
+        (e) => e.name == json['logLevel'], orElse: () => LogLevel.info),
+      excludedPackages: (json['excludedPackages'] as List<dynamic>?)?.cast<String>().toSet() ?? {},
+      includedPackages: (json['includedPackages'] as List<dynamic>?)?.cast<String>().toSet() ?? {},
+      vpnMode: VpnMode.values.firstWhere(
+        (e) => e.name == json['vpnMode'], orElse: () => VpnMode.onlySelected),
+      splitTunnelingEnabled: json['splitTunnelingEnabled'] as bool? ?? false,
+      randomPort: json['randomPort'] as bool? ?? true,
+      autoConnect: json['autoConnect'] as bool? ?? false,
+      dnsMode: DnsMode.values.firstWhere(
+        (e) => e.name == json['dnsMode'], orElse: () => DnsMode.proxy),
+      dnsPreset: json['dnsPreset'] as String? ?? 'cf_udp',
+      customDnsAddress: json['customDnsAddress'] as String? ?? '1.1.1.1',
+      customDnsType: json['customDnsType'] as String? ?? 'udp',
+      enableUdp: json['enableUdp'] as bool? ?? true,
+      allowIcmp: json['allowIcmp'] as bool? ?? true,
+      randomCredentials: json['randomCredentials'] as bool? ?? true,
+      socksUser: json['socksUser'] as String? ?? '',
+      socksPassword: json['socksPassword'] as String? ?? '',
+      proxyOnly: json['proxyOnly'] as bool? ?? false,
+      showNotification: json['showNotification'] as bool? ?? true,
+      killSwitchEnabled: json['killSwitchEnabled'] as bool? ?? false,
+      hwidEnabled: json['hwidEnabled'] as bool? ?? false,
+      routing: routingJson != null ? RoutingSettings.fromJson(routingJson) : const RoutingSettings(),
+      updateChannel: UpdateChannel.values.firstWhere(
+        (e) => e.name == json['updateChannel'], orElse: () => UpdateChannel.stable),
+      fontScale: FontScale.values.firstWhere(
+        (e) => e.name == json['fontScale'], orElse: () => FontScale.normal),
     );
   }
 
@@ -131,6 +203,7 @@ class SettingsService {
   static const _customDnsAddressKey = 'custom_dns_address';
   static const _customDnsTypeKey = 'custom_dns_type';
   static const _enableUdpKey = 'enable_udp';
+  static const _allowIcmpKey = 'allow_icmp';
   static const _randomCredentialsKey = 'random_credentials';
   static const _proxyOnlyKey = 'proxy_only';
   static const _showNotificationKey = 'show_notification';
@@ -148,6 +221,7 @@ class SettingsService {
   static const _routingGeositeCodesKey = 'routing_geosite_codes';
   static const _routingAdBlockEnabledKey = 'routing_adblock_enabled';
   static const _updateChannelKey = 'update_channel';
+  static const _fontScaleKey = 'font_scale';
 
   final _secure = StorageSecureService();
 
@@ -180,6 +254,7 @@ class SettingsService {
       customDnsAddress: prefs.getString(_customDnsAddressKey) ?? '1.1.1.1',
       customDnsType: prefs.getString(_customDnsTypeKey) ?? 'udp',
       enableUdp: prefs.getBool(_enableUdpKey) ?? true,
+      allowIcmp: prefs.getBool(_allowIcmpKey) ?? true,
       randomCredentials: prefs.getBool(_randomCredentialsKey) ?? true,
       socksUser: creds.user,
       socksPassword: creds.password,
@@ -191,6 +266,10 @@ class SettingsService {
       updateChannel: UpdateChannel.values.firstWhere(
         (e) => e.name == prefs.getString(_updateChannelKey),
         orElse: () => UpdateChannel.stable,
+      ),
+      fontScale: FontScale.values.firstWhere(
+        (e) => e.name == prefs.getString(_fontScaleKey),
+        orElse: () => FontScale.normal,
       ),
     );
   }
@@ -229,6 +308,7 @@ class SettingsService {
     await prefs.setString(_customDnsAddressKey, settings.customDnsAddress);
     await prefs.setString(_customDnsTypeKey, settings.customDnsType);
     await prefs.setBool(_enableUdpKey, settings.enableUdp);
+    await prefs.setBool(_allowIcmpKey, settings.allowIcmp);
     await prefs.setBool(_randomCredentialsKey, settings.randomCredentials);
     await prefs.setBool(_proxyOnlyKey, settings.proxyOnly);
     await prefs.setBool(_showNotificationKey, settings.showNotification);
@@ -244,6 +324,7 @@ class SettingsService {
     await prefs.setStringList(_routingGeositeCodesKey, settings.routing.geositeCodes);
     await prefs.setBool(_routingAdBlockEnabledKey, settings.routing.adBlockEnabled);
     await prefs.setString(_updateChannelKey, settings.updateChannel.name);
+    await prefs.setString(_fontScaleKey, settings.fontScale.name);
     // SOCKS credentials go to encrypted storage
     await _secure.writeSocksCredentials(settings.socksUser, settings.socksPassword);
   }

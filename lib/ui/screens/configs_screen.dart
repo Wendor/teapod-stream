@@ -11,6 +11,7 @@ import '../../providers/vpn_provider.dart';
 import '../../core/interfaces/vpn_engine.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
+import '../widgets/hero_panel.dart';
 import 'add_config_screen.dart';
 
 class ConfigsScreen extends ConsumerStatefulWidget {
@@ -32,6 +33,25 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
     final configStateAsync = ref.watch(configProvider);
     final vpnState = ref.watch(vpnProvider);
     final t = Theme.of(context).extension<TeapodTokens>()!;
+
+    // Auto-expand subscription containing active config
+    ref.listen<AsyncValue<ConfigState>>(configProvider, (prev, next) {
+      next.whenData((cs) {
+        final id = cs.activeConfigId;
+        if (id == null) return;
+        final prevId = prev?.maybeWhen(
+            data: (d) => d.activeConfigId, orElse: () => null);
+        if (id == prevId && prev != null) return;
+        for (final entry in cs.configsBySubscription.entries) {
+          if (entry.value.any((c) => c.id == id)) {
+            if (!_expandedSubs.contains(entry.key)) {
+              setState(() => _expandedSubs.add(entry.key));
+            }
+            break;
+          }
+        }
+      });
+    });
 
     return Scaffold(
       body: SafeArea(
@@ -186,58 +206,64 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
   Future<void> _showConfigMenu(
       BuildContext context, WidgetRef ref, VpnConfig config) async {
     final t = Theme.of(context).extension<TeapodTokens>()!;
-    final items = <PopupMenuEntry<String>>[
-      PopupMenuItem(value: 'rename', child: _MenuRow(Icons.edit_rounded, 'Переименовать')),
-      PopupMenuItem(value: 'edit', child: _MenuRow(Icons.code_rounded, 'Редактировать URI')),
-      const PopupMenuDivider(),
-      PopupMenuItem(value: 'copy', child: _MenuRow(Icons.copy_rounded, 'Копировать URL')),
-      PopupMenuItem(value: 'share', child: _MenuRow(Icons.share_rounded, 'Поделиться')),
-      const PopupMenuDivider(),
-      PopupMenuItem(
-          value: 'delete',
-          child: _MenuRow(Icons.delete_rounded, 'Удалить',
-              color: t.danger)),
-    ];
-
-    final result = await showMenu<String>(
+    await showModalBottomSheet(
       context: context,
-      position: RelativeRect.fromLTRB(
-        MediaQuery.of(context).size.width - 200,
-        MediaQuery.of(context).padding.top + 80,
-        20,
-        0,
+      backgroundColor: t.bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(config.name,
+                        style: AppTheme.sans(
+                            size: 16, color: t.text, weight: FontWeight.w500)),
+                  ),
+                  Text(config.protocol.name.toUpperCase(),
+                      style: AppTheme.mono(size: 10, color: t.textMuted)),
+                ],
+              ),
+            ),
+            Container(height: 1, color: t.line),
+            _SheetTile(t: t, label: 'Переименовать', onTap: () async {
+              Navigator.pop(ctx);
+              if (!context.mounted) return;
+              await _renameConfig(context, ref, config);
+            }),
+            _SheetTile(t: t, label: 'Редактировать URI', onTap: () async {
+              Navigator.pop(ctx);
+              if (!context.mounted) return;
+              await _editConfig(context, ref, config);
+            }),
+            _SheetTile(t: t, label: 'Копировать URL', onTap: () async {
+              Navigator.pop(ctx);
+              if (config.rawUri != null) {
+                await Clipboard.setData(ClipboardData(text: config.rawUri!));
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('URL скопирован'),
+                      duration: Duration(seconds: 1)));
+                }
+              }
+            }),
+            _SheetTile(t: t, label: 'Поделиться', onTap: () async {
+              Navigator.pop(ctx);
+              if (config.rawUri != null) await Share.share(config.rawUri!);
+            }),
+            _SheetTile(t: t, label: 'Удалить', color: t.danger, onTap: () async {
+              Navigator.pop(ctx);
+              if (!context.mounted) return;
+              await _deleteConfig(context, ref, config);
+            }),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
-      items: items,
     );
-
-    if (result == null) return;
-    if (!context.mounted) return;
-    switch (result) {
-      case 'rename':
-        await _renameConfig(context, ref, config);
-        break;
-      case 'edit':
-        await _editConfig(context, ref, config);
-        break;
-      case 'share':
-        if (config.rawUri != null) await Share.share(config.rawUri!);
-        break;
-      case 'copy':
-        if (config.rawUri != null) {
-          await Clipboard.setData(ClipboardData(text: config.rawUri!));
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                  content: Text('URL скопирован'),
-                  duration: Duration(seconds: 1)),
-            );
-          }
-        }
-        break;
-      case 'delete':
-        await _deleteConfig(context, ref, config);
-        break;
-    }
   }
 
   Future<void> _renameConfig(
@@ -640,54 +666,28 @@ class _CfgTitlePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
-      decoration:
-          BoxDecoration(border: Border(bottom: BorderSide(color: t.line))),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+    return HeroPanel(
+      t: t,
+      tagline: 'КОНФИГУРАЦИИ · VPN · XRAY',
+      title: 'CONFIGS',
+      subtitle: Text('subs · standalone · imported',
+          style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5)),
+      trailing: Row(
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('CONFIGS',
-                    style: AppTheme.sans(
-                        size: 28,
-                        weight: FontWeight.w500,
-                        color: t.text,
-                        letterSpacing: -1,
-                        height: 1)),
-                const SizedBox(height: 4),
-                Text('subs · standalone · imported',
-                    style: AppTheme.mono(
-                        size: 10, color: t.textMuted, letterSpacing: 1)),
-              ],
-            ),
-          ),
-          Row(
-            children: [
-              if (isRefreshing)
-                SizedBox(
-                  width: 32, height: 32,
-                  child: Center(
-                    child: SizedBox(
-                      width: 14, height: 14,
-                      child: CircularProgressIndicator(
-                          color: t.textDim, strokeWidth: 1.2),
-                    ),
-                  ),
-                )
-              else
-                _IconBtn(
-                    t: t,
-                    icon: Icons.refresh_rounded,
-                    accent: false,
-                    onTap: onRefreshAll),
-              const SizedBox(width: 6),
-              _IconBtn(t: t, icon: Icons.add_rounded, accent: true, onTap: onAdd),
-            ],
-          ),
+          if (isRefreshing)
+            SizedBox(
+              width: 32, height: 32,
+              child: Center(
+                child: SizedBox(
+                  width: 14, height: 14,
+                  child: CircularProgressIndicator(color: t.textDim, strokeWidth: 1.2),
+                ),
+              ),
+            )
+          else
+            _IconBtn(t: t, icon: Icons.refresh_rounded, accent: false, onTap: onRefreshAll),
+          const SizedBox(width: 6),
+          _IconBtn(t: t, icon: Icons.add_rounded, accent: true, onTap: onAdd),
         ],
       ),
     );
@@ -929,7 +929,7 @@ class _SubRow extends StatelessWidget {
                   return _ConfigRow(
                     t: t,
                     config: c,
-                    addr: addr * 100 + e.key + 1,
+                    addr: e.key + 1,
                     isActive: c.id == activeConfigId,
                     indent: false,
                     onTap: () => onSelectConfig(c),
@@ -944,60 +944,60 @@ class _SubRow extends StatelessWidget {
   }
 
   Future<void> _showSubMenu(BuildContext context) async {
-    final result = await showMenu<String>(
+    final t = Theme.of(context).extension<TeapodTokens>()!;
+    await showModalBottomSheet(
       context: context,
-      position: RelativeRect.fromLTRB(
-        MediaQuery.of(context).size.width - 220,
-        MediaQuery.of(context).padding.top + 80,
-        20,
-        0,
+      backgroundColor: t.bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(sub.name,
+                        style: AppTheme.sans(
+                            size: 16, color: t.text, weight: FontWeight.w500)),
+                  ),
+                  Text('sub · ${configs.length} конфигов',
+                      style: AppTheme.mono(size: 10, color: t.textMuted)),
+                ],
+              ),
+            ),
+            Container(height: 1, color: t.line),
+            _SheetTile(t: t, label: 'Переименовать', onTap: () {
+              Navigator.pop(ctx);
+              onRename();
+            }),
+            _SheetTile(t: t, label: 'Изменить URL', onTap: () {
+              Navigator.pop(ctx);
+              onEditUrl();
+            }),
+            _SheetTile(t: t, label: 'Копировать URL', onTap: () async {
+              Navigator.pop(ctx);
+              await Clipboard.setData(ClipboardData(text: sub.url));
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text('URL скопирован'),
+                    duration: Duration(seconds: 1)));
+              }
+            }),
+            _SheetTile(t: t, label: 'Обновить', onTap: () {
+              Navigator.pop(ctx);
+              onRefresh();
+            }),
+            _SheetTile(t: t, label: 'Удалить', color: t.danger, onTap: () {
+              Navigator.pop(ctx);
+              onDelete();
+            }),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
-      items: const [
-        PopupMenuItem(
-            value: 'rename',
-            child: _MenuRow(Icons.edit_rounded, 'Переименовать')),
-        PopupMenuItem(
-            value: 'edit_url',
-            child: _MenuRow(Icons.link_rounded, 'Изменить URL')),
-        PopupMenuDivider(),
-        PopupMenuItem(
-            value: 'copy_url',
-            child: _MenuRow(Icons.copy_rounded, 'Копировать URL')),
-        PopupMenuDivider(),
-        PopupMenuItem(
-            value: 'refresh',
-            child: _MenuRow(Icons.refresh_rounded, 'Обновить')),
-        PopupMenuItem(
-            value: 'delete',
-            child: _MenuRow(Icons.delete_rounded, 'Удалить',
-                color: AppColors.danger)),
-      ],
     );
-
-    switch (result) {
-      case 'rename':
-        onRename();
-        break;
-      case 'edit_url':
-        onEditUrl();
-        break;
-      case 'copy_url':
-        await Clipboard.setData(ClipboardData(text: sub.url));
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('URL скопирован'),
-                duration: Duration(seconds: 1)),
-          );
-        }
-        break;
-      case 'refresh':
-        onRefresh();
-        break;
-      case 'delete':
-        onDelete();
-        break;
-    }
   }
 }
 
@@ -1132,21 +1132,25 @@ class _ConfigRow extends StatelessWidget {
 
 // ── Shared helpers ────────────────────────────────────────────────
 
-class _MenuRow extends StatelessWidget {
-  final IconData icon;
+class _SheetTile extends StatelessWidget {
+  final TeapodTokens t;
   final String label;
   final Color? color;
-  const _MenuRow(this.icon, this.label, {this.color});
+  final VoidCallback onTap;
+
+  const _SheetTile({required this.t, required this.label, required this.onTap, this.color});
 
   @override
   Widget build(BuildContext context) {
-    final c = color ?? Theme.of(context).extension<TeapodTokens>()?.text;
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: c),
-        const SizedBox(width: 10),
-        Text(label, style: TextStyle(color: c, fontSize: 14)),
-      ],
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.lineSoft))),
+        child: Text(label,
+            style: AppTheme.sans(size: 14, color: color ?? t.text)),
+      ),
     );
   }
 }

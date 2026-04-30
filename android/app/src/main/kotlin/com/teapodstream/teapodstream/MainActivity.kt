@@ -55,6 +55,7 @@ class MainActivity : FlutterActivity() {
                         val proxyOnly = call.argument<Boolean>("proxyOnly") ?: false
                         val showNotification = call.argument<Boolean>("showNotification") ?: true
                         val killSwitch = call.argument<Boolean>("killSwitch") ?: false
+                        val allowIcmp = call.argument<Boolean>("allowIcmp") ?: true
 
                         if (proxyOnly) {
                             // Proxy-only: no TUN tunnel, no VPN permission needed
@@ -62,7 +63,7 @@ class MainActivity : FlutterActivity() {
                                 xrayConfig, socksPort, socksUser, socksPassword,
                                 excludedPackages, includedPackages, vpnMode,
                                 ssPrefix, proxyOnly = true, showNotification = showNotification,
-                                killSwitch = killSwitch
+                                killSwitch = killSwitch, allowIcmp = allowIcmp
                             )
                             result.success(null)
                         } else {
@@ -71,7 +72,7 @@ class MainActivity : FlutterActivity() {
                                     xrayConfig, socksPort, socksUser, socksPassword,
                                     excludedPackages, includedPackages, vpnMode,
                                     ssPrefix, proxyOnly = false, showNotification = showNotification,
-                                    killSwitch = killSwitch
+                                    killSwitch = killSwitch, allowIcmp = allowIcmp
                                 )
                                 result.success(null)
                             }
@@ -179,11 +180,6 @@ class MainActivity : FlutterActivity() {
                         ))
                     }
 
-                    "getStats" -> {
-                        val stats = XrayVpnService.getStats()
-                        result.success(stats)
-                    }
-
                     "getStatsHistory" -> {
                         val history = XrayVpnService.getStatsHistory()
                         result.success(history)
@@ -226,6 +222,11 @@ class MainActivity : FlutterActivity() {
     }
 
     private var pendingVpnAction: (() -> Unit)? = null
+
+    override fun onDestroy() {
+        super.onDestroy()
+        VpnEventStreamHandler.appContext = null
+    }
 
     private fun requestVpnPermission(result: MethodChannel.Result, action: () -> Unit) {
         val intent = VpnService.prepare(this)
@@ -281,6 +282,7 @@ class MainActivity : FlutterActivity() {
         proxyOnly: Boolean = false,
         showNotification: Boolean = true,
         killSwitch: Boolean = false,
+        allowIcmp: Boolean = true,
     ) {
         requestBatteryOptimizationExemption()
         val intent = Intent(this, XrayVpnService::class.java).apply {
@@ -296,6 +298,7 @@ class MainActivity : FlutterActivity() {
             putExtra(XrayVpnService.EXTRA_PROXY_ONLY, proxyOnly)
             putExtra(XrayVpnService.EXTRA_SHOW_NOTIFICATION, showNotification)
             putExtra(XrayVpnService.EXTRA_KILL_SWITCH, killSwitch)
+            putExtra(XrayVpnService.EXTRA_ALLOW_ICMP, allowIcmp)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent)

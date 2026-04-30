@@ -3,6 +3,7 @@ import '../../core/interfaces/vpn_engine.dart';
 import '../../core/models/vpn_config.dart';
 import '../../core/models/dns_config.dart';
 import '../../core/models/routing_settings.dart';
+import '../../core/constants/xray_defaults.dart';
 
 class XrayConfigBuilder {
   static Map<String, dynamic> build(VpnConfig config, VpnEngineOptions options) {
@@ -17,7 +18,7 @@ class XrayConfigBuilder {
           'tag': 'socks-in',
           'protocol': 'socks',
           'port': options.socksPort,
-          'listen': '127.0.0.1',
+          'listen': XrayDefaults.socksListen,
           'settings': {
             'auth': options.socksUser.isNotEmpty ? 'password' : 'noauth',
             if (options.socksUser.isNotEmpty)
@@ -47,7 +48,7 @@ class XrayConfigBuilder {
         {'tag': 'dns-out', 'protocol': 'dns'}
       ],
       'routing': {
-        'domainStrategy': 'IPIfNonMatch',
+        'domainStrategy': 'AsIs',
         'rules': [
           if (options.dnsMode == DnsMode.proxy) ...[
             // Proxy mode: intercept DNS via xray's DNS module → queries go through VPN
@@ -80,10 +81,10 @@ class XrayConfigBuilder {
       'policy': {
         'levels': {
           '0': {
-            'handshake': 4,
-            'connIdle': 120,
-            'uplinkOnly': 5,
-            'downlinkOnly': 30,
+            'handshake': XrayDefaults.handshakeTimeout,
+            'connIdle': XrayDefaults.connIdleTimeout,
+            'uplinkOnly': XrayDefaults.uplinkOnlyTimeout,
+            'downlinkOnly': XrayDefaults.downlinkOnlyTimeout,
           }
         },
         'system': {
@@ -157,7 +158,7 @@ if (!routing.isActive) return rules;
     if (routing.adBlockEnabled) {
       servers.add({
         'address': 'rcode://success',
-        'domains': ['geosite:category-ads-all'],
+        'domains': [XrayDefaults.adBlockGeosite],
       });
     }
 
@@ -185,7 +186,7 @@ if (!routing.isActive) return rules;
           : server.address;
       if (host.isNotEmpty && !_isIpAddress(host)) {
         servers.insert(servers.length - 1, {
-          'address': '8.8.8.8',
+          'address': XrayDefaults.bootstrapDns,
           'port': 53,
           'domains': [host],
         });

@@ -3,6 +3,7 @@ package com.teapodstream.teapodstream
 import android.os.Handler
 import android.os.Looper
 import io.flutter.plugin.common.EventChannel
+import java.lang.ref.WeakReference
 
 /**
  * Singleton EventChannel stream handler.
@@ -12,8 +13,11 @@ object VpnEventStreamHandler : EventChannel.StreamHandler {
     private var eventSink: EventChannel.EventSink? = null
     private val handler = Handler(Looper.getMainLooper())
     private val eventBuffer = mutableListOf<Map<String, Any?>>()
-    // Контекст приложения для обновления Quick Settings плитки
-    @Volatile var appContext: android.content.Context? = null
+    // Контекст приложения для обновления Quick Settings плитки — WeakReference чтобы не удерживать Activity
+    private var _appContextRef: WeakReference<android.content.Context>? = null
+    var appContext: android.content.Context?
+        get() = _appContextRef?.get()
+        set(value) { _appContextRef = if (value != null) WeakReference(value) else null }
 
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
         eventSink = events

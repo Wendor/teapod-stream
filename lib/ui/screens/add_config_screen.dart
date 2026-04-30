@@ -7,6 +7,7 @@ import '../../protocols/xray/vless_parser.dart';
 import '../../providers/config_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
+import '../widgets/breadcrumb_bar.dart';
 import 'qr_scan_screen.dart';
 
 class AddConfigScreen extends ConsumerStatefulWidget {
@@ -55,29 +56,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
                 ],
               ),
             ),
-            // ── Breadcrumb ────────────────────────────────────────
-            GestureDetector(
-              onTap: () => Navigator.pop(context),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
-                decoration:
-                    BoxDecoration(border: Border(bottom: BorderSide(color: t.lineSoft))),
-                child: Row(
-                  children: [
-                    Text('‹', style: AppTheme.mono(size: 12, color: t.textMuted)),
-                    const SizedBox(width: 8),
-                    Text('configs',
-                        style:
-                            AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
-                    const SizedBox(width: 6),
-                    Text('/', style: AppTheme.mono(size: 10, color: t.textMuted)),
-                    const SizedBox(width: 6),
-                    Text('add',
-                        style: AppTheme.mono(size: 10, color: t.text, letterSpacing: 1)),
-                  ],
-                ),
-              ),
-            ),
+            BreadcrumbBar(t: t, parent: 'configs', current: 'add'),
             // ── Hero panel ────────────────────────────────────────
             Container(
               width: double.infinity,

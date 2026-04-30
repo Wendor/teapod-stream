@@ -50,7 +50,7 @@ class LogService extends Notifier<List<VpnLogEntry>> {
       add(VpnLogEntry.debug(message, source: source));
 
   void clear() {
-    _buffer;
+    _buffer = _CircularBuffer(AppConstants.maxLogEntries);
     state = [];
   }
 }

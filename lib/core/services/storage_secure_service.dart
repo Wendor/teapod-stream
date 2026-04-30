@@ -7,6 +7,7 @@ class StorageSecureService {
 
   final _storage = const FlutterSecureStorage(aOptions: _opts);
 
+  static const _profilesKey = 'profiles_v1';
   static const _configsKey = 'vpn_configs_v2';
   static const _activeConfigKey = 'active_config_id_v2';
   static const _subscriptionsKey = 'subscriptions_v2';
@@ -14,6 +15,10 @@ class StorageSecureService {
   static const _socksPasswordKey = 'socks_password_v2';
   static const _deviceIdKey = 'device_id_v2';
   static const _deviceInfoKey = 'device_info_v2';
+
+  Future<String?> readProfilesRaw() => _storage.read(key: _profilesKey);
+  Future<void> writeProfilesRaw(String json) =>
+      _storage.write(key: _profilesKey, value: json);
 
   Future<String?> readConfigsRaw() => _storage.read(key: _configsKey);
   Future<void> writeConfigsRaw(String json) =>

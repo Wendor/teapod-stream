@@ -71,6 +71,19 @@ class VpnConfig {
     this.xhttpExtra,
   });
 
+  String? validate() {
+    if (address.isEmpty) return 'Пустой адрес сервера';
+    if (port < 1 || port > 65535) return 'Неверный порт: $port';
+    if (protocol == VpnProtocol.vless || protocol == VpnProtocol.vmess) {
+      if (uuid.isEmpty) return 'Пустой UUID';
+    }
+    if ((protocol == VpnProtocol.shadowsocks || protocol == VpnProtocol.trojan ||
+         protocol == VpnProtocol.hysteria2) && (password == null || password!.isEmpty)) {
+      return 'Пустой пароль';
+    }
+    return null;
+  }
+
   VpnConfig copyWith({
     String? name,
     int? latencyMs,

@@ -30,15 +30,7 @@ class XrayConfigBuilder {
           'sniffing': {
             'enabled': true,
             'destOverride': ['http', 'tls', 'quic'],
-            // routeOnly: true preserves sniffed domain/IP for routing — without it xray
-            // re-resolves the domain via DNS before applying rules, which adds latency and
-            // may fail for CDN domains or when DNS is unreliable during network transitions.
-            'routeOnly': (routing.isActive || routing.adBlockEnabled) && (
-              (routing.geoEnabled && routing.geoCodes.isNotEmpty) ||
-              (routing.domainEnabled && routing.domainZones.isNotEmpty) ||
-              (routing.geositeEnabled && routing.geositeCodes.isNotEmpty) ||
-              routing.adBlockEnabled
-            ),
+            'routeOnly': true,
           },
         },
       ],
@@ -48,7 +40,7 @@ class XrayConfigBuilder {
         {'tag': 'dns-out', 'protocol': 'dns'}
       ],
       'routing': {
-        'domainStrategy': 'AsIs',
+        'domainStrategy': 'IPIfNonMatch',
         'rules': [
           if (options.dnsMode == DnsMode.proxy) ...[
             // Proxy mode: intercept DNS queries from the user and handle them via xray's DNS module.
@@ -152,6 +144,7 @@ if (!routing.isActive) return rules;
       return {
         'servers': ['localhost'],
         'queryStrategy': 'UseIPv4',
+        'disableFallback': true,
       };
     }
 
@@ -313,12 +306,16 @@ if (!routing.isActive) return rules;
         'hysteriaSettings': {
           'version': 2,
           'auth': config.password ?? '',
-          if (config.obfsPassword != null && config.obfsPassword!.isNotEmpty)
-            'obfs': {
-              'type': 'salamander',
-              'password': config.obfsPassword,
-            }
         },
+        if (config.obfsPassword != null && config.obfsPassword!.isNotEmpty)
+          'finalmask': {
+            'udp': [
+              {
+                'type': 'salamander',
+                'settings': {'password': config.obfsPassword},
+              }
+            ]
+          },
       };
     }
     return {

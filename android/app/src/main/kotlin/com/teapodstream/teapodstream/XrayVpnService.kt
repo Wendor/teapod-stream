@@ -104,6 +104,11 @@ class XrayVpnService : VpnService() {
         private const val HEARTBEAT_URL_HOST = "cp.cloudflare.com"
         private const val CONNECTIVITY_CHECK_HOST = "8.8.8.8"
         private const val HEARTBEAT_INTERVAL_MS = 15_000L
+        // After a reconnect xray establishes its outbound connection lazily. Probes run every
+        // 15 s but failures are not counted until the first probe succeeds (warmup mode). This
+        // self-adjusts to actual network speed instead of relying on a fixed timer. Hard ceiling:
+        // if no probe succeeds within HEARTBEAT_WARMUP_TIMEOUT_MS → something is genuinely broken.
+        private const val HEARTBEAT_WARMUP_TIMEOUT_MS = 90_000L
         private const val STATS_INTERVAL_MS = 1_000L
         private const val STOP_THREAD_TIMEOUT_MS = 5_000L
         private const val RECONNECT_DEBOUNCE_MS = 2_000L
@@ -329,7 +334,7 @@ class XrayVpnService : VpnService() {
                                 params.socksPort, socksUser, socksPassword,
                                 params.excludedPackages, params.includedPackages, params.vpnMode,
                                 params.ssPrefix, params.proxyOnly, params.killSwitch,
-                                params.allowIcmp
+                                params.allowIcmp, isReconnect = true
                             )
                         }.start()
                     }
@@ -363,7 +368,7 @@ class XrayVpnService : VpnService() {
                             params.socksPort, socksUser, socksPassword,
                             params.excludedPackages, params.includedPackages, params.vpnMode,
                             params.ssPrefix, params.proxyOnly, params.killSwitch,
-                            params.allowIcmp
+                            params.allowIcmp, isReconnect = true
                         )
                     }.start()
                     return START_STICKY
@@ -481,6 +486,7 @@ class XrayVpnService : VpnService() {
         proxyOnly: Boolean = false,
         killSwitch: Boolean = false,
         allowIcmp: Boolean = true,
+        isReconnect: Boolean = false,
     ) {
         if (!isRunning.compareAndSet(false, true)) return
         try { tunInterface?.close() } catch (_: Exception) {}
@@ -517,7 +523,7 @@ class XrayVpnService : VpnService() {
                 startStatsMonitoring()
                 acquireWakeLock()
                 setConnected(socksPort, socksUser, socksPassword)
-                startHeartbeat()
+                startHeartbeat(isReconnect)
                 log("info", "Proxy-only mode active")
             } else {
                 val randomSubnet1 = (2..250).random()
@@ -600,7 +606,7 @@ class XrayVpnService : VpnService() {
                 registerNetworkCallback()
                 acquireWakeLock()
                 setConnected(socksPort, socksUser, socksPassword)
-                startHeartbeat()
+                startHeartbeat(isReconnect)
                 log("info", "VPN connected successfully")
             }
         } catch (e: Exception) {
@@ -1078,10 +1084,17 @@ class XrayVpnService : VpnService() {
         }
     } catch (_: Exception) { false }
 
-    private fun startHeartbeat() {
+    private fun startHeartbeat(isReconnect: Boolean = false) {
         heartbeatThread?.interrupt()
         heartbeatFailures.set(0)
         heartbeatThread = Thread {
+            // In reconnect mode: probes run every 15 s but failures are ignored until the
+            // first probe succeeds (warmup). This self-adjusts to actual network conditions —
+            // no magic fixed delay. Hard ceiling: warmupDeadline prevents staying in warmup
+            // forever if the server is genuinely unreachable.
+            var warmupDone = !isReconnect
+            val warmupDeadline = System.currentTimeMillis() + HEARTBEAT_WARMUP_TIMEOUT_MS
+
             while (!Thread.currentThread().isInterrupted && isRunning.get()) {
                 try {
                     Thread.sleep(HEARTBEAT_INTERVAL_MS)
@@ -1092,13 +1105,15 @@ class XrayVpnService : VpnService() {
                     // Check tun2socks is alive before testing SOCKS5 connectivity.
                     // The SOCKS5 probe bypasses TUN entirely, so it passes even if tun2socks
                     // has crashed or its goroutines are deadlocked.
-                    if (!Teapodcore.isTunRunning()) {
+                    // Skip in proxy-only mode: tun2socks is intentionally not started.
+                    if (tunModeActive && !Teapodcore.isTunRunning()) {
                         log("warning", "tun2socks not running, reconnecting")
                         reconnectInternal()
                         break
                     }
 
                     checkTunnelConnectivity(port)
+                    warmupDone = true
                     heartbeatFailures.set(0)
                 } catch (_: InterruptedException) {
                     break
@@ -1109,6 +1124,15 @@ class XrayVpnService : VpnService() {
                     if (!hasDirectInternet()) {
                         log("debug", "Heartbeat skipped: no direct internet")
                         continue
+                    }
+                    if (!warmupDone) {
+                        if (System.currentTimeMillis() < warmupDeadline) {
+                            log("debug", "Heartbeat warmup probe failed: ${e.message}")
+                            continue
+                        }
+                        log("warning", "Heartbeat warmup timed out (90 s), reconnecting")
+                        reconnectInternal()
+                        break
                     }
                     val failures = heartbeatFailures.incrementAndGet()
                     log("warning", "Heartbeat failed ($failures): ${e.message}")
@@ -1122,6 +1146,7 @@ class XrayVpnService : VpnService() {
                         try {
                             Thread.sleep(3000)
                             checkTunnelConnectivity(activeSocksPort)
+                            warmupDone = true
                             heartbeatFailures.set(0)
                             break
                         } catch (_: InterruptedException) {

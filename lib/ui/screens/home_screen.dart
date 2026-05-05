@@ -42,19 +42,19 @@ class HomeScreen extends ConsumerWidget {
 
     return Scaffold(
       body: SafeArea(
-        child: Column(
-          children: [
-            _HeaderStrip(t: t, stateCode: stateCode, version: version),
-            _HeroPanel(
-              t: t,
-              vpnState: vpnState,
-              protoLabel: protoLabel,
-              pingMs: pingMs,
-              canToggle: canToggle,
-              onToggle: () => ref.read(vpnProvider.notifier).toggle(),
-            ),
-            Expanded(
-              child: _MetricsGrid(
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              _HeaderStrip(t: t, stateCode: stateCode, version: version),
+              _HeroPanel(
+                t: t,
+                vpnState: vpnState,
+                protoLabel: protoLabel,
+                pingMs: pingMs,
+                canToggle: canToggle,
+                onToggle: () => ref.read(vpnProvider.notifier).toggle(),
+              ),
+              _MetricsGrid(
                 t: t,
                 stats: vpnState.stats,
                 protoLabel: protoLabel,
@@ -63,8 +63,8 @@ class HomeScreen extends ConsumerWidget {
                 pingMs: pingMs,
                 history: history,
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -526,7 +526,7 @@ class _MetricsGrid extends StatelessWidget {
 
     return Column(
       children: [
-        Expanded(
+        IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -551,7 +551,7 @@ class _MetricsGrid extends StatelessWidget {
             ],
           ),
         ),
-        Expanded(
+        IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -609,7 +609,7 @@ class _MetricCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 7, 16, 7),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       clipBehavior: Clip.hardEdge,
       decoration: BoxDecoration(
         border: Border(

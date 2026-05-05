@@ -46,13 +46,8 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
   }
 
   void _scrollToBottom() {
-    if (_scrollController.hasClients) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-      );
-    }
+    if (!_scrollController.hasClients) return;
+    _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
   }
 
   Future<void> _exportLogs() async {
@@ -194,15 +189,8 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
                     )
                   : ListView.builder(
                       controller: _scrollController,
-                      itemCount: filtered.length + 1,
+                      itemCount: filtered.length,
                       itemBuilder: (ctx, i) {
-                        if (i == filtered.length) {
-                          return Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
-                            child: Text('▌ stream active · ${filtered.length} entries',
-                                style: AppTheme.mono(size: 10, color: t.textMuted)),
-                          );
-                        }
                         final e = filtered[i];
                         final lvlColor = _lvlColor(e.level, t);
                         return Container(

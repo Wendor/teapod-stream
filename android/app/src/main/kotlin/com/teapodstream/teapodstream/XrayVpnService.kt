@@ -116,7 +116,7 @@ class XrayVpnService : VpnService() {
         // 15 s but failures are not counted until the first probe succeeds (warmup mode). This
         // self-adjusts to actual network speed instead of relying on a fixed timer. Hard ceiling:
         // if no probe succeeds within HEARTBEAT_WARMUP_TIMEOUT_MS → something is genuinely broken.
-        private const val HEARTBEAT_WARMUP_TIMEOUT_MS = 90_000L
+        private const val HEARTBEAT_WARMUP_TIMEOUT_MS = 30_000L
         private const val STATS_INTERVAL_MS = 1_000L
         private const val STOP_THREAD_TIMEOUT_MS = 5_000L
         private const val RECONNECT_DEBOUNCE_MS = 2_000L
@@ -190,9 +190,11 @@ class XrayVpnService : VpnService() {
     private val isRunning = AtomicBoolean(false)
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     @Volatile private var lastUnderlyingNetwork: Network? = null
+    @Volatile private var lastConnectedMs: Long = 0L
     private var prefixProxy: PrefixTcpProxy? = null
     @Volatile private var showNotification = true
     private var wakeLock: PowerManager.WakeLock? = null
+    private var screenReceiver: android.content.BroadcastReceiver? = null
     private var killSwitchEnabled = false
     @Volatile private var allowIcmpEnabled = true
     private var proxyOnlyMode = false
@@ -211,7 +213,6 @@ class XrayVpnService : VpnService() {
 
     override fun onCreate() {
         super.onCreate()
-        // Контекст для обновления Quick Settings плитки
         VpnEventStreamHandler.appContext = applicationContext
         migrateConnectionParamsIfNeeded()
         Teapodcore.registerVpnProtector(object : VpnProtector {
@@ -221,6 +222,7 @@ class XrayVpnService : VpnService() {
                 return result
             }
         })
+        registerScreenReceiver()
     }
 
     private fun migrateConnectionParamsIfNeeded() {
@@ -312,7 +314,7 @@ class XrayVpnService : VpnService() {
                         openApp()
                     } else {
                         userRequestedDisconnect.set(false)
-                        setState("connecting")
+                        setState("reconnecting")
                         val configText = configFile.readText()
                         // Load SOCKS credentials from saved file (survives reconnect)
                         var socksUser = ""
@@ -366,7 +368,7 @@ class XrayVpnService : VpnService() {
             val needsPermission = !params.proxyOnly && VpnService.prepare(this) != null
             if (!needsPermission) {
                 userRequestedDisconnect.set(false)
-                setState("connecting")
+                setState("reconnecting")
                 try {
                     val configText = configFile.readText()
                     val (socksUser, socksPassword) = extractSocksFromConfig(configText)
@@ -504,7 +506,7 @@ class XrayVpnService : VpnService() {
         allowIcmpEnabled = allowIcmp
         proxyOnlyMode = proxyOnly
         if (!isReconnect) clearLogFile()
-        setState("connecting")
+        setState(if (isReconnect) "reconnecting" else "connecting")
         log("info", "Starting VPN (MTU: $tunMtu)")
 
         try {
@@ -563,7 +565,6 @@ class XrayVpnService : VpnService() {
                         for (pkg in includedPackages) {
                             try {
                                 builder.addAllowedApplication(pkg)
-                                log("info", "Allowed: $pkg")
                             } catch (e: Exception) {
                                 log("warning", "Failed to allow $pkg: ${e.message}")
                             }
@@ -796,9 +797,11 @@ class XrayVpnService : VpnService() {
         reconnecting: Boolean = false,
     ) {
         if (!isRunning.compareAndSet(true, false)) return  // idempotent — safe to call multiple times
+        log("info", "stopVpn: begin (explicit=$explicit, reconnecting=$reconnecting)")
         stopHeartbeat()
         tunModeActive = false
         lastUnderlyingNetwork = null
+        lastConnectedMs = 0L
         pendingNetworkRunnable?.let { networkChangeHandler.removeCallbacks(it) }
         pendingNetworkRunnable = null
 
@@ -838,8 +841,23 @@ class XrayVpnService : VpnService() {
                 tunInterface = null
             }
 
-            try { Teapodcore.stopTun2Socks() } catch (e: Exception) {
-                log("warning", "stopTun2Socks failed: ${e.message}")
+            log("info", "Stopping tun2socks")
+            val tun2socksStopThread = Thread {
+                try { Teapodcore.stopTun2Socks() } catch (e: Exception) {
+                    log("warning", "stopTun2Socks failed: ${e.message}")
+                }
+            }
+            tun2socksStopThread.isDaemon = true
+            tun2socksStopThread.start()
+            try {
+                tun2socksStopThread.join(5000)
+                if (tun2socksStopThread.isAlive) {
+                    log("warning", "stopTun2Socks timed out after 5s, forcing continuation")
+                } else {
+                    log("info", "stopVpn: tun2socks stopped")
+                }
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
             }
 
             // Clean up saved credentials on explicit disconnect
@@ -847,6 +865,7 @@ class XrayVpnService : VpnService() {
                 try { File(filesDir, "socks_creds.json").delete() } catch (_: Exception) {}
             }
 
+            log("info", "Stopping xray")
             // stopXray() can block indefinitely while Go goroutines drain open connections.
             // Run it in a daemon thread with a 3s deadline so disconnect always completes.
             val xrayStopThread = Thread {
@@ -860,6 +879,8 @@ class XrayVpnService : VpnService() {
                 xrayStopThread.join(3000)
                 if (xrayStopThread.isAlive) {
                     log("warning", "stopXray timed out after 3s, forcing continuation")
+                } else {
+                    log("info", "stopVpn: xray stopped")
                 }
             } catch (_: InterruptedException) {
                 Thread.currentThread().interrupt()
@@ -884,12 +905,39 @@ class XrayVpnService : VpnService() {
                 // Clear credentials so startVpn picks up fresh ones from configFile
                 _socksCredentials.set(SocksCredentials(0, "", ""))
             }
+            log("info", "stopVpn: done (state=${if (reconnecting) "reconnecting" else resultState})")
         }
     }
 
     override fun onDestroy() {
+        try { unregisterReceiver(screenReceiver) } catch (_: Exception) {}
+        screenReceiver = null
         stopVpn()
         super.onDestroy()
+    }
+
+    private fun registerScreenReceiver() {
+        screenReceiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
+                when (intent.action) {
+                    android.content.Intent.ACTION_SCREEN_OFF -> log("info", "Screen off")
+                    android.content.Intent.ACTION_SCREEN_ON  -> log("info", "Screen on")
+                    android.os.PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED -> {
+                        val pm = context.getSystemService(POWER_SERVICE) as PowerManager
+                        val idle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) pm.isDeviceIdleMode else false
+                        log("info", "Doze mode: ${if (idle) "entered" else "exited"}")
+                    }
+                }
+            }
+        }
+        val filter = android.content.IntentFilter().apply {
+            addAction(android.content.Intent.ACTION_SCREEN_OFF)
+            addAction(android.content.Intent.ACTION_SCREEN_ON)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                addAction(android.os.PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED)
+            }
+        }
+        registerReceiver(screenReceiver, filter)
     }
 
     private fun startStatsMonitoring() {
@@ -979,6 +1027,11 @@ class XrayVpnService : VpnService() {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                         if (cm.activeNetwork == network) {
                             updateUnderlyingNetworks(cm)
+                            // Captive portal / temporary internet loss: VALIDATED is removed
+                            // without triggering onLost/onAvailable — detect and reconnect.
+                            val validated = networkCapabilities.hasCapability(
+                                NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                            if (!validated) scheduleNetworkChanged()
                         }
                     }
                 }
@@ -1053,6 +1106,15 @@ class XrayVpnService : VpnService() {
         // Only reconnect when fully connected — prevents spurious reconnects during the
         // initial startVpn() phase when onAvailable fires right after registration.
         if (currentNativeState != "connected") return
+        // On mobile data Android fires onAvailable/onCapabilitiesChanged right after VPN
+        // connects, causing an immediate false reconnect loop. Ignore changes within 5s of
+        // connection — real network switches happen on a longer timescale.
+        val msSinceConnect = System.currentTimeMillis() - lastConnectedMs
+        if (lastConnectedMs > 0 && msSinceConnect < 5_000L) {
+            log("debug", "Network change: ignored (VPN just connected ${msSinceConnect}ms ago)")
+            return
+        }
+        log("info", "Network change: reconnect scheduled in ${RECONNECT_DEBOUNCE_MS}ms")
         pendingNetworkRunnable?.let { networkChangeHandler.removeCallbacks(it) }
         val r = Runnable { reconnectInternal() }
         pendingNetworkRunnable = r
@@ -1064,20 +1126,39 @@ class XrayVpnService : VpnService() {
         if (!isRunning.get()) return
         networkChangeHandler.post {
             if (userRequestedDisconnect.get() || !isRunning.get()) return@post
+            log("info", "reconnectInternal: starting reconnect cycle")
             Thread {
-                stopVpn(resultState = "connecting", reconnecting = true)
-                // Wait up to 30s for the physical network to be ready before starting xray.
-                // Without this, xray's upstream TCP dial hangs during WiFi→LTE transition,
-                // causing heartbeat "Read timed out" failures for 5-10 minutes.
-                val deadline = System.currentTimeMillis() + 30_000
-                while (!userRequestedDisconnect.get() && System.currentTimeMillis() < deadline) {
-                    if (hasDirectInternet()) break
-                    Thread.sleep(RECONNECT_DEBOUNCE_MS)
+                // Hold a WakeLock for the entire reconnect cycle so the CPU can't sleep
+                // between stopVpn() releasing the main WakeLock and CONNECT_QUICK acquiring it.
+                val reconnectWakeLock = try {
+                    (getSystemService(POWER_SERVICE) as PowerManager)
+                        .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TeapodStream:Reconnect")
+                        .also { it.acquire(40_000) }
+                } catch (_: Exception) { null }
+                try {
+                    stopVpn(resultState = "connecting", reconnecting = true)
+                    log("info", "reconnectInternal: waiting for direct internet (deadline +30s)")
+                    val deadline = System.currentTimeMillis() + 30_000
+                    while (!userRequestedDisconnect.get() && System.currentTimeMillis() < deadline) {
+                        if (hasDirectInternet()) {
+                            log("info", "reconnectInternal: internet available, launching CONNECT_QUICK")
+                            break
+                        }
+                        Thread.sleep(RECONNECT_DEBOUNCE_MS)
+                    }
+                    if (userRequestedDisconnect.get()) {
+                        log("info", "reconnectInternal: cancelled (user disconnect)")
+                        return@Thread
+                    }
+                    if (System.currentTimeMillis() >= deadline) {
+                        log("info", "reconnectInternal: internet wait expired, launching CONNECT_QUICK anyway")
+                    }
+                    val intent = Intent(this@XrayVpnService, XrayVpnService::class.java)
+                        .setAction(ACTION_CONNECT_QUICK)
+                    startService(intent)
+                } finally {
+                    try { reconnectWakeLock?.release() } catch (_: Exception) {}
                 }
-                if (userRequestedDisconnect.get()) return@Thread
-                val intent = Intent(this@XrayVpnService, XrayVpnService::class.java)
-                    .setAction(ACTION_CONNECT_QUICK)
-                startService(intent)
             }.start()
         }
     }
@@ -1095,6 +1176,7 @@ class XrayVpnService : VpnService() {
     } catch (_: Exception) { false }
 
     private fun startHeartbeat(isReconnect: Boolean = false) {
+        log("info", "startHeartbeat (isReconnect=$isReconnect)")
         heartbeatThread?.interrupt()
         heartbeatFailures.set(0)
         heartbeatThread = Thread {
@@ -1103,12 +1185,22 @@ class XrayVpnService : VpnService() {
             // no magic fixed delay. Hard ceiling: warmupDeadline prevents staying in warmup
             // forever if the server is genuinely unreachable.
             var warmupDone = !isReconnect
-            val warmupDeadline = System.currentTimeMillis() + HEARTBEAT_WARMUP_TIMEOUT_MS
+            var warmupDeadline = 0L  // set on first probe iteration, not at thread start
+            // Counts consecutive skips due to no physical internet. When internet returns
+            // after a long absence the tunnel session is stale regardless of protocol, so
+            // the first probe failure should immediately trigger a reconnect.
+            var noInternetStreak = 0
+            var successCount = 0
 
             while (!Thread.currentThread().isInterrupted && isRunning.get()) {
                 try {
                     Thread.sleep(HEARTBEAT_INTERVAL_MS)
                     if (!isRunning.get()) break
+                    // Start deadline from first actual probe — not from thread creation,
+                    // which may be long before xray is ready after a slow reconnect.
+                    if (!warmupDone && warmupDeadline == 0L) {
+                        warmupDeadline = System.currentTimeMillis() + HEARTBEAT_WARMUP_TIMEOUT_MS
+                    }
                     val port = activeSocksPort
                     if (port <= 0) continue
 
@@ -1125,6 +1217,11 @@ class XrayVpnService : VpnService() {
                     checkTunnelConnectivity(port)
                     warmupDone = true
                     heartbeatFailures.set(0)
+                    noInternetStreak = 0
+                    successCount++
+                    if (successCount % 5 == 0) {
+                        log("info", "Heartbeat alive (${successCount} ok, tun=${Teapodcore.isTunRunning()})")
+                    }
                 } catch (_: InterruptedException) {
                     break
                 } catch (e: Exception) {
@@ -1132,15 +1229,27 @@ class XrayVpnService : VpnService() {
                     // count to prevent useless reconnect cycles during WiFi→LTE transitions.
                     // network_changed will trigger a reconnect once the new network is ready.
                     if (!hasDirectInternet()) {
-                        log("debug", "Heartbeat skipped: no direct internet")
+                        noInternetStreak++
+                        log("debug", "Heartbeat skipped: no direct internet (streak=$noInternetStreak)")
                         continue
                     }
+                    // Network just returned after a long absence — the tunnel session is
+                    // guaranteed stale (QUIC/TCP connection to the server was dead while we
+                    // had no route). Skip the normal 3-failure wait and reconnect immediately.
+                    if (noInternetStreak >= 3) {
+                        val absenceSec = noInternetStreak * (HEARTBEAT_INTERVAL_MS / 1000)
+                        noInternetStreak = 0
+                        log("warning", "Tunnel stale after ${absenceSec}s network absence, reconnecting")
+                        reconnectInternal()
+                        break
+                    }
+                    noInternetStreak = 0
                     if (!warmupDone) {
-                        if (System.currentTimeMillis() < warmupDeadline) {
+                        if (warmupDeadline == 0L || System.currentTimeMillis() < warmupDeadline) {
                             log("debug", "Heartbeat warmup probe failed: ${e.message}")
                             continue
                         }
-                        log("warning", "Heartbeat warmup timed out (90 s), reconnecting")
+                        log("warning", "Heartbeat warmup timed out (30 s), reconnecting")
                         reconnectInternal()
                         break
                     }
@@ -1176,20 +1285,23 @@ class XrayVpnService : VpnService() {
     }
 
     private fun stopHeartbeat() {
+        if (heartbeatThread != null) log("info", "stopHeartbeat: interrupting heartbeat thread")
         heartbeatThread?.interrupt()
         heartbeatThread = null
         heartbeatFailures.set(0)
     }
 
     private fun checkTunnelConnectivity(port: Int) {
+        var stage = "init"
         val socket = Socket()
         try {
             socket.soTimeout = 10000
+            stage = "tcp_connect"
             socket.connect(InetSocketAddress("127.0.0.1", port), 10000)
             val out = socket.getOutputStream()
             val inp = socket.getInputStream()
 
-            // SOCKS5 greeting
+            stage = "socks_greeting"
             out.write(byteArrayOf(5, 2, 0, 2))
             val resp = ByteArray(2)
             inp.read(resp)
@@ -1198,6 +1310,7 @@ class XrayVpnService : VpnService() {
             when (resp[1].toInt()) {
                 0 -> {}
                 2 -> {
+                    stage = "socks_auth"
                     val creds = _socksCredentials.get()
                     if (creds.user.isNotEmpty()) {
                         val u = creds.user.toByteArray()
@@ -1210,7 +1323,7 @@ class XrayVpnService : VpnService() {
                 else -> throw Exception("SOCKS auth not supported")
             }
 
-            // Connect to cp.cloudflare.com:80
+            stage = "socks_connect"
             val destHost = HEARTBEAT_URL_HOST
             val destPort = 80
             val domainBytes = destHost.toByteArray()
@@ -1237,10 +1350,12 @@ class XrayVpnService : VpnService() {
                 var read = 0; while (read < buf.size) read += inp.read(buf, read, buf.size - read)
             }
 
+            stage = "http_request"
             val request = "GET /generate_204 HTTP/1.1\r\nHost: $destHost\r\nConnection: close\r\n\r\n"
             out.write(request.toByteArray())
             out.flush()
 
+            stage = "http_response"
             val reader = BufferedReader(InputStreamReader(inp))
             val line = reader.readLine()
             if (line == null || !line.contains("204")) {
@@ -1250,7 +1365,7 @@ class XrayVpnService : VpnService() {
             heartbeatFailures.set(0)
             log("debug", "Heartbeat OK")
         } catch (e: Exception) {
-            log("warning", "Heartbeat check failed: ${e.message}")
+            log("warning", "Heartbeat check failed at [$stage]: ${e.message}")
             throw e
         } finally {
             socket.close()
@@ -1340,10 +1455,14 @@ class XrayVpnService : VpnService() {
             )
         }
         val notification = if (showNotification) buildDisconnectedNotification() else buildMinimalNotification()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (e: Exception) {
+            log("warning", "startForeground failed: ${e.message}")
         }
     }
 
@@ -1363,7 +1482,9 @@ class XrayVpnService : VpnService() {
 
     private fun setConnected(socksPort: Int, socksUser: String, socksPassword: String) {
         currentNativeState = "connected"
-        connectedAtMs = System.currentTimeMillis()
+        val now = System.currentTimeMillis()
+        connectedAtMs = now
+        lastConnectedMs = now
         _socksCredentials.set(SocksCredentials(socksPort, socksUser, socksPassword))
         // Save credentials to file for CONNECT_QUICK reconnect
         try {
@@ -1388,9 +1509,9 @@ class XrayVpnService : VpnService() {
 
     private fun log(level: String, message: String) {
         android.util.Log.i("TeapodVPN", "[$level] $message")
+        appendLogLine(level, message)
         if (level != "debug" || BuildConfig.DEBUG) {
             VpnEventStreamHandler.sendLogEvent(level, message)
-            appendLogLine(level, message)
         }
     }
 

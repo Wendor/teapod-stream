@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -149,7 +150,9 @@ class VpnNotifier extends Notifier<VpnState2> {
     final type = event['type'] as String?;
     switch (type) {
       case 'state':
-        final newState = _parseState(event['value'] as String?);
+        final rawValue = event['value'] as String?;
+        final isReconnect = rawValue == 'reconnecting';
+        final newState = _parseState(rawValue);
         if (newState == VpnState.connected) {
           final port = event['socksPort'] as int?;
           if (port != null && port > 0) {
@@ -166,7 +169,7 @@ class VpnNotifier extends Notifier<VpnState2> {
             );
           }
         }
-        _onNativeState(newState);
+        _onNativeState(newState, isReconnect: isReconnect);
       case 'log':
         final level = event['level'] as String? ?? 'info';
         final msg = event['message'] as String? ?? '';
@@ -188,6 +191,7 @@ class VpnNotifier extends Notifier<VpnState2> {
 
   VpnState _parseState(String? s) => switch (s) {
         'connecting' => VpnState.connecting,
+        'reconnecting' => VpnState.connecting,
         'connected' => VpnState.connected,
         'disconnecting' => VpnState.disconnecting,
         'disconnected' => VpnState.disconnected,
@@ -195,7 +199,7 @@ class VpnNotifier extends Notifier<VpnState2> {
         _ => VpnState.disconnected,
       };
 
-  void _onNativeState(VpnState nativeState) {
+  void _onNativeState(VpnState nativeState, {bool isReconnect = false}) {
     if (nativeState == VpnState.connected) {
       _connectedAt ??= DateTime.now();
       _connectTimeout?.cancel();
@@ -210,14 +214,21 @@ class VpnNotifier extends Notifier<VpnState2> {
       _disconnectTimeout?.cancel();
       _disconnectTimeout = null;
     } else if (nativeState == VpnState.connecting) {
-      _connectTimeout ??= Timer(const Duration(seconds: 45), () {
-        if (state.connectionState == VpnState.connecting) {
-          state = state.copyWith(
-              connectionState: VpnState.error, error: 'Connection timeout');
-          _connectTimeout = null;
-          _engine.disconnect().ignore();
-        }
-      });
+      if (isReconnect) {
+        // Native-triggered reconnect: cancel Flutter-side timeout so it doesn't
+        // force error while the service is mid-reconnect (cycle can exceed 45s).
+        _connectTimeout?.cancel();
+        _connectTimeout = null;
+      } else {
+        _connectTimeout ??= Timer(const Duration(seconds: 45), () {
+          if (state.connectionState == VpnState.connecting) {
+            state = state.copyWith(
+                connectionState: VpnState.error, error: 'Connection timeout');
+            _connectTimeout = null;
+            _engine.disconnect().ignore();
+          }
+        });
+      }
     } else if (nativeState == VpnState.disconnecting) {
       _disconnectTimeout ??= Timer(const Duration(seconds: 10), () {
         if (state.connectionState == VpnState.disconnecting) {
@@ -332,7 +343,7 @@ class VpnNotifier extends Notifier<VpnState2> {
         : (user: settings.socksUser, password: settings.socksPassword);
 
     final actualSocksPort = settings.randomPort
-        ? (10000 + DateTime.now().millisecondsSinceEpoch % 50000)
+        ? (10000 + Random().nextInt(50000))
         : settings.socksPort;
 
     final options = VpnEngineOptions(

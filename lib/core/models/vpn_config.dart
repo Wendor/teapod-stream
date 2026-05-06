@@ -39,6 +39,7 @@ class VpnConfig {
   final String? pinSHA256;
   final String? xhttpMode; // for xhttp transport: "auto", "packet-up", "stream-up", "stream-one"
   final Map<String, dynamic>? xhttpExtra; // raw extra object passed to xhttpSettings
+  final Map<String, dynamic>? finalmask; // xray finalmask stream setting (fm param in URL)
 
   const VpnConfig({
     required this.id,
@@ -73,6 +74,7 @@ class VpnConfig {
     this.pinSHA256,
     this.xhttpMode,
     this.xhttpExtra,
+    this.finalmask,
   });
 
   String? validate() {
@@ -129,6 +131,7 @@ class VpnConfig {
       pinSHA256: pinSHA256 ?? this.pinSHA256,
       xhttpMode: xhttpMode,
       xhttpExtra: xhttpExtra,
+      finalmask: finalmask,
     );
   }
 
@@ -165,6 +168,7 @@ class VpnConfig {
         'pinSHA256': pinSHA256,
         'xhttpMode': xhttpMode,
         'xhttpExtra': xhttpExtra,
+        'finalmask': finalmask,
       };
 
   factory VpnConfig.fromJson(Map<String, dynamic> json) => VpnConfig(
@@ -209,6 +213,7 @@ class VpnConfig {
         pinSHA256: json['pinSHA256'] as String?,
         xhttpMode: json['xhttpMode'] as String?,
         xhttpExtra: json['xhttpExtra'] as Map<String, dynamic>?,
+        finalmask: json['finalmask'] as Map<String, dynamic>?,
       );
 
   String toJsonString() => jsonEncode(toJson());

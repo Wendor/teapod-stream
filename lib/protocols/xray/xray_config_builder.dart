@@ -367,6 +367,8 @@ class XrayConfigBuilder {
           if (config.wsHost != null && config.wsHost!.isNotEmpty)
             'host': config.wsHost,
         },
+      if (config.finalmask != null && config.finalmask!.isNotEmpty)
+        'finalmask': config.finalmask,
     };
   }
 

@@ -85,6 +85,7 @@ class VlessParser {
         encryption: params['encryption'] ?? 'none',
         xhttpMode: params['mode'],
         xhttpExtra: _parseExtra(params['extra']),
+        finalmask: _parseExtra(params['fm']),
         createdAt: DateTime.now(),
         rawUri: uri,
       );

@@ -34,6 +34,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
+import teapodcore.LogListener
 import teapodcore.Teapodcore
 import teapodcore.XrayCallback
 import teapodcore.TunValidator
@@ -234,6 +235,20 @@ class XrayVpnService : VpnService() {
                 val result = this@XrayVpnService.protect(fd.toInt())
                 android.util.Log.i("TeapodVPN", "[protect] fd=$fd result=$result")
                 return result
+            }
+        })
+        // Route xray-core runtime logs (outbound dial errors, access log) into
+        // vpn_log.txt — otherwise they die on Go's stdout and connection failures
+        // are undiagnosable from user logs. Info/access lines map to "debug" so
+        // they land in the file without flooding the Flutter UI in release.
+        Teapodcore.registerLogListener(object : LogListener {
+            override fun onLog(message: String) {
+                val level = when {
+                    message.contains("[Error]") -> "error"
+                    message.contains("[Warning]") -> "warning"
+                    else -> "debug"
+                }
+                log(level, "[xray] $message")
             }
         })
         registerScreenReceiver()

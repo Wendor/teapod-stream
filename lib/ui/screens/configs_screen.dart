@@ -17,6 +17,7 @@ import '../theme/app_theme.dart';
 import '../widgets/hero_panel.dart';
 import '../widgets/pressable.dart';
 import 'add_config_screen.dart';
+import 'subscription_settings_screen.dart';
 
 class ConfigsScreen extends ConsumerStatefulWidget {
   const ConfigsScreen({super.key});
@@ -117,6 +118,13 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
               ),
               isRefreshing: _isRefreshingAll,
               onSettings: () => _showSettingsSheet(context, t),
+              onSubSettings: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      const SubscriptionSettingsScreen(breadcrumbParent: 'configs'),
+                ),
+              ),
               onExport: configStateAsync.maybeWhen(
                 data: (s) => s.configs.isNotEmpty ? () => _exportAll(s.configs) : null,
                 orElse: () => null,
@@ -810,6 +818,7 @@ class _CfgTitlePanel extends StatelessWidget {
   final VoidCallback? onRefreshAll;
   final bool isRefreshing;
   final VoidCallback onSettings;
+  final VoidCallback onSubSettings;
   final VoidCallback? onExport;
 
   const _CfgTitlePanel({
@@ -818,6 +827,7 @@ class _CfgTitlePanel extends StatelessWidget {
     this.onRefreshAll,
     this.isRefreshing = false,
     required this.onSettings,
+    required this.onSubSettings,
     this.onExport,
   });
 
@@ -832,6 +842,8 @@ class _CfgTitlePanel extends StatelessWidget {
       trailing: Row(
         children: [
           _IconBtn(t: t, icon: Icons.tune_rounded, accent: false, label: 'настройки отображения', onTap: onSettings),
+          const SizedBox(width: 6),
+          _IconBtn(t: t, icon: Icons.schedule_rounded, accent: false, label: 'настройки подписок', onTap: onSubSettings),
           const SizedBox(width: 6),
           _IconBtn(t: t, icon: Icons.ios_share_rounded, accent: false, label: 'экспорт подключений', onTap: onExport),
           const SizedBox(width: 6),

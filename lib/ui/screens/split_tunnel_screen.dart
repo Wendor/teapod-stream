@@ -78,7 +78,7 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
                 ],
               ),
             ),
-            BreadcrumbBar(t: t, parent: 'settings', current: 'split-tunnel'),
+            BreadcrumbBar(t: t, parent: 'routing', current: 'split-tunnel'),
             // ── Hero panel ────────────────────────────────────────
             HeroPanel(
               t: t,

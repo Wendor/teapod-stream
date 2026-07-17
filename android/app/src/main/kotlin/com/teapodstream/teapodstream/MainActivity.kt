@@ -208,9 +208,18 @@ class MainActivity : FlutterActivity() {
                         result.success(teapodcore.Teapodcore.getTunDiagnostics())
                     }
 
+                    "setLogsEnabled" -> {
+                        val enabled = call.argument<Boolean>("enabled") ?: true
+                        getSharedPreferences(XrayVpnService.PREFS_NAME, MODE_PRIVATE)
+                            .edit().putBoolean(XrayVpnService.PREF_LOGS_ENABLED, enabled).apply()
+                        XrayVpnService.logsEnabled = enabled
+                        result.success(null)
+                    }
+
                     "getLogs" -> {
                         Thread {
                             val lines = synchronized(XrayVpnService.LOG_FILE_LOCK) {
+                                XrayVpnService.flushLogBuffer(filesDir)
                                 listOf(XrayVpnService.LOG_PREV_FILE_NAME, XrayVpnService.LOG_FILE_NAME)
                                     .map { java.io.File(filesDir, it) }
                                     .filter { it.exists() }
@@ -226,6 +235,7 @@ class MainActivity : FlutterActivity() {
                         Thread {
                             try {
                                 synchronized(XrayVpnService.LOG_FILE_LOCK) {
+                                    XrayVpnService.flushLogBuffer(filesDir)
                                     java.io.File(filesDir, XrayVpnService.LOG_FILE_NAME).writeText("")
                                     java.io.File(filesDir, XrayVpnService.LOG_PREV_FILE_NAME).delete()
                                 }

@@ -109,6 +109,33 @@ class XrayVpnService : VpnService() {
         const val LOG_FILE_NAME = "vpn_log.txt"
         const val LOG_PREV_FILE_NAME = "vpn_log.prev.txt"
         val LOG_FILE_LOCK = Any()
+        const val PREFS_NAME = "vpn_prefs"
+        const val PREF_LOGS_ENABLED = "logs_enabled"
+
+        // User toggle: when off, only warning/error are logged (file + UI) so a broken
+        // session still leaves diagnostics. Persisted in PREFS_NAME by MainActivity.
+        @Volatile var logsEnabled = true
+
+        // Log lines are buffered and flushed in batches: a FileWriter open per line wakes
+        // flash storage on every heartbeat/xray-access event. warning/error flush
+        // immediately so crash diagnostics never sit in the buffer.
+        private val logBuffer = StringBuilder()
+        private var lastLogFlushMs = 0L
+        private const val LOG_FLUSH_INTERVAL_MS = 5_000L
+        private const val LOG_FLUSH_SIZE_CHARS = 8 * 1024
+
+        @JvmStatic fun flushLogBuffer(filesDir: File) {
+            synchronized(LOG_FILE_LOCK) { flushLogBufferLocked(filesDir) }
+        }
+
+        private fun flushLogBufferLocked(filesDir: File) {
+            if (logBuffer.isEmpty()) return
+            try {
+                java.io.FileWriter(File(filesDir, LOG_FILE_NAME), true).use { it.write(logBuffer.toString()) }
+            } catch (_: Exception) {}
+            logBuffer.setLength(0)
+            lastLogFlushMs = System.currentTimeMillis()
+        }
 
         private const val NOTIFICATION_CHANNEL_ID = "vpn_service"
         private const val NOTIFICATION_CHANNEL_MINIMAL_ID = "vpn_service_minimal"
@@ -130,6 +157,7 @@ class XrayVpnService : VpnService() {
         // if no probe succeeds within HEARTBEAT_WARMUP_TIMEOUT_MS → something is genuinely broken.
         private const val HEARTBEAT_WARMUP_TIMEOUT_MS = 30_000L
         private const val STATS_INTERVAL_MS = 1_000L
+        private const val STATS_INTERVAL_SCREEN_OFF_MS = 10_000L
         private const val STOP_THREAD_TIMEOUT_MS = 5_000L
         private const val RECONNECT_DEBOUNCE_MS = 2_000L
         // Failed CONNECT_QUICK reconnects are retried with linear backoff instead of
@@ -209,6 +237,8 @@ class XrayVpnService : VpnService() {
     @Volatile private var lastConnectedMs: Long = 0L
     private var prefixProxy: PrefixTcpProxy? = null
     @Volatile private var showNotification = true
+    @Volatile private var screenOn = true
+    @Volatile private var lastNotificationText: String? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var screenReceiver: android.content.BroadcastReceiver? = null
     private var killSwitchEnabled = false
@@ -230,6 +260,8 @@ class XrayVpnService : VpnService() {
     override fun onCreate() {
         super.onCreate()
         VpnEventStreamHandler.appContext = applicationContext
+        logsEnabled = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean(PREF_LOGS_ENABLED, true)
+        screenOn = (getSystemService(POWER_SERVICE) as PowerManager).isInteractive
         migrateConnectionParamsIfNeeded()
         Teapodcore.registerVpnProtector(object : VpnProtector {
             override fun protect(fd: Long): Boolean {
@@ -975,6 +1007,7 @@ class XrayVpnService : VpnService() {
                 _socksCredentials.set(SocksCredentials(0, "", ""))
             }
             log("info", "stopVpn: done (state=${if (reconnecting) "reconnecting" else if (keptTunAsSink) "blocked" else resultState})")
+            flushLogBuffer(filesDir)
         }
     }
 
@@ -982,6 +1015,7 @@ class XrayVpnService : VpnService() {
         try { unregisterReceiver(screenReceiver) } catch (_: Exception) {}
         screenReceiver = null
         stopVpn()
+        flushLogBuffer(filesDir)
         super.onDestroy()
     }
 
@@ -989,9 +1023,19 @@ class XrayVpnService : VpnService() {
         screenReceiver = object : android.content.BroadcastReceiver() {
             override fun onReceive(context: android.content.Context, intent: android.content.Intent) {
                 when (intent.action) {
-                    android.content.Intent.ACTION_SCREEN_OFF -> log("info", "Screen off")
+                    android.content.Intent.ACTION_SCREEN_OFF -> {
+                        screenOn = false
+                        log("info", "Screen off")
+                    }
                     android.content.Intent.ACTION_SCREEN_ON  -> {
+                        screenOn = true
                         log("info", "Screen on")
+                        // Notification updates are suppressed while the screen is off —
+                        // refresh once so the shade shows current speeds immediately.
+                        if (isRunning.get() && currentNativeState == "connected") {
+                            lastNotificationText = null
+                            updateNotification(lastUploadSpeed, lastDownloadSpeed)
+                        }
                         checkTunStallOnWake()
                     }
                     android.os.PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED -> {
@@ -1058,7 +1102,11 @@ class XrayVpnService : VpnService() {
         statsThread = Thread {
             while (isRunning.get()) {
                 try {
-                    Thread.sleep(STATS_INTERVAL_MS)
+                    // Nobody looks at speeds while the screen is off — poll 10x slower so
+                    // the CPU isn't woken every second all night. Totals stay exact
+                    // (cumulative counters), speeds average over the longer interval.
+                    val wasScreenOn = screenOn
+                    Thread.sleep(if (wasScreenOn) STATS_INTERVAL_MS else STATS_INTERVAL_SCREEN_OFF_MS)
                     val now = System.currentTimeMillis()
                     val elapsed = (now - lastTime) / 1000.0
 
@@ -1075,14 +1123,15 @@ class XrayVpnService : VpnService() {
                     lastUp = totalUpload
                     lastDown = totalDownload
                     lastTime = now
-                    synchronized(statsHistory) {
-                        if (statsHistory.size >= MAX_STATS_HISTORY) {
-                            statsHistory.removeFirst()
+                    if (screenOn) {
+                        synchronized(statsHistory) {
+                            if (statsHistory.size >= MAX_STATS_HISTORY) {
+                                statsHistory.removeFirst()
+                            }
+                            statsHistory.addLast(Pair(lastUploadSpeed, lastDownloadSpeed))
                         }
-                        statsHistory.addLast(Pair(lastUploadSpeed, lastDownloadSpeed))
+                        updateNotification(lastUploadSpeed, lastDownloadSpeed)
                     }
-                    VpnEventStreamHandler.sendStatsEvent(totalUpload, totalDownload, lastUploadSpeed, lastDownloadSpeed)
-                    updateNotification(lastUploadSpeed, lastDownloadSpeed)
                 } catch (_: InterruptedException) { break } catch (_: Exception) {}
             }
         }.also { it.isDaemon = true; it.start() }
@@ -1338,7 +1387,12 @@ class XrayVpnService : VpnService() {
                         }
                     }
 
-                    checkTunnelConnectivity(port)
+                    // Data reached the TUN within the last interval — the tunnel is
+                    // demonstrably alive, no need to burn a radio round-trip on an
+                    // active probe. Idle tunnels still get the full SOCKS5 probe.
+                    if (!isTunRxFresh()) {
+                        checkTunnelConnectivity(port)
+                    }
                     warmupDone = true
                     heartbeatFailures.set(0)
                     noInternetStreak = 0
@@ -1683,6 +1737,9 @@ class XrayVpnService : VpnService() {
             log("warning", "Failed to save socks_creds: ${e.message}")
         }
         VpnEventStreamHandler.sendConnectedEvent(socksPort, socksUser, socksPassword)
+        // The "Отключено"/intermediate notification bypasses the dedupe cache —
+        // reset it so the connected layout is always posted.
+        lastNotificationText = null
         updateNotification(0, 0)
         sendBroadcast(Intent("com.teapodstream.STATE_CHANGED").apply {
             putExtra("state", "connected")
@@ -1692,12 +1749,19 @@ class XrayVpnService : VpnService() {
 
     private fun updateNotification(uploadSpeed: Long, downloadSpeed: Long) {
         if (!showNotification) return
+        // notify() is an IPC into system_server on every call — skip while the screen
+        // is off (SCREEN_ON refreshes once) and when the rendered text hasn't changed.
+        if (!screenOn) return
+        val speedText = "↑ ${formatSpeed(uploadSpeed)}  ↓ ${formatSpeed(downloadSpeed)}"
+        if (speedText == lastNotificationText) return
+        lastNotificationText = speedText
 
         val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(NOTIFICATION_ID, buildConnectedNotification(uploadSpeed, downloadSpeed))
     }
 
     private fun log(level: String, message: String) {
+        if (!logsEnabled && level != "warning" && level != "error") return
         android.util.Log.i("TeapodVPN", "[$level] $message")
         appendLogLine(level, message)
         if (level != "debug" || BuildConfig.DEBUG) {
@@ -1709,7 +1773,13 @@ class XrayVpnService : VpnService() {
         try {
             val line = "${System.currentTimeMillis()}|$level|${message.replace("\n", " ")}\n"
             synchronized(LOG_FILE_LOCK) {
-                java.io.FileWriter(File(filesDir, LOG_FILE_NAME), true).use { it.write(line) }
+                logBuffer.append(line)
+                if (level == "warning" || level == "error"
+                    || logBuffer.length >= LOG_FLUSH_SIZE_CHARS
+                    || System.currentTimeMillis() - lastLogFlushMs >= LOG_FLUSH_INTERVAL_MS
+                ) {
+                    flushLogBufferLocked(filesDir)
+                }
             }
         } catch (_: Exception) {}
     }
@@ -1719,6 +1789,7 @@ class XrayVpnService : VpnService() {
     private fun clearLogFile() {
         try {
             synchronized(LOG_FILE_LOCK) {
+                flushLogBufferLocked(filesDir)
                 val current = File(filesDir, LOG_FILE_NAME)
                 val prev = File(filesDir, LOG_PREV_FILE_NAME)
                 prev.delete()

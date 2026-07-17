@@ -397,6 +397,10 @@ class _SpeedChartPainter extends CustomPainter {
     canvas.drawPath(linePath, color == AppColors.chartDownload ? _downloadPaint : _uploadPaint);
   }
 
+  // Длина _paddedHistory всегда _maxPoints, так что сравнение длин означало
+  // «никогда не перерисовывать» — после поворота экрана график оставался в
+  // старой раскладке до чужой перерисовки слоя. Painter пересоздаётся только
+  // из setState тикера (данные к этому моменту изменились) — репейнт честный.
   @override
-  bool shouldRepaint(_SpeedChartPainter old) => history.length != old.history.length;
+  bool shouldRepaint(_SpeedChartPainter old) => true;
 }

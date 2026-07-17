@@ -166,6 +166,13 @@ class XrayEngine implements VpnEngine {
     } catch (_) {}
   }
 
+  /// Toggle native logging (persisted in native prefs; off = warning/error only).
+  Future<void> setLogsEnabled(bool enabled) async {
+    try {
+      await _channel.invokeMethod<void>('setLogsEnabled', {'enabled': enabled});
+    } catch (_) {}
+  }
+
   /// Get current stats (for background polling).
   Future<({int upload, int download, int uploadSpeed, int downloadSpeed})>
       getStats() async {

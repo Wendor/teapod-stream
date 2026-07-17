@@ -122,6 +122,11 @@ class VpnNotifier extends Notifier<VpnState2> {
             .refreshStaleSubscriptions(intervalHours: settings!.subAutoRefreshHours);
       }
 
+      // Native persists logsEnabled in its own prefs — resync in case they
+      // diverged (fresh install with restored Flutter prefs, etc.).
+      final s0 = await ref.read(settingsProvider.future);
+      await _engine.setLogsEnabled(s0.logsEnabled);
+
       // Restore log history (previous + current session files) even when
       // disconnected — needed to diagnose failures that ended the last session.
       final logEntries = await _engine.getLogs();
@@ -585,6 +590,15 @@ class VpnNotifier extends Notifier<VpnState2> {
     // Single batch update — one storage write, one state update
     await ref.read(configProvider.notifier).batchUpdatePingResults(latencyMap, now);
   }
+
+  /// Останавливает посекундный опрос статистики, когда приложение в фоне —
+  /// при возврате syncNativeState() → _onNativeState(connected) перезапустит его.
+  void pauseStatsPolling() {
+    _statsPoller?.cancel();
+    _statsPoller = null;
+  }
+
+  Future<void> setLogsEnabled(bool enabled) => _engine.setLogsEnabled(enabled);
 
   Future<String?> getLogFilePath() => _engine.getLogFilePath();
 

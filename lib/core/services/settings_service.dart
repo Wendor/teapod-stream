@@ -89,6 +89,10 @@ class AppSettings {
   final bool autoStartOnBoot;
   final TlsFingerprint tlsFingerprint;
 
+  /// Ведение журнала (файл + UI). При выключении нативный слой
+  /// пишет только warning/error.
+  final bool logsEnabled;
+
   const AppSettings({
     this.socksPort = AppConstants.defaultSocksPort,
     this.logLevel = LogLevel.info,
@@ -127,6 +131,7 @@ class AppSettings {
     this.ipv6Enabled = false,
     this.autoStartOnBoot = false,
     this.tlsFingerprint = TlsFingerprint.defaultFp,
+    this.logsEnabled = true,
   });
 
   AppSettings copyWith({
@@ -167,6 +172,7 @@ class AppSettings {
     bool? ipv6Enabled,
     bool? autoStartOnBoot,
     TlsFingerprint? tlsFingerprint,
+    bool? logsEnabled,
   }) {
     return AppSettings(
       socksPort: socksPort ?? this.socksPort,
@@ -206,6 +212,7 @@ class AppSettings {
       ipv6Enabled: ipv6Enabled ?? this.ipv6Enabled,
       autoStartOnBoot: autoStartOnBoot ?? this.autoStartOnBoot,
       tlsFingerprint: tlsFingerprint ?? this.tlsFingerprint,
+      logsEnabled: logsEnabled ?? this.logsEnabled,
     );
   }
 
@@ -247,6 +254,7 @@ class AppSettings {
     'ipv6Enabled': ipv6Enabled,
     'autoStartOnBoot': autoStartOnBoot,
     'tlsFingerprint': tlsFingerprint.name,
+    'logsEnabled': logsEnabled,
   };
 
   static AppSettings fromJson(Map<String, dynamic> json) {
@@ -296,6 +304,7 @@ class AppSettings {
       autoStartOnBoot: json['autoStartOnBoot'] as bool? ?? false,
       tlsFingerprint: TlsFingerprint.values.firstWhere(
         (e) => e.name == json['tlsFingerprint'], orElse: () => TlsFingerprint.defaultFp),
+      logsEnabled: json['logsEnabled'] as bool? ?? true,
     );
   }
 
@@ -351,6 +360,7 @@ class SettingsService {
   static const _ipv6EnabledKey = 'ipv6_enabled';
   static const _autoStartOnBootKey = 'auto_start_on_boot';
   static const _tlsFingerprintKey = 'tls_fingerprint';
+  static const _logsEnabledKey = 'logs_enabled';
 
   final _secure = StorageSecureService();
 
@@ -417,6 +427,7 @@ class SettingsService {
         (e) => e.name == prefs.getString(_tlsFingerprintKey),
         orElse: () => TlsFingerprint.defaultFp,
       ),
+      logsEnabled: prefs.getBool(_logsEnabledKey) ?? true,
     );
   }
 
@@ -488,6 +499,7 @@ class SettingsService {
     await prefs.setBool(_ipv6EnabledKey, settings.ipv6Enabled);
     await prefs.setBool(_autoStartOnBootKey, settings.autoStartOnBoot);
     await prefs.setString(_tlsFingerprintKey, settings.tlsFingerprint.name);
+    await prefs.setBool(_logsEnabledKey, settings.logsEnabled);
     // SOCKS credentials go to encrypted storage
     await _secure.writeSocksCredentials(settings.socksUser, settings.socksPassword);
   }

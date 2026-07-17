@@ -120,6 +120,10 @@ class _AppShellState extends ConsumerState<_AppShell>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       ref.read(vpnProvider.notifier).syncNativeState();
+    } else if (state == AppLifecycleState.paused) {
+      // Не гонять MethodChannel-опрос статистики каждую секунду в фоне —
+      // syncNativeState() перезапустит его при возврате.
+      ref.read(vpnProvider.notifier).pauseStatsPolling();
     }
   }
 

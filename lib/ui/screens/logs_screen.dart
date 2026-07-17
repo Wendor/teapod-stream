@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../core/models/vpn_log_entry.dart';
 import '../../core/services/log_service.dart';
+import '../../providers/settings_provider.dart';
 import '../../providers/vpn_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
@@ -94,9 +95,19 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
       '${ts.minute.toString().padLeft(2, '0')}:'
       '${ts.second.toString().padLeft(2, '0')}';
 
+  Future<void> _toggleLogsEnabled() async {
+    final s = ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
+    if (s == null) return;
+    final enabled = !s.logsEnabled;
+    await ref.read(settingsProvider.notifier).save(s.copyWith(logsEnabled: enabled));
+    await ref.read(vpnProvider.notifier).setLogsEnabled(enabled);
+  }
+
   @override
   Widget build(BuildContext context) {
     final logs = ref.watch(logServiceProvider);
+    final logsEnabled = ref.watch(settingsProvider)
+        .maybeWhen(data: (d) => d.logsEnabled, orElse: () => true);
     final t = Theme.of(context).extension<TeapodTokens>()!;
 
     final filtered = _filters.isEmpty
@@ -143,14 +154,20 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
               title: 'LOGS',
               subtitle: Row(
                 children: [
-                  Text('last $lastTs · stream live',
+                  Text('last $lastTs · ${logsEnabled ? 'stream live' : 'stream paused'}',
                       style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5)),
                   const SizedBox(width: 8),
-                  _PulseDot(color: t.accent),
+                  _PulseDot(color: logsEnabled ? t.accent : t.textMuted),
                 ],
               ),
               trailing: Row(
                 children: [
+                  _IconBtn(
+                    t: t,
+                    icon: logsEnabled ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                    onTap: _toggleLogsEnabled,
+                  ),
+                  const SizedBox(width: 6),
                   _IconBtn(
                     t: t,
                     icon: Icons.monitor_heart_outlined,

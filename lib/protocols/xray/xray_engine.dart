@@ -210,10 +210,12 @@ class XrayEngine implements VpnEngine {
 
   VpnState _parseState(String s) => switch (s) {
         'connecting' => VpnState.connecting,
+        'reconnecting' => VpnState.connecting,
         'connected' => VpnState.connected,
         'disconnecting' => VpnState.disconnecting,
         'disconnected' => VpnState.disconnected,
         'error' => VpnState.error,
+        'blocked' => VpnState.blocked,
         _ => VpnState.disconnected,
       };
 }

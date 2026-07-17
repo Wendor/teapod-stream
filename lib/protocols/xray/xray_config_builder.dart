@@ -4,6 +4,7 @@ import '../../core/models/vpn_config.dart';
 import '../../core/models/dns_config.dart';
 import '../../core/models/routing_settings.dart';
 import '../../core/constants/xray_defaults.dart';
+import '../../core/models/vpn_log_entry.dart' show LogLevel;
 import '../../core/services/settings_service.dart' show DnsQueryStrategy, TlsFingerprint;
 
 class XrayConfigBuilder {
@@ -42,7 +43,7 @@ class XrayConfigBuilder {
     final routeOnly = options.sniffingEnabled;
 
     return {
-      'log': {'loglevel': options.logLevel.name},
+      'log': _logBlock(options),
       'dns': dnsBlock,
       'inbounds': [
         {
@@ -141,6 +142,15 @@ class XrayConfigBuilder {
       },
     };
   }
+
+  /// При logLevel warning/error access-log отключается на стороне xray —
+  /// иначе Go-слой формирует строку на каждое соединение (JNI → файл лога).
+  static Map<String, dynamic> _logBlock(VpnEngineOptions options) => {
+        'loglevel': options.logLevel.name,
+        if (options.logLevel == LogLevel.warning ||
+            options.logLevel == LogLevel.error)
+          'access': 'none',
+      };
 
   static List<Map<String, dynamic>> _buildGeoRules(RoutingSettings routing) {
     if (!routing.isActive) return [];
@@ -518,7 +528,7 @@ class XrayConfigBuilder {
       // routing configured for their outbound topology. Overriding it breaks dns-module
       // routing (no 'proxy' outbound exists in these configs) and causes DNS leaks.
       // User's custom DNS server and adblock settings do not apply to managed configs.
-      cfg['log'] = {'loglevel': options.logLevel.name};
+      cfg['log'] = _logBlock(options);
 
       _clampObservatoryInterval(cfg, options.obsProbeIntervalSec);
       _neutralizeDirectFallback(cfg);

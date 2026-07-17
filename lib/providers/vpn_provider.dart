@@ -75,9 +75,11 @@ class VpnNotifier extends Notifier<VpnState2> {
   Timer? _connectTimeout;
   Timer? _disconnectTimeout;
   Timer? _statsPoller;
-  Timer? _subRefreshTimer;
   bool _isPinging = false;
   DateTime? _connectedAt;
+
+  /// true — вкладка home на экране; история для графика тянется только тогда.
+  bool _chartVisible = true;
 
 
   @override
@@ -102,25 +104,16 @@ class VpnNotifier extends Notifier<VpnState2> {
       _connectTimeout?.cancel();
       _disconnectTimeout?.cancel();
       _statsPoller?.cancel();
-      _subRefreshTimer?.cancel();
     });
 
-    // Auto-refresh subscriptions: timer fires hourly, staleness check uses configured interval
-    _subRefreshTimer = Timer.periodic(const Duration(hours: 1), (_) async {
-      final settings = ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
-      if (settings?.subAutoRefresh != true) return;
-      await ref.read(configProvider.notifier)
-          .refreshStaleSubscriptions(intervalHours: settings!.subAutoRefreshHours);
-    });
+    // Авто-обновление подписок: при старте (ниже в microtask) и при каждом
+    // resume (app.dart → refreshStaleSubscriptionsIfDue) — часовой фоновый
+    // таймер убран, staleness-проверка сама решает, пора ли обновлять.
 
     // Sync state on init (for case when VPN is already running from tile/notification)
     Future.microtask(() async {
       // Auto-refresh stale subscriptions on startup
-      final settings = ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
-      if (settings?.subAutoRefresh == true) {
-        await ref.read(configProvider.notifier)
-            .refreshStaleSubscriptions(intervalHours: settings!.subAutoRefreshHours);
-      }
+      await refreshStaleSubscriptionsIfDue();
 
       // Native persists logsEnabled in its own prefs — resync in case they
       // diverged (fresh install with restored Flutter prefs, etc.).
@@ -177,13 +170,35 @@ class VpnNotifier extends Notifier<VpnState2> {
           'downloadSpeed': stats.downloadSpeed,
         }));
 
-        // Also fetch stats history for chart
-        final history = await _engine.getStatsHistory();
-        if (history.isNotEmpty) {
-          _handleStatsHistory({'history': history});
+        // История (300 записей через MethodChannel) нужна только графику
+        if (_chartVisible) {
+          final history = await _engine.getStatsHistory();
+          if (history.isNotEmpty) {
+            _handleStatsHistory({'history': history});
+          }
         }
       } catch (_) {}
     });
+  }
+
+  /// Вызывается из app.dart при смене вкладки: история для графика тянется
+  /// только когда home видим; при возврате — немедленная догрузка.
+  void setChartVisible(bool visible) {
+    if (_chartVisible == visible) return;
+    _chartVisible = visible;
+    if (visible && state.isConnected) {
+      _engine.getStatsHistory().then((history) {
+        if (history.isNotEmpty) _handleStatsHistory({'history': history});
+      }).ignore();
+    }
+  }
+
+  /// Проверка staleness подписок — вызывается при старте и resume.
+  Future<void> refreshStaleSubscriptionsIfDue() async {
+    final settings = ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
+    if (settings?.subAutoRefresh != true) return;
+    await ref.read(configProvider.notifier)
+        .refreshStaleSubscriptions(intervalHours: settings!.subAutoRefreshHours);
   }
 
   void _handleEvent(Map<String, dynamic> event) {
@@ -477,15 +492,28 @@ class VpnNotifier extends Notifier<VpnState2> {
   }
 
   /// Syncs Flutter state from native when the app resumes from background.
-  /// EventChannel replay on `onListen` handles most cases; this is a fallback.
+  /// Критично: перезапускает _statsPoller после pauseStatsPolling().
+  /// Историческая ошибка: getState возвращает Map, а здесь читали String —
+  /// TypeError глотался catch'ем и весь метод был тихим no-op.
   Future<void> syncNativeState() async {
-    // We now handle timeouts inside _onNativeState, so it's safe to sync everything.
-
     try {
-      const channel = MethodChannel(AppConstants.methodChannel);
-      final nativeState = await channel.invokeMethod<String>('getState');
-      if (nativeState == null) return;
-      _onNativeState(_parseState(nativeState));
+      final native = await _engine.getVpnState();
+      if (native.state == VpnState.connected && native.socksPort > 0) {
+        if (native.connectedAtMs > 0) {
+          _connectedAt ??=
+              DateTime.fromMillisecondsSinceEpoch(native.connectedAtMs);
+        }
+        state = state.copyWith(
+          activeSocksPort: native.socksPort,
+          activeSocksUser: native.socksUser,
+          activeSocksPassword: native.socksPassword,
+        );
+      }
+      // Не знаем, юзерский это connecting или нативный реконнект — не ставим
+      // 45-секундный таймаут, который мог бы форсировать error поверх живого
+      // цикла реконнекта.
+      _onNativeState(native.state,
+          isReconnect: native.state == VpnState.connecting);
     } catch (_) {}
   }
 

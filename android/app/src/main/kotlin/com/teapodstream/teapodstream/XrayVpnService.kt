@@ -144,6 +144,10 @@ class XrayVpnService : VpnService() {
         private const val HEARTBEAT_URL_HOST = "cp.cloudflare.com"
         private const val CONNECTIVITY_CHECK_HOST = "8.8.8.8"
         private const val HEARTBEAT_INTERVAL_MS = 15_000L
+        // Screen off: nobody is watching, the radio should be allowed to idle between
+        // probes. Dead-tunnel detection grows to ~3 min while asleep — acceptable,
+        // checkTunStallOnWake() probes immediately on SCREEN_ON.
+        private const val HEARTBEAT_INTERVAL_SCREEN_OFF_MS = 60_000L
         // If tun2socks has more than this many active proxy goroutines the gVisor TCP
         // state machine is leaking connections. Trigger a reconnect to reset it.
         private const val TUN_CONN_LEAK_THRESHOLD = 200L
@@ -238,8 +242,8 @@ class XrayVpnService : VpnService() {
     private var prefixProxy: PrefixTcpProxy? = null
     @Volatile private var showNotification = true
     @Volatile private var screenOn = true
+    @Volatile private var deviceIdle = false
     @Volatile private var lastNotificationText: String? = null
-    private var wakeLock: PowerManager.WakeLock? = null
     private var screenReceiver: android.content.BroadcastReceiver? = null
     private var killSwitchEnabled = false
     @Volatile private var allowIcmpEnabled = true
@@ -261,7 +265,9 @@ class XrayVpnService : VpnService() {
         super.onCreate()
         VpnEventStreamHandler.appContext = applicationContext
         logsEnabled = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean(PREF_LOGS_ENABLED, true)
-        screenOn = (getSystemService(POWER_SERVICE) as PowerManager).isInteractive
+        val pm = getSystemService(POWER_SERVICE) as PowerManager
+        screenOn = pm.isInteractive
+        deviceIdle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) pm.isDeviceIdleMode else false
         migrateConnectionParamsIfNeeded()
         Teapodcore.registerVpnProtector(object : VpnProtector {
             override fun protect(fd: Long): Boolean {
@@ -561,7 +567,6 @@ class XrayVpnService : VpnService() {
 
                 log("info", "xray started (proxy-only, SOCKS on port $socksPort)")
                 startStatsMonitoring()
-                acquireWakeLock()
                 setConnected(socksPort, socksUser, socksPassword)
                 startHeartbeat(isReconnect)
                 log("info", "Proxy-only mode active")
@@ -661,9 +666,11 @@ class XrayVpnService : VpnService() {
 
                 log("info", "tun2socks started successfully")
 
+                // No permanent wakelock: TUN packets wake the CPU by themselves, and
+                // reconnectInternal() takes its own timed wakelock for the cycle. In deep
+                // Doze the heartbeat stretches — checkTunStallOnWake() covers wake-up.
                 startStatsMonitoring()
                 registerNetworkCallback()
-                acquireWakeLock()
                 setConnected(socksPort, socksUser, socksPassword)
                 startHeartbeat(isReconnect)
                 log("info", "VPN connected successfully")
@@ -863,17 +870,6 @@ class XrayVpnService : VpnService() {
         stopSelf()
     }
 
-    private fun acquireWakeLock() {
-        try {
-            val pm = getSystemService(POWER_SERVICE) as PowerManager
-            wakeLock?.release()
-            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TeapodStream:VpnWakeLock")
-            wakeLock?.acquire()
-        } catch (e: Exception) {
-            log("warning", "Failed to acquire wake lock: ${e.message}")
-        }
-    }
-
     /** Закрывает TUN-sink kill switch'а, если сервис уже остановлен. */
     private fun closeTunSink() {
         if (isRunning.get()) return
@@ -894,9 +890,6 @@ class XrayVpnService : VpnService() {
         lastConnectedMs = 0L
         pendingNetworkRunnable?.let { networkChangeHandler.removeCallbacks(it) }
         pendingNetworkRunnable = null
-
-        try { wakeLock?.release() } catch (_: Exception) {}
-        wakeLock = null
 
         var keptTunAsSink = false
         try {
@@ -1041,7 +1034,11 @@ class XrayVpnService : VpnService() {
                     android.os.PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED -> {
                         val pm = context.getSystemService(POWER_SERVICE) as PowerManager
                         val idle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) pm.isDeviceIdleMode else false
+                        deviceIdle = idle
                         log("info", "Doze mode: ${if (idle) "entered" else "exited"}")
+                        // Выход из Doze = maintenance window или пробуждение: если TUN
+                        // долго молчал, туннель мог протухнуть — probe как при SCREEN_ON.
+                        if (!idle) checkTunStallOnWake()
                     }
                 }
             }
@@ -1355,8 +1352,16 @@ class XrayVpnService : VpnService() {
 
             while (!Thread.currentThread().isInterrupted && isRunning.get()) {
                 try {
-                    Thread.sleep(HEARTBEAT_INTERVAL_MS)
+                    // Warmup keeps the fast cadence: after a reconnect the first success
+                    // must be detected promptly regardless of screen state.
+                    Thread.sleep(
+                        if (screenOn || !warmupDone) HEARTBEAT_INTERVAL_MS
+                        else HEARTBEAT_INTERVAL_SCREEN_OFF_MS
+                    )
                     if (!isRunning.get()) break
+                    // Deep Doze: не будить радио пробами — счётчики не трогаем,
+                    // на выходе из idle (maintenance window) probe в receiver'е.
+                    if (deviceIdle) continue
                     // Start deadline from first actual probe — not from thread creation,
                     // which may be long before xray is ready after a slow reconnect.
                     if (!warmupDone && warmupDeadline == 0L) {

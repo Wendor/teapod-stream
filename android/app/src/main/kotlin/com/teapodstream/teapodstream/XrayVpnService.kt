@@ -219,6 +219,7 @@ class XrayVpnService : VpnService() {
     private var pendingNetworkRunnable: Runnable? = null
     private var heartbeatThread: Thread? = null
     private val heartbeatFailures = AtomicInteger(0)
+    private val wakeProbeRunning = AtomicBoolean(false)
     private val reconnectAttempts = AtomicInteger(0)
 
     private val tunAddress = "10.120.230.1"
@@ -492,7 +493,7 @@ class XrayVpnService : VpnService() {
         // Keep the previous TUN (kill-switch sink left by a reconnect) open until the
         // new one is established: establish() atomically replaces the interface, so
         // app traffic is blackholed by the old TUN instead of leaking while xray starts.
-        val previousTun = tunInterface
+        var previousTun = tunInterface
         tunInterface = null
         killSwitchEnabled = killSwitch
         tunModeActive = !proxyOnly
@@ -533,64 +534,76 @@ class XrayVpnService : VpnService() {
                 startHeartbeat(isReconnect)
                 log("info", "Proxy-only mode active")
             } else {
-                val randomSubnet1 = (2..250).random()
-                val randomSubnet2 = (2..250).random()
-                val randomSubnet3 = (2..250).random()
-                val dynamicTunIp = "10.$randomSubnet1.$randomSubnet2.$randomSubnet3"
+                if (isReconnect && previousTun != null) {
+                    // Auto-reconnect: Builder params come from the same ConnectionParams
+                    // that established this TUN, so the fd is reused as-is. Skipping
+                    // establish() keeps the VPN network agent alive — no system
+                    // "VPN active" notification, no connectivity flap for apps (issue #81).
+                    // tun2socks works on a dup'd fd, so the previous engine's shutdown
+                    // did not invalidate this one.
+                    tunInterface = previousTun
+                    previousTun = null
+                    log("info", "Reusing existing TUN fd for reconnect")
+                } else {
+                    val randomSubnet1 = (2..250).random()
+                    val randomSubnet2 = (2..250).random()
+                    val randomSubnet3 = (2..250).random()
+                    val dynamicTunIp = "10.$randomSubnet1.$randomSubnet2.$randomSubnet3"
 
-                val dynamicSession = "Teapod-${System.currentTimeMillis() % 10000}"
+                    val dynamicSession = "Teapod-${System.currentTimeMillis() % 10000}"
 
-                val builder = Builder()
-                    .setSession(dynamicSession)
-                    .setMtu(tunMtu)
-                    .addAddress(dynamicTunIp, 32)
-                    .addRoute("0.0.0.0", 0)
-                    .addDnsServer(tunDns)
-                    .setBlocking(true)
-                    .setMetered(false)
+                    val builder = Builder()
+                        .setSession(dynamicSession)
+                        .setMtu(tunMtu)
+                        .addAddress(dynamicTunIp, 32)
+                        .addRoute("0.0.0.0", 0)
+                        .addDnsServer(tunDns)
+                        .setBlocking(true)
+                        .setMetered(false)
 
-                // Without an IPv6 address Android blocks the family for tunneled apps
-                // (no leak): connect() fails instantly and apps fall back to IPv4.
-                // With the address, literal-IPv6 destinations (e.g. Telegram DCs) hang
-                // when the VPN server has no IPv6 connectivity (#81).
-                if (ipv6Enabled) {
-                    val hex1 = (1..65535).random().toString(16)
-                    val hex2 = (1..65535).random().toString(16)
-                    val hex3 = (1..65535).random().toString(16)
-                    builder.addAddress("fd00:$hex1:$hex2:$hex3::1", 64)
-                    builder.addRoute("::", 0)
-                }
+                    // Without an IPv6 address Android blocks the family for tunneled apps
+                    // (no leak): connect() fails instantly and apps fall back to IPv4.
+                    // With the address, literal-IPv6 destinations (e.g. Telegram DCs) hang
+                    // when the VPN server has no IPv6 connectivity (#81).
+                    if (ipv6Enabled) {
+                        val hex1 = (1..65535).random().toString(16)
+                        val hex2 = (1..65535).random().toString(16)
+                        val hex3 = (1..65535).random().toString(16)
+                        builder.addAddress("fd00:$hex1:$hex2:$hex3::1", 64)
+                        builder.addRoute("::", 0)
+                    }
 
-                if (vpnMode == "onlySelected") {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        for (pkg in includedPackages) {
-                            try {
-                                builder.addAllowedApplication(pkg)
-                            } catch (e: Exception) {
-                                log("warning", "Failed to allow $pkg: ${e.message}")
+                    if (vpnMode == "onlySelected") {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            for (pkg in includedPackages) {
+                                try {
+                                    builder.addAllowedApplication(pkg)
+                                } catch (e: Exception) {
+                                    log("warning", "Failed to allow $pkg: ${e.message}")
+                                }
                             }
+                        } else {
+                            log("warning", "onlySelected mode requires Android 10+, falling back to allExcept")
+                            for (pkg in excludedPackages) {
+                                try { builder.addDisallowedApplication(pkg) } catch (_: Exception) {}
+                            }
+                            try { builder.addDisallowedApplication(packageName) } catch (_: Exception) {}
                         }
                     } else {
-                        log("warning", "onlySelected mode requires Android 10+, falling back to allExcept")
                         for (pkg in excludedPackages) {
                             try { builder.addDisallowedApplication(pkg) } catch (_: Exception) {}
                         }
                         try { builder.addDisallowedApplication(packageName) } catch (_: Exception) {}
                     }
-                } else {
-                    for (pkg in excludedPackages) {
-                        try { builder.addDisallowedApplication(pkg) } catch (_: Exception) {}
-                    }
-                    try { builder.addDisallowedApplication(packageName) } catch (_: Exception) {}
+
+                    val fdResult = nativeSetMaxFds(65536)
+                    log("info", "nativeSetMaxFds result: $fdResult")
+
+                    tunInterface = builder.establish() ?: throw IllegalStateException("Failed to establish TUN")
+                    // The new interface replaced the old one atomically — the sink fd can go now.
+                    try { previousTun?.close() } catch (_: Exception) {}
+                    log("info", "TUN established with IP $dynamicTunIp")
                 }
-
-                val fdResult = nativeSetMaxFds(65536)
-                log("info", "nativeSetMaxFds result: $fdResult")
-
-                tunInterface = builder.establish() ?: throw IllegalStateException("Failed to establish TUN")
-                // The new interface replaced the old one atomically — the sink fd can go now.
-                try { previousTun?.close() } catch (_: Exception) {}
-                log("info", "TUN established with IP $dynamicTunIp")
 
                 // 1. Start xray-core (in-process library, not subprocess)
                 startXrayAndWait(finalConfig)
@@ -625,9 +638,10 @@ class XrayVpnService : VpnService() {
             }
         } catch (e: Exception) {
             log("error", "Start failed: ${e.message}")
-            // If no new TUN was established, restore the old kill-switch sink so
-            // stopVpn keeps blocking traffic; otherwise the old fd is obsolete.
-            if (tunInterface == null && previousTun != null && killSwitch && !proxyOnly) {
+            // If no new TUN was established, restore the old fd: as kill-switch sink
+            // (keeps blocking traffic) and/or for reuse by the next reconnect attempt.
+            // Otherwise the old fd is obsolete.
+            if (tunInterface == null && previousTun != null && (killSwitch || isReconnect) && !proxyOnly) {
                 tunInterface = previousTun
             } else {
                 try { previousTun?.close() } catch (_: Exception) {}
@@ -872,11 +886,12 @@ class XrayVpnService : VpnService() {
 
             // Close TUN fd early so tun2socks goroutines reading from it get EOF and
             // unblock immediately (tun2socks works on a dup'd fd, so this is safe to
-            // skip too). Kill-switch path keeps TUN open intentionally (traffic sink) —
-            // including during internal reconnects: the next startVpn() closes the old
-            // TUN only after the replacement is established, so app traffic is
-            // blackholed by the sink instead of leaking past the VPN in between.
-            val keepTunAsSink = killSwitchEnabled && !explicit && !proxyOnlyMode
+            // skip too). During internal reconnects the TUN is always kept open: the
+            // next startVpn(isReconnect=true) reuses the same fd (no establish(), no
+            // system "VPN active" notification), and in between app traffic is
+            // blackholed by the sink instead of leaking past the VPN. Kill-switch
+            // path additionally keeps it after non-explicit stops (traffic sink).
+            val keepTunAsSink = (killSwitchEnabled || reconnecting) && !explicit && !proxyOnlyMode
                     && tunInterface != null
                     && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
             keptTunAsSink = keepTunAsSink
@@ -936,7 +951,7 @@ class XrayVpnService : VpnService() {
 
             if (keepTunAsSink) {
                 if (reconnecting) {
-                    log("info", "Kill switch: TUN kept open as sink during reconnect")
+                    log("info", "TUN kept open during reconnect (sink + fd reuse)")
                 } else {
                     setUnderlyingNetworks(emptyArray())
                     log("info", "Kill switch active: TUN kept open, underlying networks cleared")
@@ -1005,9 +1020,25 @@ class XrayVpnService : VpnService() {
         if (idleSec < TUN_STALL_TIMEOUT_MS / 1000) return
         // Don't require activeConns >= 2: after Doze, connections drain to 0 naturally
         // but the tunnel session (xray upstream) may be stale for new connections.
-        val activeConns = Teapodcore.tunActiveConnections()
-        log("warning", "TUN stall on wake: no data for ${idleSec}s (conns=$activeConns), reconnecting")
-        reconnectInternal()
+        // Idle alone isn't proof of death though — probe the upstream through xray
+        // and reconnect only if it actually fails (issue #81: blind reconnects on
+        // every wake). onReceive runs on the main thread, so probe off-thread.
+        if (!wakeProbeRunning.compareAndSet(false, true)) return
+        Thread {
+            try {
+                val port = activeSocksPort
+                if (port <= 0) return@Thread
+                try {
+                    checkTunnelConnectivity(port)
+                    log("info", "TUN idle ${idleSec}s on wake but tunnel alive, skipping reconnect")
+                } catch (e: Exception) {
+                    log("warning", "TUN stall on wake: no data for ${idleSec}s, probe failed (${e.message}), reconnecting")
+                    reconnectInternal()
+                }
+            } finally {
+                wakeProbeRunning.set(false)
+            }
+        }.also { it.isDaemon = true; it.start() }
     }
 
     private fun startStatsMonitoring() {

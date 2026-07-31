@@ -56,7 +56,6 @@ class VpnTileService : TileService() {
         val isDisconnect = currentState == "connected" || currentState == "connecting"
 
         setIntermediateState(isDisconnect)
-        XrayVpnService.showIntermediateNotification(this, !isDisconnect)
 
         val intent = Intent(this, XrayVpnService::class.java).apply {
             action = if (isDisconnect) XrayVpnService.ACTION_DISCONNECT else XrayVpnService.ACTION_CONNECT_QUICK

@@ -88,12 +88,10 @@ object VpnEventStreamHandler : EventChannel.StreamHandler {
 
     fun sendStateEvent(state: String) {
         sendEvent(mapOf("type" to "state", "value" to state))
-        // Обновляем плитку и уведомление при изменении состояния
+        // Notification ownership stays in XrayVpnService so it can honor the
+        // user's rich-notification setting. The event stream only updates UI state.
         appContext?.let { ctx ->
             VpnTileService.updateTile(ctx)
-            if (state == "connecting" || state == "disconnecting" || state == "reconnecting") {
-                XrayVpnService.showIntermediateNotification(ctx, state != "disconnecting")
-            }
         }
     }
 

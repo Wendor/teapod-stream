@@ -148,31 +148,6 @@ class XrayVpnService : VpnService() {
             }
         }
 
-        @JvmStatic fun showIntermediateNotification(context: android.content.Context, isConnecting: Boolean) {
-            try {
-                val manager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-                ensureNotificationChannel(manager)
-                val text = if (isConnecting) "Подключение…" else "Отключение…"
-                val notification = androidx.core.app.NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
-                    .setContentTitle("TeapodStream VPN")
-                    .setContentText(text)
-                    .setSmallIcon(android.R.drawable.ic_lock_lock)
-                    .setOngoing(true)
-                    .setPriority(androidx.core.app.NotificationCompat.PRIORITY_LOW)
-                    .setProgress(0, 0, true)
-                    .build()
-                manager.notify(NOTIFICATION_ID, notification)
-            } catch (_: Exception) { }
-        }
-
-        private fun ensureNotificationChannel(manager: android.app.NotificationManager) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                manager.createNotificationChannel(
-                    android.app.NotificationChannel(NOTIFICATION_CHANNEL_ID, "VPN статус", android.app.NotificationManager.IMPORTANCE_LOW)
-                )
-            }
-        }
-
         fun prepareBinaries(context: android.content.Context): Boolean {
             val filesDir = context.filesDir
             val assets = context.assets
@@ -206,6 +181,7 @@ class XrayVpnService : VpnService() {
     private val networkChangeHandler = Handler(Looper.getMainLooper())
     private var pendingNetworkRunnable: Runnable? = null
     private val reconnectAttempts = AtomicInteger(0)
+    @Volatile private var notificationChannelsReady = false
     private val heartbeat = HeartbeatMonitor(object : HeartbeatMonitor.Deps {
         override val running: Boolean get() = isRunning.get()
         override val tunModeActive: Boolean get() = Companion.tunModeActive
@@ -290,9 +266,6 @@ class XrayVpnService : VpnService() {
 
                     // Guarantee "disconnected" is always sent
                     setState("disconnected")
-                    // Update notification to "Disconnected" ONLY after we've actually
-                    // finished (or timed out) the stopping process.
-                    showDisconnectedNotification()
                 }.start()
                 return START_STICKY
             }
@@ -424,7 +397,7 @@ class XrayVpnService : VpnService() {
                 }
             }
         }
-        showDisconnectedNotification()
+        applyNotificationState("disconnected")
         return START_STICKY
     }
 
@@ -1314,6 +1287,18 @@ class XrayVpnService : VpnService() {
             .build()
     }
 
+    private fun buildIntermediateNotification(isConnecting: Boolean): Notification {
+        val text = if (isConnecting) "Подключение…" else "Отключение…"
+        return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+            .setContentTitle("TeapodStream VPN")
+            .setContentText(text)
+            .setSmallIcon(android.R.drawable.ic_lock_lock)
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setProgress(0, 0, true)
+            .build()
+    }
+
     private fun buildMinimalNotification(): Notification =
         NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_MINIMAL_ID)
             .setContentTitle("TeapodStream VPN")
@@ -1322,19 +1307,49 @@ class XrayVpnService : VpnService() {
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .build()
 
+    private fun ensureNotificationChannels(manager: NotificationManager) {
+        if (notificationChannelsReady) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            notificationChannelsReady = true
+            return
+        }
+        manager.createNotificationChannel(
+            NotificationChannel(NOTIFICATION_CHANNEL_ID, "VPN статус", NotificationManager.IMPORTANCE_LOW)
+                .apply { description = "Скорость и управление VPN" }
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(NOTIFICATION_CHANNEL_MINIMAL_ID, "VPN (фоновый режим)", NotificationManager.IMPORTANCE_MIN)
+                .apply { description = "Фоновый VPN-сервис" }
+        )
+        notificationChannelsReady = true
+    }
+
+    private fun applyNotificationState(
+        state: String,
+        uploadSpeed: Long = 0,
+        downloadSpeed: Long = 0,
+    ) {
+        val notification = when (VpnNotificationPolicy.variantFor(state, showNotification)) {
+            VpnNotificationVariant.MINIMAL -> buildMinimalNotification()
+            VpnNotificationVariant.CONNECTING -> buildIntermediateNotification(isConnecting = true)
+            VpnNotificationVariant.DISCONNECTING -> buildIntermediateNotification(isConnecting = false)
+            VpnNotificationVariant.CONNECTED -> buildConnectedNotification(uploadSpeed, downloadSpeed)
+            VpnNotificationVariant.DISCONNECTED -> buildDisconnectedNotification()
+            VpnNotificationVariant.KEEP_CURRENT -> return
+        }
+        try {
+            val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            ensureNotificationChannels(manager)
+            manager.notify(NOTIFICATION_ID, notification)
+        } catch (e: Exception) {
+            log("warning", "Notification update failed for state=$state: ${e.message}")
+        }
+    }
+
     /** Ensure the service is in foreground. Safe to call multiple times. */
     private fun ensureForeground() {
         val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            manager.createNotificationChannel(
-                NotificationChannel(NOTIFICATION_CHANNEL_ID, "VPN статус", NotificationManager.IMPORTANCE_LOW)
-                    .apply { description = "Скорость и управление VPN" }
-            )
-            manager.createNotificationChannel(
-                NotificationChannel(NOTIFICATION_CHANNEL_MINIMAL_ID, "VPN (фоновый режим)", NotificationManager.IMPORTANCE_MIN)
-                    .apply { description = "Фоновый VPN-сервис" }
-            )
-        }
+        ensureNotificationChannels(manager)
         val notification = if (showNotification) buildDisconnectedNotification() else buildMinimalNotification()
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -1347,16 +1362,9 @@ class XrayVpnService : VpnService() {
         }
     }
 
-    private fun showDisconnectedNotification() {
-        if (!showNotification) return
-        try {
-            val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-            manager.notify(NOTIFICATION_ID, buildDisconnectedNotification())
-        } catch (_: Exception) {}
-    }
-
     private fun setState(state: String) {
         currentNativeState = state
+        applyNotificationState(state)
         VpnEventStreamHandler.sendStateEvent(state)
         sendBroadcast(Intent("com.teapodstream.STATE_CHANGED").apply { putExtra("state", state) })
     }
@@ -1380,8 +1388,8 @@ class XrayVpnService : VpnService() {
         } catch (e: Exception) {
             log("warning", "Failed to save socks_creds: ${e.message}")
         }
+        applyNotificationState("connected")
         VpnEventStreamHandler.sendConnectedEvent(socksPort, socksUser, socksPassword)
-        updateNotification(0, 0)
         sendBroadcast(Intent("com.teapodstream.STATE_CHANGED").apply {
             putExtra("state", "connected")
             putExtra("socksPort", socksPort)
@@ -1390,9 +1398,7 @@ class XrayVpnService : VpnService() {
 
     private fun updateNotification(uploadSpeed: Long, downloadSpeed: Long) {
         if (!showNotification) return
-
-        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(NOTIFICATION_ID, buildConnectedNotification(uploadSpeed, downloadSpeed))
+        applyNotificationState("connected", uploadSpeed, downloadSpeed)
     }
 
     private fun log(level: String, message: String) {

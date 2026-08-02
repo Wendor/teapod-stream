@@ -1,7 +1,11 @@
+import 'dart:convert';
+
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/vpn_log_entry.dart';
 import '../models/dns_config.dart';
+import '../models/heartbeat_settings.dart';
 import '../models/routing_settings.dart';
+import '../models/xray_tuning.dart';
 import '../constants/app_constants.dart';
 import 'storage_secure_service.dart';
 import 'storage_migration_service.dart';
@@ -88,6 +92,10 @@ class AppSettings {
   final bool ipv6Enabled;
   final bool autoStartOnBoot;
   final TlsFingerprint tlsFingerprint;
+  final FragmentSettings fragment;
+  final NoiseSettings noise;
+  final MuxSettings mux;
+  final HeartbeatSettings heartbeat;
 
   /// Ведение журнала (файл + UI). При выключении нативный слой
   /// пишет только warning/error.
@@ -131,6 +139,10 @@ class AppSettings {
     this.ipv6Enabled = false,
     this.autoStartOnBoot = false,
     this.tlsFingerprint = TlsFingerprint.defaultFp,
+    this.fragment = const FragmentSettings(),
+    this.noise = const NoiseSettings(),
+    this.mux = const MuxSettings(),
+    this.heartbeat = const HeartbeatSettings(),
     this.logsEnabled = true,
   });
 
@@ -172,6 +184,10 @@ class AppSettings {
     bool? ipv6Enabled,
     bool? autoStartOnBoot,
     TlsFingerprint? tlsFingerprint,
+    FragmentSettings? fragment,
+    NoiseSettings? noise,
+    MuxSettings? mux,
+    HeartbeatSettings? heartbeat,
     bool? logsEnabled,
   }) {
     return AppSettings(
@@ -212,6 +228,10 @@ class AppSettings {
       ipv6Enabled: ipv6Enabled ?? this.ipv6Enabled,
       autoStartOnBoot: autoStartOnBoot ?? this.autoStartOnBoot,
       tlsFingerprint: tlsFingerprint ?? this.tlsFingerprint,
+      fragment: fragment ?? this.fragment,
+      noise: noise ?? this.noise,
+      mux: mux ?? this.mux,
+      heartbeat: heartbeat ?? this.heartbeat,
       logsEnabled: logsEnabled ?? this.logsEnabled,
     );
   }
@@ -254,6 +274,10 @@ class AppSettings {
     'ipv6Enabled': ipv6Enabled,
     'autoStartOnBoot': autoStartOnBoot,
     'tlsFingerprint': tlsFingerprint.name,
+    'fragment': fragment.toJson(),
+    'noise': noise.toJson(),
+    'mux': mux.toJson(),
+    'heartbeat': heartbeat.toJson(),
     'logsEnabled': logsEnabled,
   };
 
@@ -304,6 +328,18 @@ class AppSettings {
       autoStartOnBoot: json['autoStartOnBoot'] as bool? ?? false,
       tlsFingerprint: TlsFingerprint.values.firstWhere(
         (e) => e.name == json['tlsFingerprint'], orElse: () => TlsFingerprint.defaultFp),
+      fragment: json['fragment'] is Map<String, dynamic>
+          ? FragmentSettings.fromJson(json['fragment'] as Map<String, dynamic>)
+          : const FragmentSettings(),
+      noise: json['noise'] is Map<String, dynamic>
+          ? NoiseSettings.fromJson(json['noise'] as Map<String, dynamic>)
+          : const NoiseSettings(),
+      mux: json['mux'] is Map<String, dynamic>
+          ? MuxSettings.fromJson(json['mux'] as Map<String, dynamic>)
+          : const MuxSettings(),
+      heartbeat: json['heartbeat'] is Map<String, dynamic>
+          ? HeartbeatSettings.fromJson(json['heartbeat'] as Map<String, dynamic>)
+          : const HeartbeatSettings(),
       logsEnabled: json['logsEnabled'] as bool? ?? true,
     );
   }
@@ -360,6 +396,10 @@ class SettingsService {
   static const _ipv6EnabledKey = 'ipv6_enabled';
   static const _autoStartOnBootKey = 'auto_start_on_boot';
   static const _tlsFingerprintKey = 'tls_fingerprint';
+  static const _fragmentKey = 'xray_fragment';
+  static const _noiseKey = 'xray_noise';
+  static const _muxKey = 'xray_mux';
+  static const _heartbeatKey = 'heartbeat_settings';
   static const _logsEnabledKey = 'logs_enabled';
 
   final _secure = StorageSecureService();
@@ -427,8 +467,24 @@ class SettingsService {
         (e) => e.name == prefs.getString(_tlsFingerprintKey),
         orElse: () => TlsFingerprint.defaultFp,
       ),
+      fragment: _decodeOr(prefs.getString(_fragmentKey), FragmentSettings.fromJson,
+          const FragmentSettings()),
+      noise: _decodeOr(prefs.getString(_noiseKey), NoiseSettings.fromJson, const NoiseSettings()),
+      mux: _decodeOr(prefs.getString(_muxKey), MuxSettings.fromJson, const MuxSettings()),
+      heartbeat: _decodeOr(prefs.getString(_heartbeatKey), HeartbeatSettings.fromJson,
+          const HeartbeatSettings()),
       logsEnabled: prefs.getBool(_logsEnabledKey) ?? true,
     );
+  }
+
+  /// Разбор вложенной настройки из JSON-строки в prefs; при любой ошибке — дефолт.
+  static T _decodeOr<T>(String? raw, T Function(Map<String, dynamic>) parse, T fallback) {
+    if (raw == null || raw.isEmpty) return fallback;
+    try {
+      return parse(jsonDecode(raw) as Map<String, dynamic>);
+    } catch (_) {
+      return fallback;
+    }
   }
 
   static RoutingSettings _loadRouting(SharedPreferences prefs) {
@@ -499,6 +555,10 @@ class SettingsService {
     await prefs.setBool(_ipv6EnabledKey, settings.ipv6Enabled);
     await prefs.setBool(_autoStartOnBootKey, settings.autoStartOnBoot);
     await prefs.setString(_tlsFingerprintKey, settings.tlsFingerprint.name);
+    await prefs.setString(_fragmentKey, jsonEncode(settings.fragment.toJson()));
+    await prefs.setString(_noiseKey, jsonEncode(settings.noise.toJson()));
+    await prefs.setString(_muxKey, jsonEncode(settings.mux.toJson()));
+    await prefs.setString(_heartbeatKey, jsonEncode(settings.heartbeat.toJson()));
     await prefs.setBool(_logsEnabledKey, settings.logsEnabled);
     // SOCKS credentials go to encrypted storage
     await _secure.writeSocksCredentials(settings.socksUser, settings.socksPassword);

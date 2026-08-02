@@ -3,6 +3,7 @@ import '../../core/interfaces/vpn_engine.dart';
 import '../../core/models/vpn_config.dart';
 import '../../core/models/dns_config.dart';
 import '../../core/models/routing_settings.dart';
+import '../../core/models/xray_tuning.dart';
 import '../../core/constants/xray_defaults.dart';
 import '../../core/models/vpn_log_entry.dart' show LogLevel;
 import '../../core/services/settings_service.dart' show DnsQueryStrategy, TlsFingerprint;
@@ -69,7 +70,8 @@ class XrayConfigBuilder {
         },
       ],
       'outbounds': [
-        _buildOutbound(config, options.tlsFingerprint),
+        _buildOutbound(config, options),
+        if (_dialerApplies(config, options)) _buildDialerOutbound(config, options),
         {'tag': 'direct', 'protocol': 'freedom'},
         {'tag': 'dns-out', 'protocol': 'dns'},
         {'tag': 'block', 'protocol': 'blackhole'},
@@ -283,20 +285,78 @@ class XrayConfigBuilder {
     };
   }
 
-  static Map<String, dynamic> _buildOutbound(VpnConfig config, TlsFingerprint fp) {
-    if (config.protocol == VpnProtocol.hysteria2) {
-      return {
-        'tag': 'proxy',
-        'protocol': 'hysteria',
-        'settings': _buildOutboundSettings(config),
-        'streamSettings': _buildStreamSettings(config, fp),
-      };
+  /// Тег вспомогательного freedom-outbound, через который proxy дозванивается
+  /// до сервера: там живут фрагментация (TCP) и шумы (UDP).
+  static const _dialerTag = 'dialer-out';
+
+  /// Fragment режет TCP-поток — для hysteria2 (QUIC поверх UDP) он неприменим.
+  static bool _fragmentApplies(VpnConfig config, VpnEngineOptions options) =>
+      options.fragment.enabled &&
+      options.fragment.isValid &&
+      config.protocol != VpnProtocol.hysteria2;
+
+  /// Noise пишется только в UDP-плечо (`proxy/freedom`: ветка non-TCP), то есть
+  /// реально работает для Hysteria2 и QUIC-транспорта. Для TCP безвреден.
+  static bool _noiseApplies(VpnEngineOptions options) =>
+      options.noise.enabled && options.noise.isValid;
+
+  static bool _dialerApplies(VpnConfig config, VpnEngineOptions options) =>
+      _fragmentApplies(config, options) || _noiseApplies(options);
+
+  /// Mux бесполезен поверх hysteria2: QUIC мультиплексирует потоки сам.
+  static bool _muxApplies(VpnConfig config, VpnEngineOptions options) =>
+      options.mux.enabled && config.protocol != VpnProtocol.hysteria2;
+
+  static Map<String, dynamic> _buildDialerOutbound(
+      VpnConfig config, VpnEngineOptions options) {
+    final f = options.fragment;
+    final n = options.noise;
+    return {
+      'tag': _dialerTag,
+      'protocol': 'freedom',
+      'settings': {
+        'domainStrategy': 'AsIs',
+        if (_fragmentApplies(config, options))
+          'fragment': {
+            'packets': f.packets.trim(),
+            'length': f.length.trim(),
+            'interval': f.interval.trim(),
+          },
+        if (_noiseApplies(options))
+          'noises': [
+            {
+              'type': n.type.name,
+              'packet': n.packet.trim(),
+              'delay': n.delay.trim(),
+            }
+          ],
+      },
+    };
+  }
+
+  /// XTLS Vision несовместим с TCP-mux: сервер рвёт mux-соединения с TCP-запросами
+  /// (см. proxy/vless/outbound). Оставляем только XUDP-ветку — `concurrency: -1`.
+  static Map<String, dynamic> _buildMux(VpnConfig config, MuxSettings mux) {
+    final vision = config.flow?.contains('xtls-rprx-vision') ?? false;
+    return {
+      'enabled': true,
+      'concurrency': vision ? -1 : mux.concurrency,
+      'xudpConcurrency': mux.xudpConcurrency,
+      'xudpProxyUDP443': mux.xudpProxyUDP443.name,
+    };
+  }
+
+  static Map<String, dynamic> _buildOutbound(VpnConfig config, VpnEngineOptions options) {
+    final stream = _buildStreamSettings(config, options.tlsFingerprint);
+    if (_dialerApplies(config, options)) {
+      stream['sockopt'] = {'dialerProxy': _dialerTag};
     }
     return {
       'tag': 'proxy',
-      'protocol': config.protocol.name,
+      'protocol': config.protocol == VpnProtocol.hysteria2 ? 'hysteria' : config.protocol.name,
       'settings': _buildOutboundSettings(config),
-      'streamSettings': _buildStreamSettings(config, fp),
+      'streamSettings': stream,
+      if (_muxApplies(config, options)) 'mux': _buildMux(config, options.mux),
     };
   }
 

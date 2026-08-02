@@ -66,6 +66,8 @@ class XrayVpnService : VpnService() {
         const val EXTRA_BLOCK_QUIC = "block_quic" // reject UDP/443 inside the TUN via ICMP Port Unreachable
         const val EXTRA_IPV6 = "ipv6_enabled" // add IPv6 address/route to the TUN interface
         const val EXTRA_MTU = "mtu" // TUN MTU size
+        const val EXTRA_HEARTBEAT_ACTION = "heartbeat_action"    // "reconnect" | "urltest"
+        const val EXTRA_HEARTBEAT_THRESHOLD = "heartbeat_threshold" // провалов подряд до действия
 
         // Static state tracker for querying from Dart
         @Volatile private var currentNativeState: String = "disconnected"
@@ -160,6 +162,8 @@ class XrayVpnService : VpnService() {
         // self-adjusts to actual network speed instead of relying on a fixed timer. Hard ceiling:
         // if no probe succeeds within HEARTBEAT_WARMUP_TIMEOUT_MS → something is genuinely broken.
         private const val HEARTBEAT_WARMUP_TIMEOUT_MS = 30_000L
+        // Сколько ждать реакции Flutter на tunnel_dead, прежде чем реконнектить самим.
+        private const val TUNNEL_DEAD_NOTIFY_COOLDOWN_MS = 45_000L
         private const val STATS_INTERVAL_MS = 1_000L
         private const val STATS_INTERVAL_SCREEN_OFF_MS = 10_000L
         private const val STOP_THREAD_TIMEOUT_MS = 5_000L
@@ -253,6 +257,11 @@ class XrayVpnService : VpnService() {
     private var pendingNetworkRunnable: Runnable? = null
     private var heartbeatThread: Thread? = null
     private val heartbeatFailures = AtomicInteger(0)
+    // Поведение при мёртвом туннеле: "reconnect" — переподключить тот же сервер,
+    // "urltest" — отдать решение Flutter (он подберёт живой конфиг).
+    private var heartbeatAction: String = "reconnect"
+    private var heartbeatThreshold: Int = 3
+    private var lastTunnelDeadNotifyAt = 0L
     private val wakeProbeRunning = AtomicBoolean(false)
     private val reconnectAttempts = AtomicInteger(0)
 
@@ -365,9 +374,12 @@ class XrayVpnService : VpnService() {
                 val blockQuic = intent.getBooleanExtra(EXTRA_BLOCK_QUIC, false)
                 val ipv6Enabled = intent.getBooleanExtra(EXTRA_IPV6, false)
                 val mtu = intent.getIntExtra(EXTRA_MTU, 1500).coerceIn(576, 9000)
+                heartbeatAction = intent.getStringExtra(EXTRA_HEARTBEAT_ACTION) ?: "reconnect"
+                heartbeatThreshold = intent.getIntExtra(EXTRA_HEARTBEAT_THRESHOLD, 3).coerceIn(1, 10)
                 // Persist non-sensitive params for CONNECT_QUICK reconnect (no credentials)
                 ConnectionParams(socksPort, excludedPackages, includedPackages,
-                    vpnMode, ssPrefix, proxyOnly, showNotification, killSwitch, allowIcmp, blockQuic, ipv6Enabled, mtu)
+                    vpnMode, ssPrefix, proxyOnly, showNotification, killSwitch, allowIcmp, blockQuic, ipv6Enabled, mtu,
+                    heartbeatAction, heartbeatThreshold)
                     .save(filesDir, ::log)
                 userRequestedDisconnect.set(false)
                 reconnectAttempts.set(0)
@@ -384,7 +396,11 @@ class XrayVpnService : VpnService() {
                 // Load params and set showNotification BEFORE ensureForeground so the
                 // correct notification type (full vs minimal) is shown from the start.
                 val params = ConnectionParams.load(filesDir)
-                if (params != null) showNotification = params.showNotification
+                if (params != null) {
+                    showNotification = params.showNotification
+                    heartbeatAction = params.heartbeatAction
+                    heartbeatThreshold = params.heartbeatThreshold
+                }
                 ensureForeground()
                 if (isRunning.get()) {
                     // startVpn would bail on its CAS anyway — bail here instead so the
@@ -443,7 +459,11 @@ class XrayVpnService : VpnService() {
         // Service restarted by Android after being killed, or started by always-on VPN.
         // Load params and set showNotification BEFORE ensureForeground (same fix as CONNECT_QUICK).
         val params = ConnectionParams.load(filesDir)
-        if (params != null) showNotification = params.showNotification
+        if (params != null) {
+            showNotification = params.showNotification
+            heartbeatAction = params.heartbeatAction
+            heartbeatThreshold = params.heartbeatThreshold
+        }
         ensureForeground()
         // Auto-connect if saved params exist and user didn't explicitly disconnect.
         // The flag file covers process restarts: the static userRequestedDisconnect
@@ -1332,10 +1352,41 @@ class XrayVpnService : VpnService() {
         }
     } catch (_: Exception) { false }
 
+    /// Лимит провалов исчерпан. Возвращает true, если heartbeat-цикл продолжается
+    /// (ложная тревога или ждём, пока Flutter подберёт другой конфиг), false — запущен
+    /// реконнект и поток должен завершиться.
+    private fun handleHeartbeatExhausted(failures: Int, reason: String): Boolean {
+        // Probe rides through the routing balancer and can land on a dead detour while
+        // real traffic flows fine — a false positive. If the TUN saw downstream data
+        // within the last probe interval, keep the session and just reset the counter.
+        if (isTunRxFresh()) {
+            log("warning", "Heartbeat failing but TUN traffic is alive, skipping reconnect")
+            heartbeatFailures.set(0)
+            return true
+        }
+        if (heartbeatAction == "urltest") {
+            val now = System.currentTimeMillis()
+            if (now - lastTunnelDeadNotifyAt >= TUNNEL_DEAD_NOTIFY_COOLDOWN_MS) {
+                lastTunnelDeadNotifyAt = now
+                log("warning", "$reason ($failures), requesting urltest switch")
+                VpnEventStreamHandler.sendTunnelDeadEvent(failures)
+                heartbeatFailures.set(0)
+                return true
+            }
+            // Flutter не отреагировал за cooldown (приложение убито / нет живых
+            // кандидатов) — деградируем в обычный реконнект текущего сервера.
+            log("warning", "urltest: no switch within cooldown, falling back to reconnect")
+        }
+        log("warning", "$reason $failures times, reconnecting")
+        reconnectInternal()
+        return false
+    }
+
     private fun startHeartbeat(isReconnect: Boolean = false) {
         log("info", "startHeartbeat (isReconnect=$isReconnect)")
         heartbeatThread?.interrupt()
         heartbeatFailures.set(0)
+        lastTunnelDeadNotifyAt = 0L
         heartbeatThread = Thread {
             // In reconnect mode: probes run every 15 s but failures are ignored until the
             // first probe succeeds (warmup). This self-adjusts to actual network conditions —
@@ -1473,19 +1524,8 @@ class XrayVpnService : VpnService() {
                     }
                     val failures = heartbeatFailures.incrementAndGet()
                     log("warning", "Heartbeat failed ($failures): ${e.message}")
-                    if (failures >= 3) {
-                        // Probe rides through the routing balancer and can land on a dead
-                        // detour while real traffic flows fine — a false positive. If the
-                        // TUN saw downstream data within the last probe interval, keep the
-                        // session and just reset the counter.
-                        if (isTunRxFresh()) {
-                            log("warning", "Heartbeat failing but TUN traffic is alive, skipping reconnect")
-                            heartbeatFailures.set(0)
-                            continue
-                        }
-                        log("warning", "Heartbeat failed $failures times, reconnecting")
-                        reconnectInternal()
-                        break
+                    if (failures >= heartbeatThreshold) {
+                        if (handleHeartbeatExhausted(failures, "Heartbeat failed")) continue else break
                     }
                     var immediateRetries = 0
                     while (immediateRetries < 2 && !Thread.currentThread().isInterrupted) {
@@ -1501,15 +1541,9 @@ class XrayVpnService : VpnService() {
                             immediateRetries++
                         }
                     }
-                    if (heartbeatFailures.get() >= 3) {
-                        if (isTunRxFresh()) {
-                            log("warning", "Heartbeat failing but TUN traffic is alive, skipping reconnect")
-                            heartbeatFailures.set(0)
-                            continue
-                        }
-                        log("warning", "Heartbeat retries exhausted, reconnecting")
-                        reconnectInternal()
-                        break
+                    if (heartbeatFailures.get() >= heartbeatThreshold) {
+                        val n = heartbeatFailures.get()
+                        if (handleHeartbeatExhausted(n, "Heartbeat retries exhausted")) continue else break
                     }
                 }
             }

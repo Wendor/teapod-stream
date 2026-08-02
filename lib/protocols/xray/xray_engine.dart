@@ -40,6 +40,8 @@ class XrayEngine implements VpnEngine {
       'blockQuic': options.blockQuic,
       'ipv6Enabled': options.ipv6Enabled,
       'mtu': options.mtu,
+      'heartbeatAction': options.heartbeat.action.name,
+      'heartbeatThreshold': options.heartbeat.failureThreshold,
       if (config.ssPrefix != null) 'ssPrefix': config.ssPrefix,
     });
   }

@@ -9,6 +9,7 @@ import '../core/models/vpn_config.dart';
 import '../core/constants/app_constants.dart';
 import '../core/models/vpn_stats.dart';
 import '../core/models/connection_fingerprint.dart';
+import '../core/models/heartbeat_settings.dart';
 import '../core/models/vpn_log_entry.dart';
 import '../core/services/log_service.dart';
 import '../core/services/settings_service.dart';
@@ -76,6 +77,7 @@ class VpnNotifier extends Notifier<VpnState2> {
   Timer? _disconnectTimeout;
   Timer? _statsPoller;
   bool _isPinging = false;
+  bool _urltestRunning = false;
   DateTime? _connectedAt;
 
   /// true — вкладка home на экране; история для графика тянется только тогда.
@@ -241,7 +243,74 @@ class VpnNotifier extends Notifier<VpnState2> {
         break; // Ignore stats from EventChannel - we use poller instead
       case 'statsHistory':
         _handleStatsHistory(event);
+      case 'tunnel_dead':
+        _runUrltestSwitch((event['failures'] as num?)?.toInt() ?? 0);
     }
+  }
+
+  /// Нативный heartbeat исчерпал попытки в режиме urltest: подбираем живой конфиг
+  /// среди кандидатов и переподключаемся на самый быстрый. Если живых нет —
+  /// ничего не делаем, сервис сам реконнектится по своему cooldown.
+  Future<void> _runUrltestSwitch(int failures) async {
+    if (_urltestRunning) return;
+    _urltestRunning = true;
+    final log = ref.read(logServiceProvider.notifier);
+    try {
+      final settings =
+          ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null) ??
+              const AppSettings();
+      if (settings.heartbeat.action != HeartbeatAction.urltest) return;
+
+      final configState =
+          ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
+      if (configState == null) return;
+      final current = _resolveEffectiveConfig(configState);
+      final candidates = _urltestCandidates(configState, settings.heartbeat.source, current);
+      if (candidates.isEmpty) {
+        log.addError('urltest: нет кандидатов для переключения (провалов: $failures)');
+        return;
+      }
+
+      log.addInfo('urltest: туннель не отвечает, проверяю ${candidates.length} конфиг(ов)',
+          source: 'urltest');
+      final probed = await Future.wait(candidates.map((c) async {
+        final ms = await _engine.pingConfig(c);
+        return (config: c, latency: ms);
+      }));
+      final alive = probed.where((r) => r.latency != null).toList()
+        ..sort((a, b) => a.latency!.compareTo(b.latency!));
+      if (alive.isEmpty) {
+        log.addError('urltest: живых конфигов не найдено, остаёмся на текущем');
+        return;
+      }
+
+      final best = alive.first;
+      log.addInfo('urltest: переключение на "${best.config.name}" (${best.latency} мс)',
+          source: 'urltest');
+      await ref.read(configProvider.notifier).setActiveConfig(best.config.id);
+      await disconnect();
+      await connect();
+    } catch (e) {
+      log.addError('urltest: ошибка переключения: $e');
+    } finally {
+      _urltestRunning = false;
+    }
+  }
+
+  /// Кандидаты для urltest: активный конфиг исключается — он только что не прошёл пробу.
+  List<VpnConfig> _urltestCandidates(
+    ConfigState configState,
+    UrltestSource source,
+    VpnConfig? current,
+  ) {
+    final all = configState.configs.where((c) => c.id != current?.id);
+    return switch (source) {
+      UrltestSource.subscription =>
+        all.where((c) => c.subscriptionId == current?.subscriptionId).toList(),
+      UrltestSource.pinned =>
+        all.where((c) => configState.pins.any((p) => p.matches(c))).toList(),
+      UrltestSource.all => all.toList(),
+    };
   }
 
   VpnState _parseState(String? s) => switch (s) {
@@ -440,6 +509,10 @@ class VpnNotifier extends Notifier<VpnState2> {
       ipv6Enabled: settings.ipv6Enabled,
       obsProbeIntervalSec: settings.obsProbeIntervalSec,
       tlsFingerprint: settings.tlsFingerprint,
+      fragment: settings.fragment,
+      noise: settings.noise,
+      mux: settings.mux,
+      heartbeat: settings.heartbeat,
     );
     state = state.copyWith(
       activeSocksPort: actualSocksPort,

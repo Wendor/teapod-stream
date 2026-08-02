@@ -1,7 +1,9 @@
 import '../models/vpn_config.dart';
 import '../models/vpn_log_entry.dart';
 import '../models/dns_config.dart';
+import '../models/heartbeat_settings.dart';
 import '../models/routing_settings.dart';
+import '../models/xray_tuning.dart';
 import '../services/settings_service.dart';
 
 /// blocked — kill switch удерживает TUN-sink после обрыва: трафик заблокирован.
@@ -41,6 +43,10 @@ class VpnEngineOptions {
   final bool ipv6Enabled;
   final int obsProbeIntervalSec;
   final TlsFingerprint tlsFingerprint;
+  final FragmentSettings fragment;
+  final NoiseSettings noise;
+  final MuxSettings mux;
+  final HeartbeatSettings heartbeat;
 
   const VpnEngineOptions({
     required this.socksPort,
@@ -66,5 +72,9 @@ class VpnEngineOptions {
     this.ipv6Enabled = false,
     this.obsProbeIntervalSec = 600,
     this.tlsFingerprint = TlsFingerprint.defaultFp,
+    this.fragment = const FragmentSettings(),
+    this.noise = const NoiseSettings(),
+    this.mux = const MuxSettings(),
+    this.heartbeat = const HeartbeatSettings(),
   });
 }

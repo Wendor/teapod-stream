@@ -33,6 +33,12 @@ String connectionFingerprint(AppSettings s) {
     'excludedPackages': s.excludedPackages.toList()..sort(),
     'killSwitchEnabled': s.killSwitchEnabled,
     'showNotification': s.showNotification,
+    'fragment': s.fragment.toJson(),
+    'noise': s.noise.toJson(),
+    'mux': s.mux.toJson(),
+    // source не влияет на активную сессию — он читается уже после срыва туннеля.
+    'heartbeatAction': s.heartbeat.action.name,
+    'heartbeatThreshold': s.heartbeat.failureThreshold,
   };
   return jsonEncode(map);
 }

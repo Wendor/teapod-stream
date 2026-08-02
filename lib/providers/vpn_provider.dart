@@ -9,6 +9,7 @@ import '../core/models/vpn_config.dart';
 import '../core/constants/app_constants.dart';
 import '../core/models/vpn_stats.dart';
 import '../core/models/connection_fingerprint.dart';
+import '../core/models/heartbeat_settings.dart';
 import '../core/models/vpn_log_entry.dart';
 import '../core/services/log_service.dart';
 import '../core/services/settings_service.dart';
@@ -75,9 +76,12 @@ class VpnNotifier extends Notifier<VpnState2> {
   Timer? _connectTimeout;
   Timer? _disconnectTimeout;
   Timer? _statsPoller;
-  Timer? _subRefreshTimer;
   bool _isPinging = false;
+  bool _urltestRunning = false;
   DateTime? _connectedAt;
+
+  /// true — вкладка home на экране; история для графика тянется только тогда.
+  bool _chartVisible = true;
 
 
   @override
@@ -102,25 +106,21 @@ class VpnNotifier extends Notifier<VpnState2> {
       _connectTimeout?.cancel();
       _disconnectTimeout?.cancel();
       _statsPoller?.cancel();
-      _subRefreshTimer?.cancel();
     });
 
-    // Auto-refresh subscriptions: timer fires hourly, staleness check uses configured interval
-    _subRefreshTimer = Timer.periodic(const Duration(hours: 1), (_) async {
-      final settings = ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
-      if (settings?.subAutoRefresh != true) return;
-      await ref.read(configProvider.notifier)
-          .refreshStaleSubscriptions(intervalHours: settings!.subAutoRefreshHours);
-    });
+    // Авто-обновление подписок: при старте (ниже в microtask) и при каждом
+    // resume (app.dart → refreshStaleSubscriptionsIfDue) — часовой фоновый
+    // таймер убран, staleness-проверка сама решает, пора ли обновлять.
 
     // Sync state on init (for case when VPN is already running from tile/notification)
     Future.microtask(() async {
       // Auto-refresh stale subscriptions on startup
-      final settings = ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
-      if (settings?.subAutoRefresh == true) {
-        await ref.read(configProvider.notifier)
-            .refreshStaleSubscriptions(intervalHours: settings!.subAutoRefreshHours);
-      }
+      await refreshStaleSubscriptionsIfDue();
+
+      // Native persists logsEnabled in its own prefs — resync in case they
+      // diverged (fresh install with restored Flutter prefs, etc.).
+      final s0 = await ref.read(settingsProvider.future);
+      await _engine.setLogsEnabled(s0.logsEnabled);
 
       // Restore log history (previous + current session files) even when
       // disconnected — needed to diagnose failures that ended the last session.
@@ -172,13 +172,35 @@ class VpnNotifier extends Notifier<VpnState2> {
           'downloadSpeed': stats.downloadSpeed,
         }));
 
-        // Also fetch stats history for chart
-        final history = await _engine.getStatsHistory();
-        if (history.isNotEmpty) {
-          _handleStatsHistory({'history': history});
+        // История (300 записей через MethodChannel) нужна только графику
+        if (_chartVisible) {
+          final history = await _engine.getStatsHistory();
+          if (history.isNotEmpty) {
+            _handleStatsHistory({'history': history});
+          }
         }
       } catch (_) {}
     });
+  }
+
+  /// Вызывается из app.dart при смене вкладки: история для графика тянется
+  /// только когда home видим; при возврате — немедленная догрузка.
+  void setChartVisible(bool visible) {
+    if (_chartVisible == visible) return;
+    _chartVisible = visible;
+    if (visible && state.isConnected) {
+      _engine.getStatsHistory().then((history) {
+        if (history.isNotEmpty) _handleStatsHistory({'history': history});
+      }).ignore();
+    }
+  }
+
+  /// Проверка staleness подписок — вызывается при старте и resume.
+  Future<void> refreshStaleSubscriptionsIfDue() async {
+    final settings = ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
+    if (settings?.subAutoRefresh != true) return;
+    await ref.read(configProvider.notifier)
+        .refreshStaleSubscriptions(intervalHours: settings!.subAutoRefreshHours);
   }
 
   void _handleEvent(Map<String, dynamic> event) {
@@ -221,7 +243,74 @@ class VpnNotifier extends Notifier<VpnState2> {
         break; // Ignore stats from EventChannel - we use poller instead
       case 'statsHistory':
         _handleStatsHistory(event);
+      case 'tunnel_dead':
+        _runUrltestSwitch((event['failures'] as num?)?.toInt() ?? 0);
     }
+  }
+
+  /// Нативный heartbeat исчерпал попытки в режиме urltest: подбираем живой конфиг
+  /// среди кандидатов и переподключаемся на самый быстрый. Если живых нет —
+  /// ничего не делаем, сервис сам реконнектится по своему cooldown.
+  Future<void> _runUrltestSwitch(int failures) async {
+    if (_urltestRunning) return;
+    _urltestRunning = true;
+    final log = ref.read(logServiceProvider.notifier);
+    try {
+      final settings =
+          ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null) ??
+              const AppSettings();
+      if (settings.heartbeat.action != HeartbeatAction.urltest) return;
+
+      final configState =
+          ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
+      if (configState == null) return;
+      final current = _resolveEffectiveConfig(configState);
+      final candidates = _urltestCandidates(configState, settings.heartbeat.source, current);
+      if (candidates.isEmpty) {
+        log.addError('urltest: нет кандидатов для переключения (провалов: $failures)');
+        return;
+      }
+
+      log.addInfo('urltest: туннель не отвечает, проверяю ${candidates.length} конфиг(ов)',
+          source: 'urltest');
+      final probed = await Future.wait(candidates.map((c) async {
+        final ms = await _engine.pingConfig(c);
+        return (config: c, latency: ms);
+      }));
+      final alive = probed.where((r) => r.latency != null).toList()
+        ..sort((a, b) => a.latency!.compareTo(b.latency!));
+      if (alive.isEmpty) {
+        log.addError('urltest: живых конфигов не найдено, остаёмся на текущем');
+        return;
+      }
+
+      final best = alive.first;
+      log.addInfo('urltest: переключение на "${best.config.name}" (${best.latency} мс)',
+          source: 'urltest');
+      await ref.read(configProvider.notifier).setActiveConfig(best.config.id);
+      await disconnect();
+      await connect();
+    } catch (e) {
+      log.addError('urltest: ошибка переключения: $e');
+    } finally {
+      _urltestRunning = false;
+    }
+  }
+
+  /// Кандидаты для urltest: активный конфиг исключается — он только что не прошёл пробу.
+  List<VpnConfig> _urltestCandidates(
+    ConfigState configState,
+    UrltestSource source,
+    VpnConfig? current,
+  ) {
+    final all = configState.configs.where((c) => c.id != current?.id);
+    return switch (source) {
+      UrltestSource.subscription =>
+        all.where((c) => c.subscriptionId == current?.subscriptionId).toList(),
+      UrltestSource.pinned =>
+        all.where((c) => configState.pins.any((p) => p.matches(c))).toList(),
+      UrltestSource.all => all.toList(),
+    };
   }
 
   VpnState _parseState(String? s) => switch (s) {
@@ -420,6 +509,10 @@ class VpnNotifier extends Notifier<VpnState2> {
       ipv6Enabled: settings.ipv6Enabled,
       obsProbeIntervalSec: settings.obsProbeIntervalSec,
       tlsFingerprint: settings.tlsFingerprint,
+      fragment: settings.fragment,
+      noise: settings.noise,
+      mux: settings.mux,
+      heartbeat: settings.heartbeat,
     );
     state = state.copyWith(
       activeSocksPort: actualSocksPort,
@@ -472,15 +565,28 @@ class VpnNotifier extends Notifier<VpnState2> {
   }
 
   /// Syncs Flutter state from native when the app resumes from background.
-  /// EventChannel replay on `onListen` handles most cases; this is a fallback.
+  /// Критично: перезапускает _statsPoller после pauseStatsPolling().
+  /// Историческая ошибка: getState возвращает Map, а здесь читали String —
+  /// TypeError глотался catch'ем и весь метод был тихим no-op.
   Future<void> syncNativeState() async {
-    // We now handle timeouts inside _onNativeState, so it's safe to sync everything.
-
     try {
-      const channel = MethodChannel(AppConstants.methodChannel);
-      final nativeState = await channel.invokeMethod<String>('getState');
-      if (nativeState == null) return;
-      _onNativeState(_parseState(nativeState));
+      final native = await _engine.getVpnState();
+      if (native.state == VpnState.connected && native.socksPort > 0) {
+        if (native.connectedAtMs > 0) {
+          _connectedAt ??=
+              DateTime.fromMillisecondsSinceEpoch(native.connectedAtMs);
+        }
+        state = state.copyWith(
+          activeSocksPort: native.socksPort,
+          activeSocksUser: native.socksUser,
+          activeSocksPassword: native.socksPassword,
+        );
+      }
+      // Не знаем, юзерский это connecting или нативный реконнект — не ставим
+      // 45-секундный таймаут, который мог бы форсировать error поверх живого
+      // цикла реконнекта.
+      _onNativeState(native.state,
+          isReconnect: native.state == VpnState.connecting);
     } catch (_) {}
   }
 
@@ -585,6 +691,15 @@ class VpnNotifier extends Notifier<VpnState2> {
     // Single batch update — one storage write, one state update
     await ref.read(configProvider.notifier).batchUpdatePingResults(latencyMap, now);
   }
+
+  /// Останавливает посекундный опрос статистики, когда приложение в фоне —
+  /// при возврате syncNativeState() → _onNativeState(connected) перезапустит его.
+  void pauseStatsPolling() {
+    _statsPoller?.cancel();
+    _statsPoller = null;
+  }
+
+  Future<void> setLogsEnabled(bool enabled) => _engine.setLogsEnabled(enabled);
 
   Future<String?> getLogFilePath() => _engine.getLogFilePath();
 

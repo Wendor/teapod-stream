@@ -19,7 +19,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/settings_shared.dart';
 import '../widgets/reconnect_banner.dart';
-import 'split_tunnel_screen.dart';
+import 'subscription_settings_screen.dart';
 
 // ── Screen ────────────────────────────────────────────────────────
 
@@ -305,7 +305,7 @@ class _LockPainter extends CustomPainter {
 
 // ── Settings body ─────────────────────────────────────────────────
 
-class _SettingsBody extends StatefulWidget {
+class _SettingsBody extends StatelessWidget {
   final AppSettings settings;
   final bool isProfileReadonly;
   final bool hasUpdate;
@@ -323,29 +323,10 @@ class _SettingsBody extends StatefulWidget {
   });
 
   @override
-  State<_SettingsBody> createState() => _SettingsBodyState();
-}
-
-class _SettingsBodyState extends State<_SettingsBody> {
-  late final TextEditingController _subUaCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _subUaCtrl = TextEditingController(text: widget.settings.subUserAgent);
-  }
-
-  @override
-  void dispose() {
-    _subUaCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).extension<TeapodTokens>()!;
-    final s = widget.settings;
-    final locked = widget.isProfileReadonly;
+    final s = settings;
+    final locked = isProfileReadonly;
 
     return Stack(
       children: [
@@ -353,7 +334,7 @@ class _SettingsBodyState extends State<_SettingsBody> {
         padding: EdgeInsets.zero,
         children: [
           // Доступно обновление — тайл наверху, чтобы не искать в конце списка
-          if (widget.hasUpdate)
+          if (hasUpdate)
             Container(
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
               decoration: BoxDecoration(
@@ -363,23 +344,30 @@ class _SettingsBodyState extends State<_SettingsBody> {
               child: const _UpdateTile(),
             ),
 
-          // ── 0x10 APPEARANCE ───────────────────────────────────
-          SetSectionHeader(t: t, addr: '0x10', label: 'appearance'),
+          // ── 0x10 DIAGNOSTICS ──────────────────────────────────
+          SetSectionHeader(t: t, addr: '0x10', label: 'diagnostics'),
+          SetRowChev(
+            t: t,
+            title: 'Логи',
+            hint: 'журнал приложения и xray',
+            last: true,
+            onTap: () => Navigator.push(context, MaterialPageRoute(
+                builder: (_) => const LogsScreen(breadcrumbParent: 'settings'))),
+          ),
+
+          // ── 0x20 APPEARANCE ───────────────────────────────────
+          SetSectionHeader(t: t, addr: '0x20', label: 'appearance'),
           _AppearanceRows(t: t),
 
-          // ── 0x15 PROFILES ─────────────────────────────────────
-          SetSectionHeader(t: t, addr: '0x15', label: 'profiles'),
-          _ProfilesRow(t: t),
-
-          // ── 0x20 CONNECTION ───────────────────────────────────
-          SetSectionHeader(t: t, addr: '0x20', label: 'connection'),
+          // ── 0x30 CONNECTION ───────────────────────────────────
+          SetSectionHeader(t: t, addr: '0x30', label: 'connection'),
           SetRowToggle(
             t: t,
             title: 'Автоподключение',
             hint: 'Подключаться при запуске приложения',
             value: s.autoConnect,
             locked: locked,
-            onChange: (v) => widget.onUpdate(s.copyWith(autoConnect: v)),
+            onChange: (v) => onUpdate(s.copyWith(autoConnect: v)),
           ),
           SetRowToggle(
             t: t,
@@ -387,7 +375,7 @@ class _SettingsBodyState extends State<_SettingsBody> {
             hint: 'Подключаться автоматически при перезагрузке устройства',
             value: s.autoStartOnBoot,
             locked: locked,
-            onChange: (v) => widget.onUpdate(s.copyWith(autoStartOnBoot: v)),
+            onChange: (v) => onUpdate(s.copyWith(autoStartOnBoot: v)),
           ),
           SetRowToggle(
             t: t,
@@ -395,74 +383,22 @@ class _SettingsBodyState extends State<_SettingsBody> {
             hint: 'Скорость и кнопка отключения в шторке',
             value: s.showNotification,
             locked: locked,
-            onChange: (v) => widget.onUpdate(s.copyWith(showNotification: v)),
+            onChange: (v) => onUpdate(s.copyWith(showNotification: v)),
           ),
-          SetRowToggle(
+          SetRowChev(
             t: t,
-            title: 'Kill Switch',
-            hint: 'Блокировать трафик при обрыве VPN',
-            value: s.killSwitchEnabled,
-            locked: locked,
-            onChange: (v) => widget.onUpdate(s.copyWith(killSwitchEnabled: v)),
-          ),
-          SetRowToggle(
-            t: t,
-            title: 'HWID',
-            hint: 'Отправлять ID устройства для привязки подписки',
-            value: s.hwidEnabled,
-            locked: locked,
-            onChange: (v) => widget.onUpdate(s.copyWith(hwidEnabled: v)),
-          ),
-          SetRowToggle(
-            t: t,
-            title: 'Автообновление подписок',
-            hint: 'Обновлять подписки по расписанию',
-            value: s.subAutoRefresh,
-            locked: locked,
-            onChange: (v) => widget.onUpdate(s.copyWith(subAutoRefresh: v)),
-          ),
-          if (s.subAutoRefresh)
-            SetInlineField(
-              t: t,
-              label: 'Интервал',
-              child: SetSegSquare(
-                t: t,
-                value: s.subAutoRefreshHours.toString(),
-                opts: const [('1', '1ч'), ('3', '3ч'), ('6', '6ч'), ('12', '12ч'), ('24', '24ч')],
-                locked: locked,
-                onChanged: (v) => widget.onUpdate(s.copyWith(subAutoRefreshHours: int.parse(v))),
-              ),
-            ),
-          SetInlineField(
-            t: t,
-            label: 'User-Agent',
-            child: SizedBox(
-              width: 200,
-              child: TextField(
-                controller: _subUaCtrl,
-                enabled: !locked,
-                keyboardType: TextInputType.text,
-                onChanged: (v) => widget.onUpdate(s.copyWith(subUserAgent: v)),
-                onEditingComplete: () => FocusScope.of(context).unfocus(),
-                style: AppTheme.mono(size: 13, color: t.text),
-                decoration: InputDecoration(
-                  hintText: 'по умолчанию',
-                  hintStyle: AppTheme.mono(size: 12, color: t.textMuted),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                  isDense: true,
-                  enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: t.line), borderRadius: BorderRadius.zero),
-                  focusedBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: t.accent), borderRadius: BorderRadius.zero),
-                  disabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: t.lineSoft), borderRadius: BorderRadius.zero),
-                ),
-              ),
-            ),
+            title: 'Подписки',
+            hint: s.subAutoRefresh
+                ? 'автообновление · ${s.subAutoRefreshHours}ч'
+                : 'автообновление выкл',
+            last: true,
+            onTap: () => Navigator.push(context, MaterialPageRoute(
+                builder: (_) =>
+                    const SubscriptionSettingsScreen(breadcrumbParent: 'settings'))),
           ),
 
-          // ── 0x30 NETWORK ──────────────────────────────────────
-          SetSectionHeader(t: t, addr: '0x30', label: 'network'),
+          // ── 0x40 NETWORK ──────────────────────────────────────
+          SetSectionHeader(t: t, addr: '0x40', label: 'network'),
           SetRowChev(
             t: t,
             title: 'Сеть',
@@ -480,25 +416,26 @@ class _SettingsBodyState extends State<_SettingsBody> {
                 context, MaterialPageRoute(builder: (_) => const DnsSettingsScreen())),
           ),
 
-          // ── 0x40 ROUTING ──────────────────────────────────────
-          SetSectionHeader(t: t, addr: '0x40', label: 'routing'),
-          SetRowChev(
+          // ── 0x50 SYSTEM ───────────────────────────────────────
+          SetSectionHeader(t: t, addr: '0x50', label: 'system'),
+          _ProfilesRow(t: t),
+          SetInlineField(
             t: t,
-            title: 'Сплит-туннелирование',
-            hint: !s.splitTunnelingEnabled
-                ? 'выкл'
-                : s.vpnMode == VpnMode.onlySelected
-                    ? '${s.includedPackages.length} прил · ТОЛЬКО'
-                    : '${s.excludedPackages.length} прил · КРОМЕ',
-            last: true,
-            onTap: () => Navigator.push(
-                context, MaterialPageRoute(builder: (_) => const SplitTunnelScreen())),
+            label: 'Канал обновлений',
+            child: const _UpdateChannelSegment(),
           ),
+          // Update tile (complex) — при доступном обновлении показан наверху
+          if (!hasUpdate)
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.line))),
+              child: const _UpdateTile(),
+            ),
 
-          // ── 0x50 ABOUT ────────────────────────────────────────
-          SetSectionHeader(t: t, addr: '0x50', label: 'about'),
-          _KVRow(t: t, k: 'version',    v: widget.version.isEmpty ? '...' : widget.version),
-          _KVRow(t: t, k: 'xray.core',  v: widget.xrayVersion.isEmpty ? '...' : widget.xrayVersion),
+          // ── 0x60 ABOUT ────────────────────────────────────────
+          SetSectionHeader(t: t, addr: '0x60', label: 'about'),
+          _KVRow(t: t, k: 'version',    v: version.isEmpty ? '...' : version),
+          _KVRow(t: t, k: 'xray.core',  v: xrayVersion.isEmpty ? '...' : xrayVersion),
           _KVRowTap(
             t: t,
             k: 'source',
@@ -508,27 +445,6 @@ class _SettingsBodyState extends State<_SettingsBody> {
               if (await canLaunchUrl(uri)) launchUrl(uri, mode: LaunchMode.externalApplication);
             },
           ),
-          SetRowChev(
-            t: t,
-            title: 'Логи',
-            hint: 'журнал приложения и xray',
-            locked: false,
-            onTap: () => Navigator.push(context, MaterialPageRoute(
-                builder: (_) => const LogsScreen(breadcrumbParent: 'settings'))),
-          ),
-          // Update channel
-          SetInlineField(
-            t: t,
-            label: 'Канал обновлений',
-            child: const _UpdateChannelSegment(),
-          ),
-          // Update tile (complex) — при доступном обновлении показан наверху
-          if (!widget.hasUpdate)
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
-              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.line))),
-              child: const _UpdateTile(),
-            ),
           const SizedBox(height: 32),
         ],
       ),

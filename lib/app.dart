@@ -120,6 +120,12 @@ class _AppShellState extends ConsumerState<_AppShell>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       ref.read(vpnProvider.notifier).syncNativeState();
+      // Часовой фоновый таймер убран — staleness подписок проверяется здесь
+      ref.read(vpnProvider.notifier).refreshStaleSubscriptionsIfDue();
+    } else if (state == AppLifecycleState.paused) {
+      // Не гонять MethodChannel-опрос статистики каждую секунду в фоне —
+      // syncNativeState() перезапустит его при возврате.
+      ref.read(vpnProvider.notifier).pauseStatsPolling();
     }
   }
 
@@ -190,6 +196,10 @@ class _AppShellState extends ConsumerState<_AppShell>
     ));
 
     final currentIndex = ref.watch(tabIndexProvider);
+    // История для графика тянется только на видимой вкладке home
+    ref.listen(tabIndexProvider, (_, next) {
+      ref.read(vpnProvider.notifier).setChartVisible(next == 0);
+    });
     return Scaffold(
       body: IndexedStack(index: currentIndex, children: _pages),
       bottomNavigationBar: _ConsoleTabBar(

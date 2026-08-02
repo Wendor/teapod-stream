@@ -77,6 +77,8 @@ class MainActivity : FlutterActivity() {
                         val allowIcmp = call.argument<Boolean>("allowIcmp") ?: true
                         val blockQuic = call.argument<Boolean>("blockQuic") ?: false
                         val ipv6Enabled = call.argument<Boolean>("ipv6Enabled") ?: false
+                        val heartbeatAction = call.argument<String>("heartbeatAction") ?: "reconnect"
+                        val heartbeatThreshold = call.argument<Int>("heartbeatThreshold") ?: 3
 
                         if (proxyOnly) {
                             // Proxy-only: no TUN tunnel, no VPN permission needed
@@ -85,7 +87,8 @@ class MainActivity : FlutterActivity() {
                                 excludedPackages, includedPackages, vpnMode,
                                 ssPrefix, proxyOnly = true, showNotification = showNotification,
                                 killSwitch = killSwitch, allowIcmp = allowIcmp,
-                                blockQuic = blockQuic, ipv6Enabled = ipv6Enabled
+                                blockQuic = blockQuic, ipv6Enabled = ipv6Enabled,
+                                heartbeatAction = heartbeatAction, heartbeatThreshold = heartbeatThreshold
                             )
                             result.success(null)
                         } else {
@@ -95,7 +98,8 @@ class MainActivity : FlutterActivity() {
                                     excludedPackages, includedPackages, vpnMode,
                                     ssPrefix, proxyOnly = false, showNotification = showNotification,
                                     killSwitch = killSwitch, allowIcmp = allowIcmp,
-                                    blockQuic = blockQuic, ipv6Enabled = ipv6Enabled
+                                    blockQuic = blockQuic, ipv6Enabled = ipv6Enabled,
+                                    heartbeatAction = heartbeatAction, heartbeatThreshold = heartbeatThreshold
                                 )
                                 result.success(null)
                             }
@@ -208,9 +212,18 @@ class MainActivity : FlutterActivity() {
                         result.success(teapodcore.Teapodcore.getTunDiagnostics())
                     }
 
+                    "setLogsEnabled" -> {
+                        val enabled = call.argument<Boolean>("enabled") ?: true
+                        getSharedPreferences(XrayVpnService.PREFS_NAME, MODE_PRIVATE)
+                            .edit().putBoolean(XrayVpnService.PREF_LOGS_ENABLED, enabled).apply()
+                        XrayVpnService.logsEnabled = enabled
+                        result.success(null)
+                    }
+
                     "getLogs" -> {
                         Thread {
                             val lines = synchronized(XrayVpnService.LOG_FILE_LOCK) {
+                                XrayVpnService.flushLogBuffer(filesDir)
                                 listOf(XrayVpnService.LOG_PREV_FILE_NAME, XrayVpnService.LOG_FILE_NAME)
                                     .map { java.io.File(filesDir, it) }
                                     .filter { it.exists() }
@@ -226,6 +239,7 @@ class MainActivity : FlutterActivity() {
                         Thread {
                             try {
                                 synchronized(XrayVpnService.LOG_FILE_LOCK) {
+                                    XrayVpnService.flushLogBuffer(filesDir)
                                     java.io.File(filesDir, XrayVpnService.LOG_FILE_NAME).writeText("")
                                     java.io.File(filesDir, XrayVpnService.LOG_PREV_FILE_NAME).delete()
                                 }
@@ -351,6 +365,8 @@ class MainActivity : FlutterActivity() {
         allowIcmp: Boolean = false,
         blockQuic: Boolean = false,
         ipv6Enabled: Boolean = false,
+        heartbeatAction: String = "reconnect",
+        heartbeatThreshold: Int = 3,
     ) {
         requestBatteryOptimizationExemption()
         val intent = Intent(this, XrayVpnService::class.java).apply {
@@ -369,6 +385,8 @@ class MainActivity : FlutterActivity() {
             putExtra(XrayVpnService.EXTRA_ALLOW_ICMP, allowIcmp)
             putExtra(XrayVpnService.EXTRA_BLOCK_QUIC, blockQuic)
             putExtra(XrayVpnService.EXTRA_IPV6, ipv6Enabled)
+            putExtra(XrayVpnService.EXTRA_HEARTBEAT_ACTION, heartbeatAction)
+            putExtra(XrayVpnService.EXTRA_HEARTBEAT_THRESHOLD, heartbeatThreshold)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent)

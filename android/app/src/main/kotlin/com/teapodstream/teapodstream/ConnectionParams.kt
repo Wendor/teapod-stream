@@ -15,6 +15,10 @@ internal data class ConnectionParams(
     val blockQuic: Boolean,
     val ipv6Enabled: Boolean = false,
     val mtu: Int = 1500,
+    /// "reconnect" — переподключиться к тому же серверу, "urltest" — попросить
+    /// Flutter подобрать живой конфиг (событие tunnel_dead).
+    val heartbeatAction: String = "reconnect",
+    val heartbeatThreshold: Int = 3,
 ) {
     fun save(dir: File, log: (String, String) -> Unit) {
         try {
@@ -31,6 +35,8 @@ internal data class ConnectionParams(
                 put("blockQuic", blockQuic)
                 put("ipv6Enabled", ipv6Enabled)
                 put("mtu", mtu)
+                put("heartbeatAction", heartbeatAction)
+                put("heartbeatThreshold", heartbeatThreshold)
             }
             File(dir, "last_connection_meta.json").writeText(json.toString())
         } catch (e: Exception) {
@@ -58,6 +64,8 @@ internal data class ConnectionParams(
                 blockQuic = json.optBoolean("blockQuic", false),
                 ipv6Enabled = json.optBoolean("ipv6Enabled", false),
                 mtu = json.optInt("mtu", 1500).coerceIn(576, 9000),
+                heartbeatAction = json.optString("heartbeatAction", "reconnect"),
+                heartbeatThreshold = json.optInt("heartbeatThreshold", 3).coerceIn(1, 10),
             )
         } catch (_: Exception) {
             null

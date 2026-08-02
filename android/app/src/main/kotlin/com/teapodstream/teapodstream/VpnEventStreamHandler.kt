@@ -113,24 +113,13 @@ object VpnEventStreamHandler : EventChannel.StreamHandler {
         sendEvent(mapOf("type" to "log", "level" to level, "message" to message))
     }
 
-    fun sendStatsEvent(
-        upload: Long,
-        download: Long,
-        uploadSpeed: Long,
-        downloadSpeed: Long,
-    ) {
-        sendEvent(
-            mapOf(
-                "type" to "stats",
-                "upload" to upload,
-                "download" to download,
-                "uploadSpeed" to uploadSpeed,
-                "downloadSpeed" to downloadSpeed,
-            )
-        )
-    }
-
     fun sendDeeplinkEvent(uri: String) {
         sendEvent(mapOf("type" to "deeplink", "uri" to uri))
+    }
+
+    /// Туннель не отвечает, а режим heartbeat — urltest: Flutter должен подобрать
+    /// живой конфиг и переподключиться. Если он молчит, сервис сам реконнектится.
+    fun sendTunnelDeadEvent(failures: Int) {
+        sendEvent(mapOf("type" to "tunnel_dead", "failures" to failures))
     }
 }

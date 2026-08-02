@@ -40,6 +40,8 @@ class XrayEngine implements VpnEngine {
       'blockQuic': options.blockQuic,
       'ipv6Enabled': options.ipv6Enabled,
       'mtu': options.mtu,
+      'heartbeatAction': options.heartbeat.action.name,
+      'heartbeatThreshold': options.heartbeat.failureThreshold,
       if (config.ssPrefix != null) 'ssPrefix': config.ssPrefix,
     });
   }
@@ -166,6 +168,13 @@ class XrayEngine implements VpnEngine {
     } catch (_) {}
   }
 
+  /// Toggle native logging (persisted in native prefs; off = warning/error only).
+  Future<void> setLogsEnabled(bool enabled) async {
+    try {
+      await _channel.invokeMethod<void>('setLogsEnabled', {'enabled': enabled});
+    } catch (_) {}
+  }
+
   /// Get current stats (for background polling).
   Future<({int upload, int download, int uploadSpeed, int downloadSpeed})>
       getStats() async {
@@ -203,10 +212,12 @@ class XrayEngine implements VpnEngine {
 
   VpnState _parseState(String s) => switch (s) {
         'connecting' => VpnState.connecting,
+        'reconnecting' => VpnState.connecting,
         'connected' => VpnState.connected,
         'disconnecting' => VpnState.disconnecting,
         'disconnected' => VpnState.disconnected,
         'error' => VpnState.error,
+        'blocked' => VpnState.blocked,
         _ => VpnState.disconnected,
       };
 }

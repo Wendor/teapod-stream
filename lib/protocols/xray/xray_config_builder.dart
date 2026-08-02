@@ -3,7 +3,9 @@ import '../../core/interfaces/vpn_engine.dart';
 import '../../core/models/vpn_config.dart';
 import '../../core/models/dns_config.dart';
 import '../../core/models/routing_settings.dart';
+import '../../core/models/xray_tuning.dart';
 import '../../core/constants/xray_defaults.dart';
+import '../../core/models/vpn_log_entry.dart' show LogLevel;
 import '../../core/services/settings_service.dart' show DnsQueryStrategy, TlsFingerprint;
 
 class XrayConfigBuilder {
@@ -42,7 +44,7 @@ class XrayConfigBuilder {
     final routeOnly = options.sniffingEnabled;
 
     return {
-      'log': {'loglevel': options.logLevel.name},
+      'log': _logBlock(options),
       'dns': dnsBlock,
       'inbounds': [
         {
@@ -68,7 +70,8 @@ class XrayConfigBuilder {
         },
       ],
       'outbounds': [
-        _buildOutbound(config, options.tlsFingerprint),
+        _buildOutbound(config, options),
+        if (_dialerApplies(config, options)) _buildDialerOutbound(config, options),
         {'tag': 'direct', 'protocol': 'freedom'},
         {'tag': 'dns-out', 'protocol': 'dns'},
         {'tag': 'block', 'protocol': 'blackhole'},
@@ -141,6 +144,15 @@ class XrayConfigBuilder {
       },
     };
   }
+
+  /// При logLevel warning/error access-log отключается на стороне xray —
+  /// иначе Go-слой формирует строку на каждое соединение (JNI → файл лога).
+  static Map<String, dynamic> _logBlock(VpnEngineOptions options) => {
+        'loglevel': options.logLevel.name,
+        if (options.logLevel == LogLevel.warning ||
+            options.logLevel == LogLevel.error)
+          'access': 'none',
+      };
 
   static List<Map<String, dynamic>> _buildGeoRules(RoutingSettings routing) {
     if (!routing.isActive) return [];
@@ -273,20 +285,78 @@ class XrayConfigBuilder {
     };
   }
 
-  static Map<String, dynamic> _buildOutbound(VpnConfig config, TlsFingerprint fp) {
-    if (config.protocol == VpnProtocol.hysteria2) {
-      return {
-        'tag': 'proxy',
-        'protocol': 'hysteria',
-        'settings': _buildOutboundSettings(config),
-        'streamSettings': _buildStreamSettings(config, fp),
-      };
+  /// Тег вспомогательного freedom-outbound, через который proxy дозванивается
+  /// до сервера: там живут фрагментация (TCP) и шумы (UDP).
+  static const _dialerTag = 'dialer-out';
+
+  /// Fragment режет TCP-поток — для hysteria2 (QUIC поверх UDP) он неприменим.
+  static bool _fragmentApplies(VpnConfig config, VpnEngineOptions options) =>
+      options.fragment.enabled &&
+      options.fragment.isValid &&
+      config.protocol != VpnProtocol.hysteria2;
+
+  /// Noise пишется только в UDP-плечо (`proxy/freedom`: ветка non-TCP), то есть
+  /// реально работает для Hysteria2 и QUIC-транспорта. Для TCP безвреден.
+  static bool _noiseApplies(VpnEngineOptions options) =>
+      options.noise.enabled && options.noise.isValid;
+
+  static bool _dialerApplies(VpnConfig config, VpnEngineOptions options) =>
+      _fragmentApplies(config, options) || _noiseApplies(options);
+
+  /// Mux бесполезен поверх hysteria2: QUIC мультиплексирует потоки сам.
+  static bool _muxApplies(VpnConfig config, VpnEngineOptions options) =>
+      options.mux.enabled && config.protocol != VpnProtocol.hysteria2;
+
+  static Map<String, dynamic> _buildDialerOutbound(
+      VpnConfig config, VpnEngineOptions options) {
+    final f = options.fragment;
+    final n = options.noise;
+    return {
+      'tag': _dialerTag,
+      'protocol': 'freedom',
+      'settings': {
+        'domainStrategy': 'AsIs',
+        if (_fragmentApplies(config, options))
+          'fragment': {
+            'packets': f.packets.trim(),
+            'length': f.length.trim(),
+            'interval': f.interval.trim(),
+          },
+        if (_noiseApplies(options))
+          'noises': [
+            {
+              'type': n.type.name,
+              'packet': n.packet.trim(),
+              'delay': n.delay.trim(),
+            }
+          ],
+      },
+    };
+  }
+
+  /// XTLS Vision несовместим с TCP-mux: сервер рвёт mux-соединения с TCP-запросами
+  /// (см. proxy/vless/outbound). Оставляем только XUDP-ветку — `concurrency: -1`.
+  static Map<String, dynamic> _buildMux(VpnConfig config, MuxSettings mux) {
+    final vision = config.flow?.contains('xtls-rprx-vision') ?? false;
+    return {
+      'enabled': true,
+      'concurrency': vision ? -1 : mux.concurrency,
+      'xudpConcurrency': mux.xudpConcurrency,
+      'xudpProxyUDP443': mux.xudpProxyUDP443.name,
+    };
+  }
+
+  static Map<String, dynamic> _buildOutbound(VpnConfig config, VpnEngineOptions options) {
+    final stream = _buildStreamSettings(config, options.tlsFingerprint);
+    if (_dialerApplies(config, options)) {
+      stream['sockopt'] = {'dialerProxy': _dialerTag};
     }
     return {
       'tag': 'proxy',
-      'protocol': config.protocol.name,
+      'protocol': config.protocol == VpnProtocol.hysteria2 ? 'hysteria' : config.protocol.name,
       'settings': _buildOutboundSettings(config),
-      'streamSettings': _buildStreamSettings(config, fp),
+      'streamSettings': stream,
+      if (_muxApplies(config, options)) 'mux': _buildMux(config, options.mux),
     };
   }
 
@@ -378,7 +448,9 @@ class XrayConfigBuilder {
         'network': 'hysteria',
         'security': 'tls',
         'tlsSettings': {
-          'serverName': config.sni ?? '',
+          // hysteria-dialer в xray не вызывает WithDestination: при пустом serverName
+          // SNI берётся из URL auth-запроса и становится литералом "hysteria".
+          'serverName': (config.sni?.isNotEmpty ?? false) ? config.sni : config.address,
           'allowInsecure': config.allowInsecure,
           if (config.pinSHA256 != null && config.pinSHA256!.isNotEmpty)
             'pinnedPeerCertificateChainSha256': _formatPinSHA256(config.pinSHA256),
@@ -414,7 +486,7 @@ class XrayConfigBuilder {
       if (config.security == VpnSecurity.tls)
         'tlsSettings': {
           'serverName': config.sni ?? '',
-          'allowInsecure': false,
+          'allowInsecure': config.allowInsecure,
           if (fingerprint != null && fingerprint.isNotEmpty)
             'fingerprint': fingerprint,
           if (config.alpn != null && config.alpn!.isNotEmpty)
@@ -518,7 +590,7 @@ class XrayConfigBuilder {
       // routing configured for their outbound topology. Overriding it breaks dns-module
       // routing (no 'proxy' outbound exists in these configs) and causes DNS leaks.
       // User's custom DNS server and adblock settings do not apply to managed configs.
-      cfg['log'] = {'loglevel': options.logLevel.name};
+      cfg['log'] = _logBlock(options);
 
       _clampObservatoryInterval(cfg, options.obsProbeIntervalSec);
       _neutralizeDirectFallback(cfg);

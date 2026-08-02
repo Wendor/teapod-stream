@@ -4,15 +4,24 @@ import '../../core/models/routing_settings.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/vpn_provider.dart';
 import '../../providers/geo_provider.dart';
-import '../../core/services/settings_service.dart' show GeoPresets;
+import '../../core/services/settings_service.dart' show AppSettings, GeoPresets, VpnMode;
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/hero_panel.dart';
 import '../widgets/reconnect_banner.dart';
+import '../widgets/settings_shared.dart' show SetRowChev;
+import 'split_tunnel_screen.dart';
 
 String _formatDomainLabel(String zone) {
   if (zone == 'xn--p1ai') return '.рф';
   return zone.split('.').length > 2 ? zone : '.$zone';
+}
+
+String _splitHint(AppSettings s) {
+  if (!s.splitTunnelingEnabled) return 'выкл · все приложения через VPN';
+  return s.vpnMode == VpnMode.onlySelected
+      ? '${s.includedPackages.length} прил · ТОЛЬКО'
+      : '${s.excludedPackages.length} прил · КРОМЕ';
 }
 
 class RoutingScreen extends ConsumerWidget {
@@ -43,11 +52,16 @@ class RoutingScreen extends ConsumerWidget {
             geoipUrl: settings.geoipUrl,
             geositeUrl: settings.geositeUrl,
             sniffingEnabled: settings.sniffingEnabled,
+            splitTunnelHint: _splitHint(settings),
+            killSwitchEnabled: settings.killSwitchEnabled,
             onUpdate: (r) {
               ref.read(settingsProvider.notifier).save(settings.copyWith(routing: r));
             },
             onUpdateSniffing: (v) {
               ref.read(settingsProvider.notifier).save(settings.copyWith(sniffingEnabled: v));
+            },
+            onUpdateKillSwitch: (v) {
+              ref.read(settingsProvider.notifier).save(settings.copyWith(killSwitchEnabled: v));
             },
             onUpdateGeo: (ip, site) => ref
                 .read(settingsProvider.notifier)
@@ -68,8 +82,11 @@ class _RoutingBody extends StatelessWidget {
   final String geoipUrl;
   final String geositeUrl;
   final bool sniffingEnabled;
+  final String splitTunnelHint;
+  final bool killSwitchEnabled;
   final void Function(RoutingSettings) onUpdate;
   final void Function(bool) onUpdateSniffing;
+  final void Function(bool) onUpdateKillSwitch;
   final void Function(String geoipUrl, String geositeUrl) onUpdateGeo;
 
   const _RoutingBody({
@@ -79,8 +96,11 @@ class _RoutingBody extends StatelessWidget {
     required this.geoipUrl,
     required this.geositeUrl,
     required this.sniffingEnabled,
+    required this.splitTunnelHint,
+    required this.killSwitchEnabled,
     required this.onUpdate,
     required this.onUpdateSniffing,
+    required this.onUpdateKillSwitch,
     required this.onUpdateGeo,
   });
 
@@ -178,13 +198,24 @@ class _RoutingBody extends StatelessWidget {
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
-                // 0x10 MODE
-                _SectionHeader(t: t, addr: '0x10', label: 'mode'),
+                // 0x10 APPS
+                _SectionHeader(t: t, addr: '0x10', label: 'apps'),
+                SetRowChev(
+                  t: t,
+                  title: 'Сплит-туннелирование',
+                  hint: splitTunnelHint,
+                  last: true,
+                  onTap: () => Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const SplitTunnelScreen())),
+                ),
+
+                // 0x20 MODE
+                _SectionHeader(t: t, addr: '0x20', label: 'mode'),
                 _ModeSelector(t: t, routing: routing, locked: false, onUpdate: onUpdate),
 
                 if (routing.isActive) ...[
-                  // 0x20 BYPASS
-                  _SectionHeader(t: t, addr: '0x20', label: 'bypass'),
+                  // 0x30 BYPASS
+                  _SectionHeader(t: t, addr: '0x30', label: 'bypass'),
                   // LAN
                   _RowToggle(
                     t: t,
@@ -236,8 +267,8 @@ class _RoutingBody extends StatelessWidget {
                     addLabel: '+ суффикс',
                   ),
 
-                  // 0x30 GEOSITE
-                  _SectionHeader(t: t, addr: '0x30', label: 'geosite.sets'),
+                  // 0x40 GEOSITE
+                  _SectionHeader(t: t, addr: '0x40', label: 'geosite.sets'),
                   _ToggleWithChips(
                     t: t,
                     subLabel: 'geosite',
@@ -255,7 +286,7 @@ class _RoutingBody extends StatelessWidget {
                   ),
 
                   // 0x35 SITES
-                  _SectionHeader(t: t, addr: '0x35', label: 'sites'),
+                  _SectionHeader(t: t, addr: '0x45', label: 'sites'),
                   _ToggleWithChips(
                     t: t,
                     subLabel: 'sites',
@@ -273,8 +304,8 @@ class _RoutingBody extends StatelessWidget {
                   ),
                 ],
 
-                // 0x40 EXTRAS
-                _SectionHeader(t: t, addr: '0x40', label: 'extras'),
+                // 0x50 EXTRAS
+                _SectionHeader(t: t, addr: '0x50', label: 'extras'),
                 _RowToggle(
                   t: t,
                   title: 'Блокировка рекламы',
@@ -289,12 +320,20 @@ class _RoutingBody extends StatelessWidget {
                   hint: 'Яндекс, VK, Сбер, Ozon, Авито и др. → выбранный outbound',
                   value: routing.ruServicesEnabled,
                   locked: false,
-                  last: true,
                   onChange: (v) => onUpdate(routing.copyWith(ruServicesEnabled: v)),
                 ),
+                _RowToggle(
+                  t: t,
+                  title: 'Kill Switch',
+                  hint: 'Блокировать трафик при обрыве VPN',
+                  value: killSwitchEnabled,
+                  locked: false,
+                  last: true,
+                  onChange: onUpdateKillSwitch,
+                ),
 
-                // 0x50 GEO.DATA
-                _SectionHeader(t: t, addr: '0x50', label: 'geo.data'),
+                // 0x60 GEO.DATA
+                _SectionHeader(t: t, addr: '0x60', label: 'geo.data'),
                 GestureDetector(
                   onTap: () => showModalBottomSheet<void>(
                     context: context,

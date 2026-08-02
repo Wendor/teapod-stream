@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/models/heartbeat_settings.dart';
+import '../../core/models/xray_tuning.dart';
 import '../../core/services/settings_service.dart';
 import '../../providers/profile_provider.dart';
 import '../../providers/settings_provider.dart';
@@ -24,6 +26,14 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
   TextEditingController? _socksPasswordCtrl;
   TextEditingController? _mtuCtrl;
   TextEditingController? _obsCtrl;
+  TextEditingController? _fragPacketsCtrl;
+  TextEditingController? _fragLengthCtrl;
+  TextEditingController? _fragIntervalCtrl;
+  TextEditingController? _noisePacketCtrl;
+  TextEditingController? _noiseDelayCtrl;
+  TextEditingController? _muxConcCtrl;
+  TextEditingController? _muxXudpCtrl;
+  TextEditingController? _hbThresholdCtrl;
 
   void _ensureControllers(AppSettings s) {
     _socksPortCtrl ??= TextEditingController(text: s.socksPort.toString());
@@ -31,6 +41,15 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
     _socksPasswordCtrl ??= TextEditingController(text: s.socksPassword);
     _mtuCtrl ??= TextEditingController(text: s.mtu.toString());
     _obsCtrl ??= TextEditingController(text: s.obsProbeIntervalSec.toString());
+    _fragPacketsCtrl ??= TextEditingController(text: s.fragment.packets);
+    _fragLengthCtrl ??= TextEditingController(text: s.fragment.length);
+    _fragIntervalCtrl ??= TextEditingController(text: s.fragment.interval);
+    _noisePacketCtrl ??= TextEditingController(text: s.noise.packet);
+    _noiseDelayCtrl ??= TextEditingController(text: s.noise.delay);
+    _muxConcCtrl ??= TextEditingController(text: s.mux.concurrency.toString());
+    _muxXudpCtrl ??= TextEditingController(text: s.mux.xudpConcurrency.toString());
+    _hbThresholdCtrl ??=
+        TextEditingController(text: s.heartbeat.failureThreshold.toString());
   }
 
   @override
@@ -40,6 +59,14 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
     _socksPasswordCtrl?.dispose();
     _mtuCtrl?.dispose();
     _obsCtrl?.dispose();
+    _fragPacketsCtrl?.dispose();
+    _fragLengthCtrl?.dispose();
+    _fragIntervalCtrl?.dispose();
+    _noisePacketCtrl?.dispose();
+    _noiseDelayCtrl?.dispose();
+    _muxConcCtrl?.dispose();
+    _muxXudpCtrl?.dispose();
+    _hbThresholdCtrl?.dispose();
     super.dispose();
   }
 
@@ -47,6 +74,63 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
 
   static String _fpLabel(TlsFingerprint fp) =>
       fp == TlsFingerprint.defaultFp ? 'DEFAULT' : fp.name.toUpperCase();
+
+  /// Выпадающий список значений в стиле экрана; используется для перечислений.
+  void _showEnumPicker<T>(
+    BuildContext context, {
+    required String title,
+    required List<T> values,
+    required T current,
+    required String Function(T) labelOf,
+    required void Function(T) onPick,
+  }) {
+    final t = Theme.of(context).extension<TeapodTokens>()!;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: t.bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+              child: Row(children: [
+                Expanded(
+                  child: Text(title,
+                      style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+                ),
+              ]),
+            ),
+            Container(height: 1, color: t.line),
+            for (final v in values)
+              InkWell(
+                onTap: () {
+                  onPick(v);
+                  Navigator.pop(ctx);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(labelOf(v),
+                            style: AppTheme.mono(
+                                size: 12,
+                                color: v == current ? t.accent : t.text,
+                                letterSpacing: 0.5)),
+                      ),
+                      if (v == current)
+                        Text('•', style: AppTheme.mono(size: 12, color: t.accent)),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 
   void _showFingerprintPicker(BuildContext context, AppSettings s) {
     final t = Theme.of(context).extension<TeapodTokens>()!;
@@ -329,6 +413,234 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                           },
                         ),
                       ),
+                      SetSectionHeader(t: t, addr: '0x34', label: 'fragment'),
+                      SetRowToggle(
+                        t: t,
+                        title: 'Фрагментация',
+                        hint: 'Режет исходящий TCP-поток на части, чтобы DPI не собрал ClientHello целиком. Не применяется к Hysteria2 (QUIC поверх UDP).',
+                        value: s.fragment.enabled,
+                        locked: locked,
+                        onChange: (v) => _update(s.copyWith(fragment: s.fragment.copyWith(enabled: v))),
+                      ),
+                      if (s.fragment.enabled) ...[
+                        SetInlineField(
+                          t: t,
+                          label: 'Пакеты',
+                          locked: locked,
+                          child: SetCredField(
+                            t: t,
+                            controller: _fragPacketsCtrl!,
+                            enabled: !locked,
+                            hint: 'tlshello',
+                            onChanged: (v) => _update(
+                                s.copyWith(fragment: s.fragment.copyWith(packets: v.trim()))),
+                          ),
+                        ),
+                        SetInlineField(
+                          t: t,
+                          label: 'Длина куска, байт',
+                          locked: locked,
+                          child: SetCredField(
+                            t: t,
+                            controller: _fragLengthCtrl!,
+                            enabled: !locked,
+                            hint: '100-200',
+                            onChanged: (v) => _update(
+                                s.copyWith(fragment: s.fragment.copyWith(length: v.trim()))),
+                          ),
+                        ),
+                        SetInlineField(
+                          t: t,
+                          label: 'Пауза, мс',
+                          locked: locked,
+                          child: SetCredField(
+                            t: t,
+                            controller: _fragIntervalCtrl!,
+                            enabled: !locked,
+                            hint: '10-20',
+                            onChanged: (v) => _update(
+                                s.copyWith(fragment: s.fragment.copyWith(interval: v.trim()))),
+                          ),
+                        ),
+                      ],
+                      if (s.fragment.enabled && !s.fragment.isValid)
+                        _HintRow(
+                            t: t,
+                            text: 'Длина и пауза должны быть диапазонами вида 100-200 и 10-20, пакеты — tlshello или диапазон. Фрагментация не применяется.'),
+                      SetSectionHeader(t: t, addr: '0x35', label: 'noise'),
+                      SetRowToggle(
+                        t: t,
+                        title: 'Шумы',
+                        hint: 'Мусорные UDP-датаграммы перед первой полезной. Работают только на UDP-плече — Hysteria2 и QUIC-транспорт; на TCP не влияют (там фрагментация). DNS-запросы xray шумом не портит.',
+                        value: s.noise.enabled,
+                        locked: locked,
+                        onChange: (v) => _update(s.copyWith(noise: s.noise.copyWith(enabled: v))),
+                      ),
+                      if (s.noise.enabled) ...[
+                        _PickerRow(
+                          t: t,
+                          title: 'Тип пакета',
+                          hint: 'RAND — случайные байты; STR / HEX / BASE64 — заданный вручную',
+                          value: s.noise.type.name.toUpperCase(),
+                          locked: locked,
+                          onTap: () => _showEnumPicker<NoiseType>(
+                            context,
+                            title: 'noise // type',
+                            values: NoiseType.values,
+                            current: s.noise.type,
+                            labelOf: (v) => v.name.toUpperCase(),
+                            onPick: (v) => _update(s.copyWith(noise: s.noise.copyWith(type: v))),
+                          ),
+                        ),
+                        SetInlineField(
+                          t: t,
+                          label: s.noise.type == NoiseType.rand ? 'Длина, байт' : 'Пакет',
+                          locked: locked,
+                          child: SetCredField(
+                            t: t,
+                            controller: _noisePacketCtrl!,
+                            enabled: !locked,
+                            hint: s.noise.type == NoiseType.rand ? '50-100' : 'содержимое',
+                            onChanged: (v) =>
+                                _update(s.copyWith(noise: s.noise.copyWith(packet: v.trim()))),
+                          ),
+                        ),
+                        SetInlineField(
+                          t: t,
+                          label: 'Пауза, мс',
+                          locked: locked,
+                          child: SetCredField(
+                            t: t,
+                            controller: _noiseDelayCtrl!,
+                            enabled: !locked,
+                            hint: '10-20',
+                            onChanged: (v) =>
+                                _update(s.copyWith(noise: s.noise.copyWith(delay: v.trim()))),
+                          ),
+                        ),
+                        if (!s.noise.isValid)
+                          _HintRow(
+                              t: t,
+                              text: s.noise.type == NoiseType.rand
+                                  ? 'Длина должна быть диапазоном вида 50-100, пауза — 10-20. Шумы не применяются.'
+                                  : 'Пакет не должен быть пустым, пауза — диапазон вида 10-20. Шумы не применяются.'),
+                      ],
+                      SetSectionHeader(t: t, addr: '0x36', label: 'mux'),
+                      SetRowToggle(
+                        t: t,
+                        title: 'Mux',
+                        hint: 'Мультиплексирует несколько соединений в одно — меньше хендшейков. При XTLS Vision TCP-ветка отключается автоматически (остаётся XUDP). Не применяется к Hysteria2.',
+                        value: s.mux.enabled,
+                        locked: locked,
+                        onChange: (v) => _update(s.copyWith(mux: s.mux.copyWith(enabled: v))),
+                      ),
+                      if (s.mux.enabled) ...[
+                        SetInlineField(
+                          t: t,
+                          label: 'TCP-подпотоки',
+                          locked: locked,
+                          child: SetNumField(
+                            t: t,
+                            controller: _muxConcCtrl!,
+                            enabled: !locked,
+                            hint: '8',
+                            onChanged: (v) {
+                              final n = int.tryParse(v);
+                              if (n != null) {
+                                _update(s.copyWith(
+                                    mux: s.mux.copyWith(concurrency: n.clamp(1, 1024))));
+                              }
+                            },
+                          ),
+                        ),
+                        SetInlineField(
+                          t: t,
+                          label: 'XUDP-подпотоки',
+                          locked: locked,
+                          child: SetNumField(
+                            t: t,
+                            controller: _muxXudpCtrl!,
+                            enabled: !locked,
+                            hint: '16',
+                            onChanged: (v) {
+                              final n = int.tryParse(v);
+                              if (n != null) {
+                                _update(s.copyWith(
+                                    mux: s.mux.copyWith(xudpConcurrency: n.clamp(1, 1024))));
+                              }
+                            },
+                          ),
+                        ),
+                        _PickerRow(
+                          t: t,
+                          title: 'QUIC (UDP/443) через mux',
+                          hint: 'reject — отбрасывать, allow — пускать через mux, skip — мимо mux',
+                          value: s.mux.xudpProxyUDP443.name.toUpperCase(),
+                          locked: locked,
+                          onTap: () => _showEnumPicker<XudpUdp443>(
+                            context,
+                            title: 'mux // xudpProxyUDP443',
+                            values: XudpUdp443.values,
+                            current: s.mux.xudpProxyUDP443,
+                            labelOf: (v) => v.name.toUpperCase(),
+                            onPick: (v) =>
+                                _update(s.copyWith(mux: s.mux.copyWith(xudpProxyUDP443: v))),
+                          ),
+                        ),
+                      ],
+                      SetSectionHeader(t: t, addr: '0x37', label: 'heartbeat'),
+                      _PickerRow(
+                        t: t,
+                        title: 'При потере туннеля',
+                        hint: 'RECONNECT — переподключить тот же сервер; URLTEST — перебрать кандидатов и уйти на самый быстрый живой',
+                        value: s.heartbeat.action.name.toUpperCase(),
+                        locked: locked,
+                        onTap: () => _showEnumPicker<HeartbeatAction>(
+                          context,
+                          title: 'heartbeat // action',
+                          values: HeartbeatAction.values,
+                          current: s.heartbeat.action,
+                          labelOf: (v) => v.name.toUpperCase(),
+                          onPick: (v) =>
+                              _update(s.copyWith(heartbeat: s.heartbeat.copyWith(action: v))),
+                        ),
+                      ),
+                      SetInlineField(
+                        t: t,
+                        label: 'Провалов до реакции',
+                        locked: locked,
+                        child: SetNumField(
+                          t: t,
+                          controller: _hbThresholdCtrl!,
+                          enabled: !locked,
+                          hint: '3',
+                          onChanged: (v) {
+                            final n = int.tryParse(v);
+                            if (n != null) {
+                              _update(s.copyWith(
+                                  heartbeat:
+                                      s.heartbeat.copyWith(failureThreshold: n.clamp(1, 10))));
+                            }
+                          },
+                        ),
+                      ),
+                      if (s.heartbeat.action == HeartbeatAction.urltest)
+                        _PickerRow(
+                          t: t,
+                          title: 'Кандидаты для urltest',
+                          hint: 'SUBSCRIPTION — конфиги той же подписки; PINNED — закреплённые; ALL — все сохранённые',
+                          value: s.heartbeat.source.name.toUpperCase(),
+                          locked: locked,
+                          onTap: () => _showEnumPicker<UrltestSource>(
+                            context,
+                            title: 'urltest // source',
+                            values: UrltestSource.values,
+                            current: s.heartbeat.source,
+                            labelOf: (v) => v.name.toUpperCase(),
+                            onPick: (v) =>
+                                _update(s.copyWith(heartbeat: s.heartbeat.copyWith(source: v))),
+                          ),
+                        ),
                       const SizedBox(height: 32),
                     ],
                   ),
@@ -338,6 +650,80 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
           },
         ),
       ),
+    );
+  }
+}
+
+/// Строка настройки со значением-кнопкой, открывающей выбор из списка.
+class _PickerRow extends StatelessWidget {
+  final TeapodTokens t;
+  final String title;
+  final String hint;
+  final String value;
+  final bool locked;
+  final VoidCallback onTap;
+
+  const _PickerRow({
+    required this.t,
+    required this.title,
+    required this.hint,
+    required this.value,
+    required this.locked,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.lineSoft))),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: AppTheme.sans(size: 14, color: t.text)),
+                const SizedBox(height: 3),
+                Text(hint,
+                    style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          GestureDetector(
+            onTap: locked ? () => showReadonlySnack(context) : onTap,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(border: Border.all(color: t.line)),
+              child: Text(value,
+                  style: AppTheme.mono(
+                      size: 11,
+                      color: locked ? t.textDim : t.accent,
+                      letterSpacing: 0.5)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Предупреждение под секцией: настройка введена неверно и в конфиг не попадёт.
+class _HintRow extends StatelessWidget {
+  final TeapodTokens t;
+  final String text;
+
+  const _HintRow({required this.t, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.lineSoft))),
+      child: Text(text,
+          style: AppTheme.mono(size: 10, color: t.danger, letterSpacing: 0.5)),
     );
   }
 }

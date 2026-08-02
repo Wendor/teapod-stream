@@ -388,7 +388,9 @@ class XrayConfigBuilder {
         'network': 'hysteria',
         'security': 'tls',
         'tlsSettings': {
-          'serverName': config.sni ?? '',
+          // hysteria-dialer в xray не вызывает WithDestination: при пустом serverName
+          // SNI берётся из URL auth-запроса и становится литералом "hysteria".
+          'serverName': (config.sni?.isNotEmpty ?? false) ? config.sni : config.address,
           'allowInsecure': config.allowInsecure,
           if (config.pinSHA256 != null && config.pinSHA256!.isNotEmpty)
             'pinnedPeerCertificateChainSha256': _formatPinSHA256(config.pinSHA256),
@@ -424,7 +426,7 @@ class XrayConfigBuilder {
       if (config.security == VpnSecurity.tls)
         'tlsSettings': {
           'serverName': config.sni ?? '',
-          'allowInsecure': false,
+          'allowInsecure': config.allowInsecure,
           if (fingerprint != null && fingerprint.isNotEmpty)
             'fingerprint': fingerprint,
           if (config.alpn != null && config.alpn!.isNotEmpty)

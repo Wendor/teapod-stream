@@ -50,6 +50,7 @@ class XrayEngine implements VpnEngine {
     VpnEngineOptions options, {
     String? xrayConfigWifi,
     String? xrayConfigCellular,
+    bool suspendNetworkRule = false,
   }) async {
     final xrayConfig = buildConfigJson(config, options);
 
@@ -57,6 +58,7 @@ class XrayEngine implements VpnEngine {
       'xrayConfig': xrayConfig,
       'xrayConfigWifi': xrayConfigWifi,
       'xrayConfigCellular': xrayConfigCellular,
+      'suspendNetworkRule': suspendNetworkRule,
       'socksPort': options.socksPort,
       'socksUser': options.socksUser,
       'socksPassword': options.socksPassword,
@@ -142,7 +144,7 @@ class XrayEngine implements VpnEngine {
   }
 
   /// Get current VPN state with SOCKS credentials (for sync on app start).
-  Future<({VpnState state, int socksPort, String socksUser, String socksPassword, int connectedAtMs, String networkProfile})>
+  Future<({VpnState state, int socksPort, String socksUser, String socksPassword, int connectedAtMs, String networkProfile, String networkTransport})>
       getVpnState() async {
     try {
       final result =
@@ -156,10 +158,11 @@ class XrayEngine implements VpnEngine {
           socksPassword: result['socksPassword'] as String? ?? '',
           connectedAtMs: (result['connectedAtMs'] as num?)?.toInt() ?? 0,
           networkProfile: result['networkProfile'] as String? ?? '',
+          networkTransport: result['networkTransport'] as String? ?? '',
         );
       }
     } catch (_) {}
-    return (state: VpnState.disconnected, socksPort: 0, socksUser: '', socksPassword: '', connectedAtMs: 0, networkProfile: '');
+    return (state: VpnState.disconnected, socksPort: 0, socksUser: '', socksPassword: '', connectedAtMs: 0, networkProfile: '', networkTransport: '');
   }
 
   /// JSON snapshot of tun2socks state (counters, per-connection activity).

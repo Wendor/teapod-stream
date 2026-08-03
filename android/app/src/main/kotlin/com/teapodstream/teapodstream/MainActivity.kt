@@ -83,6 +83,8 @@ class MainActivity : FlutterActivity() {
                         val heartbeatAction = call.argument<String>("heartbeatAction") ?: "reconnect"
                         val heartbeatThreshold = call.argument<Int>("heartbeatThreshold") ?: 3
                         val heartbeatUrl = call.argument<String>("heartbeatUrl") ?: ""
+                        val suspendNetworkRule =
+                            call.argument<Boolean>("suspendNetworkRule") ?: false
 
                         // Конфиги сетевых правил кладём на диск, а не в Intent:
                         // три JSON-а в одной Binder-транзакции рискуют упереться в её лимит.
@@ -100,7 +102,8 @@ class MainActivity : FlutterActivity() {
                                 killSwitch = killSwitch, allowIcmp = allowIcmp,
                                 blockQuic = blockQuic, ipv6Enabled = ipv6Enabled,
                                 heartbeatProbe = heartbeatProbe, heartbeatAction = heartbeatAction,
-                                heartbeatThreshold = heartbeatThreshold, heartbeatUrl = heartbeatUrl
+                                heartbeatThreshold = heartbeatThreshold, heartbeatUrl = heartbeatUrl,
+                                suspendNetworkRule = suspendNetworkRule
                             )
                             result.success(null)
                         } else {
@@ -112,7 +115,8 @@ class MainActivity : FlutterActivity() {
                                     killSwitch = killSwitch, allowIcmp = allowIcmp,
                                     blockQuic = blockQuic, ipv6Enabled = ipv6Enabled,
                                     heartbeatProbe = heartbeatProbe, heartbeatAction = heartbeatAction,
-                                    heartbeatThreshold = heartbeatThreshold, heartbeatUrl = heartbeatUrl
+                                    heartbeatThreshold = heartbeatThreshold, heartbeatUrl = heartbeatUrl,
+                                    suspendNetworkRule = suspendNetworkRule
                                 )
                                 result.success(null)
                             }
@@ -243,6 +247,7 @@ class MainActivity : FlutterActivity() {
                             "socksPassword" to socks["password"],
                             "connectedAtMs" to socks["connectedAtMs"],
                             "networkProfile" to (XrayVpnService.activeProfile ?: ""),
+                            "networkTransport" to XrayVpnService.currentTransport(),
                         ))
                     }
 
@@ -393,20 +398,23 @@ class MainActivity : FlutterActivity() {
     }
 
     /// Тип физической сети под VPN: "wifi" / "cellular" / "other".
+    /// Критерий тот же, что у XrayVpnService.ruleTransport(), иначе Flutter и native
+    /// выбрали бы разные правила: VPN-транспорт пропускаем (activeNetwork при поднятом
+    /// туннеле — сам VPN), учитываем только VALIDATED-сети (отключаемый Wi-Fi ещё
+    /// несколько секунд числится в allNetworks с NET_CAPABILITY_INTERNET).
     private fun activeTransport(): String {
         val cm = getSystemService(ConnectivityManager::class.java) ?: return "other"
-        // activeNetwork при поднятом VPN — сам VPN, поэтому ищем несущую сеть.
-        val caps = cm.allNetworks
-            .mapNotNull { cm.getNetworkCapabilities(it) }
-            .firstOrNull {
-                !it.hasTransport(NetworkCapabilities.TRANSPORT_VPN) &&
-                    it.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            } ?: return "other"
-        return when {
-            caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
-            caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
-            else -> "other"
+        var wifi = false
+        var cellular = false
+        for (n in cm.allNetworks) {
+            val c = cm.getNetworkCapabilities(n) ?: continue
+            if (c.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) continue
+            if (!c.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) continue
+            if (c.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) wifi = true
+            if (c.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) cellular = true
         }
+        // Wi-Fi приоритетнее — так же выбирает сам Android, когда валидны обе сети.
+        return if (wifi) "wifi" else if (cellular) "cellular" else "other"
     }
 
     /// Пишет конфиги сетевых правил в filesDir; null — правило снято, файл удаляется.
@@ -441,6 +449,7 @@ class MainActivity : FlutterActivity() {
         heartbeatAction: String = "reconnect",
         heartbeatThreshold: Int = 3,
         heartbeatUrl: String = "",
+        suspendNetworkRule: Boolean = false,
     ) {
         requestBatteryOptimizationExemption()
         val intent = Intent(this, XrayVpnService::class.java).apply {
@@ -463,6 +472,7 @@ class MainActivity : FlutterActivity() {
             putExtra(XrayVpnService.EXTRA_HEARTBEAT_ACTION, heartbeatAction)
             putExtra(XrayVpnService.EXTRA_HEARTBEAT_THRESHOLD, heartbeatThreshold)
             putExtra(XrayVpnService.EXTRA_HEARTBEAT_URL, heartbeatUrl)
+            putExtra(XrayVpnService.EXTRA_SUSPEND_RULE, suspendNetworkRule)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent)

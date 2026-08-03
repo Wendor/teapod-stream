@@ -60,6 +60,17 @@ class XrayVpnService : VpnService() {
         /// либо null — работает базовый конфиг. Отдаётся Flutter для показа
         /// реально подключённого сервера.
         @Volatile @JvmStatic var activeProfile: String? = null
+
+        /// Транспорт, для которого сервер правила признан недоступным (его увёл
+        /// failover). Правило — приоритет, а не жёсткая привязка: пока сеть не
+        /// сменилась, не возвращаемся на мёртвый сервер. Сбрасывается сменой сети.
+        @Volatile @JvmStatic var suspendedProfile: String? = null
+
+        /// Последний вычисленный транспорт ("wifi"/"cellular"/""), обновляется при
+        /// каждом ruleTransport(): выборе профиля и drift-проверках heartbeat.
+        @Volatile private var lastKnownTransport: String = ""
+
+        @JvmStatic fun currentTransport(): String = lastKnownTransport
         const val EXTRA_XRAY_CONFIG = "xray_config"
         const val EXTRA_SOCKS_PORT = "socks_port"
         const val EXTRA_SOCKS_USER = "socks_user"
@@ -75,6 +86,8 @@ class XrayVpnService : VpnService() {
         const val EXTRA_BLOCK_QUIC = "block_quic" // reject UDP/443 inside the TUN via ICMP Port Unreachable
         const val EXTRA_IPV6 = "ipv6_enabled" // add IPv6 address/route to the TUN interface
         const val EXTRA_MTU = "mtu" // TUN MTU size
+        // Подключение — результат failover: сервер правила текущей сети не отвечает.
+        const val EXTRA_SUSPEND_RULE = "suspend_network_rule"
         const val EXTRA_HEARTBEAT_PROBE = "heartbeat_probe"      // "socks" | "xrayDelay" | "passive"
         const val EXTRA_HEARTBEAT_ACTION = "heartbeat_action"    // "reconnect" | "switchConfig"
         const val EXTRA_HEARTBEAT_THRESHOLD = "heartbeat_threshold" // провалов подряд до действия
@@ -408,6 +421,8 @@ class XrayVpnService : VpnService() {
                 reconnectAttempts.set(0)
                 // Полный старт из Flutter: конфиг выбрал сам Flutter, профиль не применялся.
                 activeProfile = null
+                suspendedProfile =
+                    if (intent.getBooleanExtra(EXTRA_SUSPEND_RULE, false)) ruleTransport() else null
                 try { File(filesDir, "user_disconnected.flag").delete() } catch (_: Exception) {}
                 ensureForeground()
                 Thread {
@@ -1327,6 +1342,7 @@ class XrayVpnService : VpnService() {
         }
         // Wi-Fi приоритетнее — так же выбирает сам Android, когда валидны обе сети.
         val result = if (wifi) "wifi" else if (cellular) "cellular" else null
+        lastKnownTransport = result ?: ""
         if (verbose) log("debug", "network rule: transport=$result networks:$seen")
         return result
     }
@@ -1338,8 +1354,14 @@ class XrayVpnService : VpnService() {
         if (!isRunning.get() || userRequestedDisconnect.get()) return
         val now = System.currentTimeMillis()
         if (now - lastDriftReconnectMs < PROFILE_DRIFT_MIN_INTERVAL_MS) return
+        // Те же отсечки, что и в scheduleNetworkChanged(): иначе взвели бы троттлинг
+        // на реконнект, который всё равно будет проглочен, и отложили бы починку на 30 с.
+        if (currentNativeState != "connected") return
+        if (lastConnectedMs > 0 && now - lastConnectedMs < 5_000L) return
         val transport = ruleTransport() ?: return
         if (activeProfile == transport) return
+        // Правило для этой сети увёл failover — возвращаться к нему нельзя.
+        if (transport == suspendedProfile) return
         val expected =
             if (transport == "wifi") PROFILE_WIFI_FILE else PROFILE_CELLULAR_FILE
         // Правила для этого транспорта нет — базовый конфиг и должен работать.
@@ -1354,9 +1376,17 @@ class XrayVpnService : VpnService() {
     /// (Wi-Fi / мобильная), иначе конфиг последнего подключения.
     private fun configFileForCurrentNetwork(): File {
         val fallback = File(filesDir, BASE_CONFIG_FILE)
-        val profileName = when (ruleTransport(verbose = true)) {
-            "wifi" -> PROFILE_WIFI_FILE
-            "cellular" -> PROFILE_CELLULAR_FILE
+        val transport = ruleTransport(verbose = true)
+        // Сеть сменилась — прошлая «недоступность» правила больше не актуальна.
+        if (transport != suspendedProfile) suspendedProfile = null
+        val profileName = when {
+            transport == suspendedProfile -> {
+                log("info", "network rule: $transport suspended (failover), using base config")
+                activeProfile = null
+                return fallback
+            }
+            transport == "wifi" -> PROFILE_WIFI_FILE
+            transport == "cellular" -> PROFILE_CELLULAR_FILE
             else -> {
                 activeProfile = null
                 return fallback

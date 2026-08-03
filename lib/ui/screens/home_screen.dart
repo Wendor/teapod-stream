@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/models/network_rule.dart';
 import '../../core/models/routing_settings.dart';
 import '../../core/models/vpn_stats.dart';
 import '../../providers/vpn_provider.dart';
@@ -41,6 +42,22 @@ class HomeScreen extends ConsumerWidget {
 
     final history = vpnState.stats.speedHistory;
 
+    // Правило сети — приоритетный сервер, а не жёсткая привязка: если failover
+    // увёл с него, показываем это явно, иначе подпись объясняет, чьё решение.
+    final transport = isConn ? vpnState.networkTransport : null;
+    final ruleConfig = transport == null
+        ? null
+        : ref.watch(configProvider.select((v) => v.maybeWhen(
+              data: (d) => d.configForTransport(transport),
+              orElse: () => null,
+            )));
+    final netLabel = transport == NetTransport.wifi ? 'Wi-Fi' : 'моб. сеть';
+    final networkNote = ruleConfig == null
+        ? null
+        : (ruleConfig.id == effectiveConfig?.id
+            ? '$netLabel · по правилу сети'
+            : '$netLabel · правило недоступно');
+
     final isManaged = effectiveConfig?.rawXrayConfig != null;
     final routingDirection = ref.watch(
       settingsProvider.select((s) => s.maybeWhen(
@@ -70,9 +87,10 @@ class HomeScreen extends ConsumerWidget {
                 t: t,
                 stats: vpnState.stats,
                 serverName: effectiveConfig?.name ?? '—',
-                serverHint: effectiveConfig != null
-                    ? '$protoLabel · $serverHint'
-                    : 'нет конфигурации',
+                serverHint: networkNote ??
+                    (effectiveConfig != null
+                        ? '$protoLabel · $serverHint'
+                        : 'нет конфигурации'),
                 isConnected: isConn,
                 pingMs: pingMs,
                 history: history,

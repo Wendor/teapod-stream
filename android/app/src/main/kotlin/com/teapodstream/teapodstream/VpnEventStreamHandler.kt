@@ -107,6 +107,8 @@ object VpnEventStreamHandler : EventChannel.StreamHandler {
             "connectedAtMs" to XrayVpnService.connectedAtMs,
             // Какое сетевое правило применил native — Flutter показывает именно этот сервер.
             "networkProfile" to (XrayVpnService.activeProfile ?: ""),
+            // Фактический транспорт сессии — для подписи «Wi-Fi · правило недоступно».
+            "networkTransport" to XrayVpnService.currentTransport(),
         ))
         appContext?.let { VpnTileService.updateTile(it) }
     }

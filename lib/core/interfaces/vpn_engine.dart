@@ -14,11 +14,14 @@ abstract class VpnEngine {
 
   /// [xrayConfigWifi] / [xrayConfigCellular] — конфиги сетевых правил,
   /// native выбирает их при реконнекте по текущему транспорту.
+  /// [suspendNetworkRule] — сервер правила текущей сети не отвечает (failover):
+  /// native не возвращается к нему, пока сеть не сменится.
   Future<void> connect(
     VpnConfig config,
     VpnEngineOptions options, {
     String? xrayConfigWifi,
     String? xrayConfigCellular,
+    bool suspendNetworkRule,
   });
   Future<void> disconnect();
 

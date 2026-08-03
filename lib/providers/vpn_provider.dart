@@ -31,6 +31,9 @@ class VpnState2 {
   /// null — соединение не активно или отпечаток неизвестен.
   final String? appliedFingerprint;
 
+  /// Транспорт текущей сессии по данным native: wifi / cellular / null.
+  final NetTransport? networkTransport;
+
   const VpnState2({
     this.connectionState = VpnState.disconnected,
     this.stats = const VpnStats(),
@@ -39,6 +42,7 @@ class VpnState2 {
     this.activeSocksUser = '',
     this.activeSocksPassword = '',
     this.appliedFingerprint,
+    this.networkTransport,
   });
 
   bool get isConnected => connectionState == VpnState.connected;
@@ -55,6 +59,7 @@ class VpnState2 {
     String? activeSocksUser,
     String? activeSocksPassword,
     String? appliedFingerprint,
+    NetTransport? networkTransport,
   }) {
     return VpnState2(
       connectionState: connectionState ?? this.connectionState,
@@ -64,6 +69,7 @@ class VpnState2 {
       activeSocksUser: activeSocksUser ?? this.activeSocksUser,
       activeSocksPassword: activeSocksPassword ?? this.activeSocksPassword,
       appliedFingerprint: appliedFingerprint ?? this.appliedFingerprint,
+      networkTransport: networkTransport ?? this.networkTransport,
     );
   }
 }
@@ -226,6 +232,9 @@ class VpnNotifier extends Notifier<VpnState2> {
               activeSocksPassword: pass,
             );
           }
+          state = state.copyWith(
+              networkTransport:
+                  NetTransport.parse(event['networkTransport'] as String?));
           _syncActiveConfigWithProfile(event['networkProfile'] as String?);
         }
         _onNativeState(newState, isReconnect: isReconnect);
@@ -306,7 +315,10 @@ class VpnNotifier extends Notifier<VpnState2> {
           source: 'urltest');
       await ref.read(configProvider.notifier).setActiveConfig(best.config.id);
       await disconnect();
-      await connect();
+      // Правило — приоритет, а не жёсткая привязка: сервер правила только что не
+      // прошёл пробу, поэтому подключаемся к живому и помечаем правило текущей
+      // сети недоступным. Оно снова вступит в силу при смене сети.
+      await connect(applyNetworkRule: false);
     } catch (e) {
       log.addError('urltest: ошибка переключения: $e');
     } finally {
@@ -456,7 +468,10 @@ class VpnNotifier extends Notifier<VpnState2> {
     );
   }
 
-  Future<void> connect() async {
+  /// [applyNetworkRule] = false — подключиться строго выбранным конфигом и
+  /// пометить правило текущей сети недоступным (используется urltest-failover'ом).
+  /// Профили правил при этом всё равно сохраняются: в другой сети правило работает.
+  Future<void> connect({bool applyNetworkRule = true}) async {
     if (state.isBusy || state.isConnected) return;
 
     // Update state synchronously — button turns yellow in the same frame as tap
@@ -480,7 +495,9 @@ class VpnNotifier extends Notifier<VpnState2> {
         ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
     // Сетевое правило главнее ручного выбора: в Wi-Fi и в мобильной сети
     // подключаемся к назначенному серверу, если он назначен.
-    final transport = NetTransport.parse(await _engine.getActiveTransport());
+    final transport = applyNetworkRule
+        ? NetTransport.parse(await _engine.getActiveTransport())
+        : null;
     final ruled =
         transport == null ? null : configState?.configForTransport(transport);
     final config = ruled ?? _resolveEffectiveConfig(configState);
@@ -524,6 +541,8 @@ class VpnNotifier extends Notifier<VpnState2> {
     final options = optionsFor(config);
 
     /// Конфиг сетевого правила — native переключится на него сам при смене сети.
+    /// Профили пишутся всегда, в том числе при failover: правило должно снова
+    /// сработать в другой сети, недоступность действует только до смены сети.
     String? profileJson(NetTransport t) {
       final c = configState?.configForTransport(t);
       if (c == null || c.validate() != null) return null;
@@ -543,6 +562,7 @@ class VpnNotifier extends Notifier<VpnState2> {
         options,
         xrayConfigWifi: profileJson(NetTransport.wifi),
         xrayConfigCellular: profileJson(NetTransport.cellular),
+        suspendNetworkRule: !applyNetworkRule,
       );
       // Polling is now started in _onNativeState when connected
     } on PlatformException catch (e) {
@@ -682,6 +702,8 @@ class VpnNotifier extends Notifier<VpnState2> {
           activeSocksUser: native.socksUser,
           activeSocksPassword: native.socksPassword,
         );
+        state = state.copyWith(
+            networkTransport: NetTransport.parse(native.networkTransport));
         _syncActiveConfigWithProfile(native.networkProfile);
       }
       // Не знаем, юзерский это connecting или нативный реконнект — не ставим

@@ -122,7 +122,7 @@ class AppSettings {
     this.proxyOnly = false,
     this.showNotification = true,
     this.killSwitchEnabled = false,
-    this.hwidEnabled = false,
+    this.hwidEnabled = true,
     this.routing = const RoutingSettings(),
     this.updateChannel = UpdateChannel.stable,
     this.fontScale = FontScale.normal,
@@ -307,7 +307,7 @@ class AppSettings {
       proxyOnly: json['proxyOnly'] as bool? ?? false,
       showNotification: json['showNotification'] as bool? ?? true,
       killSwitchEnabled: json['killSwitchEnabled'] as bool? ?? false,
-      hwidEnabled: json['hwidEnabled'] as bool? ?? false,
+      hwidEnabled: json['hwidEnabled'] as bool? ?? true,
       routing: routingJson != null ? RoutingSettings.fromJson(routingJson) : const RoutingSettings(),
       updateChannel: UpdateChannel.values.firstWhere(
         (e) => e.name == json['updateChannel'], orElse: () => UpdateChannel.stable),
@@ -440,7 +440,7 @@ class SettingsService {
       proxyOnly: prefs.getBool(_proxyOnlyKey) ?? false,
       showNotification: prefs.getBool(_showNotificationKey) ?? true,
       killSwitchEnabled: prefs.getBool(_killSwitchKey) ?? false,
-      hwidEnabled: prefs.getBool(_hwidEnabledKey) ?? false,
+      hwidEnabled: prefs.getBool(_hwidEnabledKey) ?? true,
       routing: _loadRouting(prefs),
       updateChannel: UpdateChannel.values.firstWhere(
         (e) => e.name == prefs.getString(_updateChannelKey),

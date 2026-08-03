@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/models/connections_bundle.dart';
 import '../../core/models/vpn_config.dart';
 import '../../core/models/pinned_ref.dart';
+import '../../core/models/network_rule.dart';
 import '../../core/services/config_storage_service.dart';
 import '../../core/services/subscription_service.dart';
 import '../../protocols/xray/vless_parser.dart';
@@ -411,11 +412,35 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
     }
   }
 
+  /// Назначает конфиг на тип сети (повторный выбор — снимает) и переписывает
+  /// профили на нативной стороне, чтобы правило работало и без живого UI.
+  Future<void> _setNetworkRule(
+      BuildContext context, WidgetRef ref, VpnConfig config, NetTransport t) async {
+    await ref.read(configProvider.notifier).toggleNetworkRule(config, t);
+    await ref.read(vpnProvider.notifier).refreshNetworkProfiles();
+    if (!context.mounted) return;
+    final assigned = ref.read(configProvider).maybeWhen(
+          data: (d) => d.transportsFor(config).contains(t),
+          orElse: () => false,
+        );
+    final label = t == NetTransport.wifi ? 'Wi-Fi' : 'мобильной сети';
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(assigned
+          ? 'В $label — ${config.name}'
+          : 'Правило для $label снято'),
+      duration: const Duration(seconds: 2),
+    ));
+  }
+
   Future<void> _showConfigMenu(BuildContext context, WidgetRef ref, VpnConfig config) async {
     final t = Theme.of(context).extension<TeapodTokens>()!;
     final isPinned = ref.read(configProvider).maybeWhen(
           data: (d) => d.isPinned(config),
           orElse: () => false,
+        );
+    final transports = ref.read(configProvider).maybeWhen(
+          data: (d) => d.transportsFor(config),
+          orElse: () => <NetTransport>{},
         );
     await showModalBottomSheet(
       context: context,
@@ -445,6 +470,26 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
               onTap: () {
                 Navigator.pop(ctx);
                 ref.read(configProvider.notifier).togglePin(config);
+              },
+            ),
+            _SheetTile(
+              t: t,
+              label: transports.contains(NetTransport.wifi)
+                  ? 'Сеть: Wi-Fi ✓'
+                  : 'Сеть: Wi-Fi',
+              onTap: () {
+                Navigator.pop(ctx);
+                _setNetworkRule(context, ref, config, NetTransport.wifi);
+              },
+            ),
+            _SheetTile(
+              t: t,
+              label: transports.contains(NetTransport.cellular)
+                  ? 'Сеть: Мобильная ✓'
+                  : 'Сеть: Мобильная',
+              onTap: () {
+                Navigator.pop(ctx);
+                _setNetworkRule(context, ref, config, NetTransport.cellular);
               },
             ),
             _SheetTile(t: t, label: 'Переименовать', onTap: () async {
@@ -1396,7 +1441,7 @@ class _DataUsageBanner extends StatelessWidget {
 
 // ── Config row ────────────────────────────────────────────────────
 
-class _ConfigRow extends StatelessWidget {
+class _ConfigRow extends ConsumerWidget {
   final TeapodTokens t;
   final VpnConfig config;
   final int addr;
@@ -1433,9 +1478,13 @@ class _ConfigRow extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final hexAddr = '0x${addr.toString().padLeft(2, '0')}';
     final ping = config.latencyMs;
+    final transports = ref.watch(configProvider.select((v) => v.maybeWhen(
+          data: (d) => d.transportsFor(config),
+          orElse: () => <NetTransport>{},
+        )));
     final tagColor = isActive ? t.accent : t.textDim;
     final tagBorder = isActive ? t.accent : t.line;
     final leftPad = indent ? 52.0 : 20.0;
@@ -1518,6 +1567,18 @@ class _ConfigRow extends StatelessWidget {
                   ),
                   if (pinned) ...[
                     Text('★', style: AppTheme.mono(size: 10, color: t.accent)),
+                    const SizedBox(width: 6),
+                  ],
+                  if (transports.isNotEmpty) ...[
+                    Text(
+                      transports.contains(NetTransport.wifi) &&
+                              transports.contains(NetTransport.cellular)
+                          ? '[wifi·lte]'
+                          : transports.contains(NetTransport.wifi)
+                              ? '[wifi]'
+                              : '[lte]',
+                      style: AppTheme.mono(size: 10, color: t.textDim),
+                    ),
                     const SizedBox(width: 6),
                   ],
                   if (ping != null)

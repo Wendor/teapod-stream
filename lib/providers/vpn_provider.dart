@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../core/interfaces/vpn_engine.dart';
 import '../core/models/vpn_config.dart';
+import '../core/models/network_rule.dart';
 import '../core/constants/app_constants.dart';
 import '../core/models/vpn_stats.dart';
 import '../core/models/connection_fingerprint.dart';
@@ -225,6 +226,7 @@ class VpnNotifier extends Notifier<VpnState2> {
               activeSocksPassword: pass,
             );
           }
+          _syncActiveConfigWithProfile(event['networkProfile'] as String?);
         }
         _onNativeState(newState, isReconnect: isReconnect);
       case 'log':
@@ -244,14 +246,14 @@ class VpnNotifier extends Notifier<VpnState2> {
       case 'statsHistory':
         _handleStatsHistory(event);
       case 'tunnel_dead':
-        _runUrltestSwitch((event['failures'] as num?)?.toInt() ?? 0);
+        _runConfigSwitch((event['failures'] as num?)?.toInt() ?? 0);
     }
   }
 
-  /// Нативный heartbeat исчерпал попытки в режиме urltest: подбираем живой конфиг
-  /// среди кандидатов и переподключаемся на самый быстрый. Если живых нет —
+  /// Нативный heartbeat исчерпал попытки, а действие — смена конфига: меряем
+  /// кандидатов и переподключаемся на самый быстрый живой. Если живых нет —
   /// ничего не делаем, сервис сам реконнектится по своему cooldown.
-  Future<void> _runUrltestSwitch(int failures) async {
+  Future<void> _runConfigSwitch(int failures) async {
     if (_urltestRunning) return;
     _urltestRunning = true;
     final log = ref.read(logServiceProvider.notifier);
@@ -259,13 +261,14 @@ class VpnNotifier extends Notifier<VpnState2> {
       final settings =
           ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null) ??
               const AppSettings();
-      if (settings.heartbeat.action != HeartbeatAction.urltest) return;
+      if (settings.heartbeat.failAction != HeartbeatFailAction.switchConfig) return;
 
       final configState =
           ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
       if (configState == null) return;
       final current = _resolveEffectiveConfig(configState);
-      final candidates = _urltestCandidates(configState, settings.heartbeat.source, current);
+      final candidates =
+          _switchCandidates(configState, settings.heartbeat.switchSource, current);
       if (candidates.isEmpty) {
         log.addError('urltest: нет кандидатов для переключения (провалов: $failures)');
         return;
@@ -273,8 +276,22 @@ class VpnNotifier extends Notifier<VpnState2> {
 
       log.addInfo('urltest: туннель не отвечает, проверяю ${candidates.length} конфиг(ов)',
           source: 'urltest');
+      // Замер идёт через временный xray-инстанс с конфигом кандидата: TCP-пинг
+      // сказал бы «жив» и про сервер, у которого порт открыт, а протокол молчит.
+      // Инстанс временный, inbounds Go вырезает сам — важны только поля,
+      // влияющие на outbound.
+      final options = VpnEngineOptions(
+        socksPort: AppConstants.defaultSocksPort,
+        httpPort: 0,
+        socksUser: '',
+        socksPassword: '',
+        tlsFingerprint: settings.tlsFingerprint,
+        fragment: settings.fragment,
+        noise: settings.noise,
+        mux: settings.mux,
+      );
       final probed = await Future.wait(candidates.map((c) async {
-        final ms = await _engine.pingConfig(c);
+        final ms = await _engine.measureOutbound(c, options, settings.heartbeat.url);
         return (config: c, latency: ms);
       }));
       final alive = probed.where((r) => r.latency != null).toList()
@@ -297,19 +314,19 @@ class VpnNotifier extends Notifier<VpnState2> {
     }
   }
 
-  /// Кандидаты для urltest: активный конфиг исключается — он только что не прошёл пробу.
-  List<VpnConfig> _urltestCandidates(
+  /// Кандидаты для переключения: активный конфиг исключается — он только что не прошёл пробу.
+  List<VpnConfig> _switchCandidates(
     ConfigState configState,
-    UrltestSource source,
+    SwitchSource source,
     VpnConfig? current,
   ) {
     final all = configState.configs.where((c) => c.id != current?.id);
     return switch (source) {
-      UrltestSource.subscription =>
+      SwitchSource.subscription =>
         all.where((c) => c.subscriptionId == current?.subscriptionId).toList(),
-      UrltestSource.pinned =>
+      SwitchSource.pinned =>
         all.where((c) => configState.pins.any((p) => p.matches(c))).toList(),
-      UrltestSource.all => all.toList(),
+      SwitchSource.all => all.toList(),
     };
   }
 
@@ -323,6 +340,23 @@ class VpnNotifier extends Notifier<VpnState2> {
         'blocked' => VpnState.blocked,
         _ => VpnState.disconnected,
       };
+
+  /// Реконнект при смене сети выполняет native, поэтому подключённым может
+  /// оказаться не тот конфиг, что выбран в UI. Приводим активный конфиг к тому,
+  /// что реально поднято: [profile] — "wifi" / "cellular" / "" (правило не применялось).
+  void _syncActiveConfigWithProfile(String? profile) {
+    final transport = NetTransport.parse(profile);
+    if (transport == null) return;
+    final cs =
+        ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
+    final config = cs?.configForTransport(transport);
+    if (config == null || cs!.activeConfigId == config.id) return;
+    // Режим подписки при этом выключается — правило сети главнее автовыбора.
+    ref.read(configProvider.notifier).setActiveConfig(config.id);
+    ref.read(logServiceProvider.notifier).addInfo(
+        'сеть ${transport == NetTransport.wifi ? "Wi-Fi" : "мобильная"} → ${config.name}',
+        source: 'network-rule');
+  }
 
   void _onNativeState(VpnState nativeState, {bool isReconnect = false}) {
     if (nativeState == VpnState.connected) {
@@ -444,7 +478,12 @@ class VpnNotifier extends Notifier<VpnState2> {
 
     final configState =
         ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
-    final config = _resolveEffectiveConfig(configState);
+    // Сетевое правило главнее ручного выбора: в Wi-Fi и в мобильной сети
+    // подключаемся к назначенному серверу, если он назначен.
+    final transport = NetTransport.parse(await _engine.getActiveTransport());
+    final ruled =
+        transport == null ? null : configState?.configForTransport(transport);
+    final config = ruled ?? _resolveEffectiveConfig(configState);
     if (config == null) {
       ref.read(logServiceProvider.notifier).addError('No configuration selected');
       state = state.copyWith(connectionState: VpnState.error, error: 'No configuration selected');
@@ -474,11 +513,63 @@ class VpnNotifier extends Notifier<VpnState2> {
         ? (10000 + Random().nextInt(50000))
         : settings.socksPort;
 
-    final options = VpnEngineOptions(
-      socksPort: actualSocksPort,
+    VpnEngineOptions optionsFor(VpnConfig c) => _buildOptions(
+          c,
+          settings,
+          socksPort: actualSocksPort,
+          socksUser: socksCredentials.user,
+          socksPassword: socksCredentials.password,
+        );
+
+    final options = optionsFor(config);
+
+    /// Конфиг сетевого правила — native переключится на него сам при смене сети.
+    String? profileJson(NetTransport t) {
+      final c = configState?.configForTransport(t);
+      if (c == null || c.validate() != null) return null;
+      return XrayEngine.buildConfigJson(c, optionsFor(c));
+    }
+
+    state = state.copyWith(
+      activeSocksPort: actualSocksPort,
+      activeSocksUser: socksCredentials.user,
+      activeSocksPassword: socksCredentials.password,
+      appliedFingerprint: connectionFingerprint(settings),
+    );
+
+    try {
+      await _engine.connect(
+        config,
+        options,
+        xrayConfigWifi: profileJson(NetTransport.wifi),
+        xrayConfigCellular: profileJson(NetTransport.cellular),
+      );
+      // Polling is now started in _onNativeState when connected
+    } on PlatformException catch (e) {
+      ref
+          .read(logServiceProvider.notifier)
+          .addError('Connection failed: ${e.message}');
+      state = state.copyWith(
+          connectionState: VpnState.error, error: e.message);
+      _connectTimeout?.cancel();
+      _connectTimeout = null;
+    }
+  }
+
+  /// Опции движка для конкретного конфига: blockQuic зависит от самого конфига,
+  /// остальное — от настроек и параметров текущей сессии.
+  VpnEngineOptions _buildOptions(
+    VpnConfig c,
+    AppSettings settings, {
+    required int socksPort,
+    required String socksUser,
+    required String socksPassword,
+  }) =>
+      VpnEngineOptions(
+      socksPort: socksPort,
       httpPort: 0,
-      socksUser: socksCredentials.user,
-      socksPassword: socksCredentials.password,
+      socksUser: socksUser,
+      socksPassword: socksPassword,
       excludedPackages: settings.splitTunnelingEnabled
           ? (settings.vpnMode == VpnMode.allExcept
               ? settings.excludedPackages
@@ -505,7 +596,7 @@ class VpnNotifier extends Notifier<VpnState2> {
       // XTLS Vision rejects UDP/443 by design: QUIC can never pass, but browsers
       // keep retrying it (each retry costs a full outbound handshake) and stall
       // for ~30s before falling back to TCP. Force the ICMP fast-fail.
-      blockQuic: settings.blockQuic || _usesVisionFlow(config),
+      blockQuic: settings.blockQuic || _usesVisionFlow(c),
       ipv6Enabled: settings.ipv6Enabled,
       obsProbeIntervalSec: settings.obsProbeIntervalSec,
       tlsFingerprint: settings.tlsFingerprint,
@@ -514,25 +605,35 @@ class VpnNotifier extends Notifier<VpnState2> {
       mux: settings.mux,
       heartbeat: settings.heartbeat,
     );
-    state = state.copyWith(
-      activeSocksPort: actualSocksPort,
-      activeSocksUser: socksCredentials.user,
-      activeSocksPassword: socksCredentials.password,
-      appliedFingerprint: connectionFingerprint(settings),
-    );
 
-    try {
-      await _engine.connect(config, options);
-      // Polling is now started in _onNativeState when connected
-    } on PlatformException catch (e) {
-      ref
-          .read(logServiceProvider.notifier)
-          .addError('Connection failed: ${e.message}');
-      state = state.copyWith(
-          connectionState: VpnState.error, error: e.message);
-      _connectTimeout?.cancel();
-      _connectTimeout = null;
+  /// Перезаписывает конфиги сетевых правил на диске без разрыва туннеля.
+  /// Новое правило применится при ближайшей смене сети или реконнекте;
+  /// на отключённом VPN не делает ничего — профили запишет `connect()`.
+  Future<void> refreshNetworkProfiles() async {
+    if (state.connectionState != VpnState.connected) return;
+    final configState =
+        ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
+    if (configState == null) return;
+    final settings =
+        ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null) ??
+            const AppSettings();
+
+    String? profileJson(NetTransport t) {
+      final c = configState.configForTransport(t);
+      if (c == null || c.validate() != null) return null;
+      return XrayEngine.buildConfigJson(
+        c,
+        _buildOptions(c, settings,
+            socksPort: state.activeSocksPort,
+            socksUser: state.activeSocksUser,
+            socksPassword: state.activeSocksPassword),
+      );
     }
+
+    await _engine.updateNetworkProfiles(
+      wifi: profileJson(NetTransport.wifi),
+      cellular: profileJson(NetTransport.cellular),
+    );
   }
 
   Future<void> disconnect() async {
@@ -581,6 +682,7 @@ class VpnNotifier extends Notifier<VpnState2> {
           activeSocksUser: native.socksUser,
           activeSocksPassword: native.socksPassword,
         );
+        _syncActiveConfigWithProfile(native.networkProfile);
       }
       // Не знаем, юзерский это connecting или нативный реконнект — не ставим
       // 45-секундный таймаут, который мог бы форсировать error поверх живого

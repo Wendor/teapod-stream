@@ -4,6 +4,8 @@ import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.net.VpnService
 import android.os.Build
@@ -77,8 +79,17 @@ class MainActivity : FlutterActivity() {
                         val allowIcmp = call.argument<Boolean>("allowIcmp") ?: true
                         val blockQuic = call.argument<Boolean>("blockQuic") ?: false
                         val ipv6Enabled = call.argument<Boolean>("ipv6Enabled") ?: false
+                        val heartbeatProbe = call.argument<String>("heartbeatProbe") ?: "socks"
                         val heartbeatAction = call.argument<String>("heartbeatAction") ?: "reconnect"
                         val heartbeatThreshold = call.argument<Int>("heartbeatThreshold") ?: 3
+                        val heartbeatUrl = call.argument<String>("heartbeatUrl") ?: ""
+
+                        // Конфиги сетевых правил кладём на диск, а не в Intent:
+                        // три JSON-а в одной Binder-транзакции рискуют упереться в её лимит.
+                        saveNetworkProfiles(
+                            call.argument<String>("xrayConfigWifi"),
+                            call.argument<String>("xrayConfigCellular")
+                        )
 
                         if (proxyOnly) {
                             // Proxy-only: no TUN tunnel, no VPN permission needed
@@ -88,7 +99,8 @@ class MainActivity : FlutterActivity() {
                                 ssPrefix, proxyOnly = true, showNotification = showNotification,
                                 killSwitch = killSwitch, allowIcmp = allowIcmp,
                                 blockQuic = blockQuic, ipv6Enabled = ipv6Enabled,
-                                heartbeatAction = heartbeatAction, heartbeatThreshold = heartbeatThreshold
+                                heartbeatProbe = heartbeatProbe, heartbeatAction = heartbeatAction,
+                                heartbeatThreshold = heartbeatThreshold, heartbeatUrl = heartbeatUrl
                             )
                             result.success(null)
                         } else {
@@ -99,7 +111,8 @@ class MainActivity : FlutterActivity() {
                                     ssPrefix, proxyOnly = false, showNotification = showNotification,
                                     killSwitch = killSwitch, allowIcmp = allowIcmp,
                                     blockQuic = blockQuic, ipv6Enabled = ipv6Enabled,
-                                    heartbeatAction = heartbeatAction, heartbeatThreshold = heartbeatThreshold
+                                    heartbeatProbe = heartbeatProbe, heartbeatAction = heartbeatAction,
+                                    heartbeatThreshold = heartbeatThreshold, heartbeatUrl = heartbeatUrl
                                 )
                                 result.success(null)
                             }
@@ -109,6 +122,18 @@ class MainActivity : FlutterActivity() {
                     "disconnect" -> {
                         stopVpnService()
                         result.success(null)
+                    }
+
+                    "updateNetworkProfiles" -> {
+                        saveNetworkProfiles(
+                            call.argument<String>("xrayConfigWifi"),
+                            call.argument<String>("xrayConfigCellular")
+                        )
+                        result.success(null)
+                    }
+
+                    "getActiveTransport" -> {
+                        result.success(activeTransport())
                     }
 
                     "getStats" -> {
@@ -143,6 +168,22 @@ class MainActivity : FlutterActivity() {
                         Thread {
                             val latency = pingHost(address, port)
                             runOnUiThread { result.success(latency) }
+                        }.start()
+                    }
+
+                    // Реальный замер задержки через кандидата: поднимает временный
+                    // xray-инстанс с его конфигом. В отличие от TCP-пинга видит,
+                    // что сервер жив на уровне протокола, а не только слушает порт.
+                    "measureOutbound" -> {
+                        val config = call.argument<String>("config") ?: ""
+                        val url = call.argument<String>("url") ?: ""
+                        Thread {
+                            val latency = try {
+                                teapodcore.Teapodcore.measureOutboundDelay(config, url)
+                            } catch (e: Exception) {
+                                -1L
+                            }
+                            runOnUiThread { result.success(if (latency >= 0) latency.toInt() else null) }
                         }.start()
                     }
 
@@ -201,6 +242,7 @@ class MainActivity : FlutterActivity() {
                             "socksUser" to socks["user"],
                             "socksPassword" to socks["password"],
                             "connectedAtMs" to socks["connectedAtMs"],
+                            "networkProfile" to (XrayVpnService.activeProfile ?: ""),
                         ))
                     }
 
@@ -350,6 +392,36 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    /// Тип физической сети под VPN: "wifi" / "cellular" / "other".
+    private fun activeTransport(): String {
+        val cm = getSystemService(ConnectivityManager::class.java) ?: return "other"
+        // activeNetwork при поднятом VPN — сам VPN, поэтому ищем несущую сеть.
+        val caps = cm.allNetworks
+            .mapNotNull { cm.getNetworkCapabilities(it) }
+            .firstOrNull {
+                !it.hasTransport(NetworkCapabilities.TRANSPORT_VPN) &&
+                    it.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            } ?: return "other"
+        return when {
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
+            else -> "other"
+        }
+    }
+
+    /// Пишет конфиги сетевых правил в filesDir; null — правило снято, файл удаляется.
+    private fun saveNetworkProfiles(wifi: String?, cellular: String?) {
+        mapOf(
+            XrayVpnService.PROFILE_WIFI_FILE to wifi,
+            XrayVpnService.PROFILE_CELLULAR_FILE to cellular,
+        ).forEach { (fileName, json) ->
+            val file = java.io.File(filesDir, fileName)
+            try {
+                if (json.isNullOrEmpty()) file.delete() else file.writeText(json)
+            } catch (_: Exception) { }
+        }
+    }
+
     private fun startVpnService(
         xrayConfig: String,
         socksPort: Int,
@@ -365,8 +437,10 @@ class MainActivity : FlutterActivity() {
         allowIcmp: Boolean = false,
         blockQuic: Boolean = false,
         ipv6Enabled: Boolean = false,
+        heartbeatProbe: String = "socks",
         heartbeatAction: String = "reconnect",
         heartbeatThreshold: Int = 3,
+        heartbeatUrl: String = "",
     ) {
         requestBatteryOptimizationExemption()
         val intent = Intent(this, XrayVpnService::class.java).apply {
@@ -385,8 +459,10 @@ class MainActivity : FlutterActivity() {
             putExtra(XrayVpnService.EXTRA_ALLOW_ICMP, allowIcmp)
             putExtra(XrayVpnService.EXTRA_BLOCK_QUIC, blockQuic)
             putExtra(XrayVpnService.EXTRA_IPV6, ipv6Enabled)
+            putExtra(XrayVpnService.EXTRA_HEARTBEAT_PROBE, heartbeatProbe)
             putExtra(XrayVpnService.EXTRA_HEARTBEAT_ACTION, heartbeatAction)
             putExtra(XrayVpnService.EXTRA_HEARTBEAT_THRESHOLD, heartbeatThreshold)
+            putExtra(XrayVpnService.EXTRA_HEARTBEAT_URL, heartbeatUrl)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent)

@@ -51,6 +51,15 @@ class XrayVpnService : VpnService() {
         const val ACTION_CONNECT = "com.teapodstream.CONNECT"
         const val ACTION_DISCONNECT = "com.teapodstream.DISCONNECT"
         const val ACTION_CONNECT_QUICK = "com.teapodstream.CONNECT_QUICK" // reconnect from notification
+        // Конфиги сетевых правил: пишутся из MainActivity, читаются при реконнекте.
+        const val BASE_CONFIG_FILE = "xray_config.json"
+        const val PROFILE_WIFI_FILE = "xray_config_wifi.json"
+        const val PROFILE_CELLULAR_FILE = "xray_config_cellular.json"
+
+        /// Сетевое правило, с которым поднят текущий туннель ("wifi"/"cellular"),
+        /// либо null — работает базовый конфиг. Отдаётся Flutter для показа
+        /// реально подключённого сервера.
+        @Volatile @JvmStatic var activeProfile: String? = null
         const val EXTRA_XRAY_CONFIG = "xray_config"
         const val EXTRA_SOCKS_PORT = "socks_port"
         const val EXTRA_SOCKS_USER = "socks_user"
@@ -66,8 +75,10 @@ class XrayVpnService : VpnService() {
         const val EXTRA_BLOCK_QUIC = "block_quic" // reject UDP/443 inside the TUN via ICMP Port Unreachable
         const val EXTRA_IPV6 = "ipv6_enabled" // add IPv6 address/route to the TUN interface
         const val EXTRA_MTU = "mtu" // TUN MTU size
-        const val EXTRA_HEARTBEAT_ACTION = "heartbeat_action"    // "reconnect" | "urltest"
+        const val EXTRA_HEARTBEAT_PROBE = "heartbeat_probe"      // "socks" | "xrayDelay" | "passive"
+        const val EXTRA_HEARTBEAT_ACTION = "heartbeat_action"    // "reconnect" | "switchConfig"
         const val EXTRA_HEARTBEAT_THRESHOLD = "heartbeat_threshold" // провалов подряд до действия
+        const val EXTRA_HEARTBEAT_URL = "heartbeat_url"          // куда стучится проба
 
         // Static state tracker for querying from Dart
         @Volatile private var currentNativeState: String = "disconnected"
@@ -144,6 +155,7 @@ class XrayVpnService : VpnService() {
         private const val NOTIFICATION_ID = 1
 
         private const val HEARTBEAT_URL_HOST = "cp.cloudflare.com"
+        private const val DEFAULT_HEARTBEAT_URL = "http://cp.cloudflare.com/generate_204"
         private const val CONNECTIVITY_CHECK_HOST = "8.8.8.8"
         private const val HEARTBEAT_INTERVAL_MS = 15_000L
         // Screen off: nobody is watching, the radio should be allowed to idle between
@@ -153,6 +165,9 @@ class XrayVpnService : VpnService() {
         // If tun2socks has more than this many active proxy goroutines the gVisor TCP
         // state machine is leaking connections. Trigger a reconnect to reset it.
         private const val TUN_CONN_LEAK_THRESHOLD = 200L
+        // Минимальный интервал между реконнектами по рассинхрону сетевого правила —
+        // страховка от цикла, если транспорт «дрожит» между проверкой и реконнектом.
+        private const val PROFILE_DRIFT_MIN_INTERVAL_MS = 30_000L
         // If no data has reached the TUN interface for this long while ≥2 connections
         // are active, tun2socks goroutines are stuck (proxy connections held alive by
         // keepalives but real data not flowing). SOCKS5 heartbeat won't catch this.
@@ -243,6 +258,7 @@ class XrayVpnService : VpnService() {
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     @Volatile private var lastUnderlyingNetwork: Network? = null
     @Volatile private var lastConnectedMs: Long = 0L
+    @Volatile private var lastDriftReconnectMs: Long = 0L
     private var prefixProxy: PrefixTcpProxy? = null
     @Volatile private var showNotification = true
     @Volatile private var screenOn = true
@@ -257,10 +273,14 @@ class XrayVpnService : VpnService() {
     private var pendingNetworkRunnable: Runnable? = null
     private var heartbeatThread: Thread? = null
     private val heartbeatFailures = AtomicInteger(0)
+    // Чем щупаем туннель: "socks" (HTTP через SOCKS5), "xrayDelay" (замер внутри
+    // ядра) или "passive" (только метрики tun2socks, без активных проб).
+    private var heartbeatProbe: String = "socks"
     // Поведение при мёртвом туннеле: "reconnect" — переподключить тот же сервер,
-    // "urltest" — отдать решение Flutter (он подберёт живой конфиг).
+    // "switchConfig" — отдать решение Flutter (он подберёт живой конфиг).
     private var heartbeatAction: String = "reconnect"
     private var heartbeatThreshold: Int = 3
+    private var heartbeatUrl: String = DEFAULT_HEARTBEAT_URL
     private var lastTunnelDeadNotifyAt = 0L
     private val wakeProbeRunning = AtomicBoolean(false)
     private val reconnectAttempts = AtomicInteger(0)
@@ -374,15 +394,20 @@ class XrayVpnService : VpnService() {
                 val blockQuic = intent.getBooleanExtra(EXTRA_BLOCK_QUIC, false)
                 val ipv6Enabled = intent.getBooleanExtra(EXTRA_IPV6, false)
                 val mtu = intent.getIntExtra(EXTRA_MTU, 1500).coerceIn(576, 9000)
+                heartbeatProbe = intent.getStringExtra(EXTRA_HEARTBEAT_PROBE) ?: "socks"
                 heartbeatAction = intent.getStringExtra(EXTRA_HEARTBEAT_ACTION) ?: "reconnect"
                 heartbeatThreshold = intent.getIntExtra(EXTRA_HEARTBEAT_THRESHOLD, 3).coerceIn(1, 10)
+                heartbeatUrl = intent.getStringExtra(EXTRA_HEARTBEAT_URL)?.takeIf { it.isNotEmpty() }
+                    ?: DEFAULT_HEARTBEAT_URL
                 // Persist non-sensitive params for CONNECT_QUICK reconnect (no credentials)
                 ConnectionParams(socksPort, excludedPackages, includedPackages,
                     vpnMode, ssPrefix, proxyOnly, showNotification, killSwitch, allowIcmp, blockQuic, ipv6Enabled, mtu,
-                    heartbeatAction, heartbeatThreshold)
+                    heartbeatProbe, heartbeatAction, heartbeatThreshold, heartbeatUrl)
                     .save(filesDir, ::log)
                 userRequestedDisconnect.set(false)
                 reconnectAttempts.set(0)
+                // Полный старт из Flutter: конфиг выбрал сам Flutter, профиль не применялся.
+                activeProfile = null
                 try { File(filesDir, "user_disconnected.flag").delete() } catch (_: Exception) {}
                 ensureForeground()
                 Thread {
@@ -398,8 +423,10 @@ class XrayVpnService : VpnService() {
                 val params = ConnectionParams.load(filesDir)
                 if (params != null) {
                     showNotification = params.showNotification
+                    heartbeatProbe = params.heartbeatProbe
                     heartbeatAction = params.heartbeatAction
                     heartbeatThreshold = params.heartbeatThreshold
+                    heartbeatUrl = params.heartbeatUrl
                 }
                 ensureForeground()
                 if (isRunning.get()) {
@@ -408,7 +435,7 @@ class XrayVpnService : VpnService() {
                     log("info", "CONNECT_QUICK ignored: VPN already running")
                     return START_STICKY
                 }
-                val configFile = File(filesDir, "xray_config.json")
+                val configFile = configFileForCurrentNetwork()
                 if (params != null && configFile.exists()) {
                     val needsPermission = !params.proxyOnly && VpnService.prepare(this) != null
                     if (needsPermission) {
@@ -446,7 +473,8 @@ class XrayVpnService : VpnService() {
                                 params.socksPort, socksUser, socksPassword,
                                 params.excludedPackages, params.includedPackages, params.vpnMode,
                                 params.ssPrefix, params.proxyOnly, params.killSwitch,
-                                params.allowIcmp, params.blockQuic, params.ipv6Enabled, mtu = params.mtu, isReconnect = true
+                                params.allowIcmp, params.blockQuic, params.ipv6Enabled, mtu = params.mtu,
+                                isReconnect = true, persistConfig = configFile.name == BASE_CONFIG_FILE
                             )
                         }.start()
                     }
@@ -461,14 +489,16 @@ class XrayVpnService : VpnService() {
         val params = ConnectionParams.load(filesDir)
         if (params != null) {
             showNotification = params.showNotification
+            heartbeatProbe = params.heartbeatProbe
             heartbeatAction = params.heartbeatAction
             heartbeatThreshold = params.heartbeatThreshold
+            heartbeatUrl = params.heartbeatUrl
         }
         ensureForeground()
         // Auto-connect if saved params exist and user didn't explicitly disconnect.
         // The flag file covers process restarts: the static userRequestedDisconnect
         // is reset to false in a fresh process, but the user's choice must survive.
-        val configFile = File(filesDir, "xray_config.json")
+        val configFile = configFileForCurrentNetwork()
         if (params != null && configFile.exists()
             && !userRequestedDisconnect.get()
             && !File(filesDir, "user_disconnected.flag").exists()
@@ -487,7 +517,8 @@ class XrayVpnService : VpnService() {
                             params.socksPort, socksUser, socksPassword,
                             params.excludedPackages, params.includedPackages, params.vpnMode,
                             params.ssPrefix, params.proxyOnly, params.killSwitch,
-                            params.allowIcmp, params.blockQuic, params.ipv6Enabled, mtu = params.mtu, isReconnect = true
+                            params.allowIcmp, params.blockQuic, params.ipv6Enabled, mtu = params.mtu,
+                            isReconnect = true, persistConfig = configFile.name == BASE_CONFIG_FILE
                         )
                     }.start()
                     return START_STICKY
@@ -546,6 +577,7 @@ class XrayVpnService : VpnService() {
         ipv6Enabled: Boolean = false,
         mtu: Int = 1500,
         isReconnect: Boolean = false,
+        persistConfig: Boolean = true,
     ) {
         if (!isRunning.compareAndSet(false, true)) return
         // Keep the previous TUN (kill-switch sink left by a reconnect) open until the
@@ -571,8 +603,10 @@ class XrayVpnService : VpnService() {
                 xrayConfig
             }
 
-            val configFile = File(filesDir, "xray_config.json")
-            configFile.writeText(finalConfig)
+            // Конфиг сетевого правила в базовый файл не пишем: иначе после первого
+            // же переключения xray_config.json содержал бы конфиг того профиля и
+            // фоллбэк для транспорта без правила залипал бы на нём.
+            if (persistConfig) File(filesDir, "xray_config.json").writeText(finalConfig)
             prepareBinaries(this)
 
             // Set up xray asset path before starting
@@ -1084,13 +1118,14 @@ class XrayVpnService : VpnService() {
         // Idle alone isn't proof of death though — probe the upstream through xray
         // and reconnect only if it actually fails (issue #81: blind reconnects on
         // every wake). onReceive runs on the main thread, so probe off-thread.
+        if (heartbeatProbe == "passive") return
         if (!wakeProbeRunning.compareAndSet(false, true)) return
         Thread {
             try {
                 val port = activeSocksPort
                 if (port <= 0) return@Thread
                 try {
-                    checkTunnelConnectivity(port)
+                    runProbe(port)
                     log("info", "TUN idle ${idleSec}s on wake but tunnel alive, skipping reconnect")
                 } catch (e: Exception) {
                     log("warning", "TUN stall on wake: no data for ${idleSec}s, probe failed (${e.message}), reconnecting")
@@ -1209,6 +1244,12 @@ class XrayVpnService : VpnService() {
                                 NetworkCapabilities.NET_CAPABILITY_VALIDATED)
                             if (!validated) scheduleNetworkChanged()
                         }
+                        // Вне зависимости от активной сети: Wi-Fi мог провалидироваться
+                        // уже после реконнекта, тогда применён профиль другой сети.
+                        if (networkCapabilities.hasCapability(
+                                NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
+                            checkProfileDrift()
+                        }
                     }
                 }
             }
@@ -1250,6 +1291,86 @@ class XrayVpnService : VpnService() {
 
         // Active is not VPN — use it (WiFi or LTE)
         return activeNetwork
+    }
+
+    /// Транспорт для выбора сетевого правила: "wifi" / "cellular" / null.
+    ///
+    /// Считается по VALIDATED-сетям, а не через findPhysicalNetwork(): отключаемый
+    /// Wi-Fi остаётся в allNetworks ещё несколько секунд после onLost и с прежним
+    /// NET_CAPABILITY_INTERNET, из-за чего реконнект брал wifi-профиль вместо LTE.
+    /// VALIDATED снимается сразу, поэтому гонка закрывается.
+    private fun ruleTransport(verbose: Boolean = false): String? {
+        val cm = getSystemService(ConnectivityManager::class.java) ?: return null
+        var wifi = false
+        var cellular = false
+        val seen = StringBuilder()
+        try {
+            for (n in cm.allNetworks) {
+                val c = cm.getNetworkCapabilities(n) ?: continue
+                if (c.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) continue
+                if (!c.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) continue
+                val validated = c.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                when {
+                    c.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> {
+                        seen.append(" wifi(validated=$validated)")
+                        if (validated) wifi = true
+                    }
+                    c.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> {
+                        seen.append(" cellular(validated=$validated)")
+                        if (validated) cellular = true
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            log("warning", "ruleTransport failed: ${e.message}")
+            return null
+        }
+        // Wi-Fi приоритетнее — так же выбирает сам Android, когда валидны обе сети.
+        val result = if (wifi) "wifi" else if (cellular) "cellular" else null
+        if (verbose) log("debug", "network rule: transport=$result networks:$seen")
+        return result
+    }
+
+    /// Правило разошлось с фактической сетью. Возвращённый Wi-Fi валидируется
+    /// дольше, чем debounce реконнекта (2 с), поэтому переключение успевает взять
+    /// LTE-профиль — и залипает: новых сетевых событий уже не будет. Ловим отдельно.
+    private fun checkProfileDrift() {
+        if (!isRunning.get() || userRequestedDisconnect.get()) return
+        val now = System.currentTimeMillis()
+        if (now - lastDriftReconnectMs < PROFILE_DRIFT_MIN_INTERVAL_MS) return
+        val transport = ruleTransport() ?: return
+        if (activeProfile == transport) return
+        val expected =
+            if (transport == "wifi") PROFILE_WIFI_FILE else PROFILE_CELLULAR_FILE
+        // Правила для этого транспорта нет — базовый конфиг и должен работать.
+        if (!File(filesDir, expected).exists()) return
+        lastDriftReconnectMs = now
+        log("info",
+            "network rule: profile drift (${activeProfile ?: "base"} → $transport), reconnecting")
+        scheduleNetworkChanged()
+    }
+
+    /// Файл конфига под текущий транспорт: профиль сетевого правила
+    /// (Wi-Fi / мобильная), иначе конфиг последнего подключения.
+    private fun configFileForCurrentNetwork(): File {
+        val fallback = File(filesDir, BASE_CONFIG_FILE)
+        val profileName = when (ruleTransport(verbose = true)) {
+            "wifi" -> PROFILE_WIFI_FILE
+            "cellular" -> PROFILE_CELLULAR_FILE
+            else -> {
+                activeProfile = null
+                return fallback
+            }
+        }
+        val profile = File(filesDir, profileName)
+        if (!profile.exists()) {
+            log("debug", "network rule: no profile file $profileName, using base config")
+            activeProfile = null
+            return fallback
+        }
+        activeProfile = if (profileName == PROFILE_WIFI_FILE) "wifi" else "cellular"
+        log("info", "network rule: using $profileName")
+        return profile
     }
 
     private fun updateUnderlyingNetworks(cm: ConnectivityManager) {
@@ -1364,20 +1485,20 @@ class XrayVpnService : VpnService() {
             heartbeatFailures.set(0)
             return true
         }
-        if (heartbeatAction == "urltest") {
+        if (heartbeatAction == "switchConfig") {
             val now = System.currentTimeMillis()
             if (now - lastTunnelDeadNotifyAt >= TUNNEL_DEAD_NOTIFY_COOLDOWN_MS) {
                 lastTunnelDeadNotifyAt = now
-                log("warning", "$reason ($failures), requesting urltest switch")
+                log("warning", "$reason (провалов: $failures) → подбор другого конфига")
                 VpnEventStreamHandler.sendTunnelDeadEvent(failures)
                 heartbeatFailures.set(0)
                 return true
             }
             // Flutter не отреагировал за cooldown (приложение убито / нет живых
             // кандидатов) — деградируем в обычный реконнект текущего сервера.
-            log("warning", "urltest: no switch within cooldown, falling back to reconnect")
+            log("warning", "switchConfig: no switch within cooldown, falling back to reconnect")
         }
-        log("warning", "$reason $failures times, reconnecting")
+        log("warning", "$reason (провалов: $failures) → reconnect")
         reconnectInternal()
         return false
     }
@@ -1418,6 +1539,10 @@ class XrayVpnService : VpnService() {
                     if (!warmupDone && warmupDeadline == 0L) {
                         warmupDeadline = System.currentTimeMillis() + HEARTBEAT_WARMUP_TIMEOUT_MS
                     }
+                    // Страховка на случай, если onCapabilitiesChanged не пришёл:
+                    // сверяем применённое сетевое правило с фактической сетью.
+                    checkProfileDrift()
+
                     val port = activeSocksPort
                     if (port <= 0) continue
 
@@ -1445,9 +1570,11 @@ class XrayVpnService : VpnService() {
 
                     // Data reached the TUN within the last interval — the tunnel is
                     // demonstrably alive, no need to burn a radio round-trip on an
-                    // active probe. Idle tunnels still get the full SOCKS5 probe.
-                    if (!isTunRxFresh()) {
-                        checkTunnelConnectivity(port)
+                    // active probe. Idle tunnels still get the full probe, кроме
+                    // пассивного режима: там активных проб нет вовсе, обрыв ловят
+                    // TUN stall watchdog и проверки tun2socks выше.
+                    if (heartbeatProbe != "passive" && !isTunRxFresh()) {
+                        runProbe(port)
                     }
                     warmupDone = true
                     heartbeatFailures.set(0)
@@ -1480,9 +1607,10 @@ class XrayVpnService : VpnService() {
                             val activeConns by lazy { Teapodcore.tunActiveConnections() }
                             when {
                                 idleSec >= TUN_STALL_TIMEOUT_MS / 1000 && activeConns >= 2 -> {
-                                    log("warning", "TUN stall: no data for ${idleSec}s (conns=$activeConns), reconnecting")
-                                    reconnectInternal()
-                                    break
+                                    if (handleHeartbeatExhausted(
+                                            heartbeatThreshold,
+                                            "TUN stall: no data for ${idleSec}s (conns=$activeConns)")
+                                    ) continue else break
                                 }
                                 idleSec >= 60 && activeConns >= 2 && now - lastStallWarnAt >= 60_000 -> {
                                     log("warning", "TUN rx idle for ${idleSec}s (conns=$activeConns)")
@@ -1531,7 +1659,7 @@ class XrayVpnService : VpnService() {
                     while (immediateRetries < 2 && !Thread.currentThread().isInterrupted) {
                         try {
                             Thread.sleep(3000)
-                            checkTunnelConnectivity(activeSocksPort)
+                            runProbe(activeSocksPort)
                             warmupDone = true
                             heartbeatFailures.set(0)
                             break
@@ -1565,7 +1693,50 @@ class XrayVpnService : VpnService() {
         heartbeatFailures.set(0)
     }
 
+    /// Разбор URL пробы: хост, порт и путь. Пресеты плоские (http), но кастомный
+    /// URL пользователь может задать любой — https через SOCKS-пробу не пойдёт,
+    /// поэтому такой URL обслуживается только замером внутри ядра.
+    private data class ProbeUrl(val host: String, val port: Int, val path: String, val https: Boolean)
+
+    private fun parseProbeUrl(raw: String): ProbeUrl {
+        return try {
+            val u = java.net.URI(raw)
+            val https = u.scheme.equals("https", ignoreCase = true)
+            ProbeUrl(
+                host = u.host ?: HEARTBEAT_URL_HOST,
+                port = if (u.port > 0) u.port else if (https) 443 else 80,
+                path = if (u.path.isNullOrEmpty()) "/" else u.path,
+                https = https,
+            )
+        } catch (_: Exception) {
+            ProbeUrl(HEARTBEAT_URL_HOST, 80, "/generate_204", false)
+        }
+    }
+
+    /// Активная проба выбранного типа. Бросает исключение при неудаче —
+    /// heartbeat-цикл считает это провалом.
+    private fun runProbe(port: Int) {
+        when (heartbeatProbe) {
+            "passive" -> return   // сюда не доходим: цикл не вызывает пробу вовсе
+            "xrayDelay" -> {
+                val ms = Teapodcore.measureXrayDelay(heartbeatUrl)
+                if (ms < 0) throw Exception("xray delay probe returned $ms")
+                log("debug", "Heartbeat OK (xray delay ${ms}ms)")
+            }
+            else -> checkTunnelConnectivity(port)
+        }
+    }
+
     private fun checkTunnelConnectivity(port: Int) {
+        val probeUrl = parseProbeUrl(heartbeatUrl)
+        if (probeUrl.https) {
+            // Проба сама говорит plain HTTP поверх SOCKS5 — TLS она не умеет.
+            // Для https-URL честнее замерить через ядро, чем врать об успехе.
+            val ms = Teapodcore.measureXrayDelay(heartbeatUrl)
+            if (ms < 0) throw Exception("xray delay probe returned $ms")
+            log("debug", "Heartbeat OK (https url, measured in core: ${ms}ms)")
+            return
+        }
         var stage = "init"
         val socket = Socket()
         try {
@@ -1598,8 +1769,8 @@ class XrayVpnService : VpnService() {
             }
 
             stage = "socks_connect"
-            val destHost = HEARTBEAT_URL_HOST
-            val destPort = 80
+            val destHost = probeUrl.host
+            val destPort = probeUrl.port
             val domainBytes = destHost.toByteArray()
             out.write(
                 byteArrayOf(5, 1, 0, 3, domainBytes.size.toByte()) +
@@ -1625,14 +1796,15 @@ class XrayVpnService : VpnService() {
             }
 
             stage = "http_request"
-            val request = "GET /generate_204 HTTP/1.1\r\nHost: $destHost\r\nConnection: close\r\n\r\n"
+            val request = "GET ${probeUrl.path} HTTP/1.1\r\nHost: $destHost\r\nConnection: close\r\n\r\n"
             out.write(request.toByteArray())
             out.flush()
 
             stage = "http_response"
             val reader = BufferedReader(InputStreamReader(inp))
             val line = reader.readLine()
-            if (line == null || !line.contains("204")) {
+            val code = line?.split(" ")?.getOrNull(1)?.toIntOrNull()
+            if (code == null || code !in 200..299) {
                 throw Exception("Invalid HTTP response: $line")
             }
 

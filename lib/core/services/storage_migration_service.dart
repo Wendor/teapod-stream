@@ -5,6 +5,7 @@ import 'storage_secure_service.dart';
 /// Safe to call on every launch — skips immediately after the first successful run.
 class StorageMigrationService {
   static const _flagKey = 'storage_migrated_v2';
+  static const _hwidDefaultFlagKey = 'hwid_default_migrated_v1';
   static bool _ranThisSession = false;
 
   static Future<void> runIfNeeded() async {
@@ -12,6 +13,15 @@ class StorageMigrationService {
     _ranThisSession = true;
 
     final prefs = await SharedPreferences.getInstance();
+
+    // HWID is now on by default: some panels return an HTML redirect instead of
+    // the config list when X-Hwid is missing. Drop the stored value once so the
+    // new default applies to existing installs.
+    if (prefs.getBool(_hwidDefaultFlagKey) != true) {
+      await prefs.remove('hwid_enabled');
+      await prefs.setBool(_hwidDefaultFlagKey, true);
+    }
+
     if (prefs.getBool(_flagKey) == true) return;
 
     final secure = StorageSecureService();

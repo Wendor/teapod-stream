@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/models/vpn_config.dart';
 import '../core/models/pinned_ref.dart';
+import '../core/models/network_rule.dart';
 import '../core/models/connections_bundle.dart';
 import '../core/services/config_storage_service.dart';
 import '../core/services/subscription_service.dart' show SubscriptionService, SubscriptionFetchResult, HwidDeviceInfo;
@@ -14,12 +15,16 @@ class ConfigState {
   final List<Subscription> subscriptions;
   final List<PinnedRef> pins;
 
+  /// Правила «сеть → конфиг»; не более одного на каждый [NetTransport].
+  final List<NetworkRule> networkRules;
+
   ConfigState({
     this.configs = const [],
     this.activeConfigId,
     this.activeSubscriptionId,
     this.subscriptions = const [],
     this.pins = const [],
+    this.networkRules = const [],
   });
 
   VpnConfig? get activeConfig => activeConfigId == null
@@ -45,6 +50,21 @@ class ConfigState {
 
   bool isPinned(VpnConfig c) => pins.any((p) => p.matches(c));
 
+  /// Конфиг, назначенный на [transport]; null — правила нет либо конфиг
+  /// с таким именем исчез из подписки.
+  VpnConfig? configForTransport(NetTransport transport) {
+    final rule =
+        networkRules.where((r) => r.transport == transport).firstOrNull;
+    if (rule == null) return null;
+    return configs.where(rule.matches).firstOrNull;
+  }
+
+  /// Транспорты, на которые назначен конфиг (для бейджей в списке).
+  Set<NetTransport> transportsFor(VpnConfig c) => networkRules
+      .where((r) => r.matches(c))
+      .map((r) => r.transport)
+      .toSet();
+
   ConfigState copyWith({
     List<VpnConfig>? configs,
     String? activeConfigId,
@@ -53,6 +73,7 @@ class ConfigState {
     bool clearActiveSub = false,
     List<Subscription>? subscriptions,
     List<PinnedRef>? pins,
+    List<NetworkRule>? networkRules,
   }) {
     return ConfigState(
       configs: configs ?? this.configs,
@@ -60,6 +81,7 @@ class ConfigState {
       activeSubscriptionId: clearActiveSub ? null : (activeSubscriptionId ?? this.activeSubscriptionId),
       subscriptions: subscriptions ?? this.subscriptions,
       pins: pins ?? this.pins,
+      networkRules: networkRules ?? this.networkRules,
     );
   }
 }
@@ -74,7 +96,28 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     final activeSubId = await storage.loadActiveSubscriptionId();
     final subs = await storage.loadSubscriptions();
     final pins = await storage.loadPins();
-    return ConfigState(configs: configs, activeConfigId: activeId, activeSubscriptionId: activeSubId, subscriptions: subs, pins: pins);
+    final rules = await storage.loadNetworkRules();
+    return ConfigState(configs: configs, activeConfigId: activeId, activeSubscriptionId: activeSubId, subscriptions: subs, pins: pins, networkRules: rules);
+  }
+
+  // ─── Network rules ───
+
+  /// Назначает [c] на [transport]; повторный вызов для уже назначенного
+  /// конфига снимает правило. Правило на транспорт всегда одно.
+  Future<void> toggleNetworkRule(VpnConfig c, NetTransport transport) async {
+    final current = state.maybeWhen(data: (d) => d, orElse: () => null);
+    if (current == null) return;
+    final rule = NetworkRule(
+      transport: transport,
+      subscriptionId: c.subscriptionId,
+      name: c.name,
+    );
+    final rules = current.networkRules
+        .where((r) => r.transport != transport)
+        .toList();
+    if (!current.networkRules.contains(rule)) rules.add(rule);
+    await storage.saveNetworkRules(rules);
+    state = AsyncData(current.copyWith(networkRules: rules));
   }
 
   // ─── Pins ───
@@ -170,6 +213,12 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
       // Update existing: remove old configs, add new ones
       subId = existing.first.id;
       final oldConfigs = current.configs.where((c) => c.subscriptionId == subId).toList();
+      // Configs are recreated with fresh ids on every refresh, so the active
+      // selection is remembered by name (same idea as PinnedRef) and restored below.
+      final activeName = oldConfigs
+          .where((c) => c.id == current.activeConfigId)
+          .firstOrNull
+          ?.name;
       // Preserve ping results by matching address:port
       final latencyMap = <String, int>{};
       final pingTimeMap = <String, DateTime>{};
@@ -217,10 +266,19 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
           .map((s) => s.id == subId ? updatedSub : s)
           .toList();
 
+      final restoredActiveId = activeName == null
+          ? null
+          : newConfigs.where((c) => c.name == activeName).firstOrNull?.id;
+      if (restoredActiveId != null) {
+        await storage.saveActiveConfigId(restoredActiveId);
+      }
+
       state = AsyncData(current.copyWith(
         configs: newConfigsList,
         subscriptions: newSubs,
-        clearActive: current.activeConfigId != null &&
+        activeConfigId: restoredActiveId,
+        clearActive: restoredActiveId == null &&
+            current.activeConfigId != null &&
             !newConfigsList.any((c) => c.id == current.activeConfigId),
       ));
     } else {
@@ -254,8 +312,11 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
       ));
     }
 
-    // Set first new config as active if none active
-    if (state.value?.activeConfigId == null && newConfigs.isNotEmpty) {
+    // Set first new config as active if nothing is selected. In subscription
+    // mode the config is picked automatically, so don't drop that mode here.
+    if (state.value?.activeConfigId == null &&
+        state.value?.activeSubscriptionId == null &&
+        newConfigs.isNotEmpty) {
       await setActiveConfig(newConfigs.first.id);
     }
   }

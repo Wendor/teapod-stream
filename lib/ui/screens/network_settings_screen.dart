@@ -34,6 +34,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
   TextEditingController? _muxConcCtrl;
   TextEditingController? _muxXudpCtrl;
   TextEditingController? _hbThresholdCtrl;
+  TextEditingController? _hbUrlCtrl;
 
   void _ensureControllers(AppSettings s) {
     _socksPortCtrl ??= TextEditingController(text: s.socksPort.toString());
@@ -50,6 +51,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
     _muxXudpCtrl ??= TextEditingController(text: s.mux.xudpConcurrency.toString());
     _hbThresholdCtrl ??=
         TextEditingController(text: s.heartbeat.failureThreshold.toString());
+    _hbUrlCtrl ??= TextEditingController(text: s.heartbeat.customUrl);
   }
 
   @override
@@ -67,6 +69,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
     _muxConcCtrl?.dispose();
     _muxXudpCtrl?.dispose();
     _hbThresholdCtrl?.dispose();
+    _hbUrlCtrl?.dispose();
     super.dispose();
   }
 
@@ -591,20 +594,52 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                       SetSectionHeader(t: t, addr: '0x37', label: 'heartbeat'),
                       _PickerRow(
                         t: t,
-                        title: 'При потере туннеля',
-                        hint: 'RECONNECT — переподключить тот же сервер; URLTEST — перебрать кандидатов и уйти на самый быстрый живой',
-                        value: s.heartbeat.action.name.toUpperCase(),
+                        title: 'Тип проверки',
+                        hint: 'SOCKS — HTTP-запрос через SOCKS5 в xray; XRAYDELAY — замер внутри ядра, сразу даёт задержку; PASSIVE — без активных проб, только метрики tun2socks (экономит батарею, обрыв виден лишь при реальном трафике)',
+                        value: s.heartbeat.probe.name.toUpperCase(),
                         locked: locked,
-                        onTap: () => _showEnumPicker<HeartbeatAction>(
+                        onTap: () => _showEnumPicker<HeartbeatProbe>(
                           context,
-                          title: 'heartbeat // action',
-                          values: HeartbeatAction.values,
-                          current: s.heartbeat.action,
+                          title: 'heartbeat // probe',
+                          values: HeartbeatProbe.values,
+                          current: s.heartbeat.probe,
                           labelOf: (v) => v.name.toUpperCase(),
                           onPick: (v) =>
-                              _update(s.copyWith(heartbeat: s.heartbeat.copyWith(action: v))),
+                              _update(s.copyWith(heartbeat: s.heartbeat.copyWith(probe: v))),
                         ),
                       ),
+                      if (s.heartbeat.probe != HeartbeatProbe.passive) ...[
+                        _PickerRow(
+                          t: t,
+                          title: 'Адрес проверки',
+                          hint: 'Куда стучится проба. CUSTOM — свой URL ниже',
+                          value: s.heartbeat.target.name.toUpperCase(),
+                          locked: locked,
+                          onTap: () => _showEnumPicker<HeartbeatTarget>(
+                            context,
+                            title: 'heartbeat // target',
+                            values: HeartbeatTarget.values,
+                            current: s.heartbeat.target,
+                            labelOf: (v) => v.name.toUpperCase(),
+                            onPick: (v) =>
+                                _update(s.copyWith(heartbeat: s.heartbeat.copyWith(target: v))),
+                          ),
+                        ),
+                        if (s.heartbeat.target == HeartbeatTarget.custom)
+                          SetInlineField(
+                            t: t,
+                            label: 'URL',
+                            locked: locked,
+                            child: SetCredField(
+                              t: t,
+                              controller: _hbUrlCtrl!,
+                              enabled: !locked,
+                              hint: 'http://…/generate_204',
+                              onChanged: (v) => _update(
+                                  s.copyWith(heartbeat: s.heartbeat.copyWith(customUrl: v.trim()))),
+                            ),
+                          ),
+                      ],
                       SetInlineField(
                         t: t,
                         label: 'Провалов до реакции',
@@ -624,21 +659,37 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                           },
                         ),
                       ),
-                      if (s.heartbeat.action == HeartbeatAction.urltest)
+                      _PickerRow(
+                        t: t,
+                        title: 'При потере туннеля',
+                        hint: 'RECONNECT — переподключить тот же сервер; SWITCHCONFIG — уйти на самый быстрый живой конфиг',
+                        value: s.heartbeat.failAction.name.toUpperCase(),
+                        locked: locked,
+                        onTap: () => _showEnumPicker<HeartbeatFailAction>(
+                          context,
+                          title: 'heartbeat // action',
+                          values: HeartbeatFailAction.values,
+                          current: s.heartbeat.failAction,
+                          labelOf: (v) => v.name.toUpperCase(),
+                          onPick: (v) =>
+                              _update(s.copyWith(heartbeat: s.heartbeat.copyWith(failAction: v))),
+                        ),
+                      ),
+                      if (s.heartbeat.failAction == HeartbeatFailAction.switchConfig)
                         _PickerRow(
                           t: t,
-                          title: 'Кандидаты для urltest',
-                          hint: 'SUBSCRIPTION — конфиги той же подписки; PINNED — закреплённые; ALL — все сохранённые',
-                          value: s.heartbeat.source.name.toUpperCase(),
+                          title: 'Откуда брать конфиг',
+                          hint: 'SUBSCRIPTION — конфиги той же подписки; PINNED — закреплённые; ALL — все сохранённые. Кандидаты проверяются полноценным замером через сам протокол, не TCP-пингом',
+                          value: s.heartbeat.switchSource.name.toUpperCase(),
                           locked: locked,
-                          onTap: () => _showEnumPicker<UrltestSource>(
+                          onTap: () => _showEnumPicker<SwitchSource>(
                             context,
-                            title: 'urltest // source',
-                            values: UrltestSource.values,
-                            current: s.heartbeat.source,
+                            title: 'heartbeat // source',
+                            values: SwitchSource.values,
+                            current: s.heartbeat.switchSource,
                             labelOf: (v) => v.name.toUpperCase(),
-                            onPick: (v) =>
-                                _update(s.copyWith(heartbeat: s.heartbeat.copyWith(source: v))),
+                            onPick: (v) => _update(
+                                s.copyWith(heartbeat: s.heartbeat.copyWith(switchSource: v))),
                           ),
                         ),
                       const SizedBox(height: 32),

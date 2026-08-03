@@ -105,6 +105,8 @@ object VpnEventStreamHandler : EventChannel.StreamHandler {
             "socksUser" to socksUser,
             "socksPassword" to socksPassword,
             "connectedAtMs" to XrayVpnService.connectedAtMs,
+            // Какое сетевое правило применил native — Flutter показывает именно этот сервер.
+            "networkProfile" to (XrayVpnService.activeProfile ?: ""),
         ))
         appContext?.let { VpnTileService.updateTile(it) }
     }

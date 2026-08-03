@@ -1,6 +1,7 @@
 import 'dart:convert';
 import '../models/vpn_config.dart';
 import '../models/pinned_ref.dart';
+import '../models/network_rule.dart';
 import 'storage_secure_service.dart';
 import 'storage_migration_service.dart';
 
@@ -194,6 +195,23 @@ class ConfigStorageService {
   Future<void> savePins(List<PinnedRef> pins) async {
     await _secure.writePinsRaw(
         jsonEncode(pins.map((p) => p.toJson()).toList()));
+  }
+
+  // ─── Network rules ───
+
+  Future<List<NetworkRule>> loadNetworkRules() async {
+    final raw = await _secure.readNetworkRulesRaw();
+    if (raw == null || raw.isEmpty) return [];
+    final list = jsonDecode(raw) as List<dynamic>;
+    return list
+        .map((e) => NetworkRule.fromJson(e as Map<String, dynamic>))
+        .nonNulls
+        .toList();
+  }
+
+  Future<void> saveNetworkRules(List<NetworkRule> rules) async {
+    await _secure.writeNetworkRulesRaw(
+        jsonEncode(rules.map((r) => r.toJson()).toList()));
   }
 
   Future<void> addSubscription(Subscription sub) async {

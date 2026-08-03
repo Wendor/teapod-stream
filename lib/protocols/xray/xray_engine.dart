@@ -15,18 +15,48 @@ class XrayEngine implements VpnEngine {
   @override
   String get protocolName => 'xray';
 
-  @override
-  Future<void> connect(VpnConfig config, VpnEngineOptions options) async {
-    final String xrayConfig;
+  /// Собирает JSON для xray: готовый конфиг подписки или сгенерированный.
+  static String buildConfigJson(VpnConfig config, VpnEngineOptions options) =>
+      config.rawXrayConfig != null
+          ? XrayConfigBuilder.mergeWithRaw(config.rawXrayConfig!, options)
+          : XrayConfigBuilder.buildJson(config, options);
 
-    if (config.rawXrayConfig != null) {
-      xrayConfig = XrayConfigBuilder.mergeWithRaw(config.rawXrayConfig!, options);
-    } else {
-      xrayConfig = XrayConfigBuilder.buildJson(config, options);
+  /// Текущий физический транспорт: `wifi`, `cellular` или `other`.
+  /// null — native не ответил.
+  Future<String?> getActiveTransport() async {
+    try {
+      return await _channel.invokeMethod<String>('getActiveTransport');
+    } catch (_) {
+      return null;
     }
+  }
+
+  /// Перезаписывает конфиги сетевых правил на диске без разрыва туннеля —
+  /// новые правила применятся при ближайшей смене сети или реконнекте.
+  Future<void> updateNetworkProfiles({String? wifi, String? cellular}) async {
+    try {
+      await _channel.invokeMethod('updateNetworkProfiles', {
+        'xrayConfigWifi': wifi,
+        'xrayConfigCellular': cellular,
+      });
+    } catch (_) {
+      // Non-critical: профили перезапишутся при следующем connect().
+    }
+  }
+
+  @override
+  Future<void> connect(
+    VpnConfig config,
+    VpnEngineOptions options, {
+    String? xrayConfigWifi,
+    String? xrayConfigCellular,
+  }) async {
+    final xrayConfig = buildConfigJson(config, options);
 
     await _channel.invokeMethod('connect', {
       'xrayConfig': xrayConfig,
+      'xrayConfigWifi': xrayConfigWifi,
+      'xrayConfigCellular': xrayConfigCellular,
       'socksPort': options.socksPort,
       'socksUser': options.socksUser,
       'socksPassword': options.socksPassword,
@@ -40,8 +70,10 @@ class XrayEngine implements VpnEngine {
       'blockQuic': options.blockQuic,
       'ipv6Enabled': options.ipv6Enabled,
       'mtu': options.mtu,
-      'heartbeatAction': options.heartbeat.action.name,
+      'heartbeatProbe': options.heartbeat.probe.name,
+      'heartbeatAction': options.heartbeat.failAction.name,
       'heartbeatThreshold': options.heartbeat.failureThreshold,
+      'heartbeatUrl': options.heartbeat.url,
       if (config.ssPrefix != null) 'ssPrefix': config.ssPrefix,
     });
   }
@@ -50,6 +82,22 @@ class XrayEngine implements VpnEngine {
   @override
   Future<void> disconnect() async {
     await _channel.invokeMethod('disconnect');
+  }
+
+  /// Замер задержки через кандидата: временный xray-инстанс с его конфигом
+  /// (`Teapodcore.measureOutboundDelay`). null — сервер не ответил.
+  Future<int?> measureOutbound(VpnConfig config, VpnEngineOptions options, String url) async {
+    try {
+      final xrayConfig = config.rawXrayConfig != null
+          ? XrayConfigBuilder.mergeWithRaw(config.rawXrayConfig!, options)
+          : XrayConfigBuilder.buildJson(config, options);
+      return await _channel.invokeMethod<int>('measureOutbound', {
+        'config': xrayConfig,
+        'url': url,
+      });
+    } catch (_) {
+      return null;
+    }
   }
 
   @override
@@ -94,7 +142,7 @@ class XrayEngine implements VpnEngine {
   }
 
   /// Get current VPN state with SOCKS credentials (for sync on app start).
-  Future<({VpnState state, int socksPort, String socksUser, String socksPassword, int connectedAtMs})>
+  Future<({VpnState state, int socksPort, String socksUser, String socksPassword, int connectedAtMs, String networkProfile})>
       getVpnState() async {
     try {
       final result =
@@ -107,10 +155,11 @@ class XrayEngine implements VpnEngine {
           socksUser: result['socksUser'] as String? ?? '',
           socksPassword: result['socksPassword'] as String? ?? '',
           connectedAtMs: (result['connectedAtMs'] as num?)?.toInt() ?? 0,
+          networkProfile: result['networkProfile'] as String? ?? '',
         );
       }
     } catch (_) {}
-    return (state: VpnState.disconnected, socksPort: 0, socksUser: '', socksPassword: '', connectedAtMs: 0);
+    return (state: VpnState.disconnected, socksPort: 0, socksUser: '', socksPassword: '', connectedAtMs: 0, networkProfile: '');
   }
 
   /// JSON snapshot of tun2socks state (counters, per-connection activity).

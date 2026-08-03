@@ -12,7 +12,14 @@ enum VpnState { disconnected, connecting, connected, disconnecting, error, block
 abstract class VpnEngine {
   String get protocolName;
 
-  Future<void> connect(VpnConfig config, VpnEngineOptions options);
+  /// [xrayConfigWifi] / [xrayConfigCellular] — конфиги сетевых правил,
+  /// native выбирает их при реконнекте по текущему транспорту.
+  Future<void> connect(
+    VpnConfig config,
+    VpnEngineOptions options, {
+    String? xrayConfigWifi,
+    String? xrayConfigCellular,
+  });
   Future<void> disconnect();
 
   Future<int?> pingConfig(VpnConfig config);

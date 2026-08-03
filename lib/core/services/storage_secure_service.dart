@@ -17,6 +17,7 @@ class StorageSecureService {
   static const _deviceIdKey = 'device_id_v2';
   static const _deviceInfoKey = 'device_info_v2';
   static const _pinnedRefsKey = 'pinned_refs_v1';
+  static const _networkRulesKey = 'network_rules_v1';
 
   Future<String?> readProfilesRaw() => _storage.read(key: _profilesKey);
   Future<void> writeProfilesRaw(String json) =>
@@ -27,6 +28,11 @@ class StorageSecureService {
   Future<String?> readPinsRaw() => _storage.read(key: _pinnedRefsKey);
   Future<void> writePinsRaw(String json) =>
       _storage.write(key: _pinnedRefsKey, value: json);
+
+  Future<String?> readNetworkRulesRaw() => _storage.read(key: _networkRulesKey);
+  Future<void> writeNetworkRulesRaw(String json) =>
+      _storage.write(key: _networkRulesKey, value: json);
+
   Future<void> writeConfigsRaw(String json) =>
       _storage.write(key: _configsKey, value: json);
 

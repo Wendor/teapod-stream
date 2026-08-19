@@ -2,6 +2,7 @@
 
 > Оригинальный проект: [Wendor/teapod-stream](https://github.com/Wendor/teapod-stream)
 
+[![Build APK](https://github.com/tigrohvost/teapod-stream-nordic/actions/workflows/build.yml/badge.svg)](https://github.com/tigrohvost/teapod-stream-nordic/actions/workflows/build.yml)
 [![Fork: teapod-stream](https://img.shields.io/badge/upstream-Wendor%2Fteapod--stream-88C0D0?style=for-the-badge&labelColor=2E3440)](https://github.com/Wendor/teapod-stream)
 [![Flutter 3.11+](https://img.shields.io/badge/Flutter-3.11%2B-81A1C1?style=for-the-badge&labelColor=2E3440&logo=flutter)](https://flutter.dev/)
 [![Android 10+](https://img.shields.io/badge/Android-10%2B-A3BE8C?style=for-the-badge&labelColor=2E3440&logo=android)](https://developer.android.com/)
@@ -194,6 +195,45 @@ build/app/outputs/flutter-apk/
 - `x86_64`
 
 > Важно: для публичного релиза стоит использовать собственный release keystore, даже если локальная сборка проходит с текущей конфигурацией проекта.
+
+### Автосборка в GitHub Actions
+
+Workflow: [`.github/workflows/build.yml`](.github/workflows/build.yml).
+
+Что делает:
+
+- `analyze` — `flutter analyze` и `flutter test` на каждый push и pull request;
+- `build` — release APK (split per ABI, с обфускацией), сам скачивает `teapod-core.aar` из последнего релиза [Wendor/teapod-core](https://github.com/Wendor/teapod-core) и geodata, ставит NDK `28.2.13676358` и CMake `3.22.1`.
+
+Когда запускается:
+
+| Событие | Результат |
+| --- | --- |
+| push в `master`, pull request | APK как artifact запуска (90 дней) |
+| push тега `v*` | GitHub Release с APK для всех ABI |
+| ручной запуск (`Run workflow`) | APK как artifact; с опцией `publish_release` — ещё и релиз `v<версия из pubspec>` |
+
+Тег обязан совпадать с версией в `pubspec.yaml` (`v1.6.1` ↔ `version: 1.6.1+10601`), иначе сборка падает. Тег с дефисом (`v1.6.1-beta1`) публикуется как pre-release — такие сборки видит только канал `beta` во встроенном апдейтере.
+
+### Секреты для подписи
+
+Без секретов APK подписывается debug-ключом (такой APK не встанет поверх установленного и ломает встроенный апдейтер), поэтому публикация релиза без keystore намеренно завершается ошибкой.
+
+Нужные секреты репозитория (`Settings → Secrets and variables → Actions`):
+
+| Секрет | Значение |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | keystore `.jks` в base64 |
+| `ANDROID_KEYSTORE_PASSWORD` | `storePassword` из `android/key.properties` |
+| `ANDROID_KEY_ALIAS` | `keyAlias` |
+| `ANDROID_KEY_PASSWORD` | `keyPassword` |
+
+```bash
+gh secret set ANDROID_KEYSTORE_BASE64 < <(base64 -w0 /path/to/release.jks)
+gh secret set ANDROID_KEYSTORE_PASSWORD
+gh secret set ANDROID_KEY_ALIAS
+gh secret set ANDROID_KEY_PASSWORD
+```
 
 ## Используемое ПО и библиотеки
 

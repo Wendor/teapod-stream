@@ -1,0 +1,218 @@
+name: Build APK
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Publish a GitHub Release v<pubspec version> with the built APKs'
+        type: boolean
+        default: false
+      prerelease:
+        description: 'Mark that release as a pre-release'
+        type: boolean
+        default: false
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: '3.41.9'
+  NDK_VERSION: '28.2.13676358'
+  CMAKE_VERSION: '3.22.1'
+
+jobs:
+  analyze:
+    name: Analyze & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      # pubspec declares assets/binaries/ (gitignored); the bundler needs the
+      # directory to exist, but analyze/test do not need the real geodata.
+      - name: Create placeholder asset directory
+        run: mkdir -p assets/binaries && touch assets/binaries/.gitkeep
+
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  build:
+    name: Release APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version and release mode
+        id: meta
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | head -1 | cut -d' ' -f2 | cut -d'+' -f1)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            if [[ "${TAG#v}" != "$VERSION" ]]; then
+              echo "::error::Tag $TAG does not match pubspec version $VERSION"
+              exit 1
+            fi
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+            if [[ "$TAG" == *-* ]]; then
+              echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            fi
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.publish_release }}" == "true" ]]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+            echo "prerelease=${{ inputs.prerelease }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # A release signed with debug keys cannot be installed over an existing
+      # install and would break the in-app updater, so refuse to publish one.
+      - name: Require the release keystore for published builds
+        if: steps.meta.outputs.publish == 'true' && env.ANDROID_KEYSTORE_BASE64 == ''
+        run: |
+          echo "::error::ANDROID_KEYSTORE_BASE64 secret is not set — cannot publish a signed release."
+          exit 1
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install Android NDK and CMake
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+          "$SDKMANAGER" "ndk;$NDK_VERSION" "cmake;$CMAKE_VERSION"
+
+      - name: Resolve latest teapod-core release
+        id: core
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG=$(gh release view -R Wendor/teapod-core --json tagName -q .tagName)
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Cache teapod-core AAR
+        uses: actions/cache@v4
+        with:
+          path: android/app/libs/teapod-core.aar
+          key: teapod-core-${{ steps.core.outputs.tag }}
+
+      # Fat AAR only: teapod-core-<version>.aar, not the per-ABI variants.
+      - name: Download teapod-core AAR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ ! -s android/app/libs/teapod-core.aar ]]; then
+            mkdir -p android/app/libs
+            gh release download "${{ steps.core.outputs.tag }}" -R Wendor/teapod-core \
+              --pattern 'teapod-core-[0-9]*.aar' \
+              --output android/app/libs/teapod-core.aar --clobber
+          fi
+          ls -lh android/app/libs/teapod-core.aar
+
+      - name: Download geodata
+        run: |
+          mkdir -p assets/binaries
+          BASE=https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download
+          curl -fL --retry 3 -o assets/binaries/geoip.dat   "$BASE/geoip.dat"
+          curl -fL --retry 3 -o assets/binaries/geosite.dat "$BASE/geosite.dat"
+          ls -lh assets/binaries
+
+      - name: Configure release signing
+        if: env.ANDROID_KEYSTORE_BASE64 != ''
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          cat > android/key.properties <<EOF
+          storeFile=$RUNNER_TEMP/release.jks
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
+      - name: Warn about debug signing
+        if: env.ANDROID_KEYSTORE_BASE64 == ''
+        run: echo "::warning::No release keystore secret — the APKs will be signed with the Android debug key."
+
+      - run: flutter pub get
+
+      - name: Build release APKs
+        run: |
+          flutter build apk --release --split-per-abi --no-pub \
+            --obfuscate --split-debug-info=build/app/outputs/symbols
+
+      - name: Rename APKs
+        run: |
+          DIR=build/app/outputs/flutter-apk
+          VERSION="${{ steps.meta.outputs.version }}"
+          for ABI in arm64-v8a armeabi-v7a x86_64; do
+            SRC="$DIR/app-$ABI-release.apk"
+            if [[ -f "$SRC" ]]; then
+              mv "$SRC" "$DIR/teapod-stream-$ABI-release-$VERSION.apk"
+            fi
+          done
+          ls -lh "$DIR"
+
+      - name: Upload APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: teapod-stream-${{ steps.meta.outputs.version }}-apk
+          path: build/app/outputs/flutter-apk/teapod-stream-*-release-*.apk
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload debug symbols
+        uses: actions/upload-artifact@v4
+        with:
+          name: teapod-stream-${{ steps.meta.outputs.version }}-symbols
+          path: build/app/outputs/symbols
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Publish GitHub Release
+        if: steps.meta.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.meta.outputs.tag }}"
+          VERSION="${{ steps.meta.outputs.version }}"
+          APKS=(build/app/outputs/flutter-apk/teapod-stream-*-release-"$VERSION".apk)
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" "${APKS[@]}" --clobber
+          else
+            FLAGS=(--title "TeapodStream Nordic $VERSION" --generate-notes --target "$GITHUB_SHA")
+            if [[ "${{ steps.meta.outputs.prerelease }}" == "true" ]]; then
+              FLAGS+=(--prerelease)
+            fi
+            gh release create "$TAG" "${FLAGS[@]}" "${APKS[@]}"
+          fi

@@ -505,10 +505,10 @@ class VpnNotifier extends Notifier<VpnState2> {
       sniffingEnabled: settings.sniffingEnabled,
       mtu: settings.mtu,
       dnsQueryStrategy: settings.dnsQueryStrategy,
-      // XTLS Vision rejects UDP/443 by design: QUIC can never pass, but browsers
-      // keep retrying it (each retry costs a full outbound handshake) and stall
-      // for ~30s before falling back to TCP. Force the ICMP fast-fail.
-      blockQuic: settings.blockQuic || _usesVisionFlow(config),
+      // Go's TUN bridge can reject QUIC immediately for Vision. Rust handles
+      // Vision's UDP policy internally and has no host-side QUIC toggle.
+      blockQuic: CoreFeatures.current.effectiveQuicBlock(
+        requested: settings.blockQuic, usesVision: _usesVisionFlow(config)),
       ipv6Enabled: settings.ipv6Enabled,
       obsProbeIntervalSec: settings.obsProbeIntervalSec,
       tlsFingerprint: settings.tlsFingerprint,

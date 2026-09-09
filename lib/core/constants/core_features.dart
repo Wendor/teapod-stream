@@ -14,6 +14,7 @@ enum CoreFeature {
   upstreamUpdates,
   observatory,
   rawConfig,
+  visionWithTls,
   geoip,
   geosite,
   appRouting,
@@ -46,14 +47,22 @@ class CoreFeatures {
     CoreFeature.upstreamUpdates,
     CoreFeature.observatory,
     CoreFeature.rawConfig,
+    CoreFeature.visionWithTls,
   };
   bool supports(CoreFeature feature) =>
       !isRust || !rustDisabled.contains(feature);
+
+  bool effectiveQuicBlock({
+    required bool requested,
+    required bool usesVision,
+  }) => requested || (supports(CoreFeature.quicBlocking) && usesVision);
 
   /// Available features have no unavailability reason, in either build.
   String? unavailableReason(CoreFeature feature) {
     if (supports(feature)) return null;
     return switch (feature) {
+      CoreFeature.visionWithTls =>
+        'Vision поверх TLS пока недоступен: в ядре 0.6.0 обрывается передача после перехода в direct mode. Используй TCP + Reality + Vision.',
       CoreFeature.geoip ||
       CoreFeature.geosite ||
       CoreFeature.appRouting => null,
@@ -78,7 +87,7 @@ class CoreFeatures {
       CoreFeature.observatory =>
         'Rust: управляемые JSON-конфиги и Observatory пока недоступны.',
       CoreFeature.rawConfig =>
-        'Rust: поддерживается VLESS + xHTTP + Reality; полный JSON пока недоступен.',
+        'Rust: поддерживается VLESS с TLS/Reality, включая TCP + Vision; полный JSON пока недоступен.',
     };
   }
 }

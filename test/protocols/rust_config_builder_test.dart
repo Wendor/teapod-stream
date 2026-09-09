@@ -188,7 +188,7 @@ void main() {
   test('rejects unsupported profiles and options before starting VPN', () {
     expect(
       RustConfigBuilder.supports(
-        VlessParser.parseUri(profile(network: 'tcp'))!,
+        VlessParser.parseUri(profile(network: 'quic'))!,
       ),
       isFalse,
     );

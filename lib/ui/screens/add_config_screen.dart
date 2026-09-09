@@ -103,7 +103,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
                                 letterSpacing: -1,
                                 height: 1)),
                         const SizedBox(height: 6),
-                        Text(CoreFeatures.current.isRust ? 'VLESS · xHTTP · Reality · subscription' : 'vless · vmess · trojan · ss · hy2 · subscription',
+                        Text(CoreFeatures.current.isRust ? 'VLESS · TLS / Reality · Vision · subscription' : 'vless · vmess · trojan · ss · hy2 · subscription',
                             style: AppTheme.mono(
                                 size: 11, color: t.textDim, letterSpacing: 0.5)),
                       ],

@@ -5,9 +5,20 @@ The default build uses Go/teapod-core. The separate Rust build uses
 Rust application ID: `com.teapodstream.rustprobe`. It installs alongside the original TeapodStream.
 No live VPN profile or credentials are bundled.
 
-## Rust support (1.6.3-rust.3)
+## Rust support (1.6.3-rust.4)
 
-- VLESS + XHTTP/SplitHTTP + REALITY, `encryption=none`, empty `flow`.
+- VLESS with `encryption=none` over TCP/RAW, WebSocket, HTTPUpgrade, gRPC,
+  XHTTP/SplitHTTP. TLS is supported on all these carriers; REALITY on TCP/RAW,
+  gRPC and XHTTP/SplitHTTP.
+- `xtls-rprx-vision` and `xtls-rprx-vision-udp443` work over TCP/RAW + REALITY.
+  With `encryption=none`, Vision is rejected on WS/HTTPUpgrade/gRPC/XHTTP.
+- TLS + Vision is deliberately gated: the pinned native TLS transport retains
+  outer TLS decoding in direct mode and the local reference test reproduces EOF
+  after the inner TLS handshake. Ordinary TLS without Vision and REALITY + Vision
+  passed the same payload test. No transport/crypto patch is applied here.
+- TLS certificate verification remains enabled. `pinSHA256` accepts SHA-256 of
+  the full DER certificate as hex (including colon-separated hex) or base64;
+  the Rust config uses `pinnedPeerCertSha256`. `allowInsecure` and ECH are rejected.
 - XHTTP `auto` / `packet-up` / `stream-up` / `stream-one`, host/path/extra,
   REALITY SNI, fingerprint, public key, short ID and spiderX.
 - Direct TUN, TCP/UDP, DNS through the proxy, Android per-app inclusion/exclusion,
@@ -49,7 +60,7 @@ mismatched frontend/native build. There is no runtime switch between engines.
 JAVA_HOME=/path/to/jdk17 ./build.sh release
 ./build.sh test
 
-# Experimental Rust core; installs alongside Go and upgrades rust.1/rust.2.
+# Experimental Rust core; installs alongside Go and upgrades earlier Rust Probe versions.
 JAVA_HOME=/path/to/jdk17 ./build-rust.sh release
 ./build-rust.sh test
 ```
@@ -65,7 +76,7 @@ For direct Flutter commands, prepare dependencies first:
 ./build-rust.sh binaries
 flutter build apk --release --dart-define=TEAPOD_CORE=rust \
   --target-platform android-arm64,android-x64 --split-per-abi \
-  --build-name=1.6.3-rust.3 --build-number=10606
+  --build-name=1.6.3-rust.4 --build-number=10607
 
 # Native Android binding tests use the same base64-encoded Flutter flag.
 cd android
@@ -97,6 +108,39 @@ must be evaluated for both implementations.
 
 Battery savings have not been measured. These builds support comparison; the
 Rust build is not presented as proven to consume less energy.
+
+## Verification of additional VLESS transports (1.6.3-rust.4)
+
+90 Flutter tests passed in each build mode. The local Android interoperability
+campaign passed all 10 enabled combinations against Xray-core v26.7.28,
+including both REALITY/Vision flows. Each combination transferred 128 KiB in
+plain echo and another 128 KiB inside TLS, with byte-for-byte verification.
+TLS/Vision was separately tested and failed after the inner handshake; its flag
+remains disabled. The native core itself was not modified for this expansion.
+
+
+The Dart tests check carrier/security/flow combinations, TCP/RAW and WebSocket
+aliases, preservation of Vision flow/path/SNI, TLS certificate pin conversion,
+unsupported combinations and the per-engine QUIC policy. Rust does not inherit
+Go's automatic host-side QUIC toggle for Vision; the native core enforces the
+selected Vision UDP policy.
+
+The optional local interoperability campaign uses Xray-core v26.7.28, ephemeral
+keys/certificates and echo endpoints bound to host loopback. Flutter exports
+configs through the production parser and builder. Android native clients send
+both plain payloads and an inner TLS session (4 × 32 KiB per stream) through each
+supported combination. It requires a running Android emulator; no live VPN
+profile is needed:
+
+```sh
+JAVA_HOME=/path/to/jdk17 ANDROID_SERIAL=emulator-5554 \
+  python3 scripts/test-rust-transports.py
+```
+
+The default download is the checksum-pinned Linux x86_64 Xray reference binary;
+other platforms can set `XRAY_REFERENCE` to a compatible local binary. The
+harness uses emulator host alias `10.0.2.2`; physical-device battery and WAN
+performance measurements are outside this test.
 
 ## Verification of separate builds (1.6.3-rust.3)
 

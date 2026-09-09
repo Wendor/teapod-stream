@@ -380,6 +380,7 @@ class VlessParser {
   static VpnTransport _parseTransport(String s) {
     switch (s.toLowerCase()) {
       case 'ws':
+      case 'websocket':
         return VpnTransport.ws;
       case 'grpc':
         return VpnTransport.grpc;

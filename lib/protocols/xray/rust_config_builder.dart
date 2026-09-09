@@ -7,27 +7,84 @@ import '../../core/models/routing_settings.dart';
 import '../../core/models/vpn_config.dart';
 import 'xray_config_builder.dart';
 
-/// The deliberately small, validated surface of the first Rust build.
+/// Supported VLESS carrier/security combinations integrated with Android TUN.
 class RustConfigBuilder {
-  static bool supports(VpnConfig config) =>
-      config.rawXrayConfig == null &&
-      config.protocol == VpnProtocol.vless &&
-      (config.transport == VpnTransport.xhttp ||
-          config.transport == VpnTransport.splithttp) &&
-      config.security == VpnSecurity.reality &&
-      (config.encryption == null || config.encryption == 'none') &&
-      (config.flow == null || config.flow!.isEmpty);
+  static const visionFlows = {'xtls-rprx-vision', 'xtls-rprx-vision-udp443'};
+  static const _transports = {
+    VpnTransport.tcp,
+    VpnTransport.ws,
+    VpnTransport.httpupgrade,
+    VpnTransport.grpc,
+    VpnTransport.xhttp,
+    VpnTransport.splithttp,
+  };
+  static const _urlTransports = {
+    'tcp',
+    'raw',
+    'ws',
+    'websocket',
+    'httpupgrade',
+    'grpc',
+    'xhttp',
+    'splithttp',
+  };
+
+  static bool supports(VpnConfig config) => unsupportedReason(config) == null;
+
+  static String? unsupportedReason(VpnConfig config) {
+    if (config.rawXrayConfig != null) {
+      return 'Импорт полного JSON в Rust-сборке пока недоступен.';
+    }
+    if (config.protocol != VpnProtocol.vless) {
+      return 'Rust-сборка поддерживает протокол VLESS.';
+    }
+    if (config.encryption != null && config.encryption != 'none') {
+      return 'Rust-сборка пока принимает VLESS с encryption=none.';
+    }
+    final declaredTransport = Uri.tryParse(
+      config.rawUri ?? '',
+    )?.queryParameters['type'];
+    if (!_transports.contains(config.transport) ||
+        (declaredTransport != null &&
+            !_urlTransports.contains(declaredTransport.toLowerCase()))) {
+      return 'Транспорт не поддерживается. Доступны TCP/RAW, WebSocket, HTTPUpgrade, gRPC и xHTTP.';
+    }
+    if (config.security != VpnSecurity.tls &&
+        config.security != VpnSecurity.reality) {
+      return 'Для VLESS в Rust-сборке выбери TLS или Reality.';
+    }
+    if (config.security == VpnSecurity.reality &&
+        (config.transport == VpnTransport.ws ||
+            config.transport == VpnTransport.httpupgrade)) {
+      return 'Reality поддерживается с TCP/RAW, gRPC и xHTTP. Для WebSocket/HTTPUpgrade нужен TLS.';
+    }
+    final flow = config.flow ?? '';
+    if (flow.isNotEmpty && !visionFlows.contains(flow)) {
+      return 'Неизвестный VLESS flow.';
+    }
+    if (flow.isNotEmpty && config.transport != VpnTransport.tcp) {
+      return 'Vision с encryption=none поддерживается только поверх TCP/RAW с TLS или Reality.';
+    }
+    if (flow.isNotEmpty &&
+        config.security == VpnSecurity.tls &&
+        !CoreFeatures.rust.supports(CoreFeature.visionWithTls)) {
+      return CoreFeatures.rust.unavailableReason(CoreFeature.visionWithTls);
+    }
+    if (config.security == VpnSecurity.tls && config.allowInsecure) {
+      return 'Rust не поддерживает allowInsecure. Используй действительный TLS-сертификат или pinSHA256.';
+    }
+    if (config.ech?.isNotEmpty ?? false) {
+      return 'ECH пока недоступен в Rust-сборке.';
+    }
+    return null;
+  }
 
   static Map<String, dynamic> build(
     VpnConfig config,
     VpnEngineOptions options,
   ) {
-    if (!supports(config)) {
-      throw const FormatException(
-        'Пробная Rust-сборка поддерживает VLESS + xHTTP + Reality '
-        'с encryption=none и без Vision. Импорт полного JSON пока недоступен.',
-      );
-    }
+    final reason = unsupportedReason(config);
+    if (reason != null) throw FormatException(reason);
     if ((!CoreFeatures.rust.supports(CoreFeature.proxyOnly) &&
             options.proxyOnly) ||
         options.httpPort != 0) {
@@ -125,16 +182,23 @@ class RustConfigBuilder {
     // domain. Use the core's default outbound instead, leaving the second
     // routing pass available for GeoIP when GeoSite did not match.
     rules.removeLast();
-    // Both share-link spellings select the same transport in Rust.
     final stream = outbounds.first['streamSettings'] as Map<String, dynamic>;
-    stream['network'] = 'xhttp';
-    stream.remove('splithttpSettings');
-    stream['xhttpSettings'] = {
-      'host': config.wsHost ?? '',
-      'path': config.wsPath ?? '/',
-      'mode': config.xhttpMode ?? 'auto',
-      if (config.xhttpExtra != null) 'extra': config.xhttpExtra,
-    };
+    if (config.transport == VpnTransport.xhttp ||
+        config.transport == VpnTransport.splithttp) {
+      stream['network'] = 'xhttp';
+      stream.remove('splithttpSettings');
+      stream['xhttpSettings'] = {
+        'host': config.wsHost ?? '',
+        'path': config.wsPath ?? '/',
+        'mode': config.xhttpMode ?? 'auto',
+        if (config.xhttpExtra != null) 'extra': config.xhttpExtra,
+      };
+    }
+    if (config.security == VpnSecurity.tls &&
+        (config.pinSHA256?.isNotEmpty ?? false)) {
+      (stream['tlsSettings'] as Map<String, dynamic>)['pinnedPeerCertSha256'] =
+          _certificatePins(config.pinSHA256!);
+    }
     if (options.routing.direction == RoutingDirection.onlySelected) {
       final direct = outbounds.singleWhere(
         (dynamic out) => out['tag'] == 'direct',
@@ -143,6 +207,29 @@ class RustConfigBuilder {
       outbounds.insert(0, direct);
     }
     return result;
+  }
+
+  /// Native Rust expects SHA-256 of the full DER certificate as hex.
+  static String _certificatePins(String value) {
+    final pins = <String>[];
+    for (final entry in value.split(',')) {
+      final raw = entry.trim();
+      final hex = raw.replaceAll(':', '');
+      if (RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(hex)) {
+        pins.add(hex.toLowerCase());
+        continue;
+      }
+      try {
+        final bytes = base64.decode(raw);
+        if (bytes.length != 32) throw const FormatException();
+        pins.add(bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join());
+      } on FormatException {
+        throw const FormatException(
+          'pinSHA256 должен быть SHA-256 сертификата: 64 hex-символа или base64 от 32 байт.',
+        );
+      }
+    }
+    return pins.join(',');
   }
 
   static String buildJson(VpnConfig config, VpnEngineOptions options) =>

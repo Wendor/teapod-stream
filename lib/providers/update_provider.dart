@@ -62,6 +62,10 @@ class UpdateNotifier extends Notifier<UpdateState> {
     state = UpdateChecking();
     try {
       final pkgInfo = await PackageInfo.fromPlatform();
+      if (pkgInfo.packageName == 'com.teapodstream.rustprobe') {
+        state = UpdateError('Пробная Rust-сборка обновляется вручную.');
+        return;
+      }
       final currentVersion = pkgInfo.version;
       final abi = await _channel.invokeMethod<String>('getAbi') ?? 'arm64-v8a';
       final vpn = ref.read(vpnProvider);

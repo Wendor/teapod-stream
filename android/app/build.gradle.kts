@@ -27,8 +27,8 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.teapodstream.teapodstream"
-        minSdk = 29  // Required by teapod-tun2socks AAR (getConnectionOwnerUid)
+        applicationId = "com.teapodstream.rustprobe"
+        minSdk = 29
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -37,7 +37,7 @@ android {
 
     packaging {
         jniLibs {
-            // x86 is not supported by teapod-core
+            // Flutter builds target arm64, armv7 and x86_64.
             excludes.add("lib/x86/**")
         }
     }
@@ -60,7 +60,7 @@ android {
 }
 
 dependencies {
-    implementation(files("libs/teapod-core.aar"))
+    implementation(project(":xraymobile"))
 }
 
 flutter {

@@ -1,3 +1,5 @@
+> **Rust prototype:** this checkout builds Teapod Rust Probe. See [PROTOTYPE.md](PROTOTYPE.md) for supported profiles, limitations and build instructions.
+
 # TeapodStream
 
 VPN-клиент для Android с поддержкой протокола Xray и интерфейсом TUN.

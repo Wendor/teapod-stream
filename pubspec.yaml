@@ -1,7 +1,7 @@
 name: teapodstream
 description: "VPN client supporting xray protocol with TUN interface"
 publish_to: 'none'
-version: 1.6.3+10603
+version: 1.6.3-rust.2+10605
 
 environment:
   sdk: ^3.11.4
@@ -57,5 +57,6 @@ flutter_launcher_icons:
 
 flutter:
   uses-material-design: true
+
   assets:
     - assets/binaries/

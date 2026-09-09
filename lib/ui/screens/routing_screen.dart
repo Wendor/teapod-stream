@@ -129,7 +129,7 @@ class _RoutingBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context).extension<TeapodTokens>()!;
     final ruleStr = _ruleCount.toString().padLeft(2, '0');
-    final geoHint = geoMissing ? 'Загрузите geo-базы (Настройки → geo.data)' : null;
+    final geoHint = geoMissing ? 'Загрузите базы ниже, в разделе geo.data' : null;
     const sniffHint = 'Требует снифинг (Настройки → xray)';
     final domainLocked  = !sniffingEnabled;
     final geositeLocked = geoMissing || !sniffingEnabled;
@@ -334,6 +334,11 @@ class _RoutingBody extends StatelessWidget {
 
                 // 0x60 GEO.DATA
                 _SectionHeader(t: t, addr: '0x60', label: 'geo.data'),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                  child: Text('Обновлённые базы применятся после переподключения VPN.',
+                      style: AppTheme.mono(size: 10, color: t.textMuted)),
+                ),
                 GestureDetector(
                   onTap: () => showModalBottomSheet<void>(
                     context: context,

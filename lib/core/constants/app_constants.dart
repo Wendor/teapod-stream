@@ -1,5 +1,5 @@
 class AppConstants {
-  static const String appName = 'TeapodStream';
+  static const String appName = 'Teapod Rust Probe';
   static const String appVersion = '1.1.0';
 
   /// Populated at startup from the xray binary via getBinaryVersions().

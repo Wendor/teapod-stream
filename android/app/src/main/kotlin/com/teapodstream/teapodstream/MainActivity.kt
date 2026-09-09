@@ -125,10 +125,18 @@ class MainActivity : FlutterActivity() {
                         result.success(true)
                     }
 
-                    "prepareBinaries" -> {
+                    "prepareBinaries", "getGeodataDir", "activateGeodata" -> {
+                        val revision = call.argument<String>("revision")
                         Thread {
-                            val success = XrayVpnService.prepareBinaries(this)
-                            runOnUiThread { result.success(success) }
+                            try {
+                                if (call.method == "activateGeodata") {
+                                    GeodataStore.activate(this, requireNotNull(revision))
+                                }
+                                val directory = GeodataStore.directory(this).absolutePath
+                                runOnUiThread { result.success(if (call.method == "prepareBinaries") true else directory) }
+                            } catch (error: Exception) {
+                                runOnUiThread { result.error("GEODATA_ERROR", error.message, null) }
+                            }
                         }.start()
                     }
 
@@ -209,7 +217,7 @@ class MainActivity : FlutterActivity() {
                     }
 
                     "getTunnelDiag" -> {
-                        result.success(teapodcore.Teapodcore.getTunDiagnostics())
+                        result.success(RustCore.diagnostics())
                     }
 
                     "setLogsEnabled" -> {
@@ -482,8 +490,8 @@ class MainActivity : FlutterActivity() {
     private fun getBinaryVersions(): Map<String, String> {
         val versions = mutableMapOf<String, String>()
         try {
-            versions["xray"] = teapodcore.Teapodcore.getXrayVersion()
-            versions["tun2socks"] = "teapod-core (AAR)"
+            versions["xray"] = RustCore.VERSION
+            versions["tun2socks"] = "Rust direct TUN"
         } catch (e: Exception) {
             versions["xray"] = "Error"
             versions["tun2socks"] = "Error"

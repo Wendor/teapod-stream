@@ -466,9 +466,8 @@ class VpnNotifier extends Notifier<VpnState2> {
         ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null) ??
             const AppSettings();
 
-    final socksCredentials = settings.randomCredentials
-        ? XrayEngine.generateSocksCredentials()
-        : (user: settings.socksUser, password: settings.socksPassword);
+    // Rust's loopback diagnostic proxy currently supports no-auth only.
+    const socksCredentials = (user: '', password: '');
 
     final actualSocksPort = settings.randomPort
         ? (10000 + Random().nextInt(50000))

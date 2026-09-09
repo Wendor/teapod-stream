@@ -1,0 +1,24 @@
+--- a/crates/xray-config/src/geodata.rs
++++ b/crates/xray-config/src/geodata.rs
+@@ -22,7 +22,7 @@
+ const MAX_GEODATA_DOMAIN_ATTRIBUTES: usize = 400_000;
+ const MAX_GEODATA_DOMAIN_VALUE_SIZE: usize = 4 * 1024;
+ const MAX_GEODATA_ATTRIBUTE_SIZE: usize = 1024;
+-const MAX_GEODATA_CIDRS: usize = 250_000;
++const MAX_GEODATA_CIDRS: usize = 500_000;
+ const MAX_GEODATA_CIDR_SIZE: usize = 128;
+ 
+ #[derive(Debug)]
+--- a/crates/xray-config/src/parser.rs
++++ b/crates/xray-config/src/parser.rs
+@@ -41,8 +41,8 @@
+ const MAX_DNS_QTYPE_SELECTORS: usize = 65_536;
+ const MAX_ROUTING_PORT_SELECTORS: usize = 65_536;
+ pub const MAX_CONFIG_DOMAIN_MATCHERS: usize = 250_000;
+-const MAX_CONFIG_IP_MATCHERS: usize = 300_000;
+-const MAX_CONFIG_MATCHERS: usize = 500_000;
++const MAX_CONFIG_IP_MATCHERS: usize = 750_000;
++const MAX_CONFIG_MATCHERS: usize = 1_000_000;
+ const MAX_CONFIG_GEODATA_ATTR_FILTERS: usize = 32;
+ const MAX_CONFIG_GEODATA_ATTRIBUTE_SIZE: usize = 256;
+ const MAX_DNS_SERVERS: usize = 8;

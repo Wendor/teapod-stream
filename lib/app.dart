@@ -51,7 +51,7 @@ class _TeapodMaterialApp extends ConsumerWidget {
       orElse: () => 1.0,
     );
     return MaterialApp(
-      title: 'TeapodStream',
+      title: 'Teapod Rust Probe',
       theme:     AppTheme.build(Brightness.light, accent),
       darkTheme:  AppTheme.build(Brightness.dark, accent),
       themeMode: themeMode,
@@ -101,7 +101,6 @@ class _AppShellState extends ConsumerState<_AppShell>
       if (_autoConnectAttempted) return;
       _autoConnectAttempted = true;
       _tryAutoConnect();
-      _scheduleUpdateCheck();
     });
 
     _deeplinkSubscription = _eventChannel
@@ -126,15 +125,6 @@ class _AppShellState extends ConsumerState<_AppShell>
       // Не гонять MethodChannel-опрос статистики каждую секунду в фоне —
       // syncNativeState() перезапустит его при возврате.
       ref.read(vpnProvider.notifier).pauseStatsPolling();
-    }
-  }
-
-  Future<void> _scheduleUpdateCheck() async {
-    await Future.delayed(const Duration(seconds: 5));
-    if (!mounted) return;
-    final updateState = ref.read(updateProvider);
-    if (updateState is UpdateIdle) {
-      ref.read(updateProvider.notifier).checkForUpdate();
     }
   }
 

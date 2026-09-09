@@ -16,7 +16,7 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
-        android:label="TeapodStream"
+        android:label="Teapod Rust Probe"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:extractNativeLibs="true"
@@ -72,7 +72,7 @@
         <service
             android:name=".VpnTileService"
             android:exported="true"
-            android:label="TeapodStream VPN"
+            android:label="Teapod Rust Probe"
             android:icon="@drawable/ic_vpn_tile"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>

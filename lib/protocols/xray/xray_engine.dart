@@ -4,7 +4,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/interfaces/vpn_engine.dart';
 import '../../core/models/vpn_config.dart';
 import '../../core/models/vpn_log_entry.dart';
-import 'xray_config_builder.dart';
+import 'rust_config_builder.dart';
 
 /// XrayEngine is a thin MethodChannel client — it sends commands to the native
 /// Android VPN service and nothing else. All state, stats, and log events are
@@ -18,18 +18,17 @@ class XrayEngine implements VpnEngine {
   @override
   Future<void> connect(VpnConfig config, VpnEngineOptions options) async {
     final String xrayConfig;
-
-    if (config.rawXrayConfig != null) {
-      xrayConfig = XrayConfigBuilder.mergeWithRaw(config.rawXrayConfig!, options);
-    } else {
-      xrayConfig = XrayConfigBuilder.buildJson(config, options);
+    try {
+      xrayConfig = RustConfigBuilder.buildJson(config, options);
+    } on FormatException catch (error) {
+      throw PlatformException(code: 'UNSUPPORTED_CONFIG', message: error.message);
     }
 
     await _channel.invokeMethod('connect', {
       'xrayConfig': xrayConfig,
       'socksPort': options.socksPort,
-      'socksUser': options.socksUser,
-      'socksPassword': options.socksPassword,
+      'socksUser': '',
+      'socksPassword': '',
       'excludedPackages': options.excludedPackages.toList(),
       'includedPackages': options.includedPackages.toList(),
       'vpnMode': options.vpnMode.name,
@@ -67,7 +66,7 @@ class XrayEngine implements VpnEngine {
   }
 
   @override
-  bool supportsConfig(VpnConfig config) => true;
+  bool supportsConfig(VpnConfig config) => RustConfigBuilder.supports(config);
 
   Future<Map<String, String>> getBinaryVersions() async {
     try {

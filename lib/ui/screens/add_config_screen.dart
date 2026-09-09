@@ -1,3 +1,4 @@
+import '../../core/constants/core_features.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -102,7 +103,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
                                 letterSpacing: -1,
                                 height: 1)),
                         const SizedBox(height: 6),
-                        Text('vless · vmess · trojan · ss · hy2 · subscription',
+                        Text(CoreFeatures.current.isRust ? 'VLESS · xHTTP · Reality · subscription' : 'vless · vmess · trojan · ss · hy2 · subscription',
                             style: AppTheme.mono(
                                 size: 11, color: t.textDim, letterSpacing: 0.5)),
                       ],

@@ -1,3 +1,4 @@
+import '../../core/constants/core_features.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -150,7 +151,7 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
             // ── Hero panel ──────────────────────────────────────
             HeroPanel(
               t: t,
-              tagline: 'ЖУРНАЛ · XRAY · TUN2SOCKS',
+              tagline: CoreFeatures.current.isRust ? 'ЖУРНАЛ · XRAY-RUST · TUN' : 'ЖУРНАЛ · XRAY · TUN2SOCKS',
               title: 'LOGS',
               subtitle: Row(
                 children: [

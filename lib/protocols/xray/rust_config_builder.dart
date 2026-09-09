@@ -1,3 +1,4 @@
+import '../../core/constants/core_features.dart';
 import 'dart:convert';
 
 import '../../core/interfaces/vpn_engine.dart';
@@ -27,20 +28,25 @@ class RustConfigBuilder {
         'с encryption=none и без Vision. Импорт полного JSON пока недоступен.',
       );
     }
-    if (options.proxyOnly || options.httpPort != 0) {
+    if ((!CoreFeatures.rust.supports(CoreFeature.proxyOnly) &&
+            options.proxyOnly) ||
+        options.httpPort != 0) {
       throw const FormatException(
         'В Rust-пробнике доступен только режим VPN (TUN).',
       );
     }
-    if (options.mux.enabled ||
-        options.fragment.enabled ||
-        options.noise.enabled ||
+    if ((!CoreFeatures.rust.supports(CoreFeature.mux) && options.mux.enabled) ||
+        (!CoreFeatures.rust.supports(CoreFeature.fragmentation) &&
+            options.fragment.enabled) ||
+        (!CoreFeatures.rust.supports(CoreFeature.noise) &&
+            options.noise.enabled) ||
         config.finalmask != null) {
       throw const FormatException(
         'Отключи Mux, фрагментацию, noise и finalmask для Rust-пробника.',
       );
     }
-    if (options.routing.adBlockEnabled) {
+    if (!CoreFeatures.rust.supports(CoreFeature.adBlocking) &&
+        options.routing.adBlockEnabled) {
       throw const FormatException(
         'Блокировка рекламы пока недоступна в Rust-пробнике.',
       );
@@ -55,10 +61,16 @@ class RustConfigBuilder {
         'Включи определение доменов для GeoSite и доменных правил.',
       );
     }
-    if (options.dnsMode != DnsMode.proxy) {
+    if (!CoreFeatures.rust.supports(CoreFeature.directDns) &&
+        options.dnsMode != DnsMode.proxy) {
       throw const FormatException('Для Rust-пробника выбери DNS «Через VPN».');
     }
-    if (options.blockQuic || !options.enableUdp || options.mtu != 1500) {
+    if ((!CoreFeatures.rust.supports(CoreFeature.quicBlocking) &&
+            options.blockQuic) ||
+        (!CoreFeatures.rust.supports(CoreFeature.udpToggle) &&
+            !options.enableUdp) ||
+        (!CoreFeatures.rust.supports(CoreFeature.customMtu) &&
+            options.mtu != 1500)) {
       throw const FormatException(
         'Для Rust-пробника нужны UDP, MTU 1500 и выключенная блокировка QUIC.',
       );

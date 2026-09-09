@@ -1,3 +1,4 @@
+import '../core/constants/core_features.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/services.dart';
@@ -62,7 +63,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
     state = UpdateChecking();
     try {
       final pkgInfo = await PackageInfo.fromPlatform();
-      if (pkgInfo.packageName == 'com.teapodstream.rustprobe') {
+      if (!CoreFeatures.current.supports(CoreFeature.upstreamUpdates)) {
         state = UpdateError('Пробная Rust-сборка обновляется вручную.');
         return;
       }

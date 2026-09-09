@@ -1,3 +1,5 @@
+import '../../core/constants/core_features.dart';
+import '../widgets/feature_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/routing_settings.dart';
@@ -306,13 +308,19 @@ class _RoutingBody extends StatelessWidget {
 
                 // 0x50 EXTRAS
                 _SectionHeader(t: t, addr: '0x50', label: 'extras'),
-                _RowToggle(
-                  t: t,
-                  title: 'Блокировка рекламы',
-                  hint: geoHint ?? 'geosite:category-ads-all + geosite:win-spy → block',
-                  value: routing.adBlockEnabled,
-                  locked: geoMissing,
-                  onChange: (v) => onUpdate(routing.copyWith(adBlockEnabled: v)),
+                FeatureGate(
+                  feature: CoreFeature.adBlocking,
+                  onReset: routing.adBlockEnabled
+                      ? () => onUpdate(routing.copyWith(adBlockEnabled: false))
+                      : null,
+                  child: _RowToggle(
+                    t: t,
+                    title: 'Блокировка рекламы',
+                    hint: geoHint ?? 'geosite:category-ads-all + geosite:win-spy → block',
+                    value: routing.adBlockEnabled,
+                    locked: geoMissing,
+                    onChange: (v) => onUpdate(routing.copyWith(adBlockEnabled: v)),
+                  ),
                 ),
                 _RowToggle(
                   t: t,

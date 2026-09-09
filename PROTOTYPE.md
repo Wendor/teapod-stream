@@ -1,10 +1,11 @@
-# Teapod Rust Probe
+# TeapodStream: Go and experimental Rust builds
 
-Experimental Android fork using **xray-rust 0.6.0+geo.1** and its direct TUN file-descriptor backend.
-Application ID: `com.teapodstream.rustprobe`. It installs alongside the original TeapodStream.
+The default build uses Go/teapod-core. The separate Rust build uses
+**xray-rust 0.6.0+geo.1** and its direct TUN file-descriptor backend.
+Rust application ID: `com.teapodstream.rustprobe`. It installs alongside the original TeapodStream.
 No live VPN profile or credentials are bundled.
 
-## Supported configuration (1.6.3-rust.2)
+## Rust support (1.6.3-rust.3)
 
 - VLESS + XHTTP/SplitHTTP + REALITY, `encryption=none`, empty `flow`.
 - XHTTP `auto` / `packet-up` / `stream-up` / `stream-one`, host/path/extra,
@@ -25,7 +26,7 @@ No live VPN profile or credentials are bundled.
   after changing routing. FakeDNS returns IPv4 and suppresses AAAA in this mode.
 - Ad blocking remains unsupported in this build.
 
-The first build requires MTU 1500, UDP enabled and QUIC blocking disabled.
+The Rust build requires MTU 1500, UDP enabled and QUIC blocking disabled.
 Proxy-only mode, raw Xray JSON, legacy mux, fragmentation/noise and other proxy
 protocols are rejected with an error before VPN startup. ICMP handling is the
 Rust core's local synthetic behavior; it is not a remote ping measurement.
@@ -36,31 +37,84 @@ Device TUN traffic does not traverse this listener. SOCKS credentials settings
 do not apply to this experimental build. Traffic counters report core payload
 accounting, rather than the original tun2socks IP-byte counters.
 
-## Build
+## Build selection and feature flags
 
-Requires Flutter/Dart compatible with `pubspec.yaml`, Android SDK/NDK
-28.2.13676358, CMake 3.22.1, Python 3, rustup and JDK 17 (or a compatible JDK).
-The first build installs Rust 1.96.0 and the two Android targets locally.
-If Android Studio's JBR is too new for Gradle/Kotlin, set `JAVA_HOME` for this
-command. This does not modify global Flutter settings.
+`TEAPOD_CORE` is a compile-time flag, with `go` as the default. Flutter forwards
+it to Gradle in `dart-defines`; Gradle selects exactly one native source set and
+dependency. Native `getEngine` is checked before connecting, rejecting a stale or
+mismatched frontend/native build. There is no runtime switch between engines.
 
 ```sh
+# Original Go core; Rust/rustup is not needed.
 JAVA_HOME=/path/to/jdk17 ./build.sh release
 ./build.sh test
-flutter analyze
+
+# Experimental Rust core; installs alongside Go and upgrades rust.1/rust.2.
+JAVA_HOME=/path/to/jdk17 ./build-rust.sh release
+./build-rust.sh test
 ```
 
-`scripts/fetch-rust-core.py` verifies the bundled databases and invokes the
-native build. `scripts/build-rust-core.py` fetches the pinned upstream commit,
-applies `third_party/xray-rust/geo-budgets.patch` and builds the native libraries.
-Only geodata parsing budgets differ from upstream Rust 0.6.0. See
-[the binding notes](android/xraymobile/README.md) for provenance and limits.
-Generated APKs are in `build/app/outputs/flutter-apk/`:
-`app-arm64-v8a-release.apk` for phones and `app-x86_64-release.apk` for emulators.
-The prototype uses the local Android debug signing key even in release mode.
+Artifacts are copied to `build/artifacts/go/` and `build/artifacts/rust/`.
+Go builds include arm64, armv7 and x86_64; Rust builds include arm64 and x86_64.
+Both are release builds with AOT/R8; they currently use the local Android debug
+signing key. A published release signing setup is a separate task.
 
-Automatic upstream APK updates are disabled. The original project's README
-below describes upstream features, not the support boundary of this probe.
+For direct Flutter commands, prepare dependencies first:
+
+```sh
+./build-rust.sh binaries
+flutter build apk --release --dart-define=TEAPOD_CORE=rust \
+  --target-platform android-arm64,android-x64 --split-per-abi \
+  --build-name=1.6.3-rust.3 --build-number=10606
+
+# Native Android binding tests use the same base64-encoded Flutter flag.
+cd android
+JAVA_HOME=/path/to/jdk17 ./gradlew :xraymobile:connectedDebugAndroidTest \
+  -Pdart-defines=VEVBUE9EX0NPUkU9cnVzdA==
+```
+
+`lib/core/constants/core_features.dart` is the per-core feature matrix.
+Unsupported controls remain visible inside `FeatureGate`, with interaction and
+keyboard focus disabled and an explanation. Imported incompatible settings have
+an explicit reset action. The config builder still rejects unsupported values;
+a UI change alone cannot bypass validation. Go exposes its existing controls.
+Rust's upstream update buttons are gated; its source link points at this fork.
+
+Shared requirements: Flutter/Dart compatible with `pubspec.yaml`, Android SDK,
+NDK 28.2.13676358, CMake 3.22.1, Python 3 and JDK 17 (or a compatible JDK).
+Rust additionally needs rustup; its first build installs Rust 1.96.0 and the
+Android targets. `JAVA_HOME` is honored without changing global Flutter settings.
+
+`fetch-go-core.py` downloads checksum-pinned teapod-core 1.1.15. Both builds use
+the same checksum-pinned geodata assets. `build-rust-core.py` builds the pinned
+Rust source with the documented geodata budget patch. See
+[Android binding notes](android/xraymobile/README.md).
+
+The original Go service is preserved in `android/app/src/go/`; the tested Rust
+service and geodata adapter are in `android/app/src/rust/`. Notifications and
+service interfaces remain compatible with the shared UI. Future lifecycle fixes
+must be evaluated for both implementations.
+
+Battery savings have not been measured. These builds support comparison; the
+Rust build is not presented as proven to consume less energy.
+
+## Verification of separate builds (1.6.3-rust.3)
+
+- 71 Flutter tests passed in each mode (`TEAPOD_CORE=go` and `rust`).
+  Coverage includes unchanged Go feature availability, visible-but-disabled Rust
+  controls, explicit reset of an imported unsupported value, per-core config and
+  SOCKS credentials, and refusal to connect with a mismatched native engine.
+- Release APKs were built for all three Go ABIs and both Rust ABIs. Archive
+  inspection confirms exactly the selected core: `libgojni.so` in Go and
+  `libxray_ffi.so` / `libxray_mobile_jni.so` in Rust.
+- Both installed builds connected through their Flutter UI with the same separately
+  imported VLESS/XHTTP/REALITY profile. A different application UID received HTTP
+  204 through each VPN, followed by a successful explicit disconnect.
+- The Go service source is byte-for-byte identical to the upstream baseline.
+- The installed Rust network screen retains SOCKS authentication and proxy-only
+  controls with disabled interaction and explanatory text.
+- Static analysis has no new findings; three existing `onReorder` deprecation
+  infos remain.
 
 ## Verification of routing (1.6.3-rust.2)
 

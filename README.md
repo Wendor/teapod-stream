@@ -1,4 +1,4 @@
-> **Rust prototype:** this checkout builds Teapod Rust Probe. See [PROTOTYPE.md](PROTOTYPE.md) for supported profiles, limitations and build instructions.
+> **Experimental Rust build:** normal commands build Go; `./build-rust.sh release` builds Rust separately. See [PROTOTYPE.md](PROTOTYPE.md) for flags, tested support and limitations. No measured battery-life claim.
 
 # TeapodStream
 

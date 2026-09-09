@@ -1,3 +1,4 @@
+import '../core/constants/core_features.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
@@ -467,7 +468,10 @@ class VpnNotifier extends Notifier<VpnState2> {
             const AppSettings();
 
     // Rust's loopback diagnostic proxy currently supports no-auth only.
-    const socksCredentials = (user: '', password: '');
+    final socksCredentials = CoreFeatures.current.isRust
+        ? (user: '', password: '')
+        : settings.randomCredentials ? XrayEngine.generateSocksCredentials()
+        : (user: settings.socksUser, password: settings.socksPassword);
 
     final actualSocksPort = settings.randomPort
         ? (10000 + Random().nextInt(50000))

@@ -1,2 +1,5 @@
 -keep class org.xrayrust.mobile.** { *; }
 -keep class com.teapodstream.teapodstream.** { *; }
+-keep class go.** { *; }
+-keep class teapodcore.** { *; }
+-keep class tun2socks.** { *; }

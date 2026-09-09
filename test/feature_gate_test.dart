@@ -25,7 +25,7 @@ void main() {
     );
     expect(find.text('Mux'), findsOneWidget);
     expect(
-      find.text(CoreFeatures.rust.unavailableReason(CoreFeature.mux)),
+      find.text(CoreFeatures.rust.unavailableReason(CoreFeature.mux)!),
       findsOneWidget,
     );
     await tester.tap(find.byType(Switch), warnIfMissed: false);
@@ -52,7 +52,7 @@ void main() {
     await tester.tap(find.byType(Switch));
     expect(changed, isTrue);
     expect(
-      find.text(CoreFeatures.rust.unavailableReason(CoreFeature.mux)),
+      find.text(CoreFeatures.rust.unavailableReason(CoreFeature.mux)!),
       findsNothing,
     );
   });

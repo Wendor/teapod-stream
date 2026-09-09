@@ -35,7 +35,8 @@ class FeatureGate extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                features.unavailableReason(feature),
+                features.unavailableReason(feature) ??
+                    'Функция недоступна в выбранной сборке.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               if (onReset != null)

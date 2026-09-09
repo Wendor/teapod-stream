@@ -50,29 +50,35 @@ class CoreFeatures {
   bool supports(CoreFeature feature) =>
       !isRust || !rustDisabled.contains(feature);
 
-  String unavailableReason(CoreFeature feature) => switch (feature) {
-    CoreFeature.geoip ||
-    CoreFeature.geosite ||
-    CoreFeature.appRouting => 'Функция недоступна в выбранной сборке.',
-    CoreFeature.socksAuthentication =>
-      'Rust: локальный SOCKS работает без логина и пароля.',
-    CoreFeature.proxyOnly => 'Rust: доступен режим VPN через TUN.',
-    CoreFeature.udpToggle => 'Rust: UDP включён постоянно.',
-    CoreFeature.icmpToggle =>
-      'Rust: ICMP обрабатывается ядром локально; настройка не применяется.',
-    CoreFeature.quicBlocking =>
-      'Блокировка QUIC пока недоступна в Rust-сборке.',
-    CoreFeature.customMtu => 'Rust: используется MTU 1500.',
-    CoreFeature.fragmentation => 'Фрагментация пока недоступна в Rust-сборке.',
-    CoreFeature.noise => 'Шумы пока недоступны в Rust-сборке.',
-    CoreFeature.mux => 'Mux пока недоступен в Rust-сборке.',
-    CoreFeature.directDns => 'Rust: DNS должен идти через VPN.',
-    CoreFeature.adBlocking =>
-      'Блокировка рекламы пока недоступна в Rust-сборке.',
-    CoreFeature.upstreamUpdates => 'Rust-сборка обновляется вручную из форка.',
-    CoreFeature.observatory =>
-      'Rust: управляемые JSON-конфиги и Observatory пока недоступны.',
-    CoreFeature.rawConfig =>
-      'Rust: поддерживается VLESS + xHTTP + Reality; полный JSON пока недоступен.',
-  };
+  /// Available features have no unavailability reason, in either build.
+  String? unavailableReason(CoreFeature feature) {
+    if (supports(feature)) return null;
+    return switch (feature) {
+      CoreFeature.geoip ||
+      CoreFeature.geosite ||
+      CoreFeature.appRouting => null,
+      CoreFeature.socksAuthentication =>
+        'Rust: локальный SOCKS работает без логина и пароля.',
+      CoreFeature.proxyOnly => 'Rust: доступен режим VPN через TUN.',
+      CoreFeature.udpToggle => 'Rust: UDP включён постоянно.',
+      CoreFeature.icmpToggle =>
+        'Rust: ICMP обрабатывается ядром локально; настройка не применяется.',
+      CoreFeature.quicBlocking =>
+        'Блокировка QUIC пока недоступна в Rust-сборке.',
+      CoreFeature.customMtu => 'Rust: используется MTU 1500.',
+      CoreFeature.fragmentation =>
+        'Фрагментация пока недоступна в Rust-сборке.',
+      CoreFeature.noise => 'Шумы пока недоступны в Rust-сборке.',
+      CoreFeature.mux => 'Mux пока недоступен в Rust-сборке.',
+      CoreFeature.directDns => 'Rust: DNS должен идти через VPN.',
+      CoreFeature.adBlocking =>
+        'Блокировка рекламы пока недоступна в Rust-сборке.',
+      CoreFeature.upstreamUpdates =>
+        'Rust-сборка обновляется вручную из форка.',
+      CoreFeature.observatory =>
+        'Rust: управляемые JSON-конфиги и Observatory пока недоступны.',
+      CoreFeature.rawConfig =>
+        'Rust: поддерживается VLESS + xHTTP + Reality; полный JSON пока недоступен.',
+    };
+  }
 }

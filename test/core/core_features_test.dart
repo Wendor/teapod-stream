@@ -27,6 +27,26 @@ void main() {
     }
   });
 
+  test('availability and its explanation agree for every feature and core', () {
+    for (final features in [CoreFeatures.go, CoreFeatures.rust]) {
+      for (final feature in CoreFeature.values) {
+        if (features.supports(feature)) {
+          expect(
+            features.unavailableReason(feature),
+            isNull,
+            reason: feature.name,
+          );
+        } else {
+          expect(
+            features.unavailableReason(feature),
+            isNotEmpty,
+            reason: feature.name,
+          );
+        }
+      }
+    }
+  });
+
   test('the build uses the requested core flag, defaulting to Go', () {
     const expected = String.fromEnvironment('TEAPOD_CORE', defaultValue: 'go');
     expect(CoreFeatures.current.isRust, expected == 'rust');

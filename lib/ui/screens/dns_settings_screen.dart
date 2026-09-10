@@ -1,3 +1,5 @@
+import '../../core/constants/core_features.dart';
+import '../widgets/feature_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/dns_config.dart';
@@ -158,32 +160,44 @@ class _DnsSettingsScreenState extends ConsumerState<DnsSettingsScreen> {
                 padding: EdgeInsets.zero,
                 children: [
                   SetSectionHeader(t: t, addr: '0x05', label: 'mode'),
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
-                    decoration: BoxDecoration(
-                        border: Border(bottom: BorderSide(color: t.lineSoft))),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Режим DNS',
-                                style: AppTheme.sans(size: 14, color: t.text)),
-                            const SizedBox(height: 3),
-                            Text(_dnsMode == DnsMode.proxy ? 'через VPN-туннель' : 'напрямую',
+                  FeatureGate(
+                    feature: CoreFeature.directDns,
+                    onReset: _dnsMode != DnsMode.proxy
+                        ? () => setState(() => _dnsMode = DnsMode.proxy)
+                        : null,
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+                      decoration: BoxDecoration(
+                        border: Border(bottom: BorderSide(color: t.lineSoft)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Режим DNS', style: AppTheme.sans(size: 14, color: t.text)),
+                              const SizedBox(height: 3),
+                              Text(
+                                _dnsMode == DnsMode.proxy ? 'через VPN-туннель' : 'напрямую',
                                 style: AppTheme.mono(
-                                    size: 10, color: t.textMuted, letterSpacing: 0.5)),
-                          ],
-                        ),
-                        SetSegSquare(
-                          t: t,
-                          value: _dnsMode == DnsMode.proxy ? 'proxy' : 'direct',
-                          opts: const [('proxy', 'VPN'), ('direct', 'DIRECT')],
-                          onChanged: (v) => setState(() =>
-                              _dnsMode = v == 'proxy' ? DnsMode.proxy : DnsMode.direct),
-                        ),
-                      ],
+                                  size: 10,
+                                  color: t.textMuted,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                          SetSegSquare(
+                            t: t,
+                            value: _dnsMode == DnsMode.proxy ? 'proxy' : 'direct',
+                            opts: const [('proxy', 'VPN'), ('direct', 'DIRECT')],
+                            onChanged: (v) => setState(
+                              () => _dnsMode = v == 'proxy' ? DnsMode.proxy : DnsMode.direct,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   Container(

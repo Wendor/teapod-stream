@@ -5,6 +5,8 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val rustCore = gradle.extensions.extraProperties.get("teapodRust") as Boolean
+
 android {
     namespace = "com.teapodstream.teapodstream"
     compileSdk = flutter.compileSdkVersion
@@ -27,17 +29,20 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.teapodstream.teapodstream"
-        minSdk = 29  // Required by teapod-tun2socks AAR (getConnectionOwnerUid)
+        applicationId = if (rustCore) "com.teapodstream.rustprobe" else "com.teapodstream.teapodstream"
+        minSdk = 29
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["appLabel"] = if (rustCore) "Teapod Rust Probe" else "TeapodStream"
 
     }
 
+    sourceSets.getByName("main").java.srcDir(if (rustCore) "src/rust/kotlin" else "src/go/kotlin")
+
     packaging {
         jniLibs {
-            // x86 is not supported by teapod-core
+            // Flutter builds target arm64, armv7 and x86_64.
             excludes.add("lib/x86/**")
         }
     }
@@ -60,7 +65,8 @@ android {
 }
 
 dependencies {
-    implementation(files("libs/teapod-core.aar"))
+    if (rustCore) implementation(project(":xraymobile"))
+    else implementation(files("libs/teapod-core.aar"))
 }
 
 flutter {

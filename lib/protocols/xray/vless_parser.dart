@@ -15,6 +15,12 @@ Map<String, dynamic>? _parseExtra(String? raw) {
 
 class VlessParser {
   static VpnConfig? parseUri(String uri) {
+    uri = uri.trim();
+    // Chat/Markdown exports may escape URI punctuation. Only undo the
+    // punctuation escapes, preserving percent-encoded path/query values.
+    if (uri.startsWith(r'vless\://')) {
+      uri = uri.replaceAllMapped(RegExp(r'\\([:@_])'), (m) => m[1]!);
+    }
     if (uri.startsWith('vless://')) return _parseVless(uri);
     if (uri.startsWith('vmess://')) return _parseVmess(uri);
     if (uri.startsWith('trojan://')) return _parseTrojan(uri);
@@ -88,7 +94,10 @@ class VlessParser {
         flow: params['flow'],
         encryption: params['encryption'] ?? 'none',
         xhttpMode: params['mode'],
-        xhttpExtra: _parseExtra(params['extra']),
+        xhttpExtra: _parseExtra(params['extra']) ??
+            (params['x_padding_bytes'] == null
+                ? null
+                : {'xPaddingBytes': params['x_padding_bytes']}),
         finalmask: _parseExtra(params['fm']),
         alpn: params['alpn'],
         ech: params['ech'],
@@ -371,6 +380,7 @@ class VlessParser {
   static VpnTransport _parseTransport(String s) {
     switch (s.toLowerCase()) {
       case 'ws':
+      case 'websocket':
         return VpnTransport.ws;
       case 'grpc':
         return VpnTransport.grpc;

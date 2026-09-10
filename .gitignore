@@ -16,7 +16,6 @@ build/
 .metadata
 .pub-cache/
 .pub/
-pubspec.lock
 
 # ─────────────────────────────────────────
 #  Android
@@ -62,3 +61,12 @@ Thumbs.db
 CLAUDE.md
 wiki/
 redesign/
+# Python build helpers
+__pycache__/
+*.pyc
+android/app/libs/*.download
+
+android/xraymobile/src/main/jniLibs/
+android/xraymobile/.cxx/
+
+.native/

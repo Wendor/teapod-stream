@@ -1,3 +1,5 @@
+import 'core/constants/core_features.dart';
+import 'core/constants/app_constants.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -51,7 +53,7 @@ class _TeapodMaterialApp extends ConsumerWidget {
       orElse: () => 1.0,
     );
     return MaterialApp(
-      title: 'TeapodStream',
+      title: AppConstants.appName,
       theme:     AppTheme.build(Brightness.light, accent),
       darkTheme:  AppTheme.build(Brightness.dark, accent),
       themeMode: themeMode,
@@ -130,6 +132,7 @@ class _AppShellState extends ConsumerState<_AppShell>
   }
 
   Future<void> _scheduleUpdateCheck() async {
+    if (!CoreFeatures.current.supports(CoreFeature.upstreamUpdates)) return;
     await Future.delayed(const Duration(seconds: 5));
     if (!mounted) return;
     final updateState = ref.read(updateProvider);

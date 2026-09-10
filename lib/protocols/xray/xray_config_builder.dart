@@ -164,7 +164,8 @@ class XrayConfigBuilder {
       rules.add({'type': 'field', 'ip': ['geoip:private'], 'outboundTag': 'direct'});
     }
 
-    if (!routing.geoEnabled && !routing.domainEnabled && !routing.geositeEnabled) return rules;
+    if (!routing.geoEnabled && !routing.domainEnabled && !routing.geositeEnabled &&
+        !routing.sitesEnabled && !routing.ruServicesEnabled) { return rules; }
 
     final selectedOut =
         routing.direction == RoutingDirection.bypass ? 'direct' : 'proxy';

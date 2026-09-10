@@ -1,3 +1,5 @@
+import '../../core/constants/core_features.dart';
+import '../widgets/feature_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/routing_settings.dart';
@@ -129,7 +131,7 @@ class _RoutingBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context).extension<TeapodTokens>()!;
     final ruleStr = _ruleCount.toString().padLeft(2, '0');
-    final geoHint = geoMissing ? 'Загрузите geo-базы (Настройки → geo.data)' : null;
+    final geoHint = geoMissing ? 'Загрузите базы ниже, в разделе geo.data' : null;
     const sniffHint = 'Требует снифинг (Настройки → xray)';
     final domainLocked  = !sniffingEnabled;
     final geositeLocked = geoMissing || !sniffingEnabled;
@@ -306,13 +308,19 @@ class _RoutingBody extends StatelessWidget {
 
                 // 0x50 EXTRAS
                 _SectionHeader(t: t, addr: '0x50', label: 'extras'),
-                _RowToggle(
-                  t: t,
-                  title: 'Блокировка рекламы',
-                  hint: geoHint ?? 'geosite:category-ads-all + geosite:win-spy → block',
-                  value: routing.adBlockEnabled,
-                  locked: geoMissing,
-                  onChange: (v) => onUpdate(routing.copyWith(adBlockEnabled: v)),
+                FeatureGate(
+                  feature: CoreFeature.adBlocking,
+                  onReset: routing.adBlockEnabled
+                      ? () => onUpdate(routing.copyWith(adBlockEnabled: false))
+                      : null,
+                  child: _RowToggle(
+                    t: t,
+                    title: 'Блокировка рекламы',
+                    hint: geoHint ?? 'geosite:category-ads-all + geosite:win-spy → block',
+                    value: routing.adBlockEnabled,
+                    locked: geoMissing,
+                    onChange: (v) => onUpdate(routing.copyWith(adBlockEnabled: v)),
+                  ),
                 ),
                 _RowToggle(
                   t: t,
@@ -334,6 +342,11 @@ class _RoutingBody extends StatelessWidget {
 
                 // 0x60 GEO.DATA
                 _SectionHeader(t: t, addr: '0x60', label: 'geo.data'),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                  child: Text('Обновлённые базы применятся после переподключения VPN.',
+                      style: AppTheme.mono(size: 10, color: t.textMuted)),
+                ),
                 GestureDetector(
                   onTap: () => showModalBottomSheet<void>(
                     context: context,

@@ -16,7 +16,7 @@ build_flags=("--dart-define=TEAPOD_CORE=$selected_core")
 if [[ "$selected_core" == rust ]]; then
   target_platforms="android-arm64,android-x64"
   abis=(arm64-v8a x86_64)
-  build_flags+=("--build-name=1.6.3-rust.4" "--build-number=10607")
+  build_flags+=("--build-name=1.6.3-rust.5" "--build-number=10608")
 fi
 prepare_binaries() {
   if [[ "$selected_core" == rust ]]; then

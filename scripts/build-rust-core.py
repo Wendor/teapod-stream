@@ -10,7 +10,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SOURCE = ROOT / '.native/xray-rust'
-COMMIT = '8a86a7f762aba919ff75cad5980a28612ba2dfe8'
+COMMIT = 'ed5258a3a589c2a1f9330142f37c8f3d28a640fa'
 TOOLCHAIN = '1.96.0'
 NDK_VERSION = '28.2.13676358'
 PATCH = ROOT / 'third_party/xray-rust/geo-budgets.patch'
@@ -32,7 +32,7 @@ def main():
                 (DEST / abi / 'libxray_ffi.so').is_file() and
                 hashlib.sha256((DEST / abi / 'libxray_ffi.so').read_bytes()).hexdigest() == saved.get('sha256', {}).get(abi)
                 for abi in TARGETS.values()):
-            print('xray-rust 0.6.0+geo.1: verified cached native binaries', flush=True)
+            print('xray-rust 0.6.1+geo.1: verified cached native binaries', flush=True)
             return
     if not shutil.which('rustup'):
         raise RuntimeError('Install rustup to build xray-rust (Rust 1.96.0).')
@@ -80,7 +80,7 @@ def main():
         temporary.replace(destination)
         hashes[abi] = hashlib.sha256(data).hexdigest()
     STAMP.write_text(json.dumps(dict(identity=identity, sha256=hashes), indent=2))
-    print('xray-rust 0.6.0+geo.1: built both Android architectures', flush=True)
+    print('xray-rust 0.6.1+geo.1: built both Android architectures', flush=True)
 
 
 if __name__ == '__main__':

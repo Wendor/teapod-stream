@@ -62,7 +62,7 @@ class CoreFeatures {
     if (supports(feature)) return null;
     return switch (feature) {
       CoreFeature.visionWithTls =>
-        'Vision поверх TLS пока недоступен: в ядре 0.6.0 обрывается передача после перехода в direct mode. Используй TCP + Reality + Vision.',
+        'Vision поверх TLS пока недоступен: в текущем Rust-ядре обрывается передача после перехода в direct mode. Используй TCP + Reality + Vision.',
       CoreFeature.geoip ||
       CoreFeature.geosite ||
       CoreFeature.appRouting => null,

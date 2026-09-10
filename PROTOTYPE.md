@@ -1,11 +1,11 @@
 # TeapodStream: Go and experimental Rust builds
 
 The default build uses Go/teapod-core. The separate Rust build uses
-**xray-rust 0.6.0+geo.1** and its direct TUN file-descriptor backend.
+**xray-rust 0.6.1+geo.1** and its direct TUN file-descriptor backend.
 Rust application ID: `com.teapodstream.rustprobe`. It installs alongside the original TeapodStream.
 No live VPN profile or credentials are bundled.
 
-## Rust support (1.6.3-rust.4)
+## Rust support (1.6.3-rust.5)
 
 - VLESS with `encryption=none` over TCP/RAW, WebSocket, HTTPUpgrade, gRPC,
   XHTTP/SplitHTTP. TLS is supported on all these carriers; REALITY on TCP/RAW,
@@ -76,7 +76,7 @@ For direct Flutter commands, prepare dependencies first:
 ./build-rust.sh binaries
 flutter build apk --release --dart-define=TEAPOD_CORE=rust \
   --target-platform android-arm64,android-x64 --split-per-abi \
-  --build-name=1.6.3-rust.4 --build-number=10607
+  --build-name=1.6.3-rust.5 --build-number=10608
 
 # Native Android binding tests use the same base64-encoded Flutter flag.
 cd android
@@ -106,8 +106,48 @@ service and geodata adapter are in `android/app/src/rust/`. Notifications and
 service interfaces remain compatible with the shared UI. Future lifecycle fixes
 must be evaluated for both implementations.
 
-Battery savings have not been measured. These builds support comparison; the
-Rust build is not presented as proven to consume less energy.
+Controlled battery savings have not been measured. These builds support
+comparison; phone battery-screen observations are not a controlled A/B result.
+
+## Core update (1.6.3-rust.5)
+
+The core is pinned to stable xray-rust v0.6.1, commit
+`ed5258a3a589c2a1f9330142f37c8f3d28a640fa`. The existing GeoIP budget patch,
+bundled geodata, supported protocols, package ID and signing key are retained.
+Installing this APK updates rust.4 without requiring profile re-import.
+
+Upstream changes increase the default XHTTP/H2 stream receive window from
+65,535 bytes to 4 MiB (connection credit stays 16 MiB), avoiding the small-window
+single-download limit on high-latency paths. A stalled TUN TCP reader no longer
+blocks neighboring TCP, UDP or control events. Download prefetch is bounded to
+256 KiB per flow and immediately ready reads are batched without waiting for
+more data. Larger H2 receive credit permits more buffering; the TUN prefetch
+limit is not a whole-process memory limit.
+
+No additional setting is needed to use these fixes. Vision over ordinary TLS
+remains gated; the upstream TLS/Vision implementation was not changed by this
+release. The public Android bindings and C ABI are unchanged. Keep rust.4 and
+rust.5 energy observations separate because the native data path has changed.
+
+Verification for this update:
+
+- 90 Flutter tests passed in each build mode; analysis has only the three
+  existing `onReorder` deprecation infos.
+- 19 upstream regression tests passed against the patched v0.6.1 source:
+  H2 window validation, receive-window limits/replenishment, all H2 modes,
+  stalled-reader isolation, bounded prefetch, DNS/FIN ordering and cancellation.
+- Six Android GeoIP/GeoSite tests passed, including simultaneous loading of
+  the bundled US/RU and Cloudflare/YouTube categories.
+- All 10 Android VLESS interoperability combinations passed again, transferring
+  both plain payloads and inner TLS against the local Xray-core 26.7.28 server.
+- Both release APKs retain the rust.4 signing certificate, increase the Android
+  version code and pass 16 KiB ZIP alignment checks. Their packaged Rust libraries
+  match the newly built v0.6.1 libraries after symbol stripping.
+- On an isolated API 36 emulator, installation over rust.4 retained an app-data
+  marker. A separate application UID downloaded and SHA-256-verified 8 MiB through
+  the installed release APK's Android TUN with xHTTP/TLS, then another 8 MiB with
+  xHTTP/REALITY. Both sessions disconnected cleanly. The fixture used a local
+  reference server and generated test credentials.
 
 ## Verification of additional VLESS transports (1.6.3-rust.4)
 
@@ -190,7 +230,7 @@ remain to be measured; the emulator result is a functional smoke test.
 
 Import a VLESS share link in the app, approve the Android VPN request, and test
 web browsing, DNS/UDP, screen-off resume, reconnect and disconnect. In the
-diagnostic snapshot, `engine` must be `xray-rust 0.6.0+geo.1` and `tunBackend` must be
+diagnostic snapshot, `engine` must be `xray-rust 0.6.1+geo.1` and `tunBackend` must be
 `fd`; incoming and outgoing packet counters should increase with app traffic.
 
 Compare energy against the original app on the same phone, server, network and
@@ -199,6 +239,6 @@ workload. Desktop/emulator tests cannot establish a battery-life improvement.
 ## Dependencies
 
 - [xray-rust source](https://github.com/aimalygin/xray-rust), MPL-2.0.
-- [Pinned source](https://github.com/aimalygin/xray-rust/tree/8a86a7f762aba919ff75cad5980a28612ba2dfe8), with [local budget patch](third_party/xray-rust/geo-budgets.patch).
+- [Pinned source](https://github.com/aimalygin/xray-rust/tree/ed5258a3a589c2a1f9330142f37c8f3d28a640fa), with [local budget patch](third_party/xray-rust/geo-budgets.patch).
 - [Bundled geodata snapshot](https://github.com/Loyalsoldier/v2ray-rules-dat/releases/tag/202609082347).
 - Upstream TeapodStream retains its existing license.

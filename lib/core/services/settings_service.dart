@@ -90,6 +90,9 @@ class AppSettings {
   final DnsQueryStrategy dnsQueryStrategy;
   final bool blockQuic;
   final bool ipv6Enabled;
+  /// allExcept: пропускать в туннель потоки без владельца (раздача точки доступа).
+  /// Ослабляет защиту: исключённые приложения смогут выйти через tun0.
+  final bool allowTethering;
   final bool autoStartOnBoot;
   final TlsFingerprint tlsFingerprint;
   final FragmentSettings fragment;
@@ -137,6 +140,7 @@ class AppSettings {
     this.dnsQueryStrategy = DnsQueryStrategy.ipv4Only,
     this.blockQuic = false,
     this.ipv6Enabled = false,
+    this.allowTethering = false,
     this.autoStartOnBoot = false,
     this.tlsFingerprint = TlsFingerprint.defaultFp,
     this.fragment = const FragmentSettings(),
@@ -182,6 +186,7 @@ class AppSettings {
     DnsQueryStrategy? dnsQueryStrategy,
     bool? blockQuic,
     bool? ipv6Enabled,
+    bool? allowTethering,
     bool? autoStartOnBoot,
     TlsFingerprint? tlsFingerprint,
     FragmentSettings? fragment,
@@ -226,6 +231,7 @@ class AppSettings {
       dnsQueryStrategy: dnsQueryStrategy ?? this.dnsQueryStrategy,
       blockQuic: blockQuic ?? this.blockQuic,
       ipv6Enabled: ipv6Enabled ?? this.ipv6Enabled,
+      allowTethering: allowTethering ?? this.allowTethering,
       autoStartOnBoot: autoStartOnBoot ?? this.autoStartOnBoot,
       tlsFingerprint: tlsFingerprint ?? this.tlsFingerprint,
       fragment: fragment ?? this.fragment,
@@ -272,6 +278,7 @@ class AppSettings {
     'dnsQueryStrategy': dnsQueryStrategy.name,
     'blockQuic': blockQuic,
     'ipv6Enabled': ipv6Enabled,
+    'allowTethering': allowTethering,
     'autoStartOnBoot': autoStartOnBoot,
     'tlsFingerprint': tlsFingerprint.name,
     'fragment': fragment.toJson(),
@@ -325,6 +332,7 @@ class AppSettings {
         (e) => e.name == json['dnsQueryStrategy'], orElse: () => DnsQueryStrategy.ipv4Only),
       blockQuic: json['blockQuic'] as bool? ?? false,
       ipv6Enabled: json['ipv6Enabled'] as bool? ?? false,
+      allowTethering: json['allowTethering'] as bool? ?? false,
       autoStartOnBoot: json['autoStartOnBoot'] as bool? ?? false,
       tlsFingerprint: TlsFingerprint.values.firstWhere(
         (e) => e.name == json['tlsFingerprint'], orElse: () => TlsFingerprint.defaultFp),
@@ -394,6 +402,7 @@ class SettingsService {
   static const _dnsQueryStrategyKey = 'dns_query_strategy';
   static const _blockQuicKey = 'block_quic';
   static const _ipv6EnabledKey = 'ipv6_enabled';
+  static const _allowTetheringKey = 'allow_tethering';
   static const _autoStartOnBootKey = 'auto_start_on_boot';
   static const _tlsFingerprintKey = 'tls_fingerprint';
   static const _fragmentKey = 'xray_fragment';
@@ -462,6 +471,7 @@ class SettingsService {
       ),
       blockQuic: prefs.getBool(_blockQuicKey) ?? false,
       ipv6Enabled: prefs.getBool(_ipv6EnabledKey) ?? false,
+      allowTethering: prefs.getBool(_allowTetheringKey) ?? false,
       autoStartOnBoot: prefs.getBool(_autoStartOnBootKey) ?? false,
       tlsFingerprint: TlsFingerprint.values.firstWhere(
         (e) => e.name == prefs.getString(_tlsFingerprintKey),
@@ -553,6 +563,7 @@ class SettingsService {
     await prefs.setString(_dnsQueryStrategyKey, settings.dnsQueryStrategy.name);
     await prefs.setBool(_blockQuicKey, settings.blockQuic);
     await prefs.setBool(_ipv6EnabledKey, settings.ipv6Enabled);
+    await prefs.setBool(_allowTetheringKey, settings.allowTethering);
     await prefs.setBool(_autoStartOnBootKey, settings.autoStartOnBoot);
     await prefs.setString(_tlsFingerprintKey, settings.tlsFingerprint.name);
     await prefs.setString(_fragmentKey, jsonEncode(settings.fragment.toJson()));

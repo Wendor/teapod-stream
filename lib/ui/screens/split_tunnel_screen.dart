@@ -44,6 +44,35 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
     }
   }
 
+  Future<bool> _confirmTethering(TeapodTokens t) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: t.bgElev,
+        title: Text('Раздача через VPN',
+            style: AppTheme.sans(size: 16, color: t.text)),
+        content: Text(
+          'Трафик точки доступа неотличим от трафика исключённых приложений. '
+          'С этой опцией любое исключённое приложение сможет отправить запрос '
+          'через VPN и узнать IP сервера — например, чтобы сообщить о нём.\n\n'
+          'Включайте, только если нужна раздача интернета через VPN.',
+          style: AppTheme.sans(size: 13, color: t.textDim),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Отмена', style: AppTheme.mono(size: 12, color: t.textDim)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Включить', style: AppTheme.mono(size: 12, color: t.danger)),
+          ),
+        ],
+      ),
+    );
+    return ok ?? false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).extension<TeapodTokens>()!;
@@ -164,6 +193,32 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
                 ],
               ),
             ),
+            if (settings != null &&
+                settings.splitTunnelingEnabled &&
+                settings.vpnMode == VpnMode.allExcept) ...[
+              SetRowToggle(
+                t: t,
+                title: 'Раздача через VPN',
+                hint: 'Пускать в туннель трафик точки доступа',
+                value: settings.allowTethering,
+                onChange: (v) async {
+                  if (v && !await _confirmTethering(t)) return;
+                  ref
+                      .read(settingsProvider.notifier)
+                      .save(settings.copyWith(allowTethering: v));
+                },
+              ),
+              if (settings.allowTethering)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                  color: t.danger.withAlpha(0x1A),
+                  child: Text(
+                    '⚠ Защита ослаблена: исключённые приложения могут выйти через VPN и узнать IP сервера',
+                    style: AppTheme.mono(size: 11, color: t.danger, letterSpacing: 0.5),
+                  ),
+                ),
+            ],
             // ── Search ────────────────────────────────────────────
             Container(
               padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),

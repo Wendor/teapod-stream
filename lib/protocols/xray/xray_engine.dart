@@ -39,6 +39,7 @@ class XrayEngine implements VpnEngine {
       'allowIcmp': options.allowIcmp,
       'blockQuic': options.blockQuic,
       'ipv6Enabled': options.ipv6Enabled,
+      'allowTethering': options.allowTethering,
       'mtu': options.mtu,
       'heartbeatProbe': options.heartbeat.probe.name,
       'heartbeatAction': options.heartbeat.failAction.name,

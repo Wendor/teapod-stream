@@ -522,6 +522,7 @@ class VpnNotifier extends Notifier<VpnState2> {
       // for ~30s before falling back to TCP. Force the ICMP fast-fail.
       blockQuic: settings.blockQuic || _usesVisionFlow(config),
       ipv6Enabled: settings.ipv6Enabled,
+      allowTethering: settings.allowTethering,
       obsProbeIntervalSec: settings.obsProbeIntervalSec,
       tlsFingerprint: settings.tlsFingerprint,
       fragment: settings.fragment,

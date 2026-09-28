@@ -41,6 +41,7 @@ class VpnEngineOptions {
   final DnsQueryStrategy dnsQueryStrategy;
   final bool blockQuic;
   final bool ipv6Enabled;
+  final bool allowTethering;
   final int obsProbeIntervalSec;
   final TlsFingerprint tlsFingerprint;
   final FragmentSettings fragment;
@@ -70,6 +71,7 @@ class VpnEngineOptions {
     this.dnsQueryStrategy = DnsQueryStrategy.ipv4Only,
     this.blockQuic = false,
     this.ipv6Enabled = false,
+    this.allowTethering = false,
     this.obsProbeIntervalSec = 600,
     this.tlsFingerprint = TlsFingerprint.defaultFp,
     this.fragment = const FragmentSettings(),

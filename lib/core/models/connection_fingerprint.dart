@@ -17,6 +17,7 @@ String connectionFingerprint(AppSettings s) {
     'blockQuic': s.blockQuic,
     'mtu': s.mtu,
     'ipv6Enabled': s.ipv6Enabled,
+    'allowTethering': s.allowTethering,
     'tlsFingerprint': s.tlsFingerprint.name,
     'obsProbeIntervalSec': s.obsProbeIntervalSec,
     'logLevel': s.logLevel.name,

@@ -77,6 +77,7 @@ class MainActivity : FlutterActivity() {
                         val allowIcmp = call.argument<Boolean>("allowIcmp") ?: true
                         val blockQuic = call.argument<Boolean>("blockQuic") ?: false
                         val ipv6Enabled = call.argument<Boolean>("ipv6Enabled") ?: false
+                        val allowTethering = call.argument<Boolean>("allowTethering") ?: false
                         val heartbeatProbe = call.argument<String>("heartbeatProbe") ?: "socks"
                         val heartbeatAction = call.argument<String>("heartbeatAction") ?: "reconnect"
                         val heartbeatThreshold = call.argument<Int>("heartbeatThreshold") ?: 3
@@ -89,7 +90,7 @@ class MainActivity : FlutterActivity() {
                                 excludedPackages, includedPackages, vpnMode,
                                 ssPrefix, proxyOnly = true, showNotification = showNotification,
                                 killSwitch = killSwitch, allowIcmp = allowIcmp,
-                                blockQuic = blockQuic, ipv6Enabled = ipv6Enabled,
+                                blockQuic = blockQuic, ipv6Enabled = ipv6Enabled, allowTethering = allowTethering,
                                 heartbeatProbe = heartbeatProbe, heartbeatAction = heartbeatAction,
                                 heartbeatThreshold = heartbeatThreshold, heartbeatUrl = heartbeatUrl
                             )
@@ -101,7 +102,7 @@ class MainActivity : FlutterActivity() {
                                     excludedPackages, includedPackages, vpnMode,
                                     ssPrefix, proxyOnly = false, showNotification = showNotification,
                                     killSwitch = killSwitch, allowIcmp = allowIcmp,
-                                    blockQuic = blockQuic, ipv6Enabled = ipv6Enabled,
+                                    blockQuic = blockQuic, ipv6Enabled = ipv6Enabled, allowTethering = allowTethering,
                                     heartbeatProbe = heartbeatProbe, heartbeatAction = heartbeatAction,
                                     heartbeatThreshold = heartbeatThreshold, heartbeatUrl = heartbeatUrl
                                 )
@@ -385,6 +386,7 @@ class MainActivity : FlutterActivity() {
         allowIcmp: Boolean = false,
         blockQuic: Boolean = false,
         ipv6Enabled: Boolean = false,
+        allowTethering: Boolean = false,
         heartbeatProbe: String = "socks",
         heartbeatAction: String = "reconnect",
         heartbeatThreshold: Int = 3,
@@ -407,6 +409,7 @@ class MainActivity : FlutterActivity() {
             putExtra(XrayVpnService.EXTRA_ALLOW_ICMP, allowIcmp)
             putExtra(XrayVpnService.EXTRA_BLOCK_QUIC, blockQuic)
             putExtra(XrayVpnService.EXTRA_IPV6, ipv6Enabled)
+            putExtra(XrayVpnService.EXTRA_ALLOW_TETHERING, allowTethering)
             putExtra(XrayVpnService.EXTRA_HEARTBEAT_PROBE, heartbeatProbe)
             putExtra(XrayVpnService.EXTRA_HEARTBEAT_ACTION, heartbeatAction)
             putExtra(XrayVpnService.EXTRA_HEARTBEAT_THRESHOLD, heartbeatThreshold)

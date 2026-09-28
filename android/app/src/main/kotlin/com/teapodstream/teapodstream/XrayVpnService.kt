@@ -65,6 +65,7 @@ class XrayVpnService : VpnService() {
         const val EXTRA_ALLOW_ICMP = "allow_icmp" // allow ICMP echo (ping) through the tunnel
         const val EXTRA_BLOCK_QUIC = "block_quic" // reject UDP/443 inside the TUN via ICMP Port Unreachable
         const val EXTRA_IPV6 = "ipv6_enabled" // add IPv6 address/route to the TUN interface
+        const val EXTRA_ALLOW_TETHERING = "allow_tethering" // allExcept: let unowned (tethered) flows in
         const val EXTRA_MTU = "mtu" // TUN MTU size
         const val EXTRA_HEARTBEAT_PROBE = "heartbeat_probe"      // "socks" | "xrayDelay" | "passive"
         const val EXTRA_HEARTBEAT_ACTION = "heartbeat_action"    // "reconnect" | "switchConfig"
@@ -268,6 +269,7 @@ class XrayVpnService : VpnService() {
     private var heartbeatAction: String = "reconnect"
     private var heartbeatThreshold: Int = 3
     private var heartbeatUrl: String = DEFAULT_HEARTBEAT_URL
+    @Volatile private var allowTethering = false
     private var lastTunnelDeadNotifyAt = 0L
     private val wakeProbeRunning = AtomicBoolean(false)
     private val reconnectAttempts = AtomicInteger(0)
@@ -386,10 +388,11 @@ class XrayVpnService : VpnService() {
                 heartbeatThreshold = intent.getIntExtra(EXTRA_HEARTBEAT_THRESHOLD, 3).coerceIn(1, 10)
                 heartbeatUrl = intent.getStringExtra(EXTRA_HEARTBEAT_URL)?.takeIf { it.isNotEmpty() }
                     ?: DEFAULT_HEARTBEAT_URL
+                allowTethering = intent.getBooleanExtra(EXTRA_ALLOW_TETHERING, false)
                 // Persist non-sensitive params for CONNECT_QUICK reconnect (no credentials)
                 ConnectionParams(socksPort, excludedPackages, includedPackages,
                     vpnMode, ssPrefix, proxyOnly, showNotification, killSwitch, allowIcmp, blockQuic, ipv6Enabled, mtu,
-                    heartbeatProbe, heartbeatAction, heartbeatThreshold, heartbeatUrl)
+                    heartbeatProbe, heartbeatAction, heartbeatThreshold, heartbeatUrl, allowTethering)
                     .save(filesDir, ::log)
                 userRequestedDisconnect.set(false)
                 reconnectAttempts.set(0)
@@ -412,6 +415,7 @@ class XrayVpnService : VpnService() {
                     heartbeatAction = params.heartbeatAction
                     heartbeatThreshold = params.heartbeatThreshold
                     heartbeatUrl = params.heartbeatUrl
+                    allowTethering = params.allowTethering
                 }
                 ensureForeground()
                 if (isRunning.get()) {
@@ -477,6 +481,7 @@ class XrayVpnService : VpnService() {
             heartbeatAction = params.heartbeatAction
             heartbeatThreshold = params.heartbeatThreshold
             heartbeatUrl = params.heartbeatUrl
+            allowTethering = params.allowTethering
         }
         ensureForeground()
         // Auto-connect if saved params exist and user didn't explicitly disconnect.
@@ -682,9 +687,10 @@ class XrayVpnService : VpnService() {
 
                 // 2. Resolve UIDs for split tunneling (tun2socks validator level)
                 val allowedUids = resolveUids(vpnMode, includedPackages, excludedPackages)
-                val validator = buildTunValidator(allowedUids, vpnMode, excludedPackages.isNotEmpty())
+                val blockUnowned = excludedPackages.isNotEmpty() && !allowTethering
+                val validator = buildTunValidator(allowedUids, vpnMode, blockUnowned)
 
-                log("info", "Starting tun2socks: mode=$vpnMode uids=${allowedUids.size} blockUnowned=${excludedPackages.isNotEmpty()}")
+                log("info", "Starting tun2socks: mode=$vpnMode uids=${allowedUids.size} blockUnowned=$blockUnowned")
 
                 val tunErr = Teapodcore.startTun2Socks(
                     tunInterface!!.fd.toLong(),
@@ -800,7 +806,7 @@ class XrayVpnService : VpnService() {
      * An excluded app can bind a socket to the TUN (SO_BINDTODEVICE, kernel 5.7+), and
      * getConnectionOwnerUid() reports INVALID_UID for UIDs our VPN doesn't apply to —
      * so such a bypass is indistinguishable from tethered traffic and must be blocked
-     * whenever user exclusions exist. Cost: tethering via VPN stops working in that case.
+     * whenever user exclusions exist, unless the user opted into tethering (allowTethering).
      */
     private fun buildTunValidator(allowedUids: Set<Int>, vpnMode: String, blockUnowned: Boolean): TunValidator {
         if (allowedUids.isEmpty()) {

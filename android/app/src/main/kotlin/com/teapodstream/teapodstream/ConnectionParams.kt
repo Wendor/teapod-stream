@@ -22,6 +22,8 @@ internal data class ConnectionParams(
     val heartbeatAction: String = "reconnect",
     val heartbeatThreshold: Int = 3,
     val heartbeatUrl: String = "http://cp.cloudflare.com/generate_204",
+    /// allExcept: пропускать потоки без владельца (тетеринг) при непустых исключениях.
+    val allowTethering: Boolean = false,
 ) {
     fun save(dir: File, log: (String, String) -> Unit) {
         try {
@@ -37,6 +39,7 @@ internal data class ConnectionParams(
                 put("allowIcmp", allowIcmp)
                 put("blockQuic", blockQuic)
                 put("ipv6Enabled", ipv6Enabled)
+                put("allowTethering", allowTethering)
                 put("mtu", mtu)
                 put("heartbeatProbe", heartbeatProbe)
                 put("heartbeatAction", heartbeatAction)
@@ -68,6 +71,7 @@ internal data class ConnectionParams(
                 allowIcmp = json.optBoolean("allowIcmp", false),
                 blockQuic = json.optBoolean("blockQuic", false),
                 ipv6Enabled = json.optBoolean("ipv6Enabled", false),
+                allowTethering = json.optBoolean("allowTethering", false),
                 mtu = json.optInt("mtu", 1500).coerceIn(576, 9000),
                 heartbeatProbe = json.optString("heartbeatProbe", "socks"),
                 heartbeatAction = json.optString("heartbeatAction", "reconnect"),

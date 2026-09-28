@@ -55,13 +55,21 @@ void main() {
             customAddress: 'xbox-dns.ru', customType: DnsType.dot),
       ));
       final servers = dns['servers'] as List;
-      final main = servers.last as Map<String, dynamic>;
+      final main = servers.first as Map<String, dynamic>;
       expect(main['address'], 'tls://xbox-dns.ru');
       expect(main['port'], 853);
       expect(dns['disableFallback'], isTrue);
       // bootstrap resolves only the DoT hostname itself
-      final bootstrap = servers.first as Map<String, dynamic>;
+      final bootstrap = servers.last as Map<String, dynamic>;
       expect(bootstrap['domains'], ['xbox-dns.ru']);
+    });
+
+    test('main DNS server stays first when adblock is enabled', () {
+      final dns = XrayConfigBuilder.buildDnsBlock(_defaultOptions(
+          routing: const RoutingSettings(adBlockEnabled: true)));
+      final servers = dns['servers'] as List;
+      expect((servers.first as Map)['address'], isNot('rcode://success'));
+      expect((servers.last as Map)['address'], 'rcode://success');
     });
 
     test('inbound socks uses correct port', () {

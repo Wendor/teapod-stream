@@ -237,15 +237,8 @@ class XrayConfigBuilder {
     }
 
     // Proxy mode: DNS queries are intercepted and handled by xray's DNS module.
-    // Add adblock first - returns empty response for matched domains
-    if (routing.adBlockEnabled) {
-      servers.add({
-        'address': 'rcode://success',
-        'domains': [XrayDefaults.adBlockGeosite, 'geosite:win-spy'],
-      });
-    }
-
-    // Add main DNS server
+    // Main server must be first: with disableFallback, xray sends every domain that
+    // matches no 'domains' filter to servers[0].
     switch (server.type) {
       case DnsType.udp:
         servers.add({'address': server.address, 'port': server.port});
@@ -259,6 +252,14 @@ class XrayConfigBuilder {
         break;
     }
 
+    // Adblock: returns empty response for matched domains
+    if (routing.adBlockEnabled) {
+      servers.add({
+        'address': 'rcode://success',
+        'domains': [XrayDefaults.adBlockGeosite, 'geosite:win-spy'],
+      });
+    }
+
     final hosts = <String, String>{};
     if (server.domain != null && server.fallbackIp != null) {
       hosts[server.domain!] = server.fallbackIp!;
@@ -269,7 +270,7 @@ class XrayConfigBuilder {
           ? (Uri.tryParse(server.address)?.host ?? '')
           : server.address;
       if (host.isNotEmpty && !_isIpAddress(host)) {
-        servers.insert(servers.length - 1, {
+        servers.add({
           'address': XrayDefaults.bootstrapDns,
           'port': 53,
           'domains': [host],

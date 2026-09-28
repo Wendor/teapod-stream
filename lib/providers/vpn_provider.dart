@@ -244,14 +244,14 @@ class VpnNotifier extends Notifier<VpnState2> {
       case 'statsHistory':
         _handleStatsHistory(event);
       case 'tunnel_dead':
-        _runUrltestSwitch((event['failures'] as num?)?.toInt() ?? 0);
+        _runConfigSwitch((event['failures'] as num?)?.toInt() ?? 0);
     }
   }
 
-  /// Нативный heartbeat исчерпал попытки в режиме urltest: подбираем живой конфиг
-  /// среди кандидатов и переподключаемся на самый быстрый. Если живых нет —
+  /// Нативный heartbeat исчерпал попытки, а действие — смена конфига: меряем
+  /// кандидатов и переподключаемся на самый быстрый живой. Если живых нет —
   /// ничего не делаем, сервис сам реконнектится по своему cooldown.
-  Future<void> _runUrltestSwitch(int failures) async {
+  Future<void> _runConfigSwitch(int failures) async {
     if (_urltestRunning) return;
     _urltestRunning = true;
     final log = ref.read(logServiceProvider.notifier);
@@ -259,13 +259,14 @@ class VpnNotifier extends Notifier<VpnState2> {
       final settings =
           ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null) ??
               const AppSettings();
-      if (settings.heartbeat.action != HeartbeatAction.urltest) return;
+      if (settings.heartbeat.failAction != HeartbeatFailAction.switchConfig) return;
 
       final configState =
           ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
       if (configState == null) return;
       final current = _resolveEffectiveConfig(configState);
-      final candidates = _urltestCandidates(configState, settings.heartbeat.source, current);
+      final candidates =
+          _switchCandidates(configState, settings.heartbeat.switchSource, current);
       if (candidates.isEmpty) {
         log.addError('urltest: нет кандидатов для переключения (провалов: $failures)');
         return;
@@ -273,8 +274,22 @@ class VpnNotifier extends Notifier<VpnState2> {
 
       log.addInfo('urltest: туннель не отвечает, проверяю ${candidates.length} конфиг(ов)',
           source: 'urltest');
+      // Замер идёт через временный xray-инстанс с конфигом кандидата: TCP-пинг
+      // сказал бы «жив» и про сервер, у которого порт открыт, а протокол молчит.
+      // Инстанс временный, inbounds Go вырезает сам — важны только поля,
+      // влияющие на outbound.
+      final options = VpnEngineOptions(
+        socksPort: AppConstants.defaultSocksPort,
+        httpPort: 0,
+        socksUser: '',
+        socksPassword: '',
+        tlsFingerprint: settings.tlsFingerprint,
+        fragment: settings.fragment,
+        noise: settings.noise,
+        mux: settings.mux,
+      );
       final probed = await Future.wait(candidates.map((c) async {
-        final ms = await _engine.pingConfig(c);
+        final ms = await _engine.measureOutbound(c, options, settings.heartbeat.url);
         return (config: c, latency: ms);
       }));
       final alive = probed.where((r) => r.latency != null).toList()
@@ -297,19 +312,19 @@ class VpnNotifier extends Notifier<VpnState2> {
     }
   }
 
-  /// Кандидаты для urltest: активный конфиг исключается — он только что не прошёл пробу.
-  List<VpnConfig> _urltestCandidates(
+  /// Кандидаты для переключения: активный конфиг исключается — он только что не прошёл пробу.
+  List<VpnConfig> _switchCandidates(
     ConfigState configState,
-    UrltestSource source,
+    SwitchSource source,
     VpnConfig? current,
   ) {
     final all = configState.configs.where((c) => c.id != current?.id);
     return switch (source) {
-      UrltestSource.subscription =>
+      SwitchSource.subscription =>
         all.where((c) => c.subscriptionId == current?.subscriptionId).toList(),
-      UrltestSource.pinned =>
+      SwitchSource.pinned =>
         all.where((c) => configState.pins.any((p) => p.matches(c))).toList(),
-      UrltestSource.all => all.toList(),
+      SwitchSource.all => all.toList(),
     };
   }
 

@@ -66,8 +66,10 @@ class XrayVpnService : VpnService() {
         const val EXTRA_BLOCK_QUIC = "block_quic" // reject UDP/443 inside the TUN via ICMP Port Unreachable
         const val EXTRA_IPV6 = "ipv6_enabled" // add IPv6 address/route to the TUN interface
         const val EXTRA_MTU = "mtu" // TUN MTU size
-        const val EXTRA_HEARTBEAT_ACTION = "heartbeat_action"    // "reconnect" | "urltest"
+        const val EXTRA_HEARTBEAT_PROBE = "heartbeat_probe"      // "socks" | "xrayDelay" | "passive"
+        const val EXTRA_HEARTBEAT_ACTION = "heartbeat_action"    // "reconnect" | "switchConfig"
         const val EXTRA_HEARTBEAT_THRESHOLD = "heartbeat_threshold" // провалов подряд до действия
+        const val EXTRA_HEARTBEAT_URL = "heartbeat_url"          // куда стучится проба
 
         // Static state tracker for querying from Dart
         @Volatile private var currentNativeState: String = "disconnected"
@@ -144,6 +146,7 @@ class XrayVpnService : VpnService() {
         private const val NOTIFICATION_ID = 1
 
         private const val HEARTBEAT_URL_HOST = "cp.cloudflare.com"
+        private const val DEFAULT_HEARTBEAT_URL = "http://cp.cloudflare.com/generate_204"
         private const val CONNECTIVITY_CHECK_HOST = "8.8.8.8"
         private const val HEARTBEAT_INTERVAL_MS = 15_000L
         // Screen off: nobody is watching, the radio should be allowed to idle between
@@ -257,10 +260,14 @@ class XrayVpnService : VpnService() {
     private var pendingNetworkRunnable: Runnable? = null
     private var heartbeatThread: Thread? = null
     private val heartbeatFailures = AtomicInteger(0)
+    // Чем щупаем туннель: "socks" (HTTP через SOCKS5), "xrayDelay" (замер внутри
+    // ядра) или "passive" (только метрики tun2socks, без активных проб).
+    private var heartbeatProbe: String = "socks"
     // Поведение при мёртвом туннеле: "reconnect" — переподключить тот же сервер,
-    // "urltest" — отдать решение Flutter (он подберёт живой конфиг).
+    // "switchConfig" — отдать решение Flutter (он подберёт живой конфиг).
     private var heartbeatAction: String = "reconnect"
     private var heartbeatThreshold: Int = 3
+    private var heartbeatUrl: String = DEFAULT_HEARTBEAT_URL
     private var lastTunnelDeadNotifyAt = 0L
     private val wakeProbeRunning = AtomicBoolean(false)
     private val reconnectAttempts = AtomicInteger(0)
@@ -374,12 +381,15 @@ class XrayVpnService : VpnService() {
                 val blockQuic = intent.getBooleanExtra(EXTRA_BLOCK_QUIC, false)
                 val ipv6Enabled = intent.getBooleanExtra(EXTRA_IPV6, false)
                 val mtu = intent.getIntExtra(EXTRA_MTU, 1500).coerceIn(576, 9000)
+                heartbeatProbe = intent.getStringExtra(EXTRA_HEARTBEAT_PROBE) ?: "socks"
                 heartbeatAction = intent.getStringExtra(EXTRA_HEARTBEAT_ACTION) ?: "reconnect"
                 heartbeatThreshold = intent.getIntExtra(EXTRA_HEARTBEAT_THRESHOLD, 3).coerceIn(1, 10)
+                heartbeatUrl = intent.getStringExtra(EXTRA_HEARTBEAT_URL)?.takeIf { it.isNotEmpty() }
+                    ?: DEFAULT_HEARTBEAT_URL
                 // Persist non-sensitive params for CONNECT_QUICK reconnect (no credentials)
                 ConnectionParams(socksPort, excludedPackages, includedPackages,
                     vpnMode, ssPrefix, proxyOnly, showNotification, killSwitch, allowIcmp, blockQuic, ipv6Enabled, mtu,
-                    heartbeatAction, heartbeatThreshold)
+                    heartbeatProbe, heartbeatAction, heartbeatThreshold, heartbeatUrl)
                     .save(filesDir, ::log)
                 userRequestedDisconnect.set(false)
                 reconnectAttempts.set(0)
@@ -398,8 +408,10 @@ class XrayVpnService : VpnService() {
                 val params = ConnectionParams.load(filesDir)
                 if (params != null) {
                     showNotification = params.showNotification
+                    heartbeatProbe = params.heartbeatProbe
                     heartbeatAction = params.heartbeatAction
                     heartbeatThreshold = params.heartbeatThreshold
+                    heartbeatUrl = params.heartbeatUrl
                 }
                 ensureForeground()
                 if (isRunning.get()) {
@@ -461,8 +473,10 @@ class XrayVpnService : VpnService() {
         val params = ConnectionParams.load(filesDir)
         if (params != null) {
             showNotification = params.showNotification
+            heartbeatProbe = params.heartbeatProbe
             heartbeatAction = params.heartbeatAction
             heartbeatThreshold = params.heartbeatThreshold
+            heartbeatUrl = params.heartbeatUrl
         }
         ensureForeground()
         // Auto-connect if saved params exist and user didn't explicitly disconnect.
@@ -668,9 +682,9 @@ class XrayVpnService : VpnService() {
 
                 // 2. Resolve UIDs for split tunneling (tun2socks validator level)
                 val allowedUids = resolveUids(vpnMode, includedPackages, excludedPackages)
-                val validator = buildTunValidator(allowedUids, vpnMode)
+                val validator = buildTunValidator(allowedUids, vpnMode, excludedPackages.isNotEmpty())
 
-                log("info", "Starting tun2socks: mode=$vpnMode uids=${allowedUids.size}")
+                log("info", "Starting tun2socks: mode=$vpnMode uids=${allowedUids.size} blockUnowned=${excludedPackages.isNotEmpty()}")
 
                 val tunErr = Teapodcore.startTun2Socks(
                     tunInterface!!.fd.toLong(),
@@ -781,7 +795,14 @@ class XrayVpnService : VpnService() {
         return uids
     }
 
-    private fun buildTunValidator(allowedUids: Set<Int>, vpnMode: String): TunValidator {
+    /**
+     * [blockUnowned] — reject flows without a visible owner (uid=-1) in allExcept mode.
+     * An excluded app can bind a socket to the TUN (SO_BINDTODEVICE, kernel 5.7+), and
+     * getConnectionOwnerUid() reports INVALID_UID for UIDs our VPN doesn't apply to —
+     * so such a bypass is indistinguishable from tethered traffic and must be blocked
+     * whenever user exclusions exist. Cost: tethering via VPN stops working in that case.
+     */
+    private fun buildTunValidator(allowedUids: Set<Int>, vpnMode: String, blockUnowned: Boolean): TunValidator {
         if (allowedUids.isEmpty()) {
             return object : TunValidator {
                 override fun onValidate(srcIP: String, srcPort: Long, dstIP: String, dstPort: Long, protocol: Long) = true
@@ -808,15 +829,11 @@ class XrayVpnService : VpnService() {
                     return true
                 }
 
-                // uid=-1 means no local owner (e.g. tethered client packets).
-                // Apply the same vpnMode logic: in allExcept mode -1 is not excluded → allow;
-                // in onlySelected mode -1 is not in the allowlist → block.
-                val effectiveUid = if (uid < 0) -1 else uid
-                return if (vpnMode == "onlySelected") {
-                    effectiveUid in allowedUids
-                } else {
-                    effectiveUid !in allowedUids
-                }
+                // uid=-1: tethered client or an app our VPN doesn't apply to (excluded app
+                // bound to the TUN). onlySelected: not in the allowlist → block.
+                // allExcept: block only when there are user exclusions (see blockUnowned).
+                if (uid < 0) return vpnMode != "onlySelected" && !blockUnowned
+                return if (vpnMode == "onlySelected") uid in allowedUids else uid !in allowedUids
             }
         }
     }
@@ -1084,13 +1101,14 @@ class XrayVpnService : VpnService() {
         // Idle alone isn't proof of death though — probe the upstream through xray
         // and reconnect only if it actually fails (issue #81: blind reconnects on
         // every wake). onReceive runs on the main thread, so probe off-thread.
+        if (heartbeatProbe == "passive") return
         if (!wakeProbeRunning.compareAndSet(false, true)) return
         Thread {
             try {
                 val port = activeSocksPort
                 if (port <= 0) return@Thread
                 try {
-                    checkTunnelConnectivity(port)
+                    runProbe(port)
                     log("info", "TUN idle ${idleSec}s on wake but tunnel alive, skipping reconnect")
                 } catch (e: Exception) {
                     log("warning", "TUN stall on wake: no data for ${idleSec}s, probe failed (${e.message}), reconnecting")
@@ -1364,20 +1382,20 @@ class XrayVpnService : VpnService() {
             heartbeatFailures.set(0)
             return true
         }
-        if (heartbeatAction == "urltest") {
+        if (heartbeatAction == "switchConfig") {
             val now = System.currentTimeMillis()
             if (now - lastTunnelDeadNotifyAt >= TUNNEL_DEAD_NOTIFY_COOLDOWN_MS) {
                 lastTunnelDeadNotifyAt = now
-                log("warning", "$reason ($failures), requesting urltest switch")
+                log("warning", "$reason (провалов: $failures) → подбор другого конфига")
                 VpnEventStreamHandler.sendTunnelDeadEvent(failures)
                 heartbeatFailures.set(0)
                 return true
             }
             // Flutter не отреагировал за cooldown (приложение убито / нет живых
             // кандидатов) — деградируем в обычный реконнект текущего сервера.
-            log("warning", "urltest: no switch within cooldown, falling back to reconnect")
+            log("warning", "switchConfig: no switch within cooldown, falling back to reconnect")
         }
-        log("warning", "$reason $failures times, reconnecting")
+        log("warning", "$reason (провалов: $failures) → reconnect")
         reconnectInternal()
         return false
     }
@@ -1445,9 +1463,11 @@ class XrayVpnService : VpnService() {
 
                     // Data reached the TUN within the last interval — the tunnel is
                     // demonstrably alive, no need to burn a radio round-trip on an
-                    // active probe. Idle tunnels still get the full SOCKS5 probe.
-                    if (!isTunRxFresh()) {
-                        checkTunnelConnectivity(port)
+                    // active probe. Idle tunnels still get the full probe, кроме
+                    // пассивного режима: там активных проб нет вовсе, обрыв ловят
+                    // TUN stall watchdog и проверки tun2socks выше.
+                    if (heartbeatProbe != "passive" && !isTunRxFresh()) {
+                        runProbe(port)
                     }
                     warmupDone = true
                     heartbeatFailures.set(0)
@@ -1480,9 +1500,10 @@ class XrayVpnService : VpnService() {
                             val activeConns by lazy { Teapodcore.tunActiveConnections() }
                             when {
                                 idleSec >= TUN_STALL_TIMEOUT_MS / 1000 && activeConns >= 2 -> {
-                                    log("warning", "TUN stall: no data for ${idleSec}s (conns=$activeConns), reconnecting")
-                                    reconnectInternal()
-                                    break
+                                    if (handleHeartbeatExhausted(
+                                            heartbeatThreshold,
+                                            "TUN stall: no data for ${idleSec}s (conns=$activeConns)")
+                                    ) continue else break
                                 }
                                 idleSec >= 60 && activeConns >= 2 && now - lastStallWarnAt >= 60_000 -> {
                                     log("warning", "TUN rx idle for ${idleSec}s (conns=$activeConns)")
@@ -1531,7 +1552,7 @@ class XrayVpnService : VpnService() {
                     while (immediateRetries < 2 && !Thread.currentThread().isInterrupted) {
                         try {
                             Thread.sleep(3000)
-                            checkTunnelConnectivity(activeSocksPort)
+                            runProbe(activeSocksPort)
                             warmupDone = true
                             heartbeatFailures.set(0)
                             break
@@ -1565,7 +1586,50 @@ class XrayVpnService : VpnService() {
         heartbeatFailures.set(0)
     }
 
+    /// Разбор URL пробы: хост, порт и путь. Пресеты плоские (http), но кастомный
+    /// URL пользователь может задать любой — https через SOCKS-пробу не пойдёт,
+    /// поэтому такой URL обслуживается только замером внутри ядра.
+    private data class ProbeUrl(val host: String, val port: Int, val path: String, val https: Boolean)
+
+    private fun parseProbeUrl(raw: String): ProbeUrl {
+        return try {
+            val u = java.net.URI(raw)
+            val https = u.scheme.equals("https", ignoreCase = true)
+            ProbeUrl(
+                host = u.host ?: HEARTBEAT_URL_HOST,
+                port = if (u.port > 0) u.port else if (https) 443 else 80,
+                path = if (u.path.isNullOrEmpty()) "/" else u.path,
+                https = https,
+            )
+        } catch (_: Exception) {
+            ProbeUrl(HEARTBEAT_URL_HOST, 80, "/generate_204", false)
+        }
+    }
+
+    /// Активная проба выбранного типа. Бросает исключение при неудаче —
+    /// heartbeat-цикл считает это провалом.
+    private fun runProbe(port: Int) {
+        when (heartbeatProbe) {
+            "passive" -> return   // сюда не доходим: цикл не вызывает пробу вовсе
+            "xrayDelay" -> {
+                val ms = Teapodcore.measureXrayDelay(heartbeatUrl)
+                if (ms < 0) throw Exception("xray delay probe returned $ms")
+                log("debug", "Heartbeat OK (xray delay ${ms}ms)")
+            }
+            else -> checkTunnelConnectivity(port)
+        }
+    }
+
     private fun checkTunnelConnectivity(port: Int) {
+        val probeUrl = parseProbeUrl(heartbeatUrl)
+        if (probeUrl.https) {
+            // Проба сама говорит plain HTTP поверх SOCKS5 — TLS она не умеет.
+            // Для https-URL честнее замерить через ядро, чем врать об успехе.
+            val ms = Teapodcore.measureXrayDelay(heartbeatUrl)
+            if (ms < 0) throw Exception("xray delay probe returned $ms")
+            log("debug", "Heartbeat OK (https url, measured in core: ${ms}ms)")
+            return
+        }
         var stage = "init"
         val socket = Socket()
         try {
@@ -1598,8 +1662,8 @@ class XrayVpnService : VpnService() {
             }
 
             stage = "socks_connect"
-            val destHost = HEARTBEAT_URL_HOST
-            val destPort = 80
+            val destHost = probeUrl.host
+            val destPort = probeUrl.port
             val domainBytes = destHost.toByteArray()
             out.write(
                 byteArrayOf(5, 1, 0, 3, domainBytes.size.toByte()) +
@@ -1625,14 +1689,15 @@ class XrayVpnService : VpnService() {
             }
 
             stage = "http_request"
-            val request = "GET /generate_204 HTTP/1.1\r\nHost: $destHost\r\nConnection: close\r\n\r\n"
+            val request = "GET ${probeUrl.path} HTTP/1.1\r\nHost: $destHost\r\nConnection: close\r\n\r\n"
             out.write(request.toByteArray())
             out.flush()
 
             stage = "http_response"
             val reader = BufferedReader(InputStreamReader(inp))
             val line = reader.readLine()
-            if (line == null || !line.contains("204")) {
+            val code = line?.split(" ")?.getOrNull(1)?.toIntOrNull()
+            if (code == null || code !in 200..299) {
                 throw Exception("Invalid HTTP response: $line")
             }
 

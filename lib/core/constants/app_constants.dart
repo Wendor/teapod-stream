@@ -1,6 +1,8 @@
 class AppConstants {
   static const String appName = 'TeapodStream';
-  static const String appVersion = '1.1.0';
+
+  /// Populated at startup from PackageInfo (pubspec version).
+  static String appVersion = '';
 
   /// Populated at startup from the xray binary via getBinaryVersions().
   static String xrayCoreVersion = '';
@@ -8,8 +10,9 @@ class AppConstants {
   /// User-Agent sent with subscription HTTP requests.
   /// Format matches common VPN clients so subscription providers don't block us.
   static String get subscriptionUserAgent {
+    final app = appVersion.isNotEmpty ? appVersion : 'unknown';
     final xray = xrayCoreVersion.isNotEmpty ? xrayCoreVersion : 'unknown';
-    return 'TeapodStream/$appVersion (Android; XrayNG-compatible) Xray-core/$xray';
+    return 'TeapodStream/$app (Android; XrayNG-compatible) Xray-core/$xray';
   }
 
   static const String methodChannel = 'com.teapodstream/vpn';

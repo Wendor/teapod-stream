@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'app.dart';
 import 'core/constants/app_constants.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // App version for the subscription User-Agent (single source of truth: pubspec).
+  try {
+    AppConstants.appVersion = (await PackageInfo.fromPlatform()).version;
+  } catch (_) {
+    // Non-critical: UA will fall back to 'unknown'
+  }
 
   // Fetch xray-core version early so it's available in the subscription User-Agent.
   try {

@@ -70,12 +70,55 @@ class DnsServerConfig {
       case 'adguard_udp': return adguard;
       case 'adguard_doh': return adguardDoH;
       case 'custom':
-        return DnsServerConfig(
-          type: customType ?? DnsType.udp,
-          address: customAddress ?? '1.1.1.1',
-        );
+        return _custom(customType ?? DnsType.udp, customAddress);
       default: return cloudflare;
     }
+  }
+
+  /// Разбирает адрес кастомного сервера: снимает схему, вытаскивает `:port`
+  /// и подставляет дефолт по типу (UDP 53, DoT 853, DoH 443).
+  /// Без этого DoT уходил в xray с портом 53 и TLS-рукопожатие не проходило.
+  static DnsServerConfig _custom(DnsType type, String? raw) {
+    var input = (raw ?? '').trim();
+    if (input.isEmpty) {
+      return switch (type) {
+        DnsType.udp => cloudflare,
+        DnsType.doh => cloudflareDoH,
+        DnsType.dot => cloudflareDoT,
+      };
+    }
+
+    if (type == DnsType.doh) {
+      if (!input.startsWith('http://') && !input.startsWith('https://')) {
+        input = input.contains('/') ? 'https://$input' : 'https://$input/dns-query';
+      }
+      final uri = Uri.tryParse(input);
+      return DnsServerConfig(
+        type: type,
+        address: input,
+        port: uri?.hasPort == true ? uri!.port : 443,
+        domain: uri?.host.isNotEmpty == true ? uri!.host : null,
+      );
+    }
+
+    input = input.replaceFirst(RegExp(r'^[a-z0-9+]+://'), '');
+    final slash = input.indexOf('/');
+    if (slash >= 0) input = input.substring(0, slash);
+
+    final defaultPort = type == DnsType.dot ? 853 : 53;
+    var host = input;
+    var port = defaultPort;
+    // IPv6-литерал в скобках: порт только после закрывающей скобки.
+    final sep = input.startsWith('[') ? input.lastIndexOf(']:') : input.lastIndexOf(':');
+    if (sep > 0 && !input.substring(sep + 1).contains(':')) {
+      final parsed = int.tryParse(input.substring(input.startsWith('[') ? sep + 2 : sep + 1));
+      if (parsed != null && parsed > 0 && parsed <= 65535) {
+        host = input.substring(0, input.startsWith('[') ? sep + 1 : sep);
+        port = parsed;
+      }
+    }
+
+    return DnsServerConfig(type: type, address: host, port: port);
   }
 
   String get displayName {

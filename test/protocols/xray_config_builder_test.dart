@@ -5,6 +5,7 @@ import 'package:teapodstream/protocols/xray/xray_config_builder.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/core/models/routing_settings.dart';
 import 'package:teapodstream/core/interfaces/vpn_engine.dart';
+import 'package:teapodstream/core/models/dns_config.dart';
 
 VpnConfig _vlessConfig({String address = '1.2.3.4', int port = 443}) => VpnConfig(
   id: 'id',
@@ -41,6 +42,26 @@ void main() {
       expect(json.containsKey('outbounds'), isTrue);
       expect(json.containsKey('routing'), isTrue);
       expect(json.containsKey('policy'), isTrue);
+    });
+
+    test('custom DoT server keeps its own port and disables fallback', () {
+      final dns = XrayConfigBuilder.buildDnsBlock(VpnEngineOptions(
+        socksPort: 10808,
+        httpPort: 0,
+        socksUser: '',
+        socksPassword: '',
+        routing: const RoutingSettings(),
+        dnsServer: DnsServerConfig.fromPreset('custom',
+            customAddress: 'xbox-dns.ru', customType: DnsType.dot),
+      ));
+      final servers = dns['servers'] as List;
+      final main = servers.last as Map<String, dynamic>;
+      expect(main['address'], 'tls://xbox-dns.ru');
+      expect(main['port'], 853);
+      expect(dns['disableFallback'], isTrue);
+      // bootstrap resolves only the DoT hostname itself
+      final bootstrap = servers.first as Map<String, dynamic>;
+      expect(bootstrap['domains'], ['xbox-dns.ru']);
     });
 
     test('inbound socks uses correct port', () {

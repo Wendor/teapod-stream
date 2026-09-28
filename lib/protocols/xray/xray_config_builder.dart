@@ -282,6 +282,10 @@ class XrayConfigBuilder {
       'hosts': hosts,
       'servers': servers,
       'queryStrategy': strategy,
+      // Without this, a broken primary server (e.g. DoT on a wrong port) silently
+      // falls back to the domain-filtered bootstrap server, and all queries end up
+      // on 8.8.8.8 instead of the server the user selected.
+      'disableFallback': true,
     };
   }
 

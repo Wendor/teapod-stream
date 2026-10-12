@@ -101,52 +101,159 @@ class VpnConfig {
 
   VpnConfig copyWith({
     String? name,
+    VpnProtocol? protocol,
+    String? address,
+    int? port,
+    String? uuid,
+    VpnSecurity? security,
+    VpnTransport? transport,
+    String? sni,
+    String? wsPath,
+    String? wsHost,
+    String? grpcServiceName,
+    String? fingerprint,
+    String? publicKey,
+    String? shortId,
+    String? spiderX,
+    String? postQuantumKey,
+    String? flow,
+    String? encryption,
+    String? alterId,
+    String? method,
+    String? password,
     int? latencyMs,
+    bool clearLatency = false,
     DateTime? lastPingedAt,
     String? subscriptionId,
+    String? ssPrefix,
+    String? obfsPassword,
     bool? allowInsecure,
     String? pinSHA256,
+    String? xhttpMode,
+    Map<String, dynamic>? xhttpExtra,
+    Map<String, dynamic>? finalmask,
+    String? alpn,
+    String? ech,
+    String? rawXrayConfig,
     String? rawUri,
   }) {
     return VpnConfig(
       id: id,
       name: name ?? this.name,
-      protocol: protocol,
-      address: address,
-      port: port,
-      uuid: uuid,
-      security: security,
-      transport: transport,
-      sni: sni,
-      wsPath: wsPath,
-      wsHost: wsHost,
-      grpcServiceName: grpcServiceName,
-      fingerprint: fingerprint,
-      publicKey: publicKey,
-      shortId: shortId,
-      spiderX: spiderX,
-      postQuantumKey: postQuantumKey,
-      flow: flow,
-      encryption: encryption,
-      alterId: alterId,
-      method: method,
-      password: password,
+      protocol: protocol ?? this.protocol,
+      address: address ?? this.address,
+      port: port ?? this.port,
+      uuid: uuid ?? this.uuid,
+      security: security ?? this.security,
+      transport: transport ?? this.transport,
+      sni: sni ?? this.sni,
+      wsPath: wsPath ?? this.wsPath,
+      wsHost: wsHost ?? this.wsHost,
+      grpcServiceName: grpcServiceName ?? this.grpcServiceName,
+      fingerprint: fingerprint ?? this.fingerprint,
+      publicKey: publicKey ?? this.publicKey,
+      shortId: shortId ?? this.shortId,
+      spiderX: spiderX ?? this.spiderX,
+      postQuantumKey: postQuantumKey ?? this.postQuantumKey,
+      flow: flow ?? this.flow,
+      encryption: encryption ?? this.encryption,
+      alterId: alterId ?? this.alterId,
+      method: method ?? this.method,
+      password: password ?? this.password,
       createdAt: createdAt,
       rawUri: rawUri ?? this.rawUri,
-      latencyMs: latencyMs ?? this.latencyMs,
+      latencyMs: clearLatency ? null : (latencyMs ?? this.latencyMs),
       lastPingedAt: lastPingedAt ?? this.lastPingedAt,
       subscriptionId: subscriptionId ?? this.subscriptionId,
-      ssPrefix: ssPrefix,
-      obfsPassword: obfsPassword,
+      ssPrefix: ssPrefix ?? this.ssPrefix,
+      obfsPassword: obfsPassword ?? this.obfsPassword,
       allowInsecure: allowInsecure ?? this.allowInsecure,
       pinSHA256: pinSHA256 ?? this.pinSHA256,
-      xhttpMode: xhttpMode,
-      xhttpExtra: xhttpExtra,
-      finalmask: finalmask,
-      alpn: alpn,
-      ech: ech,
-      rawXrayConfig: rawXrayConfig,
+      xhttpMode: xhttpMode ?? this.xhttpMode,
+      xhttpExtra: xhttpExtra ?? this.xhttpExtra,
+      finalmask: finalmask ?? this.finalmask,
+      alpn: alpn ?? this.alpn,
+      ech: ech ?? this.ech,
+      rawXrayConfig: rawXrayConfig ?? this.rawXrayConfig,
     );
+  }
+
+  String toUri() {
+    if (rawUri != null && rawUri!.isNotEmpty) return rawUri!;
+    if (rawXrayConfig != null) return rawXrayConfig!;
+
+    switch (protocol) {
+      case VpnProtocol.vless:
+        final query = <String, String>{};
+        query['type'] = transport.name;
+        if (security != VpnSecurity.none) query['security'] = security.name;
+        if (sni != null && sni!.isNotEmpty) query['sni'] = sni!;
+        if (fingerprint != null && fingerprint!.isNotEmpty) query['fp'] = fingerprint!;
+        if (flow != null && flow!.isNotEmpty) query['flow'] = flow!;
+        if (publicKey != null && publicKey!.isNotEmpty) query['pbk'] = publicKey!;
+        if (shortId != null && shortId!.isNotEmpty) query['sid'] = shortId!;
+        if (spiderX != null && spiderX!.isNotEmpty) query['spx'] = spiderX!;
+        if (wsPath != null && wsPath!.isNotEmpty) query['path'] = wsPath!;
+        if (wsHost != null && wsHost!.isNotEmpty) query['host'] = wsHost!;
+        if (grpcServiceName != null && grpcServiceName!.isNotEmpty) query['serviceName'] = grpcServiceName!;
+        if (alpn != null && alpn!.isNotEmpty) query['alpn'] = alpn!;
+        final qStr = query.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&');
+        final qPart = qStr.isNotEmpty ? '?$qStr' : '';
+        return 'vless://$uuid@$address:$port$qPart#${Uri.encodeComponent(name)}';
+
+      case VpnProtocol.hysteria2:
+        final query = <String, String>{};
+        if (sni != null && sni!.isNotEmpty) query['sni'] = sni!;
+        if (obfsPassword != null && obfsPassword!.isNotEmpty) {
+          query['obfs'] = 'salamander';
+          query['obfs-password'] = obfsPassword!;
+        }
+        if (pinSHA256 != null && pinSHA256!.isNotEmpty) query['pinSHA256'] = pinSHA256!;
+        if (allowInsecure) query['insecure'] = '1';
+        final qStr = query.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&');
+        final qPart = qStr.isNotEmpty ? '?$qStr' : '';
+        final pass = (password != null && password!.isNotEmpty) ? password! : uuid;
+        return 'hysteria2://$pass@$address:$port$qPart#${Uri.encodeComponent(name)}';
+
+      case VpnProtocol.shadowsocks:
+        final meth = method ?? 'chacha20-ietf-poly1305';
+        final pass = password ?? '';
+        final userInfo = base64Url.encode(utf8.encode('$meth:$pass')).replaceAll('=', '');
+        return 'ss://$userInfo@$address:$port#${Uri.encodeComponent(name)}';
+
+      case VpnProtocol.vmess:
+        final vmessJson = {
+          'v': '2',
+          'ps': name,
+          'add': address,
+          'port': port,
+          'id': uuid,
+          'aid': alterId ?? '0',
+          'net': transport.name,
+          'type': 'none',
+          'host': wsHost ?? '',
+          'path': wsPath ?? '',
+          'tls': security == VpnSecurity.tls ? 'tls' : '',
+          'sni': sni ?? '',
+          'fp': fingerprint ?? '',
+        };
+        final enc = base64.encode(utf8.encode(jsonEncode(vmessJson)));
+        return 'vmess://$enc';
+
+      case VpnProtocol.trojan:
+        final query = <String, String>{};
+        query['type'] = transport.name;
+        if (security != VpnSecurity.none) query['security'] = security.name;
+        if (sni != null && sni!.isNotEmpty) query['sni'] = sni!;
+        if (fingerprint != null && fingerprint!.isNotEmpty) query['fp'] = fingerprint!;
+        if (wsPath != null && wsPath!.isNotEmpty) query['path'] = wsPath!;
+        if (wsHost != null && wsHost!.isNotEmpty) query['host'] = wsHost!;
+        if (alpn != null && alpn!.isNotEmpty) query['alpn'] = alpn!;
+        final qStr = query.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&');
+        final qPart = qStr.isNotEmpty ? '?$qStr' : '';
+        final pass = (password != null && password!.isNotEmpty) ? password! : uuid;
+        return 'trojan://$pass@$address:$port$qPart#${Uri.encodeComponent(name)}';
+    }
   }
 
   Map<String, dynamic> toJson() => {

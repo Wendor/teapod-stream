@@ -110,6 +110,9 @@ class XrayConfigBuilder {
               'outboundTag': 'direct',
             },
           ],
+          if (options.subscriptionRoutingRules != null && options.subscriptionRoutingRules!.isNotEmpty) ...[
+            ...options.subscriptionRoutingRules!,
+          ],
           ..._buildGeoRules(routing),
           // In ONLY mode the catch-all routes to direct, so diagnostic hosts that aren't
           // in the user's rules would bypass the proxy and may be blocked locally.
@@ -625,6 +628,9 @@ class XrayConfigBuilder {
       // Only inject rules that route to 'direct' — safe regardless of server outbound names.
       // onlySelected rules (→ 'proxy') are skipped: the server's own catch-all handles routing.
       final routing = options.routing;
+      if (options.subscriptionRoutingRules != null && options.subscriptionRoutingRules!.isNotEmpty) {
+        appRules.addAll(options.subscriptionRoutingRules!);
+      }
       if (routing.direction == RoutingDirection.bypass) {
         appRules.addAll(_buildGeoRules(routing));
       } else if (routing.bypassLocal) {

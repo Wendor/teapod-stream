@@ -15,6 +15,7 @@ import '../core/services/log_service.dart';
 import '../core/services/settings_service.dart';
 import 'ip_info_provider.dart';
 import '../protocols/xray/xray_engine.dart';
+import '../core/services/subscription_routing_parser.dart';
 import 'settings_provider.dart';
 import 'config_provider.dart';
 
@@ -384,11 +385,9 @@ class VpnNotifier extends Notifier<VpnState2> {
     if (nativeState == VpnState.disconnected ||
         nativeState == VpnState.error ||
         nativeState == VpnState.blocked) {
-      // Reset stats on disconnect/error/blocked
       _statsPoller?.cancel();
       state = VpnState2(
         connectionState: nativeState,
-        // Reset stats including speedHistory
         stats: const VpnStats(),
         error: nativeState == VpnState.error
             ? (state.error ?? 'Connection error')
@@ -489,6 +488,21 @@ class VpnNotifier extends Notifier<VpnState2> {
         ? (10000 + Random().nextInt(50000))
         : settings.socksPort;
 
+    List<Map<String, dynamic>>? subscriptionRoutingRules;
+    final effectiveSubId = config.subscriptionId ?? configState?.activeSubscriptionId;
+    if (effectiveSubId != null && configState != null) {
+      final sub = configState.subscriptions
+          .where((s) => s.id == effectiveSubId)
+          .firstOrNull;
+      if (sub != null &&
+          sub.useSubscriptionRouting &&
+          sub.routingJson != null &&
+          sub.routingJson!.isNotEmpty) {
+        subscriptionRoutingRules =
+            SubscriptionRoutingParser.parse(sub.routingJson);
+      }
+    }
+
     final options = VpnEngineOptions(
       socksPort: actualSocksPort,
       httpPort: 0,
@@ -529,6 +543,7 @@ class VpnNotifier extends Notifier<VpnState2> {
       noise: settings.noise,
       mux: settings.mux,
       heartbeat: settings.heartbeat,
+      subscriptionRoutingRules: subscriptionRoutingRules,
     );
     state = state.copyWith(
       activeSocksPort: actualSocksPort,
@@ -665,6 +680,39 @@ class VpnNotifier extends Notifier<VpnState2> {
     }
   }
 
+  static const realDelayTestUrl = 'https://www.gstatic.com/generate_204';
+
+  Future<void> measureAllRealDelays([String? testUrl]) async {
+    if (_isPinging) return;
+    final configState = ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
+    if (configState == null || configState.configs.isEmpty) return;
+    _isPinging = true;
+    final url = testUrl ?? realDelayTestUrl;
+    final now = DateTime.now();
+
+    final settings = ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null) ?? const AppSettings();
+    final options = VpnEngineOptions(
+      socksPort: AppConstants.defaultSocksPort,
+      httpPort: 0,
+      socksUser: '',
+      socksPassword: '',
+      enableUdp: false,
+      allowIcmp: false,
+      tlsFingerprint: settings.tlsFingerprint,
+    );
+
+    try {
+      final results = await Future.wait(configState.configs.map((c) async {
+        final ms = await _engine.measureOutbound(c, options, url);
+        return MapEntry(c.id, ms ?? -1);
+      }));
+      final latencyMap = Map.fromEntries(results);
+      await ref.read(configProvider.notifier).batchUpdateDelaysById(latencyMap, now);
+    } finally {
+      _isPinging = false;
+    }
+  }
+
   Future<void> pingStaleConfigs() async {
     if (_isPinging) return;
     final configState = ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
@@ -700,7 +748,7 @@ class VpnNotifier extends Notifier<VpnState2> {
 
     final results = await Future.wait(endpoints.entries.map((e) async {
       final ms = await _engine.pingConfig(e.value);
-      return MapEntry(e.key, ms);
+      return MapEntry(e.key, ms ?? -1);
     }));
     final latencyMap = Map.fromEntries(results);
 

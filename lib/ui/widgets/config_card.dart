@@ -181,6 +181,7 @@ class _LatencyBadge extends StatelessWidget {
   const _LatencyBadge(this.ms);
 
   Color get _color {
+    if (ms < 0) return AppColors.error;
     if (ms < 100) return AppColors.connected;
     if (ms < 300) return AppColors.connecting;
     return AppColors.error;
@@ -189,7 +190,7 @@ class _LatencyBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(
-      '${ms}ms',
+      ms < 0 ? 'н/д' : '${ms}ms',
       style: TextStyle(
         color: _color,
         fontSize: 11,

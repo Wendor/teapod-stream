@@ -14,6 +14,9 @@ import '../../app.dart';
 import '../widgets/live_sparkline.dart';
 import '../widgets/reconnect_banner.dart';
 import '../widgets/server_picker_sheet.dart';
+import '../../core/services/config_storage_service.dart';
+import '../../core/services/subscription_service.dart';
+import '../widgets/subscription_status_card.dart';
 import 'logs_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -49,6 +52,11 @@ class HomeScreen extends ConsumerWidget {
       )),
     );
 
+    final configState = ref.watch(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
+    final activeSub = (effectiveConfig?.subscriptionId != null && configState != null)
+        ? configState.subscriptions.where((s) => s.id == effectiveConfig!.subscriptionId).firstOrNull
+        : null;
+
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
@@ -66,6 +74,12 @@ class HomeScreen extends ConsumerWidget {
                 // Без конфигов кнопка ведёт на вкладку «Конфиги»
                 onDisabledTap: () => ref.read(tabIndexProvider.notifier).set(1),
               ),
+              if (activeSub != null)
+                SubscriptionStatusCard(
+                  t: t,
+                  subscription: activeSub,
+                  onRefresh: () => _refreshSubscription(context, ref, activeSub),
+                ),
               _MetricsGrid(
                 t: t,
                 stats: vpnState.stats,
@@ -85,6 +99,67 @@ class HomeScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _refreshSubscription(BuildContext context, WidgetRef ref, Subscription sub,
+      {bool allowSelfSigned = false}) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      await ref.read(configProvider.notifier).addSubscriptionFromUrl(
+            sub.url,
+            name: sub.name,
+            allowSelfSigned: allowSelfSigned,
+          );
+      if (context.mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Подписка обновлена')));
+      }
+    } on UntrustedCertificateException catch (e) {
+      if (!context.mounted) return;
+      Navigator.pop(context);
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Ненадёжный сертификат'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Сервер использует самоподписанный или неизвестный сертификат. '
+                  'Соединение может быть небезопасным.'),
+              const SizedBox(height: 12),
+              Text('Сервер: ${e.host}',
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+              Text('Сертификат: ${e.subject}',
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+              Text('Издатель: ${e.issuer}',
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+              const SizedBox(height: 12),
+              const Text('Продолжить всё равно?'),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Продолжить')),
+          ],
+        ),
+      );
+      if (confirmed == true && context.mounted) {
+        await _refreshSubscription(context, ref, sub, allowSelfSigned: true);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка обновления: $e')),
+        );
+      }
+    }
   }
 }
 
@@ -241,7 +316,8 @@ class _StateInfo extends ConsumerWidget {
     } else if (isConn) {
       final ipStr = ipAsync.maybeWhen(data: (d) => d?.ip, orElse: () => null) ?? '—';
       final cc    = ipAsync.maybeWhen(data: (d) => d?.countryCode.toLowerCase(), orElse: () => null) ?? '—';
-      subtitle = pingMs != null ? '${pingMs}ms · $cc · $ipStr' : '$cc · $ipStr';
+      final pingFormatted = pingMs != null ? (pingMs! < 0 ? 'н/д' : '${pingMs}ms') : null;
+      subtitle = pingFormatted != null ? '$pingFormatted · $cc · $ipStr' : '$cc · $ipStr';
     } else if (isConnecting) {
       subtitle = 'установка соединения…';
     } else if (isDisconnecting) {
@@ -600,7 +676,9 @@ class _MetricsGrid extends StatelessWidget {
         .toList();
     final peakDown = sparkSamples.fold<double>(0, (m, v) => v > m ? v : m);
 
-    final pingStr = pingMs != null ? '$pingMs' : '—';
+    final pingStr = pingMs != null ? (pingMs! < 0 ? 'н/д' : '$pingMs') : '—';
+    final pingUnit = (pingMs != null && pingMs! >= 0) ? 'ms' : null;
+    final pingColor = (pingMs != null && pingMs! < 0) ? t.danger : null;
 
     return Column(
       children: [
@@ -632,7 +710,8 @@ class _MetricsGrid extends StatelessWidget {
                   t: t,
                   label: 'Пинг',
                   value: pingStr,
-                  unit: pingMs != null ? 'ms' : null,
+                  valueColor: pingColor,
+                  unit: pingUnit,
                   alignRight: true,
                 ),
               ),
@@ -716,6 +795,7 @@ class _MetricCell extends StatelessWidget {
   final TeapodTokens t;
   final String label;
   final String value;
+  final Color? valueColor;
   final String? unit;
   final String? hint;
   final bool borderRight;
@@ -729,6 +809,7 @@ class _MetricCell extends StatelessWidget {
     required this.t,
     required this.label,
     required this.value,
+    this.valueColor,
     this.unit,
     this.hint,
     this.borderRight = false,
@@ -773,10 +854,10 @@ class _MetricCell extends StatelessWidget {
                   style: compactValue
                       ? AppTheme.sans(
                           size: 15, weight: FontWeight.w500,
-                          color: t.text, letterSpacing: -0.3)
+                          color: valueColor ?? t.text, letterSpacing: -0.3)
                       : AppTheme.mono(
                           size: 20, weight: FontWeight.w500,
-                          color: t.text, letterSpacing: -0.5),
+                          color: valueColor ?? t.text, letterSpacing: -0.5),
                 ),
               ),
               if (unit != null) ...[

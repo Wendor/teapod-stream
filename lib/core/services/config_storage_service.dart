@@ -16,6 +16,8 @@ class Subscription {
   final int? totalBytes;
   final String? announce;
   final String? announceUrl;
+  final String? routingJson;
+  final bool useSubscriptionRouting;
 
   const Subscription({
     required this.id,
@@ -29,6 +31,8 @@ class Subscription {
     this.totalBytes,
     this.announce,
     this.announceUrl,
+    this.routingJson,
+    this.useSubscriptionRouting = true,
   });
 
   Map<String, dynamic> toJson() => {
@@ -43,6 +47,8 @@ class Subscription {
         'totalBytes': totalBytes,
         'announce': announce,
         'announceUrl': announceUrl,
+        'routingJson': routingJson,
+        'useSubscriptionRouting': useSubscriptionRouting,
       };
 
   factory Subscription.fromJson(Map<String, dynamic> json) => Subscription(
@@ -61,6 +67,8 @@ class Subscription {
         totalBytes: json['totalBytes'] as int?,
         announce: json['announce'] as String?,
         announceUrl: json['announceUrl'] as String?,
+        routingJson: json['routingJson'] as String?,
+        useSubscriptionRouting: json['useSubscriptionRouting'] as bool? ?? true,
       );
 
   Subscription copyWith({
@@ -72,6 +80,8 @@ class Subscription {
     int? totalBytes,
     String? announce,
     String? announceUrl,
+    String? routingJson,
+    bool? useSubscriptionRouting,
   }) {
     return Subscription(
       id: id,
@@ -85,6 +95,9 @@ class Subscription {
       totalBytes: totalBytes ?? this.totalBytes,
       announce: announce ?? this.announce,
       announceUrl: announceUrl ?? this.announceUrl,
+      routingJson: routingJson ?? this.routingJson,
+      useSubscriptionRouting:
+          useSubscriptionRouting ?? this.useSubscriptionRouting,
     );
   }
 }

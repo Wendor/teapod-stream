@@ -8,7 +8,6 @@ import '../../core/models/vpn_config.dart';
 import '../../core/models/pinned_ref.dart';
 import '../../core/services/config_storage_service.dart';
 import '../../core/services/subscription_service.dart';
-import '../../protocols/xray/vless_parser.dart';
 import '../../providers/config_provider.dart';
 import '../../providers/vpn_provider.dart';
 import '../../core/interfaces/vpn_engine.dart';
@@ -18,6 +17,7 @@ import '../widgets/hero_panel.dart';
 import '../widgets/pressable.dart';
 import 'add_config_screen.dart';
 import 'subscription_settings_screen.dart';
+import 'edit_config_screen.dart';
 
 class ConfigsScreen extends ConsumerStatefulWidget {
   const ConfigsScreen({super.key});
@@ -29,6 +29,7 @@ class ConfigsScreen extends ConsumerStatefulWidget {
 class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
   final Set<String> _expandedSubs = {};
   bool _isPinging = false;
+  bool _isTestingDelay = false;
   bool _isRefreshingAll = false;
   bool _hideGroups = false;
   bool _sortByPing = false;
@@ -64,6 +65,11 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
         if (a.latencyMs == null && b.latencyMs == null) return 0;
         if (a.latencyMs == null) return 1;
         if (b.latencyMs == null) return -1;
+        final aFail = a.latencyMs! < 0;
+        final bFail = b.latencyMs! < 0;
+        if (aFail && bFail) return 0;
+        if (aFail) return 1;
+        if (bFail) return -1;
         return a.latencyMs!.compareTo(b.latencyMs!);
       });
   }
@@ -106,6 +112,11 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
               isPinging: _isPinging,
               onPing: configStateAsync.maybeWhen(
                 data: (s) => s.configs.isNotEmpty ? () => _pingAll(s.configs) : null,
+                orElse: () => null,
+              ),
+              isTestingDelay: _isTestingDelay,
+              onRealDelay: configStateAsync.maybeWhen(
+                data: (s) => s.configs.isNotEmpty ? () => _measureRealDelayAll(s.configs) : null,
                 orElse: () => null,
               ),
             ),
@@ -402,12 +413,22 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
   }
 
   Future<void> _pingAll(List<VpnConfig> configs) async {
-    if (_isPinging) return;
+    if (_isPinging || _isTestingDelay) return;
     setState(() => _isPinging = true);
     try {
       await ref.read(vpnProvider.notifier).pingAllConfigs();
     } finally {
       if (mounted) setState(() => _isPinging = false);
+    }
+  }
+
+  Future<void> _measureRealDelayAll(List<VpnConfig> configs) async {
+    if (_isTestingDelay || _isPinging) return;
+    setState(() => _isTestingDelay = true);
+    try {
+      await ref.read(vpnProvider.notifier).measureAllRealDelays();
+    } finally {
+      if (mounted) setState(() => _isTestingDelay = false);
     }
   }
 
@@ -452,7 +473,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
               if (!context.mounted) return;
               await _renameConfig(context, ref, config);
             }),
-            _SheetTile(t: t, label: 'Редактировать URI', onTap: () async {
+            _SheetTile(t: t, label: 'Редактировать', onTap: () async {
               Navigator.pop(ctx);
               if (!context.mounted) return;
               await _editConfig(context, ref, config);
@@ -506,63 +527,11 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
   }
 
   Future<void> _editConfig(BuildContext context, WidgetRef ref, VpnConfig config) async {
-    final controller = TextEditingController(text: config.rawUri ?? '');
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Редактировать URI'),
-        content: SizedBox(
-          width: MediaQuery.of(context).size.width * 0.8,
-          child: TextField(
-            controller: controller,
-            maxLines: 5,
-            keyboardType: TextInputType.multiline,
-            decoration: const InputDecoration(
-              hintText: 'vless://...',
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить')),
-        ],
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => EditConfigScreen(config: config),
       ),
     );
-    if (ok == true && controller.text.trim().isNotEmpty) {
-      final updated = VlessParser.parseUri(controller.text.trim());
-      if (updated != null) {
-        final renamed = VpnConfig(
-          id: config.id,
-          name: updated.name,
-          protocol: updated.protocol,
-          address: updated.address,
-          port: updated.port,
-          uuid: updated.uuid,
-          security: updated.security,
-          transport: updated.transport,
-          sni: updated.sni,
-          wsPath: updated.wsPath,
-          wsHost: updated.wsHost,
-          grpcServiceName: updated.grpcServiceName,
-          publicKey: updated.publicKey,
-          shortId: updated.shortId,
-          spiderX: updated.spiderX,
-          flow: updated.flow,
-          encryption: updated.encryption,
-          createdAt: config.createdAt,
-          rawUri: controller.text.trim(),
-          latencyMs: config.latencyMs,
-          subscriptionId: config.subscriptionId,
-        );
-        ref.read(configProvider.notifier).updateConfig(renamed);
-      } else if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не удалось распознать URI')),
-        );
-      }
-    }
   }
 
   Future<void> _deleteConfig(BuildContext context, WidgetRef ref, VpnConfig config) async {
@@ -766,12 +735,16 @@ class _CfgHeaderStrip extends StatelessWidget {
   final int total;
   final bool isPinging;
   final VoidCallback? onPing;
+  final bool isTestingDelay;
+  final VoidCallback? onRealDelay;
 
   const _CfgHeaderStrip({
     required this.t,
     required this.total,
     required this.isPinging,
     this.onPing,
+    required this.isTestingDelay,
+    this.onRealDelay,
   });
 
   @override
@@ -796,8 +769,33 @@ class _CfgHeaderStrip extends StatelessWidget {
               else if (onPing != null)
                 GestureDetector(
                   onTap: onPing,
-                  child: Text('ping',
-                      style: AppTheme.mono(size: 10, color: t.accent, letterSpacing: 1)),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: t.line),
+                    ),
+                    child: Text('ping',
+                        style: AppTheme.mono(size: 9, color: t.accent, letterSpacing: 1)),
+                  ),
+                ),
+              const SizedBox(width: 8),
+              if (isTestingDelay)
+                SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(color: t.accent, strokeWidth: 1.2),
+                )
+              else if (onRealDelay != null)
+                GestureDetector(
+                  onTap: onRealDelay,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: t.line),
+                    ),
+                    child: Text('отклик',
+                        style: AppTheme.mono(size: 9, color: t.accent, letterSpacing: 1)),
+                  ),
                 ),
               const SizedBox(width: 12),
               Text('total [$totalStr]',
@@ -1521,8 +1519,8 @@ class _ConfigRow extends StatelessWidget {
                     const SizedBox(width: 6),
                   ],
                   if (ping != null)
-                    Text('${ping}ms',
-                        style: AppTheme.mono(size: 11, color: t.accent)),
+                    Text(ping < 0 ? 'н/д' : '${ping}ms',
+                        style: AppTheme.mono(size: 11, color: ping < 0 ? t.danger : t.accent)),
                   trailing,
                 ],
               ),

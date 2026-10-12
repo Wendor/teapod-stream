@@ -333,17 +333,6 @@ class _SettingsBody extends StatelessWidget {
         ListView(
         padding: EdgeInsets.zero,
         children: [
-          // Доступно обновление — тайл наверху, чтобы не искать в конце списка
-          if (hasUpdate)
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
-              decoration: BoxDecoration(
-                color: t.accentFade,
-                border: Border(bottom: BorderSide(color: t.accent)),
-              ),
-              child: const _UpdateTile(),
-            ),
-
           // ── 0x10 DIAGNOSTICS ──────────────────────────────────
           SetSectionHeader(t: t, addr: '0x10', label: 'diagnostics'),
           SetRowChev(
@@ -424,13 +413,12 @@ class _SettingsBody extends StatelessWidget {
             label: 'Канал обновлений',
             child: const _UpdateChannelSegment(),
           ),
-          // Update tile (complex) — при доступном обновлении показан наверху
-          if (!hasUpdate)
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
-              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.line))),
-              child: const _UpdateTile(),
-            ),
+          // Update tile (complex)
+          Container(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.line))),
+            child: const _UpdateTile(),
+          ),
 
           // ── 0x60 ABOUT ────────────────────────────────────────
           SetSectionHeader(t: t, addr: '0x60', label: 'about'),

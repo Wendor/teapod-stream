@@ -168,8 +168,8 @@ class _PickerRow extends StatelessWidget {
                   ),
                   if (ping != null) ...[
                     const SizedBox(width: 8),
-                    Text('${ping}ms',
-                        style: AppTheme.mono(size: 11, color: t.accent)),
+                    Text(ping < 0 ? 'н/д' : '${ping}ms',
+                        style: AppTheme.mono(size: 11, color: ping < 0 ? t.danger : t.accent)),
                   ],
                 ],
               ),

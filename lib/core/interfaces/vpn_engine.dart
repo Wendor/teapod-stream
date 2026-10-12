@@ -48,6 +48,7 @@ class VpnEngineOptions {
   final NoiseSettings noise;
   final MuxSettings mux;
   final HeartbeatSettings heartbeat;
+  final List<Map<String, dynamic>>? subscriptionRoutingRules;
 
   const VpnEngineOptions({
     required this.socksPort,
@@ -78,5 +79,6 @@ class VpnEngineOptions {
     this.noise = const NoiseSettings(),
     this.mux = const MuxSettings(),
     this.heartbeat = const HeartbeatSettings(),
+    this.subscriptionRoutingRules,
   });
 }

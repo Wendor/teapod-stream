@@ -27,6 +27,7 @@ class XrayEngine implements VpnEngine {
 
     await _channel.invokeMethod('connect', {
       'xrayConfig': xrayConfig,
+      'configName': config.name,
       'socksPort': options.socksPort,
       'socksUser': options.socksUser,
       'socksPassword': options.socksPassword,
@@ -53,6 +54,16 @@ class XrayEngine implements VpnEngine {
   @override
   Future<void> disconnect() async {
     await _channel.invokeMethod('disconnect');
+  }
+
+  /// Sync active config name and prebuilt json to Android native SharedPreferences & tile
+  static Future<void> syncActiveConfigName(String name, {String? xrayConfig}) async {
+    try {
+      await _channel.invokeMethod('setActiveConfigName', {
+        'name': name,
+        'xrayConfig': ?xrayConfig,
+      });
+    } catch (_) {}
   }
 
   /// Замер задержки через кандидата: временный xray-инстанс с его конфигом

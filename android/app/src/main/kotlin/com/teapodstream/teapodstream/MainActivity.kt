@@ -64,6 +64,7 @@ class MainActivity : FlutterActivity() {
                             result.error("INVALID_ARGS", "xrayConfig required", null)
                             return@setMethodCallHandler
                         }
+                        val configName = call.argument<String>("configName") ?: ""
                         val socksPort = call.argument<Int>("socksPort") ?: 10808
                         val socksUser = call.argument<String>("socksUser") ?: ""
                         val socksPassword = call.argument<String>("socksPassword") ?: ""
@@ -92,7 +93,8 @@ class MainActivity : FlutterActivity() {
                                 killSwitch = killSwitch, allowIcmp = allowIcmp,
                                 blockQuic = blockQuic, ipv6Enabled = ipv6Enabled, allowTethering = allowTethering,
                                 heartbeatProbe = heartbeatProbe, heartbeatAction = heartbeatAction,
-                                heartbeatThreshold = heartbeatThreshold, heartbeatUrl = heartbeatUrl
+                                heartbeatThreshold = heartbeatThreshold, heartbeatUrl = heartbeatUrl,
+                                configName = configName
                             )
                             result.success(null)
                         } else {
@@ -104,7 +106,8 @@ class MainActivity : FlutterActivity() {
                                     killSwitch = killSwitch, allowIcmp = allowIcmp,
                                     blockQuic = blockQuic, ipv6Enabled = ipv6Enabled, allowTethering = allowTethering,
                                     heartbeatProbe = heartbeatProbe, heartbeatAction = heartbeatAction,
-                                    heartbeatThreshold = heartbeatThreshold, heartbeatUrl = heartbeatUrl
+                                    heartbeatThreshold = heartbeatThreshold, heartbeatUrl = heartbeatUrl,
+                                    configName = configName
                                 )
                                 result.success(null)
                             }
@@ -113,6 +116,30 @@ class MainActivity : FlutterActivity() {
 
                     "disconnect" -> {
                         stopVpnService()
+                        result.success(null)
+                    }
+
+                    "setActiveConfigName" -> {
+                        val name = call.argument<String>("name") ?: ""
+                        val xrayConfig = call.argument<String>("xrayConfig")
+                        if (name.isNotEmpty()) {
+                            XrayVpnService.activeConfigName = name
+                            getSharedPreferences(XrayVpnService.PREFS_NAME, MODE_PRIVATE)
+                                .edit()
+                                .putString("active_config_name", name)
+                                .apply()
+                            if (!xrayConfig.isNullOrBlank()) {
+                                try {
+                                    java.io.File(filesDir, "xray_config.json").writeText(xrayConfig)
+                                } catch (_: Exception) {}
+                            }
+                            if (!java.io.File(filesDir, "last_connection_meta.json").exists()) {
+                                try {
+                                    ConnectionParams.default().save(filesDir) { _, _ -> }
+                                } catch (_: Exception) {}
+                            }
+                            VpnTileService.updateTile(this)
+                        }
                         result.success(null)
                     }
 
@@ -391,11 +418,13 @@ class MainActivity : FlutterActivity() {
         heartbeatAction: String = "reconnect",
         heartbeatThreshold: Int = 3,
         heartbeatUrl: String = "",
+        configName: String = "",
     ) {
         requestBatteryOptimizationExemption()
         val intent = Intent(this, XrayVpnService::class.java).apply {
             action = XrayVpnService.ACTION_CONNECT
             putExtra(XrayVpnService.EXTRA_XRAY_CONFIG, xrayConfig)
+            putExtra(XrayVpnService.EXTRA_CONFIG_NAME, configName)
             putExtra(XrayVpnService.EXTRA_SOCKS_PORT, socksPort)
             putExtra(XrayVpnService.EXTRA_SOCKS_USER, socksUser)
             putExtra(XrayVpnService.EXTRA_SOCKS_PASSWORD, socksPassword)

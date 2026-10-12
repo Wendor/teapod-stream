@@ -71,9 +71,22 @@ class XrayVpnService : VpnService() {
         const val EXTRA_HEARTBEAT_ACTION = "heartbeat_action"    // "reconnect" | "switchConfig"
         const val EXTRA_HEARTBEAT_THRESHOLD = "heartbeat_threshold" // провалов подряд до действия
         const val EXTRA_HEARTBEAT_URL = "heartbeat_url"          // куда стучится проба
+        const val EXTRA_CONFIG_NAME = "config_name"
 
         // Static state tracker for querying from Dart
         @Volatile private var currentNativeState: String = "disconnected"
+        @Volatile var activeConfigName: String? = null
+
+        @JvmStatic fun getActiveConfigName(context: android.content.Context): String? {
+            if (!activeConfigName.isNullOrBlank()) return activeConfigName
+            val saved = context.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
+                .getString("active_config_name", null)
+            if (!saved.isNullOrBlank()) {
+                activeConfigName = saved
+                return saved
+            }
+            return null
+        }
         // Tracks whether we are in TUN mode (not proxy-only). Used by getNativeState() to detect
         // a TUN fd closed externally (e.g. during a phone call) without onRevoke() being called.
         @Volatile private var tunModeActive = false
@@ -336,6 +349,10 @@ class XrayVpnService : VpnService() {
         when (intent?.action) {
             ACTION_DISCONNECT -> {
                 userRequestedDisconnect.set(true)
+                // Retain activeConfigName and SharedPreferences so status bar tile keeps the selected config name
+                if (activeConfigName.isNullOrBlank()) {
+                    activeConfigName = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString("active_config_name", null)
+                }
                 try { File(filesDir, "user_disconnected.flag").createNewFile() } catch (_: Exception) {}
                 // Signal disconnecting immediately so the button turns yellow
                 // even when triggered from the notification (no Flutter-side handler).
@@ -369,6 +386,11 @@ class XrayVpnService : VpnService() {
             }
             ACTION_CONNECT -> {
                 showNotification = intent.getBooleanExtra(EXTRA_SHOW_NOTIFICATION, true)
+                val cfgName = intent.getStringExtra(EXTRA_CONFIG_NAME)
+                if (!cfgName.isNullOrBlank()) {
+                    activeConfigName = cfgName
+                    getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString("active_config_name", cfgName).apply()
+                }
                 val xrayConfig = intent.getStringExtra(EXTRA_XRAY_CONFIG) ?: ""
                 val socksPort = intent.getIntExtra(EXTRA_SOCKS_PORT, 10808)
                 val socksUser = intent.getStringExtra(EXTRA_SOCKS_USER) ?: ""
@@ -406,17 +428,23 @@ class XrayVpnService : VpnService() {
                 return START_STICKY
             }
             ACTION_CONNECT_QUICK -> {
+                if (activeConfigName.isNullOrBlank()) {
+                    activeConfigName = getActiveConfigName(this)
+                }
+                try { VpnTileService.updateTile(this) } catch (_: Exception) {}
                 // Load params and set showNotification BEFORE ensureForeground so the
                 // correct notification type (full vs minimal) is shown from the start.
-                val params = ConnectionParams.load(filesDir)
-                if (params != null) {
-                    showNotification = params.showNotification
-                    heartbeatProbe = params.heartbeatProbe
-                    heartbeatAction = params.heartbeatAction
-                    heartbeatThreshold = params.heartbeatThreshold
-                    heartbeatUrl = params.heartbeatUrl
-                    allowTethering = params.allowTethering
+                val params = ConnectionParams.load(filesDir) ?: ConnectionParams.default()
+                if (!File(filesDir, "last_connection_meta.json").exists()) {
+                    params.save(filesDir, ::log)
                 }
+                showNotification = params.showNotification
+                heartbeatProbe = params.heartbeatProbe
+                heartbeatAction = params.heartbeatAction
+                heartbeatThreshold = params.heartbeatThreshold
+                heartbeatUrl = params.heartbeatUrl
+                allowTethering = params.allowTethering
+
                 ensureForeground()
                 if (isRunning.get()) {
                     // startVpn would bail on its CAS anyway — bail here instead so the
@@ -425,14 +453,14 @@ class XrayVpnService : VpnService() {
                     return START_STICKY
                 }
                 val configFile = File(filesDir, "xray_config.json")
-                if (params != null && configFile.exists()) {
+                if (configFile.exists() && configFile.length() > 0) {
                     val needsPermission = !params.proxyOnly && VpnService.prepare(this) != null
                     if (needsPermission) {
                         openApp()
                     } else {
                         userRequestedDisconnect.set(false)
                         try { File(filesDir, "user_disconnected.flag").delete() } catch (_: Exception) {}
-                        setState("reconnecting")
+                        setState("connecting")
                         val configText = configFile.readText()
                         // Load SOCKS credentials from saved file (survives reconnect)
                         var socksUser = ""
@@ -462,7 +490,7 @@ class XrayVpnService : VpnService() {
                                 params.socksPort, socksUser, socksPassword,
                                 params.excludedPackages, params.includedPackages, params.vpnMode,
                                 params.ssPrefix, params.proxyOnly, params.killSwitch,
-                                params.allowIcmp, params.blockQuic, params.ipv6Enabled, mtu = params.mtu, isReconnect = true
+                                params.allowIcmp, params.blockQuic, params.ipv6Enabled, mtu = params.mtu, isReconnect = false
                             )
                         }.start()
                     }
@@ -1824,12 +1852,19 @@ class XrayVpnService : VpnService() {
 
     private fun setState(state: String) {
         currentNativeState = state
+        if (activeConfigName.isNullOrBlank()) {
+            activeConfigName = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString("active_config_name", null)
+        }
         VpnEventStreamHandler.sendStateEvent(state)
         sendBroadcast(Intent("com.teapodstream.STATE_CHANGED").apply { putExtra("state", state) })
+        try { VpnTileService.updateTile(this) } catch (_: Exception) {}
     }
 
     private fun setConnected(socksPort: Int, socksUser: String, socksPassword: String) {
         currentNativeState = "connected"
+        if (activeConfigName.isNullOrBlank()) {
+            activeConfigName = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString("active_config_name", null)
+        }
         reconnectAttempts.set(0)
         val now = System.currentTimeMillis()
         connectedAtMs = now
@@ -1855,6 +1890,7 @@ class XrayVpnService : VpnService() {
             putExtra("state", "connected")
             putExtra("socksPort", socksPort)
         })
+        try { VpnTileService.updateTile(this) } catch (_: Exception) {}
     }
 
     private fun updateNotification(uploadSpeed: Long, downloadSpeed: Long) {

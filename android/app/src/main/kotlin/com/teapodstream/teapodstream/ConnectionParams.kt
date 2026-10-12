@@ -53,6 +53,26 @@ internal data class ConnectionParams(
     }
 
     companion object {
+        fun default(): ConnectionParams = ConnectionParams(
+            socksPort = 10808,
+            excludedPackages = emptyList(),
+            includedPackages = emptyList(),
+            vpnMode = "allExcept",
+            ssPrefix = null,
+            proxyOnly = false,
+            showNotification = true,
+            killSwitch = false,
+            allowIcmp = true,
+            blockQuic = false,
+            ipv6Enabled = false,
+            mtu = 1500,
+            heartbeatProbe = "socks",
+            heartbeatAction = "reconnect",
+            heartbeatThreshold = 3,
+            heartbeatUrl = "http://cp.cloudflare.com/generate_204",
+            allowTethering = false,
+        )
+
         fun load(dir: File): ConnectionParams? = try {
             val json = org.json.JSONObject(File(dir, "last_connection_meta.json").readText())
             val excluded = json.getJSONArray("excludedPackages")

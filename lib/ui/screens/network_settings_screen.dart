@@ -1,3 +1,5 @@
+import '../../core/constants/core_features.dart';
+import '../widgets/feature_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/heartbeat_settings.dart';
@@ -74,6 +76,21 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
   }
 
   void _update(AppSettings s) => ref.read(settingsProvider.notifier).save(s);
+
+  /// Проба, которую сборка не поддерживает (сейчас оба ядра умеют все три),
+  /// остаётся видна с объяснением и явным сбросом на SOCKS-пробу.
+  Widget _heartbeatProbeGate(AppSettings s, bool locked, Widget child) {
+    final feature = CoreFeatures.heartbeatProbeFeature(s.heartbeat.probe);
+    if (feature == null) return child;
+    return FeatureGate(
+      feature: feature,
+      onReset: locked
+          ? null
+          : () => _update(
+              s.copyWith(heartbeat: s.heartbeat.copyWith(probe: HeartbeatProbe.socks))),
+      child: child,
+    );
+  }
 
   static String _fpLabel(TlsFingerprint fp) =>
       fp == TlsFingerprint.defaultFp ? 'DEFAULT' : fp.name.toUpperCase();
@@ -256,79 +273,115 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             },
                           ),
                         ),
-                      SetRowToggle(
-                        t: t,
-                        title: 'Случайные учётные данные',
-                        hint: 'Генерировать случайный логин/пароль SOCKS',
-                        value: s.randomCredentials,
-                        locked: locked,
-                        onChange: (v) => _update(s.copyWith(randomCredentials: v)),
+                      FeatureGate(
+                        feature: CoreFeature.socksAuthentication,
+                        child: Column(
+                          children: [
+                            SetRowToggle(
+                              t: t,
+                              title: 'Случайные учётные данные',
+                              hint: 'Генерировать случайный логин/пароль SOCKS',
+                              value: s.randomCredentials,
+                              locked: locked,
+                              onChange: (v) => _update(s.copyWith(randomCredentials: v)),
+                            ),
+                            if (!s.randomCredentials) ...[
+                              SetInlineField(
+                                t: t,
+                                label: 'Логин SOCKS',
+                                locked: locked,
+                                child: SetCredField(
+                                  controller: _socksUserCtrl!,
+                                  enabled: !locked,
+                                  hint: 'без пароля',
+                                  onChanged: (_) => _update(
+                                    s.copyWith(
+                                      socksUser: _socksUserCtrl!.text,
+                                      socksPassword: _socksPasswordCtrl!.text,
+                                    ),
+                                  ),
+                                  t: t,
+                                ),
+                              ),
+                              SetInlineField(
+                                t: t,
+                                label: 'Пароль SOCKS',
+                                locked: locked,
+                                child: SetCredField(
+                                  controller: _socksPasswordCtrl!,
+                                  enabled: !locked,
+                                  hint: 'без пароля',
+                                  obscureText: true,
+                                  onChanged: (_) => _update(
+                                    s.copyWith(
+                                      socksUser: _socksUserCtrl!.text,
+                                      socksPassword: _socksPasswordCtrl!.text,
+                                    ),
+                                  ),
+                                  t: t,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
-                      if (!s.randomCredentials) ...[
-                        SetInlineField(
+                      FeatureGate(
+                        feature: CoreFeature.proxyOnly,
+                        onReset: !locked && s.proxyOnly
+                            ? () => _update(s.copyWith(proxyOnly: false))
+                            : null,
+                        child: SetRowToggle(
                           t: t,
-                          label: 'Логин SOCKS',
+                          title: 'Только прокси',
+                          hint: 'Запустить SOCKS прокси без VPN-туннеля',
+                          value: s.proxyOnly,
                           locked: locked,
-                          child: SetCredField(
-                            controller: _socksUserCtrl!,
-                            enabled: !locked,
-                            hint: 'без пароля',
-                            onChanged: (_) => _update(s.copyWith(
-                              socksUser: _socksUserCtrl!.text,
-                              socksPassword: _socksPasswordCtrl!.text,
-                            )),
-                            t: t,
-                          ),
+                          onChange: (v) => _update(s.copyWith(proxyOnly: v)),
                         ),
-                        SetInlineField(
-                          t: t,
-                          label: 'Пароль SOCKS',
-                          locked: locked,
-                          child: SetCredField(
-                            controller: _socksPasswordCtrl!,
-                            enabled: !locked,
-                            hint: 'без пароля',
-                            obscureText: true,
-                            onChanged: (_) => _update(s.copyWith(
-                              socksUser: _socksUserCtrl!.text,
-                              socksPassword: _socksPasswordCtrl!.text,
-                            )),
-                            t: t,
-                          ),
-                        ),
-                      ],
-                      SetRowToggle(
-                        t: t,
-                        title: 'Только прокси',
-                        hint: 'Запустить SOCKS прокси без VPN-туннеля',
-                        value: s.proxyOnly,
-                        locked: locked,
-                        onChange: (v) => _update(s.copyWith(proxyOnly: v)),
                       ),
                       SetSectionHeader(t: t, addr: '0x32', label: 'traffic'),
-                      SetRowToggle(
-                        t: t,
-                        title: 'UDP',
-                        hint: 'Разрешить UDP-трафик через SOCKS',
-                        value: s.enableUdp,
-                        locked: locked,
-                        onChange: (v) => _update(s.copyWith(enableUdp: v)),
+                      FeatureGate(
+                        feature: CoreFeature.udpToggle,
+                        onReset: !locked && !s.enableUdp
+                            ? () => _update(s.copyWith(enableUdp: true))
+                            : null,
+                        child: SetRowToggle(
+                          t: t,
+                          title: 'UDP',
+                          hint: CoreFeatures.current.isRust
+                              ? 'Разрешить UDP из приложений (TUN) и через SOCKS. Выключенный UDP Rust-ядро отбрасывает молча; DNS (порт 53) работает и без него'
+                              : 'Разрешить UDP-трафик через SOCKS',
+                          value: s.enableUdp,
+                          locked: locked,
+                          onChange: (v) => _update(s.copyWith(enableUdp: v)),
+                        ),
                       ),
-                      SetRowToggle(
-                        t: t,
-                        title: 'ICMP (ping)',
-                        hint: 'Разрешить ping-запросы через туннель',
-                        value: s.allowIcmp,
-                        locked: locked,
-                        onChange: (v) => _update(s.copyWith(allowIcmp: v)),
+                      FeatureGate(
+                        feature: CoreFeature.icmpToggle,
+                        child: SetRowToggle(
+                          t: t,
+                          title: 'ICMP (ping)',
+                          hint: 'Разрешить ping-запросы через туннель',
+                          value: s.allowIcmp,
+                          locked: locked,
+                          onChange: (v) => _update(s.copyWith(allowIcmp: v)),
+                        ),
                       ),
-                      SetRowToggle(
-                        t: t,
-                        title: 'Блокировать QUIC',
-                        hint: 'TUN отвечает на UDP 443 ICMP-ом "порт недоступен": браузер мгновенно падает на TCP вместо ожидания QUIC-таймаута (~55с). Трафик из устройства не уходит.',
-                        value: s.blockQuic,
-                        locked: locked,
-                        onChange: (v) => _update(s.copyWith(blockQuic: v)),
+                      FeatureGate(
+                        feature: CoreFeature.quicBlocking,
+                        onReset: !locked && s.blockQuic
+                            ? () => _update(s.copyWith(blockQuic: false))
+                            : null,
+                        child: SetRowToggle(
+                          t: t,
+                          title: 'Блокировать QUIC',
+                          hint: CoreFeatures.current.isRust
+                              ? 'UDP 443 из TUN отбрасывается правилом ядра молча: ICMP «порт недоступен», как в Go-сборке, не отправляется, поэтому браузер переходит на TCP по своему таймауту QUIC. Трафик из устройства не уходит. При выключенном переключателе на UDP 443 профиля с xtls-rprx-vision ядро само сразу отвечает ICMP «порт недоступен»; с xtls-rprx-vision-udp443 блокировка включается автоматически, как в Go.'
+                              : 'TUN отвечает на UDP 443 ICMP-ом "порт недоступен": браузер мгновенно падает на TCP вместо ожидания QUIC-таймаута (~55с). Трафик из устройства не уходит.',
+                          value: s.blockQuic,
+                          locked: locked,
+                          onChange: (v) => _update(s.copyWith(blockQuic: v)),
+                        ),
                       ),
                       // TLS fingerprint (uTLS) override
                       Container(
@@ -382,233 +435,304 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                           onChange: (v) => _update(s.copyWith(ipv6Enabled: v)),
                         ),
                       if (!s.proxyOnly)
-                        SetInlineField(
-                          t: t,
-                          label: 'MTU',
-                          locked: locked,
-                          child: SetNumField(
+                        FeatureGate(
+                          feature: CoreFeature.customMtu,
+                          onReset: !locked && s.mtu != 1500
+                              ? () {
+                                  _mtuCtrl!.text = '1500';
+                                  _update(s.copyWith(mtu: 1500));
+                                }
+                              : null,
+                          child: SetInlineField(
                             t: t,
-                            controller: _mtuCtrl!,
-                            enabled: !locked,
-                            hint: '1500',
-                            onChanged: (v) {
-                              final mtu = int.tryParse(v);
-                              if (mtu != null) {
-                                _update(s.copyWith(mtu: mtu.clamp(576, 9000)));
-                              }
-                            },
-                          ),
-                        ),
-                      SetInlineField(
-                        t: t,
-                        label: 'Observatory мин. интервал, сек',
-                        locked: locked,
-                        child: SetNumField(
-                          t: t,
-                          controller: _obsCtrl!,
-                          enabled: !locked,
-                          hint: '600',
-                          onChanged: (v) {
-                            final sec = int.tryParse(v);
-                            if (sec != null) {
-                              _update(s.copyWith(obsProbeIntervalSec: sec.clamp(0, 86400)));
-                            }
-                          },
-                        ),
-                      ),
-                      SetSectionHeader(t: t, addr: '0x34', label: 'fragment'),
-                      SetRowToggle(
-                        t: t,
-                        title: 'Фрагментация',
-                        hint: 'Режет исходящий TCP-поток на части, чтобы DPI не собрал ClientHello целиком. Не применяется к Hysteria2 (QUIC поверх UDP).',
-                        value: s.fragment.enabled,
-                        locked: locked,
-                        onChange: (v) => _update(s.copyWith(fragment: s.fragment.copyWith(enabled: v))),
-                      ),
-                      if (s.fragment.enabled) ...[
-                        SetInlineField(
-                          t: t,
-                          label: 'Пакеты',
-                          locked: locked,
-                          child: SetCredField(
-                            t: t,
-                            controller: _fragPacketsCtrl!,
-                            enabled: !locked,
-                            hint: 'tlshello',
-                            onChanged: (v) => _update(
-                                s.copyWith(fragment: s.fragment.copyWith(packets: v.trim()))),
-                          ),
-                        ),
-                        SetInlineField(
-                          t: t,
-                          label: 'Длина куска, байт',
-                          locked: locked,
-                          child: SetCredField(
-                            t: t,
-                            controller: _fragLengthCtrl!,
-                            enabled: !locked,
-                            hint: '100-200',
-                            onChanged: (v) => _update(
-                                s.copyWith(fragment: s.fragment.copyWith(length: v.trim()))),
-                          ),
-                        ),
-                        SetInlineField(
-                          t: t,
-                          label: 'Пауза, мс',
-                          locked: locked,
-                          child: SetCredField(
-                            t: t,
-                            controller: _fragIntervalCtrl!,
-                            enabled: !locked,
-                            hint: '10-20',
-                            onChanged: (v) => _update(
-                                s.copyWith(fragment: s.fragment.copyWith(interval: v.trim()))),
-                          ),
-                        ),
-                      ],
-                      if (s.fragment.enabled && !s.fragment.isValid)
-                        _HintRow(
-                            t: t,
-                            text: 'Длина и пауза должны быть диапазонами вида 100-200 и 10-20, пакеты — tlshello или диапазон. Фрагментация не применяется.'),
-                      SetSectionHeader(t: t, addr: '0x35', label: 'noise'),
-                      SetRowToggle(
-                        t: t,
-                        title: 'Шумы',
-                        hint: 'Мусорные UDP-датаграммы перед первой полезной. Работают только на UDP-плече — Hysteria2 и QUIC-транспорт; на TCP не влияют (там фрагментация). DNS-запросы xray шумом не портит.',
-                        value: s.noise.enabled,
-                        locked: locked,
-                        onChange: (v) => _update(s.copyWith(noise: s.noise.copyWith(enabled: v))),
-                      ),
-                      if (s.noise.enabled) ...[
-                        _PickerRow(
-                          t: t,
-                          title: 'Тип пакета',
-                          hint: 'RAND — случайные байты; STR / HEX / BASE64 — заданный вручную',
-                          value: s.noise.type.name.toUpperCase(),
-                          locked: locked,
-                          onTap: () => _showEnumPicker<NoiseType>(
-                            context,
-                            title: 'noise // type',
-                            values: NoiseType.values,
-                            current: s.noise.type,
-                            labelOf: (v) => v.name.toUpperCase(),
-                            onPick: (v) => _update(s.copyWith(noise: s.noise.copyWith(type: v))),
-                          ),
-                        ),
-                        SetInlineField(
-                          t: t,
-                          label: s.noise.type == NoiseType.rand ? 'Длина, байт' : 'Пакет',
-                          locked: locked,
-                          child: SetCredField(
-                            t: t,
-                            controller: _noisePacketCtrl!,
-                            enabled: !locked,
-                            hint: s.noise.type == NoiseType.rand ? '50-100' : 'содержимое',
-                            onChanged: (v) =>
-                                _update(s.copyWith(noise: s.noise.copyWith(packet: v.trim()))),
-                          ),
-                        ),
-                        SetInlineField(
-                          t: t,
-                          label: 'Пауза, мс',
-                          locked: locked,
-                          child: SetCredField(
-                            t: t,
-                            controller: _noiseDelayCtrl!,
-                            enabled: !locked,
-                            hint: '10-20',
-                            onChanged: (v) =>
-                                _update(s.copyWith(noise: s.noise.copyWith(delay: v.trim()))),
-                          ),
-                        ),
-                        if (!s.noise.isValid)
-                          _HintRow(
+                            label: 'MTU',
+                            locked: locked,
+                            child: SetNumField(
                               t: t,
-                              text: s.noise.type == NoiseType.rand
-                                  ? 'Длина должна быть диапазоном вида 50-100, пауза — 10-20. Шумы не применяются.'
-                                  : 'Пакет не должен быть пустым, пауза — диапазон вида 10-20. Шумы не применяются.'),
-                      ],
-                      SetSectionHeader(t: t, addr: '0x36', label: 'mux'),
-                      SetRowToggle(
-                        t: t,
-                        title: 'Mux',
-                        hint: 'Мультиплексирует несколько соединений в одно — меньше хендшейков. При XTLS Vision TCP-ветка отключается автоматически (остаётся XUDP). Не применяется к Hysteria2.',
-                        value: s.mux.enabled,
-                        locked: locked,
-                        onChange: (v) => _update(s.copyWith(mux: s.mux.copyWith(enabled: v))),
+                              controller: _mtuCtrl!,
+                              enabled: !locked,
+                              hint: '1500',
+                              onChanged: (v) {
+                                final mtu = int.tryParse(v);
+                                if (mtu != null) {
+                                  _update(s.copyWith(mtu: mtu.clamp(576, 9000)));
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                      FeatureGate(
+                        feature: CoreFeature.observatory,
+                        child: SetInlineField(
+                          t: t,
+                          label: 'Observatory мин. интервал, сек',
+                          locked: locked,
+                          child: SetNumField(
+                            t: t,
+                            controller: _obsCtrl!,
+                            enabled: !locked,
+                            hint: '600',
+                            onChanged: (v) {
+                              final sec = int.tryParse(v);
+                              if (sec != null) {
+                                _update(s.copyWith(obsProbeIntervalSec: sec.clamp(0, 86400)));
+                              }
+                            },
+                          ),
+                        ),
                       ),
-                      if (s.mux.enabled) ...[
-                        SetInlineField(
-                          t: t,
-                          label: 'TCP-подпотоки',
-                          locked: locked,
-                          child: SetNumField(
-                            t: t,
-                            controller: _muxConcCtrl!,
-                            enabled: !locked,
-                            hint: '8',
-                            onChanged: (v) {
-                              final n = int.tryParse(v);
-                              if (n != null) {
-                                _update(s.copyWith(
-                                    mux: s.mux.copyWith(concurrency: n.clamp(1, 1024))));
-                              }
-                            },
-                          ),
+                      FeatureGate(
+                        feature: CoreFeature.fragmentation,
+                        onReset: !locked && s.fragment.enabled
+                            ? () => _update(s.copyWith(fragment: s.fragment.copyWith(enabled: false)))
+                            : null,
+                        child: Column(
+                          children: [
+                            SetSectionHeader(t: t, addr: '0x34', label: 'fragment'),
+                            SetRowToggle(
+                              t: t,
+                              title: 'Фрагментация',
+                              hint: CoreFeatures.current.isRust
+                                  ? 'Режет TLS ClientHello на части, чтобы DPI не собрал его целиком: только пакеты tlshello, TCP с TLS/Reality, длина до 16384 байт, пауза до 1000 мс (всего не больше 10 с — при длинной паузе последний кусок длиннее). Без TLS и для QUIC (Hysteria2, xHTTP h3) не применяется.'
+                                  : 'Режет исходящий TCP-поток на части, чтобы DPI не собрал ClientHello целиком. Не применяется к Hysteria2 (QUIC поверх UDP).',
+                              value: s.fragment.enabled,
+                              locked: locked,
+                              onChange: (v) =>
+                                  _update(s.copyWith(fragment: s.fragment.copyWith(enabled: v))),
+                            ),
+                            if (s.fragment.enabled) ...[
+                              SetInlineField(
+                                t: t,
+                                label: 'Пакеты',
+                                locked: locked,
+                                child: SetCredField(
+                                  t: t,
+                                  controller: _fragPacketsCtrl!,
+                                  enabled: !locked,
+                                  hint: 'tlshello',
+                                  onChanged: (v) => _update(
+                                    s.copyWith(fragment: s.fragment.copyWith(packets: v.trim())),
+                                  ),
+                                ),
+                              ),
+                              SetInlineField(
+                                t: t,
+                                label: 'Длина куска, байт',
+                                locked: locked,
+                                child: SetCredField(
+                                  t: t,
+                                  controller: _fragLengthCtrl!,
+                                  enabled: !locked,
+                                  hint: '100-200',
+                                  onChanged: (v) => _update(
+                                    s.copyWith(fragment: s.fragment.copyWith(length: v.trim())),
+                                  ),
+                                ),
+                              ),
+                              SetInlineField(
+                                t: t,
+                                label: 'Пауза, мс',
+                                locked: locked,
+                                child: SetCredField(
+                                  t: t,
+                                  controller: _fragIntervalCtrl!,
+                                  enabled: !locked,
+                                  hint: '10-20',
+                                  onChanged: (v) => _update(
+                                    s.copyWith(fragment: s.fragment.copyWith(interval: v.trim())),
+                                  ),
+                                ),
+                              ),
+                            ],
+                            if (s.fragment.enabled && !s.fragment.isValid)
+                              _HintRow(
+                                t: t,
+                                text:
+                                    'Длина и пауза должны быть диапазонами вида 100-200 и 10-20, пакеты — tlshello или диапазон. Фрагментация не применяется.',
+                              ),
+                          ],
                         ),
-                        SetInlineField(
-                          t: t,
-                          label: 'XUDP-подпотоки',
-                          locked: locked,
-                          child: SetNumField(
-                            t: t,
-                            controller: _muxXudpCtrl!,
-                            enabled: !locked,
-                            hint: '16',
-                            onChanged: (v) {
-                              final n = int.tryParse(v);
-                              if (n != null) {
-                                _update(s.copyWith(
-                                    mux: s.mux.copyWith(xudpConcurrency: n.clamp(1, 1024))));
-                              }
-                            },
-                          ),
+                      ),
+                      FeatureGate(
+                        feature: CoreFeature.noise,
+                        onReset: !locked && s.noise.enabled
+                            ? () => _update(s.copyWith(noise: s.noise.copyWith(enabled: false)))
+                            : null,
+                        child: Column(
+                          children: [
+                            SetSectionHeader(t: t, addr: '0x35', label: 'noise'),
+                            SetRowToggle(
+                              t: t,
+                              title: 'Шумы',
+                              hint: CoreFeatures.current.isRust
+                                  ? 'Мусорные UDP-датаграммы перед первым QUIC-пакетом: только Hysteria2 и xHTTP поверх HTTP/3 (alpn h3), до 4096 байт, пауза до 1000 мс. На TCP-транспорт не влияют; профиль Shadowsocks с шумами не запустится — его UDP Rust-ядро не зашумляет.'
+                                  : 'Мусорные UDP-датаграммы перед первой полезной. Работают только на UDP-плече — Hysteria2 и QUIC-транспорт; на TCP не влияют (там фрагментация). DNS-запросы xray шумом не портит.',
+                              value: s.noise.enabled,
+                              locked: locked,
+                              onChange: (v) =>
+                                  _update(s.copyWith(noise: s.noise.copyWith(enabled: v))),
+                            ),
+                            if (s.noise.enabled) ...[
+                              _PickerRow(
+                                t: t,
+                                title: 'Тип пакета',
+                                hint: 'RAND — случайные байты; STR / HEX / BASE64 — заданный вручную',
+                                value: s.noise.type.name.toUpperCase(),
+                                locked: locked,
+                                onTap: () => _showEnumPicker<NoiseType>(
+                                  context,
+                                  title: 'noise // type',
+                                  values: NoiseType.values,
+                                  current: s.noise.type,
+                                  labelOf: (v) => v.name.toUpperCase(),
+                                  onPick: (v) =>
+                                      _update(s.copyWith(noise: s.noise.copyWith(type: v))),
+                                ),
+                              ),
+                              SetInlineField(
+                                t: t,
+                                label: s.noise.type == NoiseType.rand ? 'Длина, байт' : 'Пакет',
+                                locked: locked,
+                                child: SetCredField(
+                                  t: t,
+                                  controller: _noisePacketCtrl!,
+                                  enabled: !locked,
+                                  hint: s.noise.type == NoiseType.rand ? '50-100' : 'содержимое',
+                                  onChanged: (v) =>
+                                      _update(s.copyWith(noise: s.noise.copyWith(packet: v.trim()))),
+                                ),
+                              ),
+                              SetInlineField(
+                                t: t,
+                                label: 'Пауза, мс',
+                                locked: locked,
+                                child: SetCredField(
+                                  t: t,
+                                  controller: _noiseDelayCtrl!,
+                                  enabled: !locked,
+                                  hint: '10-20',
+                                  onChanged: (v) =>
+                                      _update(s.copyWith(noise: s.noise.copyWith(delay: v.trim()))),
+                                ),
+                              ),
+                              if (!s.noise.isValid)
+                                _HintRow(
+                                  t: t,
+                                  text: s.noise.type == NoiseType.rand
+                                      ? 'Длина должна быть диапазоном вида 50-100, пауза — 10-20. Шумы не применяются.'
+                                      : 'Пакет не должен быть пустым, пауза — диапазон вида 10-20. Шумы не применяются.',
+                                ),
+                            ],
+                          ],
                         ),
+                      ),
+                      FeatureGate(
+                        feature: CoreFeature.mux,
+                        onReset: !locked && s.mux.enabled
+                            ? () => _update(s.copyWith(mux: s.mux.copyWith(enabled: false)))
+                            : null,
+                        child: Column(
+                          children: [
+                            SetSectionHeader(t: t, addr: '0x36', label: 'mux'),
+                            SetRowToggle(
+                              t: t,
+                              title: 'Mux',
+                              hint:
+                                  'Мультиплексирует несколько соединений в одно — меньше хендшейков. При XTLS Vision TCP-ветка отключается автоматически (остаётся XUDP). Не применяется к Hysteria2.',
+                              value: s.mux.enabled,
+                              locked: locked,
+                              onChange: (v) => _update(s.copyWith(mux: s.mux.copyWith(enabled: v))),
+                            ),
+                            if (s.mux.enabled) ...[
+                              SetInlineField(
+                                t: t,
+                                label: 'TCP-подпотоки',
+                                locked: locked,
+                                child: SetNumField(
+                                  t: t,
+                                  controller: _muxConcCtrl!,
+                                  enabled: !locked,
+                                  hint: '8',
+                                  onChanged: (v) {
+                                    final n = int.tryParse(v);
+                                    if (n != null) {
+                                      _update(
+                                        s.copyWith(
+                                          mux: s.mux.copyWith(concurrency: n.clamp(1, 1024)),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                ),
+                              ),
+                              SetInlineField(
+                                t: t,
+                                label: 'XUDP-подпотоки',
+                                locked: locked,
+                                child: SetNumField(
+                                  t: t,
+                                  controller: _muxXudpCtrl!,
+                                  enabled: !locked,
+                                  hint: '16',
+                                  onChanged: (v) {
+                                    final n = int.tryParse(v);
+                                    if (n != null) {
+                                      _update(
+                                        s.copyWith(
+                                          mux: s.mux.copyWith(xudpConcurrency: n.clamp(1, 1024)),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                ),
+                              ),
+                              _PickerRow(
+                                t: t,
+                                title: 'QUIC (UDP/443) через mux',
+                                hint:
+                                    'reject — отбрасывать, allow — пускать через mux, skip — мимо mux',
+                                value: s.mux.xudpProxyUDP443.name.toUpperCase(),
+                                locked: locked,
+                                onTap: () => _showEnumPicker<XudpUdp443>(
+                                  context,
+                                  title: 'mux // xudpProxyUDP443',
+                                  values: XudpUdp443.values,
+                                  current: s.mux.xudpProxyUDP443,
+                                  labelOf: (v) => v.name.toUpperCase(),
+                                  onPick: (v) =>
+                                      _update(s.copyWith(mux: s.mux.copyWith(xudpProxyUDP443: v))),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      SetSectionHeader(t: t, addr: '0x37', label: 'heartbeat'),
+                      _heartbeatProbeGate(
+                        s,
+                        locked,
                         _PickerRow(
                           t: t,
-                          title: 'QUIC (UDP/443) через mux',
-                          hint: 'reject — отбрасывать, allow — пускать через mux, skip — мимо mux',
-                          value: s.mux.xudpProxyUDP443.name.toUpperCase(),
+                          title: 'Тип проверки',
+                          hint: CoreFeatures.current.isRust
+                              ? 'SOCKS — HTTP(S)-запрос через локальный SOCKS5 в xray-rust; XRAYDELAY — запрос внутри Rust-ядра прямо через прокси-выход, мимо маршрутизации, сразу даёт задержку; PASSIVE — без активных проб, только счётчики TUN Rust-ядра (экономит батарею, обрыв виден лишь при реальном трафике)'
+                              : 'SOCKS — HTTP-запрос через SOCKS5 в xray; XRAYDELAY — замер внутри ядра, сразу даёт задержку; PASSIVE — без активных проб, только метрики tun2socks (экономит батарею, обрыв виден лишь при реальном трафике)',
+                          value: s.heartbeat.probe.name.toUpperCase(),
                           locked: locked,
-                          onTap: () => _showEnumPicker<XudpUdp443>(
+                          onTap: () => _showEnumPicker<HeartbeatProbe>(
                             context,
-                            title: 'mux // xudpProxyUDP443',
-                            values: XudpUdp443.values,
-                            current: s.mux.xudpProxyUDP443,
+                            title: 'heartbeat // probe',
+                            values: CoreFeatures.current.heartbeatProbes,
+                            current: s.heartbeat.probe,
                             labelOf: (v) => v.name.toUpperCase(),
                             onPick: (v) =>
-                                _update(s.copyWith(mux: s.mux.copyWith(xudpProxyUDP443: v))),
+                                _update(s.copyWith(heartbeat: s.heartbeat.copyWith(probe: v))),
                           ),
                         ),
-                      ],
-                      SetSectionHeader(t: t, addr: '0x37', label: 'heartbeat'),
-                      _PickerRow(
-                        t: t,
-                        title: 'Тип проверки',
-                        hint: 'SOCKS — HTTP-запрос через SOCKS5 в xray; XRAYDELAY — замер внутри ядра, сразу даёт задержку; PASSIVE — без активных проб, только метрики tun2socks (экономит батарею, обрыв виден лишь при реальном трафике)',
-                        value: s.heartbeat.probe.name.toUpperCase(),
-                        locked: locked,
-                        onTap: () => _showEnumPicker<HeartbeatProbe>(
-                          context,
-                          title: 'heartbeat // probe',
-                          values: HeartbeatProbe.values,
-                          current: s.heartbeat.probe,
-                          labelOf: (v) => v.name.toUpperCase(),
-                          onPick: (v) =>
-                              _update(s.copyWith(heartbeat: s.heartbeat.copyWith(probe: v))),
-                        ),
                       ),
-                      if (s.heartbeat.probe != HeartbeatProbe.passive) ...[
+                      // Адрес нужен любой активной пробе.
+                      if (CoreFeatures.current.effectiveHeartbeatProbe(s.heartbeat.probe) !=
+                          HeartbeatProbe.passive) ...[
                         _PickerRow(
                           t: t,
                           title: 'Адрес проверки',
@@ -679,7 +803,9 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                         _PickerRow(
                           t: t,
                           title: 'Откуда брать конфиг',
-                          hint: 'SUBSCRIPTION — конфиги той же подписки; PINNED — закреплённые; ALL — все сохранённые. Кандидаты проверяются полноценным замером через сам протокол, не TCP-пингом',
+                          hint: 'SUBSCRIPTION — конфиги той же подписки; PINNED — закреплённые; ALL — все сохранённые. '
+                              'Кандидаты проверяются полноценным замером через сам протокол, не TCP-пингом'
+                              '${CoreFeatures.current.isRust ? '; берутся только профили, которые поддерживает Rust-сборка' : ''}',
                           value: s.heartbeat.switchSource.name.toUpperCase(),
                           locked: locked,
                           onTap: () => _showEnumPicker<SwitchSource>(

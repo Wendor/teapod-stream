@@ -1,3 +1,5 @@
+import '../../core/constants/core_features.dart';
+import '../widgets/feature_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -341,7 +343,10 @@ class _SettingsBody extends StatelessWidget {
                 color: t.accentFade,
                 border: Border(bottom: BorderSide(color: t.accent)),
               ),
-              child: const _UpdateTile(),
+              child: const FeatureGate(
+                feature: CoreFeature.upstreamUpdates,
+                child: _UpdateTile(),
+              ),
             ),
 
           // ── 0x10 DIAGNOSTICS ──────────────────────────────────
@@ -419,17 +424,23 @@ class _SettingsBody extends StatelessWidget {
           // ── 0x50 SYSTEM ───────────────────────────────────────
           SetSectionHeader(t: t, addr: '0x50', label: 'system'),
           _ProfilesRow(t: t),
-          SetInlineField(
-            t: t,
-            label: 'Канал обновлений',
-            child: const _UpdateChannelSegment(),
+          FeatureGate(
+            feature: CoreFeature.upstreamUpdates,
+            child: SetInlineField(
+              t: t,
+              label: 'Канал обновлений',
+              child: const _UpdateChannelSegment(),
+            ),
           ),
           // Update tile (complex) — при доступном обновлении показан наверху
           if (!hasUpdate)
             Container(
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
               decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.line))),
-              child: const _UpdateTile(),
+              child: const FeatureGate(
+                feature: CoreFeature.upstreamUpdates,
+                child: _UpdateTile(),
+              ),
             ),
 
           // ── 0x60 ABOUT ────────────────────────────────────────
@@ -439,9 +450,9 @@ class _SettingsBody extends StatelessWidget {
           _KVRowTap(
             t: t,
             k: 'source',
-            v: 'github.com/Wendor/teapod-stream',
+            v: CoreFeatures.current.isRust ? 'github.com/vivatfreedom/teapod-stream' : 'github.com/Wendor/teapod-stream',
             onTap: () async {
-              final uri = Uri.parse('https://github.com/Wendor/teapod-stream');
+              final uri = Uri.parse(CoreFeatures.current.isRust ? 'https://github.com/vivatfreedom/teapod-stream' : 'https://github.com/Wendor/teapod-stream');
               if (await canLaunchUrl(uri)) launchUrl(uri, mode: LaunchMode.externalApplication);
             },
           ),

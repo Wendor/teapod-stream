@@ -355,37 +355,12 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
           ? subIdMap[c.subscriptionId]
           : c.subscriptionId;
 
-      return VpnConfig(
+      // copyWith переносит все поля (pinSHA256, allowInsecure, alpn, ech,
+      // finalmask, rawXrayConfig…), а не только перечисленные вручную.
+      return c.copyWith(
         id: newId,
-        name: c.name,
-        protocol: c.protocol,
-        address: c.address,
-        port: c.port,
-        uuid: c.uuid,
-        security: c.security,
-        transport: c.transport,
-        sni: c.sni,
-        wsPath: c.wsPath,
-        wsHost: c.wsHost,
-        grpcServiceName: c.grpcServiceName,
-        fingerprint: c.fingerprint,
-        publicKey: c.publicKey,
-        shortId: c.shortId,
-        spiderX: c.spiderX,
-        postQuantumKey: c.postQuantumKey,
-        flow: c.flow,
-        encryption: c.encryption,
-        alterId: c.alterId,
-        method: c.method,
-        password: c.password,
         createdAt: DateTime.now(),
-        rawUri: c.rawUri,
-        latencyMs: c.latencyMs,
         subscriptionId: newSubId,
-        ssPrefix: c.ssPrefix,
-        obfsPassword: c.obfsPassword,
-        xhttpMode: c.xhttpMode,
-        xhttpExtra: c.xhttpExtra,
       );
     }).toList();
 

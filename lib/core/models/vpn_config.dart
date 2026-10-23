@@ -36,6 +36,9 @@ class VpnConfig {
   final String? subscriptionId; // ID of the subscription this config came from
   final String? ssPrefix; // hex-encoded prefix bytes for Outline Shadowsocks (e.g. "160301...")
   final String? obfsPassword; // for Hysteria2 salamander obfuscation
+  /// Hysteria2 port hopping: the URI's port range/list ("20000-30000",
+  /// "443,5000-6000") or `mport`. [port] keeps the first port.
+  final String? hopPorts;
   final bool allowInsecure;
   final String? pinSHA256;
   final String? xhttpMode; // for xhttp transport: "auto", "packet-up", "stream-up", "stream-one"
@@ -75,6 +78,7 @@ class VpnConfig {
     this.subscriptionId,
     this.ssPrefix,
     this.obfsPassword,
+    this.hopPorts,
     this.allowInsecure = false,
     this.pinSHA256,
     this.xhttpMode,
@@ -100,7 +104,9 @@ class VpnConfig {
   }
 
   VpnConfig copyWith({
+    String? id,
     String? name,
+    DateTime? createdAt,
     int? latencyMs,
     DateTime? lastPingedAt,
     String? subscriptionId,
@@ -109,7 +115,7 @@ class VpnConfig {
     String? rawUri,
   }) {
     return VpnConfig(
-      id: id,
+      id: id ?? this.id,
       name: name ?? this.name,
       protocol: protocol,
       address: address,
@@ -131,13 +137,14 @@ class VpnConfig {
       alterId: alterId,
       method: method,
       password: password,
-      createdAt: createdAt,
+      createdAt: createdAt ?? this.createdAt,
       rawUri: rawUri ?? this.rawUri,
       latencyMs: latencyMs ?? this.latencyMs,
       lastPingedAt: lastPingedAt ?? this.lastPingedAt,
       subscriptionId: subscriptionId ?? this.subscriptionId,
       ssPrefix: ssPrefix,
       obfsPassword: obfsPassword,
+      hopPorts: hopPorts,
       allowInsecure: allowInsecure ?? this.allowInsecure,
       pinSHA256: pinSHA256 ?? this.pinSHA256,
       xhttpMode: xhttpMode,
@@ -179,6 +186,7 @@ class VpnConfig {
         'subscriptionId': subscriptionId,
         'ssPrefix': ssPrefix,
         'obfsPassword': obfsPassword,
+        'hopPorts': hopPorts,
         'allowInsecure': allowInsecure,
         'pinSHA256': pinSHA256,
         'xhttpMode': xhttpMode,
@@ -230,6 +238,7 @@ class VpnConfig {
         subscriptionId: json['subscriptionId'] as String?,
         ssPrefix: json['ssPrefix'] as String?,
         obfsPassword: json['obfsPassword'] as String?,
+        hopPorts: json['hopPorts'] as String?,
         allowInsecure: json['allowInsecure'] as bool? ?? false,
         pinSHA256: json['pinSHA256'] as String?,
         xhttpMode: json['xhttpMode'] as String?,

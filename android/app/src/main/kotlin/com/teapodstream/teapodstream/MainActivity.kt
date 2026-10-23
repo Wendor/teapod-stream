@@ -125,15 +125,25 @@ class MainActivity : FlutterActivity() {
                         result.success(android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a")
                     }
 
+                    "getEngine" -> result.success(CoreBridge.ENGINE)
+
                     "isBinaryReady" -> {
                         // teapod-core is an AAR library; geo files are managed by Flutter
                         result.success(true)
                     }
 
-                    "prepareBinaries" -> {
+                    "prepareBinaries", "getGeodataDir", "activateGeodata" -> {
+                        val revision = call.argument<String>("revision")
                         Thread {
-                            val success = XrayVpnService.prepareBinaries(this)
-                            runOnUiThread { result.success(success) }
+                            try {
+                                if (call.method == "activateGeodata") {
+                                    CoreBridge.activate(this, requireNotNull(revision))
+                                }
+                                val directory = CoreBridge.prepare(this)
+                                runOnUiThread { result.success(if (call.method == "prepareBinaries") true else directory) }
+                            } catch (error: Exception) {
+                                runOnUiThread { result.error("GEODATA_ERROR", error.message, null) }
+                            }
                         }.start()
                     }
 
@@ -159,7 +169,7 @@ class MainActivity : FlutterActivity() {
                         val url = call.argument<String>("url") ?: ""
                         Thread {
                             val latency = try {
-                                teapodcore.Teapodcore.measureOutboundDelay(config, url)
+                                CoreBridge.measureOutboundDelay(applicationContext, config, url)
                             } catch (e: Exception) {
                                 -1L
                             }
@@ -230,7 +240,7 @@ class MainActivity : FlutterActivity() {
                     }
 
                     "getTunnelDiag" -> {
-                        result.success(teapodcore.Teapodcore.getTunDiagnostics())
+                        result.success(CoreBridge.diagnostics())
                     }
 
                     "setLogsEnabled" -> {
@@ -509,8 +519,7 @@ class MainActivity : FlutterActivity() {
     private fun getBinaryVersions(): Map<String, String> {
         val versions = mutableMapOf<String, String>()
         try {
-            versions["xray"] = teapodcore.Teapodcore.getXrayVersion()
-            versions["tun2socks"] = "teapod-core (AAR)"
+            versions.putAll(CoreBridge.versions())
         } catch (e: Exception) {
             versions["xray"] = "Error"
             versions["tun2socks"] = "Error"

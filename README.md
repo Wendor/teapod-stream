@@ -1,3 +1,5 @@
+> **Experimental Rust build:** normal commands build Go; `./build-rust.sh release` builds Rust separately. See [PROTOTYPE.md](PROTOTYPE.md) for flags, tested support and limitations. No measured battery-life claim.
+
 # TeapodStream
 
 VPN-клиент для Android с поддержкой протокола Xray и интерфейсом TUN.

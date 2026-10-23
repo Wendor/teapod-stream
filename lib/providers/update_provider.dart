@@ -1,3 +1,4 @@
+import '../core/constants/core_features.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/services.dart';
@@ -62,6 +63,10 @@ class UpdateNotifier extends Notifier<UpdateState> {
     state = UpdateChecking();
     try {
       final pkgInfo = await PackageInfo.fromPlatform();
+      if (!CoreFeatures.current.supports(CoreFeature.upstreamUpdates)) {
+        state = UpdateError('Пробная Rust-сборка обновляется вручную.');
+        return;
+      }
       final currentVersion = pkgInfo.version;
       final abi = await _channel.invokeMethod<String>('getAbi') ?? 'arm64-v8a';
       final vpn = ref.read(vpnProvider);

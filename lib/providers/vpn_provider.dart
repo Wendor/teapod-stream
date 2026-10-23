@@ -1,3 +1,4 @@
+import '../core/constants/core_features.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
@@ -265,8 +266,12 @@ class VpnNotifier extends Notifier<VpnState2> {
           ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
       if (configState == null) return;
       final current = _resolveEffectiveConfig(configState);
+      // Rust-сборка запускает не все профили (см. RustConfigBuilder): неподдерживаемый
+      // кандидат не подключится, даже если сервер жив. В Go фильтр пропускает всё.
       final candidates =
-          _switchCandidates(configState, settings.heartbeat.switchSource, current);
+          _switchCandidates(configState, settings.heartbeat.switchSource, current)
+              .where(_engine.supportsConfig)
+              .toList();
       if (candidates.isEmpty) {
         log.addError('urltest: нет кандидатов для переключения (провалов: $failures)');
         return;
@@ -276,8 +281,8 @@ class VpnNotifier extends Notifier<VpnState2> {
           source: 'urltest');
       // Замер идёт через временный xray-инстанс с конфигом кандидата: TCP-пинг
       // сказал бы «жив» и про сервер, у которого порт открыт, а протокол молчит.
-      // Инстанс временный, inbounds Go вырезает сам — важны только поля,
-      // влияющие на outbound.
+      // Инстанс временный: inbounds Go вырезает сам, Rust собирает отдельный
+      // probe-конфиг без TUN — важны только поля, влияющие на outbound.
       final options = VpnEngineOptions(
         socksPort: AppConstants.defaultSocksPort,
         httpPort: 0,
@@ -481,8 +486,10 @@ class VpnNotifier extends Notifier<VpnState2> {
         ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null) ??
             const AppSettings();
 
-    final socksCredentials = settings.randomCredentials
-        ? XrayEngine.generateSocksCredentials()
+    // Rust's loopback diagnostic proxy currently supports no-auth only.
+    final socksCredentials = CoreFeatures.current.isRust
+        ? (user: '', password: '')
+        : settings.randomCredentials ? XrayEngine.generateSocksCredentials()
         : (user: settings.socksUser, password: settings.socksPassword);
 
     final actualSocksPort = settings.randomPort
@@ -517,10 +524,11 @@ class VpnNotifier extends Notifier<VpnState2> {
       sniffingEnabled: settings.sniffingEnabled,
       mtu: settings.mtu,
       dnsQueryStrategy: settings.dnsQueryStrategy,
-      // XTLS Vision rejects UDP/443 by design: QUIC can never pass, but browsers
-      // keep retrying it (each retry costs a full outbound handshake) and stall
-      // for ~30s before falling back to TCP. Force the ICMP fast-fail.
-      blockQuic: settings.blockQuic || _usesVisionFlow(config),
+      // Vision rejects UDP/443. Go's tun2socks answers it with ICMP for every
+      // Vision flow; the Rust core does that itself for plain Vision, so Rust
+      // adds its blackhole rule only for -udp443 or on the toggle.
+      blockQuic: CoreFeatures.current.effectiveQuicBlock(
+        requested: settings.blockQuic, flow: _visionFlow(config)),
       ipv6Enabled: settings.ipv6Enabled,
       allowTethering: settings.allowTethering,
       obsProbeIntervalSec: settings.obsProbeIntervalSec,
@@ -536,6 +544,14 @@ class VpnNotifier extends Notifier<VpnState2> {
       activeSocksPassword: socksCredentials.password,
       appliedFingerprint: connectionFingerprint(settings),
     );
+    // XrayEngine отправит в native поддерживаемую пробу; подмена видна в журнале.
+    final probe = settings.heartbeat.probe;
+    if (!CoreFeatures.current.supportsHeartbeatProbe(probe)) {
+      ref.read(logServiceProvider.notifier).addWarning(
+          'heartbeat: проба ${probe.name.toUpperCase()} недоступна в этой сборке, '
+          'используется ${CoreFeatures.current.effectiveHeartbeatProbe(probe).name.toUpperCase()}',
+          source: 'heartbeat');
+    }
 
     try {
       await _engine.connect(config, options);
@@ -630,12 +646,13 @@ class VpnNotifier extends Notifier<VpnState2> {
   VpnConfig? _resolveEffectiveConfig(ConfigState? cs) =>
       cs == null ? null : ref.read(effectiveConfigProvider);
 
-  /// True when the config's outbound(s) use xtls-rprx-vision — such outbounds
-  /// reject UDP/443, so QUIC must be fast-failed on the TUN side.
-  static bool _usesVisionFlow(VpnConfig config) {
-    if (config.flow?.contains('vision') ?? false) return true;
+  /// The xtls-rprx-vision flow of the config's outbound(s), or null — such
+  /// outbounds reject UDP/443, so QUIC must be fast-failed on the TUN side.
+  static String? _visionFlow(VpnConfig config) {
+    final flow = config.flow;
+    if (flow != null && flow.contains('vision')) return flow;
     final raw = config.rawXrayConfig;
-    if (raw == null) return false;
+    if (raw == null) return null;
     try {
       final cfg = jsonDecode(raw) as Map<String, dynamic>;
       final outbounds = cfg['outbounds'] as List<dynamic>? ?? [];
@@ -645,12 +662,13 @@ class VpnNotifier extends Notifier<VpnState2> {
         for (final v in vnext.whereType<Map<String, dynamic>>()) {
           final users = v['users'] as List<dynamic>? ?? [];
           for (final u in users.whereType<Map<String, dynamic>>()) {
-            if ((u['flow'] as String?)?.contains('vision') ?? false) return true;
+            final userFlow = u['flow'] as String?;
+            if (userFlow != null && userFlow.contains('vision')) return userFlow;
           }
         }
       }
     } catch (_) {}
-    return false;
+    return null;
   }
 
   Future<void> pingAllConfigs() async {

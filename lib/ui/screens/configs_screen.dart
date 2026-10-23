@@ -533,24 +533,11 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
     if (ok == true && controller.text.trim().isNotEmpty) {
       final updated = VlessParser.parseUri(controller.text.trim());
       if (updated != null) {
-        final renamed = VpnConfig(
+        // Все разобранные поля (пароль, пин, insecure, hopPorts, fingerprint,
+        // alpn, xhttp…) — из новой ссылки; от старого профиля только его
+        // идентичность, задержка и подписка.
+        final renamed = updated.copyWith(
           id: config.id,
-          name: updated.name,
-          protocol: updated.protocol,
-          address: updated.address,
-          port: updated.port,
-          uuid: updated.uuid,
-          security: updated.security,
-          transport: updated.transport,
-          sni: updated.sni,
-          wsPath: updated.wsPath,
-          wsHost: updated.wsHost,
-          grpcServiceName: updated.grpcServiceName,
-          publicKey: updated.publicKey,
-          shortId: updated.shortId,
-          spiderX: updated.spiderX,
-          flow: updated.flow,
-          encryption: updated.encryption,
           createdAt: config.createdAt,
           rawUri: controller.text.trim(),
           latencyMs: config.latencyMs,

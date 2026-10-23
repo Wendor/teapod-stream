@@ -4,7 +4,9 @@ import '../../core/constants/app_constants.dart';
 import '../../core/interfaces/vpn_engine.dart';
 import '../../core/models/vpn_config.dart';
 import '../../core/models/vpn_log_entry.dart';
+import 'rust_config_builder.dart';
 import 'xray_config_builder.dart';
+import '../../core/constants/core_features.dart';
 
 /// XrayEngine is a thin MethodChannel client — it sends commands to the native
 /// Android VPN service and nothing else. All state, stats, and log events are
@@ -18,18 +20,38 @@ class XrayEngine implements VpnEngine {
   @override
   Future<void> connect(VpnConfig config, VpnEngineOptions options) async {
     final String xrayConfig;
-
-    if (config.rawXrayConfig != null) {
-      xrayConfig = XrayConfigBuilder.mergeWithRaw(config.rawXrayConfig!, options);
-    } else {
-      xrayConfig = XrayConfigBuilder.buildJson(config, options);
+    try {
+      if (CoreFeatures.current.isRust) {
+        xrayConfig = RustConfigBuilder.buildJson(config, options);
+      } else if (config.rawXrayConfig != null) {
+        xrayConfig = XrayConfigBuilder.mergeWithRaw(
+          config.rawXrayConfig!,
+          options,
+        );
+      } else {
+        xrayConfig = XrayConfigBuilder.buildJson(config, options);
+      }
+    } on FormatException catch (error) {
+      throw PlatformException(
+        code: 'UNSUPPORTED_CONFIG',
+        message: error.message,
+      );
     }
 
+    final nativeEngine = await _channel.invokeMethod<String>('getEngine');
+    final expectedEngine = CoreFeatures.current.isRust ? 'rust' : 'go';
+    if (nativeEngine != expectedEngine) {
+      throw PlatformException(
+        code: 'ENGINE_MISMATCH',
+        message:
+            'Ядро Android не соответствует сборке интерфейса. Пересобери приложение.',
+      );
+    }
     await _channel.invokeMethod('connect', {
       'xrayConfig': xrayConfig,
       'socksPort': options.socksPort,
-      'socksUser': options.socksUser,
-      'socksPassword': options.socksPassword,
+      'socksUser': CoreFeatures.current.isRust ? '' : options.socksUser,
+      'socksPassword': CoreFeatures.current.isRust ? '' : options.socksPassword,
       'excludedPackages': options.excludedPackages.toList(),
       'includedPackages': options.includedPackages.toList(),
       'vpnMode': options.vpnMode.name,
@@ -39,9 +61,15 @@ class XrayEngine implements VpnEngine {
       'allowIcmp': options.allowIcmp,
       'blockQuic': options.blockQuic,
       'ipv6Enabled': options.ipv6Enabled,
-      'allowTethering': options.allowTethering,
+      // Both services check flow owners in TUN (Go: tun2socks validator,
+      // Rust: xray-rust TUN admission), so the switch applies in both builds.
+      'allowTethering':
+          CoreFeatures.current.supports(CoreFeature.tetheringControl) &&
+          options.allowTethering,
       'mtu': options.mtu,
-      'heartbeatProbe': options.heartbeat.probe.name,
+      'heartbeatProbe': CoreFeatures.current
+          .effectiveHeartbeatProbe(options.heartbeat.probe)
+          .name,
       'heartbeatAction': options.heartbeat.failAction.name,
       'heartbeatThreshold': options.heartbeat.failureThreshold,
       'heartbeatUrl': options.heartbeat.url,
@@ -49,17 +77,21 @@ class XrayEngine implements VpnEngine {
     });
   }
 
-
   @override
   Future<void> disconnect() async {
     await _channel.invokeMethod('disconnect');
   }
 
   /// Замер задержки через кандидата: временный xray-инстанс с его конфигом
-  /// (`Teapodcore.measureOutboundDelay`). null — сервер не ответил.
+  /// (Go: `Teapodcore.measureOutboundDelay`; Rust: временное ядро без TUN с
+  /// [RustConfigBuilder.buildProbeJson]). null — сервер не ответил или профиль
+  /// с этими настройками не собирается.
   Future<int?> measureOutbound(VpnConfig config, VpnEngineOptions options, String url) async {
+    if (!CoreFeatures.current.supports(CoreFeature.outboundDelayProbe)) return null;
     try {
-      final xrayConfig = config.rawXrayConfig != null
+      final xrayConfig = CoreFeatures.current.isRust
+          ? RustConfigBuilder.buildProbeJson(config, options)
+          : config.rawXrayConfig != null
           ? XrayConfigBuilder.mergeWithRaw(config.rawXrayConfig!, options)
           : XrayConfigBuilder.buildJson(config, options);
       return await _channel.invokeMethod<int>('measureOutbound', {
@@ -86,7 +118,8 @@ class XrayEngine implements VpnEngine {
   }
 
   @override
-  bool supportsConfig(VpnConfig config) => true;
+  bool supportsConfig(VpnConfig config) =>
+      !CoreFeatures.current.isRust || RustConfigBuilder.supports(config);
 
   Future<Map<String, String>> getBinaryVersions() async {
     try {
@@ -113,11 +146,20 @@ class XrayEngine implements VpnEngine {
   }
 
   /// Get current VPN state with SOCKS credentials (for sync on app start).
-  Future<({VpnState state, int socksPort, String socksUser, String socksPassword, int connectedAtMs})>
-      getVpnState() async {
+  Future<
+    ({
+      VpnState state,
+      int socksPort,
+      String socksUser,
+      String socksPassword,
+      int connectedAtMs,
+    })
+  >
+  getVpnState() async {
     try {
-      final result =
-          await _channel.invokeMethod<Map<Object?, Object?>>('getState');
+      final result = await _channel.invokeMethod<Map<Object?, Object?>>(
+        'getState',
+      );
       if (result != null) {
         final stateStr = result['state'] as String? ?? 'disconnected';
         return (
@@ -129,7 +171,13 @@ class XrayEngine implements VpnEngine {
         );
       }
     } catch (_) {}
-    return (state: VpnState.disconnected, socksPort: 0, socksUser: '', socksPassword: '', connectedAtMs: 0);
+    return (
+      state: VpnState.disconnected,
+      socksPort: 0,
+      socksUser: '',
+      socksPassword: '',
+      connectedAtMs: 0,
+    );
   }
 
   /// JSON snapshot of tun2socks state (counters, per-connection activity).
@@ -156,25 +204,29 @@ class XrayEngine implements VpnEngine {
     try {
       final lines = await _channel.invokeMethod<List<Object?>>('getLogs');
       if (lines == null) return [];
-      return lines.whereType<String>().map((line) {
-        final idx1 = line.indexOf('|');
-        final idx2 = line.indexOf('|', idx1 + 1);
-        if (idx1 < 0 || idx2 < 0) return null;
-        final ts = int.tryParse(line.substring(0, idx1));
-        if (ts == null) return null;
-        final levelStr = line.substring(idx1 + 1, idx2);
-        final message = line.substring(idx2 + 1);
-        final level = LogLevel.values.firstWhere(
-          (e) => e.name == levelStr,
-          orElse: () => LogLevel.info,
-        );
-        return VpnLogEntry(
-          timestamp: DateTime.fromMillisecondsSinceEpoch(ts),
-          level: level,
-          message: message,
-          source: 'xray',
-        );
-      }).whereType<VpnLogEntry>().toList();
+      return lines
+          .whereType<String>()
+          .map((line) {
+            final idx1 = line.indexOf('|');
+            final idx2 = line.indexOf('|', idx1 + 1);
+            if (idx1 < 0 || idx2 < 0) return null;
+            final ts = int.tryParse(line.substring(0, idx1));
+            if (ts == null) return null;
+            final levelStr = line.substring(idx1 + 1, idx2);
+            final message = line.substring(idx2 + 1);
+            final level = LogLevel.values.firstWhere(
+              (e) => e.name == levelStr,
+              orElse: () => LogLevel.info,
+            );
+            return VpnLogEntry(
+              timestamp: DateTime.fromMillisecondsSinceEpoch(ts),
+              level: level,
+              message: message,
+              source: 'xray',
+            );
+          })
+          .whereType<VpnLogEntry>()
+          .toList();
     } catch (_) {
       return [];
     }
@@ -196,10 +248,11 @@ class XrayEngine implements VpnEngine {
 
   /// Get current stats (for background polling).
   Future<({int upload, int download, int uploadSpeed, int downloadSpeed})>
-      getStats() async {
+  getStats() async {
     try {
-      final result =
-          await _channel.invokeMethod<Map<Object?, Object?>>('getStats');
+      final result = await _channel.invokeMethod<Map<Object?, Object?>>(
+        'getStats',
+      );
       if (result != null) {
         return (
           upload: (result['upload'] as num?)?.toInt() ?? 0,
@@ -215,14 +268,18 @@ class XrayEngine implements VpnEngine {
   /// Get stats history for chart.
   Future<List<Map<String, int>>> getStatsHistory() async {
     try {
-      final result = await _channel.invokeMethod<List<Object?>>('getStatsHistory');
+      final result = await _channel.invokeMethod<List<Object?>>(
+        'getStatsHistory',
+      );
       if (result != null) {
         return result
             .whereType<Map<Object?, Object?>>()
-            .map((m) => {
-                  'uploadSpeed': (m['uploadSpeed'] as num?)?.toInt() ?? 0,
-                  'downloadSpeed': (m['downloadSpeed'] as num?)?.toInt() ?? 0,
-                })
+            .map(
+              (m) => {
+                'uploadSpeed': (m['uploadSpeed'] as num?)?.toInt() ?? 0,
+                'downloadSpeed': (m['downloadSpeed'] as num?)?.toInt() ?? 0,
+              },
+            )
             .toList();
       }
     } catch (_) {}
@@ -230,13 +287,13 @@ class XrayEngine implements VpnEngine {
   }
 
   VpnState _parseState(String s) => switch (s) {
-        'connecting' => VpnState.connecting,
-        'reconnecting' => VpnState.connecting,
-        'connected' => VpnState.connected,
-        'disconnecting' => VpnState.disconnecting,
-        'disconnected' => VpnState.disconnected,
-        'error' => VpnState.error,
-        'blocked' => VpnState.blocked,
-        _ => VpnState.disconnected,
-      };
+    'connecting' => VpnState.connecting,
+    'reconnecting' => VpnState.connecting,
+    'connected' => VpnState.connected,
+    'disconnecting' => VpnState.disconnecting,
+    'disconnected' => VpnState.disconnected,
+    'error' => VpnState.error,
+    'blocked' => VpnState.blocked,
+    _ => VpnState.disconnected,
+  };
 }

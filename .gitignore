@@ -16,7 +16,6 @@ build/
 .metadata
 .pub-cache/
 .pub/
-pubspec.lock
 
 # ─────────────────────────────────────────
 #  Android
@@ -64,3 +63,12 @@ AGENTS.md
 wiki/
 redesign/
 docs/superpowers/
+# Python build helpers
+__pycache__/
+*.pyc
+android/app/libs/*.download
+
+android/xraymobile/src/main/jniLibs/
+android/xraymobile/.cxx/
+
+.native/

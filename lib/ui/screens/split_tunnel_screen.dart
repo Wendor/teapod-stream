@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/constants/core_features.dart';
 import '../../core/models/app_info.dart';
 import '../../core/services/settings_service.dart';
 import '../../providers/app_icon_provider.dart';
@@ -219,6 +220,20 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
                   ),
                 ),
             ],
+            // Rust: проверка владельца закрывает только TUN, а локальный SOCKS
+            // без пароля (другого xray-rust не принимает) открыт всем приложениям.
+            if (settings != null &&
+                settings.splitTunnelingEnabled &&
+                !CoreFeatures.current.supports(CoreFeature.socksAuthentication))
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                child: Text(
+                  'Rust: локальный SOCKS работает без пароля и доступен любому приложению на устройстве, '
+                  'в том числе исключённому или невыбранному: через него оно может выйти в VPN и узнать IP сервера. '
+                  'Проверка владельца потоков TUN и раздача на это не влияют.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
             // ── Search ────────────────────────────────────────────
             Container(
               padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),

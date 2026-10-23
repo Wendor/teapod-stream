@@ -1,5 +1,9 @@
+import 'core_features.dart';
+
 class AppConstants {
-  static const String appName = 'TeapodStream';
+  static const String appName = CoreFeatures.rustBuild
+      ? 'Teapod Rust Probe'
+      : 'TeapodStream';
 
   /// Populated at startup from PackageInfo (pubspec version).
   static String appVersion = '';

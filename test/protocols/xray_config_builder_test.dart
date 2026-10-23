@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:teapodstream/protocols/xray/xray_config_builder.dart';
+import 'package:teapodstream/protocols/xray/vless_parser.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/core/models/routing_settings.dart';
 import 'package:teapodstream/core/interfaces/vpn_engine.dart';
@@ -169,6 +170,113 @@ void main() {
         final vnext = (proxy['settings'] as Map)['vnext'] as List;
         expect(vnext.first['address'], '1.2.3.4');
         expect((vnext.first['users'] as List).first['id'], 'test-uuid');
+      });
+    });
+
+    group('Hysteria2 outbound', () {
+      Map<String, dynamic> stream(String uri) {
+        final json = XrayConfigBuilder.build(
+          VlessParser.parseUri(uri)!,
+          _defaultOptions(),
+        );
+        final proxy = (json['outbounds'] as List)
+            .firstWhere((o) => (o as Map)['tag'] == 'proxy') as Map;
+        return proxy['streamSettings'] as Map<String, dynamic>;
+      }
+
+      test('a single port emits no finalmask (unchanged)', () {
+        expect(stream('hy2://pass@hy.example:443?sni=s').containsKey('finalmask'), isFalse);
+        expect(stream('hy2://pass@hy.example:443?obfs=salamander&obfs-password=o')['finalmask'], {
+          'udp': [
+            {'type': 'salamander', 'settings': {'password': 'o'}},
+          ],
+        });
+      });
+
+      test('port range becomes Xray udpHop with the first port as settings.port', () {
+        final json = XrayConfigBuilder.build(
+          VlessParser.parseUri('hy2://pass@hy.example:20000-30000/?sni=s')!,
+          _defaultOptions(),
+        );
+        final proxy = (json['outbounds'] as List)
+            .firstWhere((o) => (o as Map)['tag'] == 'proxy') as Map;
+        expect(proxy['settings']['port'], 20000);
+        expect(proxy['streamSettings']['finalmask'], {
+          'quicParams': {
+            'udpHop': {'ports': '20000-30000'},
+          },
+        });
+        expect(
+          stream('hy2://pass@hy.example:443,5000-6000?obfs=salamander&obfs-password=o')['finalmask'],
+          {
+            'udp': [
+              {'type': 'salamander', 'settings': {'password': 'o'}},
+            ],
+            'quicParams': {
+              'udpHop': {'ports': '443,5000-6000'},
+            },
+          },
+        );
+        expect(
+          stream('hy2://pass@hy.example:443?mport=20000-30000')['finalmask'],
+          {
+            'quicParams': {
+              'udpHop': {'ports': '20000-30000'},
+            },
+          },
+        );
+      });
+
+      test('hop spec survives toJson/fromJson', () {
+        final config = VlessParser.parseUri(
+          'hy2://pass@hy.example:443,5000-6000/?sni=s',
+        )!;
+        final restored = VpnConfig.fromJsonString(config.toJsonString());
+        expect(restored.hopPorts, '443,5000-6000');
+        expect(restored.port, 443);
+        expect(restored.copyWith(name: 'renamed').hopPorts, '443,5000-6000');
+        expect(
+          XrayConfigBuilder.buildJson(restored, _defaultOptions()),
+          XrayConfigBuilder.buildJson(config, _defaultOptions()),
+        );
+        final legacy = config.toJson()..remove('hopPorts');
+        expect(VpnConfig.fromJson(legacy).hopPorts, isNull);
+      });
+    });
+
+    group('Trojan outbound', () {
+      // Shared parser fix: security, REALITY keys and the pin were dropped.
+      test('follows the link security instead of always TLS', () {
+        final reality = XrayConfigBuilder.build(
+          VlessParser.parseUri(
+            'trojan://pw@1.2.3.4:443?security=reality&type=tcp&sni=cover.example'
+            '&pbk=key&sid=ab12&fp=chrome',
+          )!,
+          _defaultOptions(),
+        );
+        final stream =
+            (reality['outbounds'] as List).first['streamSettings'] as Map;
+        expect(stream['security'], 'reality');
+        expect(stream['realitySettings']['publicKey'], 'key');
+        expect(stream['realitySettings']['shortId'], 'ab12');
+        expect(stream.containsKey('tlsSettings'), isFalse);
+
+        final pinned = XrayConfigBuilder.build(
+          VlessParser.parseUri(
+            'trojan://pw@1.2.3.4:443?sni=cover.example&pinSHA256=${'ab' * 32}',
+          )!,
+          _defaultOptions(),
+        );
+        final tls = (pinned['outbounds'] as List).first['streamSettings']
+            ['tlsSettings'] as Map;
+        expect(tls['pinnedPeerCertSha256'], 'ab' * 32);
+        expect(tls['allowInsecure'], isFalse);
+        final plain = VlessParser.parseUri('trojan://pw@1.2.3.4:443')!;
+        expect(
+          (XrayConfigBuilder.build(plain, _defaultOptions())['outbounds'] as List)
+              .first['streamSettings']['security'],
+          'tls',
+        );
       });
     });
 

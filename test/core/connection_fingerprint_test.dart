@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:teapodstream/core/models/heartbeat_settings.dart';
 import 'package:teapodstream/core/models/connection_fingerprint.dart';
 import 'package:teapodstream/core/services/settings_service.dart';
 
@@ -40,6 +41,23 @@ void main() {
       final a = const AppSettings().copyWith(excludedPackages: {'b', 'a'});
       final b = const AppSettings().copyWith(excludedPackages: {'a', 'b'});
       expect(connectionFingerprint(a), connectionFingerprint(b));
+    });
+
+    test('учитывает только значения, которые доходят до native', () {
+      const base = AppSettings();
+      AppSettings withProbe(HeartbeatProbe probe) =>
+          base.copyWith(heartbeat: base.heartbeat.copyWith(probe: probe));
+      final xrayDelay = withProbe(HeartbeatProbe.xrayDelay);
+      final passive = withProbe(HeartbeatProbe.passive);
+      final socks = withProbe(HeartbeatProbe.socks);
+      final tethering = base.copyWith(allowTethering: true);
+      final noTethering = base.copyWith(allowTethering: false);
+      // Все три пробы и переключатель раздачи доходят до native в обеих сборках:
+      // их смена меняет сессию.
+      expect(connectionFingerprint(passive), isNot(connectionFingerprint(socks)));
+      expect(connectionFingerprint(xrayDelay), isNot(connectionFingerprint(socks)));
+      expect(connectionFingerprint(tethering),
+          isNot(connectionFingerprint(noTethering)));
     });
   });
 }

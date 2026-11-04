@@ -164,7 +164,10 @@ class XrayConfigBuilder {
       rules.add({'type': 'field', 'ip': ['geoip:private'], 'outboundTag': 'direct'});
     }
 
-    if (!routing.geoEnabled && !routing.domainEnabled && !routing.geositeEnabled) return rules;
+    if (!routing.geoEnabled && !routing.domainEnabled && !routing.geositeEnabled &&
+        !routing.sitesEnabled && !routing.ruServicesEnabled) {
+      return rules;
+    }
 
     final selectedOut =
         routing.direction == RoutingDirection.bypass ? 'direct' : 'proxy';
@@ -221,20 +224,25 @@ class XrayConfigBuilder {
   static Map<String, dynamic> buildDnsBlock(VpnEngineOptions options) => _buildDnsBlock(options);
 
   static Map<String, dynamic> _buildDnsBlock(VpnEngineOptions options) {
-    final server = options.dnsServer;
-    final routing = options.routing;
-    final strategy = _queryStrategy(options.dnsQueryStrategy);
-    List<dynamic> servers = [];
-
     if (options.dnsMode == DnsMode.direct) {
       // Direct mode: DNS queries bypass the VPN via the 'direct' routing rule above.
       // Use system resolver for xray's own domain lookups (e.g. routing decisions).
       return {
         'servers': ['localhost'],
-        'queryStrategy': strategy,
+        'queryStrategy': _queryStrategy(options.dnsQueryStrategy),
         'disableFallback': true,
       };
     }
+    return buildResolverDnsBlock(options);
+  }
+
+  /// DNS-модуль с выбранным сервером — блок режима «через VPN». Ядро Rust берёт его
+  /// и для режима «напрямую» (`localhost` xray-rust считает обычным DNS-сервером).
+  static Map<String, dynamic> buildResolverDnsBlock(VpnEngineOptions options) {
+    final server = options.dnsServer;
+    final routing = options.routing;
+    final strategy = _queryStrategy(options.dnsQueryStrategy);
+    List<dynamic> servers = [];
 
     // Proxy mode: DNS queries are intercepted and handled by xray's DNS module.
     // Main server must be first: with disableFallback, xray sends every domain that
@@ -425,30 +433,38 @@ class XrayConfigBuilder {
   static String _networkName(VpnTransport t) =>
       t == VpnTransport.http2 ? 'h2' : t.name;
 
-  static List<String>? _formatPinSHA256(String? pin) {
-    if (pin == null || pin.isEmpty) return null;
-    try {
-      if (pin.contains(':')) {
-        final bytes = pin.split(':').map((e) => int.parse(e, radix: 16)).toList();
-        return [base64Encode(bytes)];
+  /// `pinnedPeerCertSha256`: SHA-256 полного DER-сертификата в hex, через запятую.
+  /// `pinSHA256` из ссылки — hex (с двоеточиями или без) или base64 от 32 байт.
+  static String certificatePins(String value) {
+    final pins = <String>[];
+    for (final entry in value.split(',')) {
+      final raw = entry.trim();
+      final hex = raw.replaceAll(':', '');
+      if (RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(hex)) {
+        pins.add(hex.toLowerCase());
+        continue;
       }
-      if (RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(pin)) {
-        final bytes = <int>[];
-        for (var i = 0; i < pin.length; i += 2) {
-          bytes.add(int.parse(pin.substring(i, i + 2), radix: 16));
-        }
-        return [base64Encode(bytes)];
+      try {
+        final bytes = base64.decode(raw);
+        if (bytes.length != 32) throw const FormatException();
+        pins.add(bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join());
+      } on FormatException {
+        throw const FormatException(
+          'pinSHA256 должен быть SHA-256 сертификата: 64 hex-символа или base64 от 32 байт.',
+        );
       }
-      return [pin];
-    } catch (_) {
-      return [pin];
     }
+    return pins.join(',');
   }
 
   static Map<String, dynamic> _buildStreamSettings(VpnConfig config, TlsFingerprint fp) {
     // Глобальный override из настроек приложения; defaultFp — значение из конфига.
     final fingerprint = fp.xrayValue ?? config.fingerprint;
+    // Пин сильнее allowInsecure: принимается только этот сертификат.
+    final pin = config.pinSHA256?.trim() ?? '';
     if (config.protocol == VpnProtocol.hysteria2) {
+      final salamander = config.obfsPassword?.isNotEmpty ?? false;
+      final hopping = config.hopPorts?.isNotEmpty ?? false;
       return {
         'network': 'hysteria',
         'security': 'tls',
@@ -456,22 +472,28 @@ class XrayConfigBuilder {
           // hysteria-dialer в xray не вызывает WithDestination: при пустом serverName
           // SNI берётся из URL auth-запроса и становится литералом "hysteria".
           'serverName': (config.sni?.isNotEmpty ?? false) ? config.sni : config.address,
-          'allowInsecure': config.allowInsecure,
-          if (config.pinSHA256 != null && config.pinSHA256!.isNotEmpty)
-            'pinnedPeerCertificateChainSha256': _formatPinSHA256(config.pinSHA256),
+          'allowInsecure': config.allowInsecure && pin.isEmpty,
+          if (pin.isNotEmpty) 'pinnedPeerCertSha256': certificatePins(pin),
         },
         'hysteriaSettings': {
           'version': 2,
           'auth': config.password ?? '',
         },
-        if (config.obfsPassword != null && config.obfsPassword!.isNotEmpty)
+        if (salamander || hopping)
           'finalmask': {
-            'udp': [
-              {
-                'type': 'salamander',
-                'settings': {'password': config.obfsPassword},
-              }
-            ]
+            if (salamander)
+              'udp': [
+                {
+                  'type': 'salamander',
+                  'settings': {'password': config.obfsPassword},
+                }
+              ],
+            // finalmask.quicParams.udpHop.ports — PortList "a-b,c";
+            // остальные параметры quicParams по умолчанию (смена порта раз в 30 с).
+            if (hopping)
+              'quicParams': {
+                'udpHop': {'ports': config.hopPorts},
+              },
           },
       };
     }
@@ -491,7 +513,8 @@ class XrayConfigBuilder {
       if (config.security == VpnSecurity.tls)
         'tlsSettings': {
           'serverName': config.sni ?? '',
-          'allowInsecure': config.allowInsecure,
+          'allowInsecure': config.allowInsecure && pin.isEmpty,
+          if (pin.isNotEmpty) 'pinnedPeerCertSha256': certificatePins(pin),
           if (fingerprint != null && fingerprint.isNotEmpty)
             'fingerprint': fingerprint,
           if (config.alpn != null && config.alpn!.isNotEmpty)

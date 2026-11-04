@@ -109,11 +109,13 @@ class DnsServerConfig {
     var host = input;
     var port = defaultPort;
     // IPv6-литерал в скобках: порт только после закрывающей скобки.
-    final sep = input.startsWith('[') ? input.lastIndexOf(']:') : input.lastIndexOf(':');
-    if (sep > 0 && !input.substring(sep + 1).contains(':')) {
-      final parsed = int.tryParse(input.substring(input.startsWith('[') ? sep + 2 : sep + 1));
+    // Голый IPv6 (несколько ':') порта не содержит.
+    final bracketed = input.startsWith('[');
+    final sep = bracketed ? input.lastIndexOf(']:') : input.lastIndexOf(':');
+    if (sep > 0 && (bracketed || input.indexOf(':') == sep)) {
+      final parsed = int.tryParse(input.substring(bracketed ? sep + 2 : sep + 1));
       if (parsed != null && parsed > 0 && parsed <= 65535) {
-        host = input.substring(0, input.startsWith('[') ? sep + 1 : sep);
+        host = input.substring(0, bracketed ? sep + 1 : sep);
         port = parsed;
       }
     }

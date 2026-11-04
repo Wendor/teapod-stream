@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:teapodstream/protocols/xray/xray_config_builder.dart';
+import 'package:teapodstream/protocols/xray/vless_parser.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/core/models/routing_settings.dart';
 import 'package:teapodstream/core/interfaces/vpn_engine.dart';
@@ -303,5 +304,150 @@ void main() {
         isFalse,
       );
     });
+  });
+
+  group('routing rules', () {
+    List<Map<String, dynamic>> rulesFor(RoutingSettings routing) {
+      final json = XrayConfigBuilder.build(_vlessConfig(), _defaultOptions(routing: routing));
+      final r = (json['routing'] as Map<String, dynamic>)['rules'] as List;
+      return r.cast<Map<String, dynamic>>();
+    }
+
+    test('sites alone produce a domain rule to the selected outbound', () {
+      final rules = rulesFor(const RoutingSettings(
+        direction: RoutingDirection.bypass,
+        sitesEnabled: true,
+        sites: ['example.com'],
+      ));
+      expect(rules.any((r) => (r['domain'] as List?)?.contains('domain:example.com') ?? false), isTrue);
+    });
+
+    test('ru services alone produce a domain rule to the selected outbound', () {
+      final rules = rulesFor(const RoutingSettings(
+        direction: RoutingDirection.bypass,
+        ruServicesEnabled: true,
+      ));
+      expect(rules.where((r) => r['domain'] != null && r['outboundTag'] == 'direct'), isNotEmpty);
+    });
+  });
+
+  group('certificate pins', () {
+    final hex = List.generate(32, (i) => i.toRadixString(16).padLeft(2, '0')).join();
+    final colon = List.generate(32, (i) => i.toRadixString(16).padLeft(2, '0').toUpperCase()).join(':');
+    final b64 = base64.encode(List.generate(32, (i) => i));
+
+    test('colon hex becomes lowercase hex', () {
+      expect(XrayConfigBuilder.certificatePins(colon), hex);
+    });
+    test('base64 of 32 bytes becomes hex', () {
+      expect(XrayConfigBuilder.certificatePins(b64), hex);
+    });
+    test('comma list keeps every pin', () {
+      expect(XrayConfigBuilder.certificatePins('$colon, $b64'), '$hex,$hex');
+    });
+    test('garbage is rejected', () {
+      expect(() => XrayConfigBuilder.certificatePins('garbage'), throwsFormatException);
+    });
+
+    Map<String, dynamic> tlsOf(VpnConfig c) {
+      final json = XrayConfigBuilder.build(c, _defaultOptions());
+      final proxy = (json['outbounds'] as List).cast<Map<String, dynamic>>().firstWhere((o) => o['tag'] == 'proxy');
+      return (proxy['streamSettings'] as Map<String, dynamic>)['tlsSettings'] as Map<String, dynamic>;
+    }
+
+    test('TLS pin wins over allowInsecure', () {
+      final tls = tlsOf(VpnConfig(
+        id: 'p', name: 'p', protocol: VpnProtocol.vless, address: 'h', port: 443, uuid: 'u',
+        security: VpnSecurity.tls, transport: VpnTransport.tcp, createdAt: DateTime(2026),
+        allowInsecure: true, pinSHA256: colon,
+      ));
+      expect(tls['pinnedPeerCertSha256'], hex);
+      expect(tls['allowInsecure'], isFalse);
+      expect(tls.containsKey('pinnedPeerCertificateChainSha256'), isFalse);
+    });
+
+    test('Hysteria2 pin wins over allowInsecure', () {
+      final tls = tlsOf(VpnConfig(
+        id: 'p', name: 'p', protocol: VpnProtocol.hysteria2, address: 'h', port: 443, uuid: '', password: 'pw',
+        security: VpnSecurity.tls, transport: VpnTransport.tcp, createdAt: DateTime(2026),
+        allowInsecure: true, pinSHA256: hex,
+      ));
+      expect(tls['pinnedPeerCertSha256'], hex);
+      expect(tls['allowInsecure'], isFalse);
+      expect(tls.containsKey('pinnedPeerCertificateChainSha256'), isFalse);
+    });
+  });
+  group('hysteria2 hopping', () {
+    group('Hysteria2 outbound', () {
+      Map<String, dynamic> stream(String uri) {
+        final json = XrayConfigBuilder.build(
+          VlessParser.parseUri(uri)!,
+          _defaultOptions(),
+        );
+        final proxy = (json['outbounds'] as List)
+            .firstWhere((o) => (o as Map)['tag'] == 'proxy') as Map;
+        return proxy['streamSettings'] as Map<String, dynamic>;
+      }
+
+      test('a single port emits no finalmask (unchanged)', () {
+        expect(stream('hy2://pass@hy.example:443?sni=s').containsKey('finalmask'), isFalse);
+        expect(stream('hy2://pass@hy.example:443?obfs=salamander&obfs-password=o')['finalmask'], {
+          'udp': [
+            {'type': 'salamander', 'settings': {'password': 'o'}},
+          ],
+        });
+      });
+
+      test('port range becomes Xray udpHop with the first port as settings.port', () {
+        final json = XrayConfigBuilder.build(
+          VlessParser.parseUri('hy2://pass@hy.example:20000-30000/?sni=s')!,
+          _defaultOptions(),
+        );
+        final proxy = (json['outbounds'] as List)
+            .firstWhere((o) => (o as Map)['tag'] == 'proxy') as Map;
+        expect(proxy['settings']['port'], 20000);
+        expect(proxy['streamSettings']['finalmask'], {
+          'quicParams': {
+            'udpHop': {'ports': '20000-30000'},
+          },
+        });
+        expect(
+          stream('hy2://pass@hy.example:443,5000-6000?obfs=salamander&obfs-password=o')['finalmask'],
+          {
+            'udp': [
+              {'type': 'salamander', 'settings': {'password': 'o'}},
+            ],
+            'quicParams': {
+              'udpHop': {'ports': '443,5000-6000'},
+            },
+          },
+        );
+        expect(
+          stream('hy2://pass@hy.example:443?mport=20000-30000')['finalmask'],
+          {
+            'quicParams': {
+              'udpHop': {'ports': '20000-30000'},
+            },
+          },
+        );
+      });
+
+      test('hop spec survives toJson/fromJson', () {
+        final config = VlessParser.parseUri(
+          'hy2://pass@hy.example:443,5000-6000/?sni=s',
+        )!;
+        final restored = VpnConfig.fromJsonString(config.toJsonString());
+        expect(restored.hopPorts, '443,5000-6000');
+        expect(restored.port, 443);
+        expect(restored.copyWith(name: 'renamed').hopPorts, '443,5000-6000');
+        expect(
+          XrayConfigBuilder.buildJson(restored, _defaultOptions()),
+          XrayConfigBuilder.buildJson(config, _defaultOptions()),
+        );
+        final legacy = config.toJson()..remove('hopPorts');
+        expect(VpnConfig.fromJson(legacy).hopPorts, isNull);
+      });
+    });
+
   });
 }

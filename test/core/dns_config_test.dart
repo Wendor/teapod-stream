@@ -48,6 +48,24 @@ void main() {
       expect(s.port, 443);
     });
 
+    test('bare ipv6 literal keeps every group and the default port', () {
+      final s = custom('2001:db8::1', DnsType.udp);
+      expect(s.address, '2001:db8::1');
+      expect(s.port, 53);
+    });
+
+    test('bracketed ipv6 keeps explicit port after the bracket', () {
+      final s = custom('[2001:db8::1]:5353', DnsType.udp);
+      expect(s.address, '[2001:db8::1]');
+      expect(s.port, 5353);
+    });
+
+    test('bracketed ipv6 dot without port defaults to 853', () {
+      final s = custom('[2606:4700:4700::1111]', DnsType.dot);
+      expect(s.address, '[2606:4700:4700::1111]');
+      expect(s.port, 853);
+    });
+
     test('empty address falls back to cloudflare udp', () {
       final s = custom('  ', DnsType.udp);
       expect(s.address, '1.1.1.1');

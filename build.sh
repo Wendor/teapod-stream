@@ -17,7 +17,7 @@ cd "$SCRIPT_DIR"
 
 JNILIBS_DIR="android/app/src/main/jniLibs"
 LIBS_DIR="android/app/libs"
-ALL_ABIS=("arm64-v8a" "armeabi-v7a" "x86_64")
+ALL_ABIS=("arm64-v8a" "x86_64")
 DEFAULT_ABI="arm64-v8a"
 LOCAL_TEAPOD_CORE_DIR="../teapod-core/outputs"
 NDK_VERSION="28.2.13676358"
@@ -174,7 +174,7 @@ rename_apks() {
 
   echo ""
   if ls "$dir"/app-arm64-v8a-release.apk 1>/dev/null 2>&1; then
-    for abi in arm64-v8a armeabi-v7a x86_64; do
+    for abi in arm64-v8a x86_64; do
       local src="$dir/app-$abi-release.apk"
       if [[ -f "$src" ]]; then
         local dst="$dir/teapod-stream-$abi-release-$VERSION.apk"
@@ -183,7 +183,7 @@ rename_apks() {
       fi
     done
   elif ls "$dir"/app-arm64-v8a-debug.apk 1>/dev/null 2>&1; then
-    for abi in arm64-v8a armeabi-v7a x86_64; do
+    for abi in arm64-v8a x86_64; do
       local src="$dir/app-$abi-debug.apk"
       if [[ -f "$src" ]]; then
         local dst="$dir/teapod-stream-$abi-debug-$VERSION.apk"
@@ -245,12 +245,12 @@ case "${1:-help}" in
     accept_sdk_licenses
     check_binaries || true
     ensure_pub
-    flutter build apk --debug --split-per-abi --no-pub
+    flutter build apk --debug --split-per-abi --no-pub --target-platform android-arm64,android-x64
     rename_apks
     ;;
 
   release)
-    log "Сборка RELEASE APK (arm64 + arm32 + x86_64)..."
+    log "Сборка RELEASE APK (arm64 + x86_64)..."
     accept_sdk_licenses
     check_binaries || true
     ensure_pub
@@ -258,7 +258,7 @@ case "${1:-help}" in
     dir="build/app/outputs/flutter-apk"
     rm -f "$dir"/app-*-release.apk
 
-    flutter build apk --release --split-per-abi --no-pub \
+    flutter build apk --release --split-per-abi --no-pub --target-platform android-arm64,android-x64 \
       --obfuscate --split-debug-info=build/app/outputs/symbols
 
     rename_apks
@@ -269,7 +269,7 @@ case "${1:-help}" in
     accept_sdk_licenses
     check_binaries || warn "Продолжаем без бинарников"
     ensure_pub
-    flutter build appbundle --release --no-pub
+    flutter build appbundle --release --no-pub --target-platform android-arm64,android-x64
     ok "AAB: build/app/outputs/bundle/release/app-release.aab"
     ;;
 

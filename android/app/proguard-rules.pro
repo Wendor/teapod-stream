@@ -10,3 +10,6 @@
 
 # Keep other JNI boundaries if necessary
 -keep class com.teapodstream.teapodstream.** { *; }
+
+# Rust-ядро (xray-rust-mobile): JNI находит классы и колбэки по имени.
+-keep class org.xrayrust.mobile.** { *; }

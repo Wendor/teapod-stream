@@ -22,6 +22,10 @@ import android.util.LruCache
 import androidx.core.app.NotificationCompat
 import java.io.BufferedReader
 import java.io.File
+import com.teapodstream.teapodstream.core.CoreKind
+import com.teapodstream.teapodstream.core.CoreStartParams
+import com.teapodstream.teapodstream.core.VpnCore
+import com.teapodstream.teapodstream.core.VpnCores
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.InetAddress
@@ -34,11 +38,6 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
-import teapodcore.LogListener
-import teapodcore.Teapodcore
-import teapodcore.XrayCallback
-import teapodcore.TunValidator
-import teapodcore.VpnProtector
 
 class XrayVpnService : VpnService() {
 
@@ -71,6 +70,7 @@ class XrayVpnService : VpnService() {
         const val EXTRA_HEARTBEAT_ACTION = "heartbeat_action"    // "reconnect" | "switchConfig"
         const val EXTRA_HEARTBEAT_THRESHOLD = "heartbeat_threshold" // провалов подряд до действия
         const val EXTRA_HEARTBEAT_URL = "heartbeat_url"          // куда стучится проба
+        const val EXTRA_ENGINE = "engine"                        // "go" | "rust"
 
         // Static state tracker for querying from Dart
         @Volatile private var currentNativeState: String = "disconnected"
@@ -83,7 +83,7 @@ class XrayVpnService : VpnService() {
             // the TUN fd was likely closed externally (e.g. system network change during a phone call)
             // without onRevoke() being called. Correct the stale state proactively so that
             // syncNativeState() in Flutter reflects reality instead of showing a phantom connection.
-            if (currentNativeState == "connected" && tunModeActive && !Teapodcore.isTunRunning()) {
+            if (currentNativeState == "connected" && tunModeActive && !VpnCores.active.isTunRunning()) {
                 currentNativeState = "disconnected"
             }
             return currentNativeState
@@ -277,7 +277,10 @@ class XrayVpnService : VpnService() {
     private val tunAddress = "10.120.230.1"
     private val tunNetmask = "255.255.255.0"
     @Volatile private var tunMtu = 1500
-    private val tunDns    = "1.1.1.1"
+    // Ядро текущей сессии: фиксируется в startVpn после CAS, чтобы смена ядра
+    // новым connect не перенаправила stop/heartbeat/stats в чужое ядро.
+    @Volatile private var sessionCore: VpnCore = VpnCores.active
+    private val core: VpnCore get() = sessionCore
 
     override fun onCreate() {
         super.onCreate()
@@ -287,27 +290,6 @@ class XrayVpnService : VpnService() {
         screenOn = pm.isInteractive
         deviceIdle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) pm.isDeviceIdleMode else false
         migrateConnectionParamsIfNeeded()
-        Teapodcore.registerVpnProtector(object : VpnProtector {
-            override fun protect(fd: Long): Boolean {
-                val result = this@XrayVpnService.protect(fd.toInt())
-                android.util.Log.i("TeapodVPN", "[protect] fd=$fd result=$result")
-                return result
-            }
-        })
-        // Route xray-core runtime logs (outbound dial errors, access log) into
-        // vpn_log.txt — otherwise they die on Go's stdout and connection failures
-        // are undiagnosable from user logs. Info/access lines map to "debug" so
-        // they land in the file without flooding the Flutter UI in release.
-        Teapodcore.registerLogListener(object : LogListener {
-            override fun onLog(message: String) {
-                val level = when {
-                    message.contains("[Error]") -> "error"
-                    message.contains("[Warning]") -> "warning"
-                    else -> "debug"
-                }
-                log(level, "[xray] $message")
-            }
-        })
         registerScreenReceiver()
     }
 
@@ -389,10 +371,11 @@ class XrayVpnService : VpnService() {
                 heartbeatUrl = intent.getStringExtra(EXTRA_HEARTBEAT_URL)?.takeIf { it.isNotEmpty() }
                     ?: DEFAULT_HEARTBEAT_URL
                 allowTethering = intent.getBooleanExtra(EXTRA_ALLOW_TETHERING, false)
+                val engine = CoreKind.fromId(intent.getStringExtra(EXTRA_ENGINE)).id
                 // Persist non-sensitive params for CONNECT_QUICK reconnect (no credentials)
                 ConnectionParams(socksPort, excludedPackages, includedPackages,
                     vpnMode, ssPrefix, proxyOnly, showNotification, killSwitch, allowIcmp, blockQuic, ipv6Enabled, mtu,
-                    heartbeatProbe, heartbeatAction, heartbeatThreshold, heartbeatUrl, allowTethering)
+                    heartbeatProbe, heartbeatAction, heartbeatThreshold, heartbeatUrl, allowTethering, engine)
                     .save(filesDir, ::log)
                 userRequestedDisconnect.set(false)
                 reconnectAttempts.set(0)
@@ -401,7 +384,7 @@ class XrayVpnService : VpnService() {
                 Thread {
                     startVpn(xrayConfig, socksPort, socksUser, socksPassword,
                         excludedPackages, includedPackages, vpnMode, ssPrefix, proxyOnly, killSwitch,
-                        allowIcmp, blockQuic, ipv6Enabled, mtu = mtu)
+                        allowIcmp, blockQuic, ipv6Enabled, mtu = mtu, engine = engine)
                 }.start()
                 return START_STICKY
             }
@@ -462,7 +445,7 @@ class XrayVpnService : VpnService() {
                                 params.socksPort, socksUser, socksPassword,
                                 params.excludedPackages, params.includedPackages, params.vpnMode,
                                 params.ssPrefix, params.proxyOnly, params.killSwitch,
-                                params.allowIcmp, params.blockQuic, params.ipv6Enabled, mtu = params.mtu, isReconnect = true
+                                params.allowIcmp, params.blockQuic, params.ipv6Enabled, mtu = params.mtu, isReconnect = true, engine = params.engine
                             )
                         }.start()
                     }
@@ -506,7 +489,7 @@ class XrayVpnService : VpnService() {
                             params.socksPort, socksUser, socksPassword,
                             params.excludedPackages, params.includedPackages, params.vpnMode,
                             params.ssPrefix, params.proxyOnly, params.killSwitch,
-                            params.allowIcmp, params.blockQuic, params.ipv6Enabled, mtu = params.mtu, isReconnect = true
+                            params.allowIcmp, params.blockQuic, params.ipv6Enabled, mtu = params.mtu, isReconnect = true, engine = params.engine
                         )
                     }.start()
                     return START_STICKY
@@ -565,8 +548,11 @@ class XrayVpnService : VpnService() {
         ipv6Enabled: Boolean = false,
         mtu: Int = 1500,
         isReconnect: Boolean = false,
+        engine: String = CoreKind.GO.id,
     ) {
         if (!isRunning.compareAndSet(false, true)) return
+        sessionCore = VpnCores.get(CoreKind.fromId(engine))
+        VpnCores.active = sessionCore
         // Keep the previous TUN (kill-switch sink left by a reconnect) open until the
         // new one is established: establish() atomically replaces the interface, so
         // app traffic is blackholed by the old TUN instead of leaking while xray starts.
@@ -577,7 +563,7 @@ class XrayVpnService : VpnService() {
         allowIcmpEnabled = allowIcmp
         blockQuicEnabled = blockQuic
         proxyOnlyMode = proxyOnly
-        tunMtu = mtu.coerceIn(576, 9000)
+        tunMtu = core.tunMtu(mtu.coerceIn(576, 9000))
         if (!isReconnect) clearLogFile()
         setState(if (isReconnect) "reconnecting" else "connecting")
         log("info", "Starting VPN (MTU: $tunMtu)")
@@ -594,15 +580,21 @@ class XrayVpnService : VpnService() {
             configFile.writeText(finalConfig)
             prepareBinaries(this)
 
-            // Set up xray asset path before starting
-            Teapodcore.initCoreEnv(filesDir.absolutePath, "")
+            core.init(this) { level, message -> log(level, message) }
+            fun coreParams(tunFd: Int?, allowedUids: Set<Int> = emptySet(), blockUnowned: Boolean = false) =
+                CoreStartParams(
+                    tunFd = tunFd, mtu = tunMtu, socksPort = socksPort,
+                    socksUser = socksUser, socksPassword = socksPassword,
+                    allowIcmp = allowIcmpEnabled, blockQuic = blockQuicEnabled,
+                    vpnMode = vpnMode, allowedUids = allowedUids, blockUnowned = blockUnowned,
+                )
 
             if (proxyOnly) {
                 // Proxy-only mode: start Xray SOCKS proxy without TUN tunnel or tun2socks
                 log("info", "Proxy-only mode: skipping TUN tunnel")
                 try { previousTun?.close() } catch (_: Exception) {}
 
-                startXrayAndWait(finalConfig)
+                core.start(finalConfig, coreParams(tunFd = null))
 
                 log("info", "xray started (proxy-only, SOCKS on port $socksPort)")
                 startStatsMonitoring()
@@ -633,7 +625,7 @@ class XrayVpnService : VpnService() {
                         .setMtu(tunMtu)
                         .addAddress(dynamicTunIp, 32)
                         .addRoute("0.0.0.0", 0)
-                        .addDnsServer(tunDns)
+                        .addDnsServer(core.tunDnsServer)
                         .setBlocking(true)
                         .setMetered(false)
 
@@ -681,30 +673,10 @@ class XrayVpnService : VpnService() {
                     log("info", "TUN established with IP $dynamicTunIp")
                 }
 
-                // 1. Start xray-core (in-process library, not subprocess)
-                startXrayAndWait(finalConfig)
-                log("info", "xray started")
-
-                // 2. Resolve UIDs for split tunneling (tun2socks validator level)
+                // Split tunneling: UID-фильтр на уровне ядра (tun2socks validator / TUN admission)
                 val allowedUids = resolveUids(vpnMode, includedPackages, excludedPackages)
                 val blockUnowned = excludedPackages.isNotEmpty() && !allowTethering
-                val validator = buildTunValidator(allowedUids, vpnMode, blockUnowned)
-
-                log("info", "Starting tun2socks: mode=$vpnMode uids=${allowedUids.size} blockUnowned=$blockUnowned")
-
-                val tunErr = Teapodcore.startTun2Socks(
-                    tunInterface!!.fd.toLong(),
-                    tunMtu.toLong(),
-                    socksPort.toLong(),
-                    socksUser,
-                    socksPassword,
-                    allowIcmpEnabled,
-                    blockQuicEnabled,
-                    validator
-                )
-                if (tunErr.isNotEmpty()) throw IllegalStateException("tun2socks: $tunErr")
-
-                log("info", "tun2socks started successfully")
+                core.start(finalConfig, coreParams(tunInterface!!.fd, allowedUids, blockUnowned))
 
                 // No permanent wakelock: TUN packets wake the CPU by themselves, and
                 // reconnectInternal() takes its own timed wakelock for the cycle. In deep
@@ -715,7 +687,9 @@ class XrayVpnService : VpnService() {
                 startHeartbeat(isReconnect)
                 log("info", "VPN connected successfully")
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            // Throwable: UnsatisfiedLinkError/ExceptionInInitializerError ядра тоже
+            // должны вернуть сервис в остановленное состояние.
             log("error", "Start failed: ${e.message}")
             // If no new TUN was established, restore the old fd: as kill-switch sink
             // (keeps blocking traffic) and/or for reuse by the next reconnect attempt.
@@ -740,26 +714,6 @@ class XrayVpnService : VpnService() {
                 }
             }
         }
-    }
-
-    /**
-     * Starts xray-core and blocks until it signals ready or error via callback (max 30s safety timeout).
-     * Throws IllegalStateException if xray reports an error status.
-     */
-    private fun startXrayAndWait(config: String) {
-        val latch = CountDownLatch(1)
-        val failed = AtomicBoolean(false)
-
-        Teapodcore.startXray(config, object : XrayCallback {
-            override fun onStatus(status: Long, message: String) {
-                log("info", "[xray] $message")
-                if (status != 0L) failed.set(true)
-                latch.countDown()
-            }
-        })
-
-        if (!latch.await(30, TimeUnit.SECONDS)) throw IllegalStateException("xray start timeout (30s)")
-        if (failed.get()) throw IllegalStateException("xray failed to start")
     }
 
     /**
@@ -799,49 +753,6 @@ class XrayVpnService : VpnService() {
         }
 
         return uids
-    }
-
-    /**
-     * [blockUnowned] — reject flows without a visible owner (uid=-1) in allExcept mode.
-     * An excluded app can bind a socket to the TUN (SO_BINDTODEVICE, kernel 5.7+), and
-     * getConnectionOwnerUid() reports INVALID_UID for UIDs our VPN doesn't apply to —
-     * so such a bypass is indistinguishable from tethered traffic and must be blocked
-     * whenever user exclusions exist, unless the user opted into tethering (allowTethering).
-     */
-    private fun buildTunValidator(allowedUids: Set<Int>, vpnMode: String, blockUnowned: Boolean): TunValidator {
-        if (allowedUids.isEmpty()) {
-            return object : TunValidator {
-                override fun onValidate(srcIP: String, srcPort: Long, dstIP: String, dstPort: Long, protocol: Long) = true
-            }
-        }
-        val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
-
-        return object : TunValidator {
-            override fun onValidate(srcIP: String, srcPort: Long, dstIP: String, dstPort: Long, protocol: Long): Boolean {
-                var uid = -1
-                var threwException = false
-                try {
-                    uid = cm.getConnectionOwnerUid(
-                        protocol.toInt(),
-                        InetSocketAddress(srcIP, srcPort.toInt()),
-                        InetSocketAddress(dstIP, dstPort.toInt())
-                    )
-                } catch (_: Exception) {
-                    threwException = true
-                }
-
-                if (threwException) {
-                    // Lookup threw (e.g. API unavailable) — allow to avoid breaking connectivity.
-                    return true
-                }
-
-                // uid=-1: tethered client or an app our VPN doesn't apply to (excluded app
-                // bound to the TUN). onlySelected: not in the allowlist → block.
-                // allExcept: block only when there are user exclusions (see blockUnowned).
-                if (uid < 0) return vpnMode != "onlySelected" && !blockUnowned
-                return if (vpnMode == "onlySelected") uid in allowedUids else uid !in allowedUids
-            }
-        }
     }
 
     /**
@@ -963,6 +874,9 @@ class XrayVpnService : VpnService() {
                     && tunInterface != null
                     && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
             keptTunAsSink = keepTunAsSink
+            // Ядро, которое читает TUN fd само (Rust), останавливается до закрытия fd:
+            // иначе освобождённый номер fd может достаться чужому дескриптору.
+            if (core.borrowsTunFd) core.stop()
             if (!keepTunAsSink) {
                 try {
                     tunInterface?.close()
@@ -972,49 +886,11 @@ class XrayVpnService : VpnService() {
                 tunInterface = null
             }
 
-            log("info", "Stopping tun2socks")
-            val tun2socksStopThread = Thread {
-                try { Teapodcore.stopTun2Socks() } catch (e: Exception) {
-                    log("warning", "stopTun2Socks failed: ${e.message}")
-                }
-            }
-            tun2socksStopThread.isDaemon = true
-            tun2socksStopThread.start()
-            try {
-                tun2socksStopThread.join(5000)
-                if (tun2socksStopThread.isAlive) {
-                    log("warning", "stopTun2Socks timed out after 5s, forcing continuation")
-                } else {
-                    log("info", "stopVpn: tun2socks stopped")
-                }
-            } catch (_: InterruptedException) {
-                Thread.currentThread().interrupt()
-            }
+            if (!core.borrowsTunFd) core.stop()
 
             // Clean up saved credentials on explicit disconnect
             if (explicit) {
                 try { File(filesDir, "socks_creds.json").delete() } catch (_: Exception) {}
-            }
-
-            log("info", "Stopping xray")
-            // stopXray() can block indefinitely while Go goroutines drain open connections.
-            // Run it in a daemon thread with a 3s deadline so disconnect always completes.
-            val xrayStopThread = Thread {
-                try { Teapodcore.stopXray() } catch (e: Exception) {
-                    log("warning", "stopXray failed: ${e.message}")
-                }
-            }
-            xrayStopThread.isDaemon = true
-            xrayStopThread.start()
-            try {
-                xrayStopThread.join(3000)
-                if (xrayStopThread.isAlive) {
-                    log("warning", "stopXray timed out after 3s, forcing continuation")
-                } else {
-                    log("info", "stopVpn: xray stopped")
-                }
-            } catch (_: InterruptedException) {
-                Thread.currentThread().interrupt()
             }
 
             if (keepTunAsSink) {
@@ -1098,7 +974,7 @@ class XrayVpnService : VpnService() {
 
     private fun checkTunStallOnWake() {
         if (!tunModeActive || !isRunning.get()) return
-        val lastRx = Teapodcore.getTunLastRxActivityMs()
+        val lastRx = core.lastRxActivityMs()
         if (lastRx <= 0) return
         val idleSec = (System.currentTimeMillis() - lastRx) / 1000
         if (idleSec < TUN_STALL_TIMEOUT_MS / 1000) return
@@ -1151,8 +1027,8 @@ class XrayVpnService : VpnService() {
                     val now = System.currentTimeMillis()
                     val elapsed = (now - lastTime) / 1000.0
 
-                    val currentTx = Teapodcore.getTunUploadBytes()
-                    val currentRx = Teapodcore.getTunDownloadBytes()
+                    val currentTx = core.uploadBytes()
+                    val currentRx = core.downloadBytes()
 
                     totalUpload = currentTx
                     totalDownload = currentRx
@@ -1205,7 +1081,7 @@ class XrayVpnService : VpnService() {
                     // observe per-connection gVisor state. Closing them now forces apps to
                     // reconnect through a clean path when the network comes back.
                     if (tunModeActive && isRunning.get()) {
-                        val closed = Teapodcore.forceTunCloseAllConnections()
+                        val closed = core.closeAllConnections()
                         if (closed > 0) log("debug", "Network lost: force-closed $closed TUN connections")
                     }
                     // Snapshot BEFORE clearing — needed for smooth-handover case where
@@ -1449,7 +1325,7 @@ class XrayVpnService : VpnService() {
                     // The SOCKS5 probe bypasses TUN entirely, so it passes even if tun2socks
                     // has crashed or its goroutines are deadlocked.
                     // Skip in proxy-only mode: tun2socks is intentionally not started.
-                    if (tunModeActive && !Teapodcore.isTunRunning()) {
+                    if (tunModeActive && !core.isTunRunning()) {
                         log("warning", "tun2socks not running, reconnecting")
                         reconnectInternal()
                         break
@@ -1459,7 +1335,7 @@ class XrayVpnService : VpnService() {
                     // goroutines is abnormally high the TCP state machine is accumulating
                     // stale entries (TIME_WAIT / CLOSE_WAIT). Reconnect to reset gVisor.
                     if (tunModeActive) {
-                        val activeConns = Teapodcore.tunActiveConnections()
+                        val activeConns = core.activeConnections()
                         if (activeConns > TUN_CONN_LEAK_THRESHOLD) {
                             log("warning", "gVisor connection leak detected (activeConns=$activeConns), reconnecting")
                             reconnectInternal()
@@ -1480,16 +1356,16 @@ class XrayVpnService : VpnService() {
                     noInternetStreak = 0
                     successCount++
                     if (successCount % 5 == 0) {
-                        val activeConns = if (tunModeActive) Teapodcore.tunActiveConnections() else 0L
-                        log("info", "Heartbeat alive (${successCount} ok, tun=${Teapodcore.isTunRunning()}, conns=$activeConns)")
+                        val activeConns = if (tunModeActive) core.activeConnections() else 0L
+                        log("info", "Heartbeat alive (${successCount} ok, tun=${core.isTunRunning()}, conns=$activeConns)")
                     }
                     // Log detailed tunnel stats every ~1 minute for diagnostics.
                     // getTunStatsLine() returns a Go string → log() routes it to
                     // vpn_log.txt + Flutter EventChannel (not only logcat).
                     if (tunModeActive && successCount % 4 == 0) {
-                        val stats = Teapodcore.getTunStatsLine()
+                        val stats = core.statsLine()
                         if (stats.isNotEmpty()) {
-                            val lastRx = Teapodcore.getTunLastRxActivityMs()
+                            val lastRx = core.lastRxActivityMs()
                             val lastRxSec = if (lastRx > 0) (System.currentTimeMillis() - lastRx) / 1000 else -1
                             log("debug", "tun stats: $stats lastRxSec=$lastRxSec")
                         }
@@ -1499,11 +1375,11 @@ class XrayVpnService : VpnService() {
                     // the TUN interface (e.g. xray connections half-open, held by keepalives).
                     // getTunLastRxActivityMs() is updated on every TUN write in tun2socks.
                     if (tunModeActive) {
-                        val lastRx = Teapodcore.getTunLastRxActivityMs()
+                        val lastRx = core.lastRxActivityMs()
                         if (lastRx > 0) {
                             val now = System.currentTimeMillis()
                             val idleSec = (now - lastRx) / 1000
-                            val activeConns by lazy { Teapodcore.tunActiveConnections() }
+                            val activeConns by lazy { core.activeConnections() }
                             when {
                                 idleSec >= TUN_STALL_TIMEOUT_MS / 1000 && activeConns >= 2 -> {
                                     if (handleHeartbeatExhausted(
@@ -1581,7 +1457,7 @@ class XrayVpnService : VpnService() {
     // the tunnel is demonstrably passing traffic even if the probe itself fails.
     private fun isTunRxFresh(): Boolean {
         if (!tunModeActive) return false
-        val lastRx = Teapodcore.getTunLastRxActivityMs()
+        val lastRx = core.lastRxActivityMs()
         return lastRx > 0 && System.currentTimeMillis() - lastRx < HEARTBEAT_INTERVAL_MS
     }
 
@@ -1618,7 +1494,7 @@ class XrayVpnService : VpnService() {
         when (heartbeatProbe) {
             "passive" -> return   // сюда не доходим: цикл не вызывает пробу вовсе
             "xrayDelay" -> {
-                val ms = Teapodcore.measureXrayDelay(heartbeatUrl)
+                val ms = core.measureDelay(heartbeatUrl)
                 if (ms < 0) throw Exception("xray delay probe returned $ms")
                 log("debug", "Heartbeat OK (xray delay ${ms}ms)")
             }
@@ -1631,7 +1507,7 @@ class XrayVpnService : VpnService() {
         if (probeUrl.https) {
             // Проба сама говорит plain HTTP поверх SOCKS5 — TLS она не умеет.
             // Для https-URL честнее замерить через ядро, чем врать об успехе.
-            val ms = Teapodcore.measureXrayDelay(heartbeatUrl)
+            val ms = core.measureDelay(heartbeatUrl)
             if (ms < 0) throw Exception("xray delay probe returned $ms")
             log("debug", "Heartbeat OK (https url, measured in core: ${ms}ms)")
             return

@@ -79,4 +79,44 @@ class VpnEngineOptions {
     this.mux = const MuxSettings(),
     this.heartbeat = const HeartbeatSettings(),
   });
+
+  /// Поля, которые ядро может заменить допустимыми значениями.
+  VpnEngineOptions copyWith({
+    int? mtu,
+    RoutingSettings? routing,
+    bool? sniffingEnabled,
+    FragmentSettings? fragment,
+    NoiseSettings? noise,
+    MuxSettings? mux,
+  }) =>
+      VpnEngineOptions(
+        socksPort: socksPort,
+        httpPort: httpPort,
+        socksUser: socksUser,
+        socksPassword: socksPassword,
+        excludedPackages: excludedPackages,
+        includedPackages: includedPackages,
+        logLevel: logLevel,
+        enableUdp: enableUdp,
+        allowIcmp: allowIcmp,
+        dnsMode: dnsMode,
+        dnsServer: dnsServer,
+        vpnMode: vpnMode,
+        proxyOnly: proxyOnly,
+        showNotification: showNotification,
+        killSwitch: killSwitch,
+        routing: routing ?? this.routing,
+        sniffingEnabled: sniffingEnabled ?? this.sniffingEnabled,
+        mtu: mtu ?? this.mtu,
+        dnsQueryStrategy: dnsQueryStrategy,
+        blockQuic: blockQuic,
+        ipv6Enabled: ipv6Enabled,
+        allowTethering: allowTethering,
+        obsProbeIntervalSec: obsProbeIntervalSec,
+        tlsFingerprint: tlsFingerprint,
+        fragment: fragment ?? this.fragment,
+        noise: noise ?? this.noise,
+        mux: mux ?? this.mux,
+        heartbeat: heartbeat,
+      );
 }

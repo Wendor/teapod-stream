@@ -15,6 +15,9 @@ import '../core/services/log_service.dart';
 import '../core/services/settings_service.dart';
 import 'ip_info_provider.dart';
 import '../protocols/xray/xray_engine.dart';
+import '../core/cores/core_backend.dart';
+import '../core/cores/core_switch.dart';
+import 'core_provider.dart';
 import 'settings_provider.dart';
 import 'config_provider.dart';
 
@@ -87,6 +90,9 @@ class VpnNotifier extends Notifier<VpnState2> {
   @override
   VpnState2 build() {
     _engine = XrayEngine();
+    ref.listen(settingsProvider.select((s) => s.value?.core), (prev, next) {
+      if (prev != null && next != null && prev != next) _onCoreChanged();
+    });
 
     _eventSub = _eventChannel.receiveBroadcastStream().listen(
       (dynamic event) {
@@ -265,8 +271,10 @@ class VpnNotifier extends Notifier<VpnState2> {
           ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
       if (configState == null) return;
       final current = _resolveEffectiveConfig(configState);
-      final candidates =
-          _switchCandidates(configState, settings.heartbeat.switchSource, current);
+      final backend = ref.read(coreBackendProvider);
+      _engine.backend = backend;
+      final candidates = supportedCandidates(
+          _switchCandidates(configState, settings.heartbeat.switchSource, current), backend);
       if (candidates.isEmpty) {
         log.addError('urltest: нет кандидатов для переключения (провалов: $failures)');
         return;
@@ -481,6 +489,14 @@ class VpnNotifier extends Notifier<VpnState2> {
         ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null) ??
             const AppSettings();
 
+    final backend = ref.read(coreBackendProvider);
+    _engine.backend = backend;
+    final unsupported = backend.checkConfig(config);
+    if (unsupported != null) {
+      _failConnect(unsupported);
+      return;
+    }
+
     final socksCredentials = settings.randomCredentials
         ? XrayEngine.generateSocksCredentials()
         : (user: settings.socksUser, password: settings.socksPassword);
@@ -489,47 +505,16 @@ class VpnNotifier extends Notifier<VpnState2> {
         ? (10000 + Random().nextInt(50000))
         : settings.socksPort;
 
-    final options = VpnEngineOptions(
-      socksPort: actualSocksPort,
-      httpPort: 0,
-      socksUser: socksCredentials.user,
-      socksPassword: socksCredentials.password,
-      excludedPackages: settings.splitTunnelingEnabled
-          ? (settings.vpnMode == VpnMode.allExcept
-              ? settings.excludedPackages
-              : <String>{})
-          : {},
-      includedPackages: settings.splitTunnelingEnabled
-          ? (settings.vpnMode == VpnMode.onlySelected
-              ? settings.includedPackages
-              : <String>{})
-          : {},
-      logLevel: settings.logLevel,
-      enableUdp: settings.enableUdp,
-      allowIcmp: settings.allowIcmp,
-      dnsMode: settings.dnsMode,
-      dnsServer: settings.dnsServer,
-      vpnMode: settings.splitTunnelingEnabled ? settings.vpnMode : VpnMode.allExcept,
-      proxyOnly: settings.proxyOnly,
-      showNotification: settings.showNotification,
-      killSwitch: settings.killSwitchEnabled,
-      routing: settings.routing,
-      sniffingEnabled: settings.sniffingEnabled,
-      mtu: settings.mtu,
-      dnsQueryStrategy: settings.dnsQueryStrategy,
-      // XTLS Vision rejects UDP/443 by design: QUIC can never pass, but browsers
-      // keep retrying it (each retry costs a full outbound handshake) and stall
-      // for ~30s before falling back to TCP. Force the ICMP fast-fail.
-      blockQuic: settings.blockQuic || _usesVisionFlow(config),
-      ipv6Enabled: settings.ipv6Enabled,
-      allowTethering: settings.allowTethering,
-      obsProbeIntervalSec: settings.obsProbeIntervalSec,
-      tlsFingerprint: settings.tlsFingerprint,
-      fragment: settings.fragment,
-      noise: settings.noise,
-      mux: settings.mux,
-      heartbeat: settings.heartbeat,
-    );
+    final options = _buildOptions(settings, config, backend,
+        socksPort: actualSocksPort, credentials: socksCredentials);
+    final check = backend.checkOptions(config, options);
+    if (check.blocking != null) {
+      _failConnect(check.blocking!);
+      return;
+    }
+    for (final w in check.warnings) {
+      ref.read(logServiceProvider.notifier).addWarning(w, source: 'core');
+    }
     state = state.copyWith(
       activeSocksPort: actualSocksPort,
       activeSocksUser: socksCredentials.user,
@@ -548,6 +533,92 @@ class VpnNotifier extends Notifier<VpnState2> {
           connectionState: VpnState.error, error: e.message);
       _connectTimeout?.cancel();
       _connectTimeout = null;
+    }
+  }
+
+  void _failConnect(String reason) {
+    ref.read(logServiceProvider.notifier).addError(reason);
+    state = state.copyWith(connectionState: VpnState.error, error: reason);
+    _connectTimeout?.cancel();
+    _connectTimeout = null;
+  }
+
+  VpnEngineOptions _buildOptions(
+    AppSettings settings,
+    VpnConfig config,
+    CoreBackend backend, {
+    required int socksPort,
+    required ({String user, String password}) credentials,
+  }) =>
+      VpnEngineOptions(
+        socksPort: socksPort,
+        httpPort: 0,
+        socksUser: credentials.user,
+        socksPassword: credentials.password,
+        excludedPackages: settings.splitTunnelingEnabled
+            ? (settings.vpnMode == VpnMode.allExcept ? settings.excludedPackages : <String>{})
+            : {},
+        includedPackages: settings.splitTunnelingEnabled
+            ? (settings.vpnMode == VpnMode.onlySelected ? settings.includedPackages : <String>{})
+            : {},
+        logLevel: settings.logLevel,
+        enableUdp: settings.enableUdp,
+        allowIcmp: settings.allowIcmp,
+        dnsMode: settings.dnsMode,
+        dnsServer: settings.dnsServer,
+        vpnMode: settings.splitTunnelingEnabled ? settings.vpnMode : VpnMode.allExcept,
+        proxyOnly: settings.proxyOnly,
+        showNotification: settings.showNotification,
+        killSwitch: settings.killSwitchEnabled,
+        routing: settings.routing,
+        sniffingEnabled: settings.sniffingEnabled,
+        mtu: settings.mtu,
+        dnsQueryStrategy: settings.dnsQueryStrategy,
+        // Vision отвергает UDP/443: браузеры ретраят QUIC ~30 с перед откатом на
+        // TCP. Политика блокировки — у ядра.
+        blockQuic: backend.effectiveQuicBlock(requested: settings.blockQuic, flow: _visionFlow(config)),
+        ipv6Enabled: settings.ipv6Enabled,
+        allowTethering: settings.allowTethering,
+        obsProbeIntervalSec: settings.obsProbeIntervalSec,
+        tlsFingerprint: settings.tlsFingerprint,
+        fragment: settings.fragment,
+        noise: settings.noise,
+        mux: settings.mux,
+        heartbeat: settings.heartbeat,
+      );
+
+  /// Смена ядра: отключить неподдерживаемое, пересохранить/очистить quick-reconnect.
+  Future<void> _onCoreChanged() async {
+    final settings = await ref.read(settingsProvider.future);
+    final backend = coreBackendFor(settings.core);
+    final config = _resolveEffectiveConfig(
+        ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null));
+    _engine.backend = backend;
+    final options = config == null
+        ? null
+        : _buildOptions(settings, config, backend,
+            socksPort: settings.randomPort ? (10000 + Random().nextInt(50000)) : settings.socksPort,
+            credentials: settings.randomCredentials
+                ? XrayEngine.generateSocksCredentials()
+                : (user: settings.socksUser, password: settings.socksPassword));
+    final unsupported = config == null
+        ? 'Конфигурация не выбрана'
+        : backend.checkConfig(config) ?? backend.checkOptions(config, options!).blocking;
+    try {
+      switch (coreSwitchAction(state: state.connectionState, unsupported: unsupported)) {
+        case CoreSwitchAction.none:
+          break;
+        case CoreSwitchAction.disconnect:
+          await disconnect();
+          ref.read(logServiceProvider.notifier).addError('${backend.kind.displayName}: $unsupported');
+          state = state.copyWith(error: unsupported);
+        case CoreSwitchAction.saveQuickConnect:
+          await _engine.saveQuickConnect(config!, options!);
+        case CoreSwitchAction.clearQuickConnect:
+          await _engine.clearQuickConnect();
+      }
+    } catch (e) {
+      ref.read(logServiceProvider.notifier).addError('Смена ядра: $e');
     }
   }
 
@@ -632,10 +703,11 @@ class VpnNotifier extends Notifier<VpnState2> {
 
   /// True when the config's outbound(s) use xtls-rprx-vision — such outbounds
   /// reject UDP/443, so QUIC must be fast-failed on the TUN side.
-  static bool _usesVisionFlow(VpnConfig config) {
-    if (config.flow?.contains('vision') ?? false) return true;
+  static String? _visionFlow(VpnConfig config) {
+    final flow = config.flow;
+    if (flow != null && flow.contains('vision')) return flow;
     final raw = config.rawXrayConfig;
-    if (raw == null) return false;
+    if (raw == null) return null;
     try {
       final cfg = jsonDecode(raw) as Map<String, dynamic>;
       final outbounds = cfg['outbounds'] as List<dynamic>? ?? [];
@@ -645,12 +717,13 @@ class VpnNotifier extends Notifier<VpnState2> {
         for (final v in vnext.whereType<Map<String, dynamic>>()) {
           final users = v['users'] as List<dynamic>? ?? [];
           for (final u in users.whereType<Map<String, dynamic>>()) {
-            if ((u['flow'] as String?)?.contains('vision') ?? false) return true;
+            final userFlow = u['flow'] as String?;
+            if (userFlow != null && userFlow.contains('vision')) return userFlow;
           }
         }
       }
     } catch (_) {}
-    return false;
+    return null;
   }
 
   Future<void> pingAllConfigs() async {

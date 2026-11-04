@@ -1,5 +1,9 @@
 package com.teapodstream.teapodstream
 
+import com.teapodstream.teapodstream.core.CoreKind
+import java.io.File
+import com.teapodstream.teapodstream.core.VpnCores
+
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
@@ -82,6 +86,7 @@ class MainActivity : FlutterActivity() {
                         val heartbeatAction = call.argument<String>("heartbeatAction") ?: "reconnect"
                         val heartbeatThreshold = call.argument<Int>("heartbeatThreshold") ?: 3
                         val heartbeatUrl = call.argument<String>("heartbeatUrl") ?: ""
+                        val engine = CoreKind.fromId(call.argument<String>("engine")).id
 
                         if (proxyOnly) {
                             // Proxy-only: no TUN tunnel, no VPN permission needed
@@ -92,7 +97,8 @@ class MainActivity : FlutterActivity() {
                                 killSwitch = killSwitch, allowIcmp = allowIcmp,
                                 blockQuic = blockQuic, ipv6Enabled = ipv6Enabled, allowTethering = allowTethering,
                                 heartbeatProbe = heartbeatProbe, heartbeatAction = heartbeatAction,
-                                heartbeatThreshold = heartbeatThreshold, heartbeatUrl = heartbeatUrl
+                                heartbeatThreshold = heartbeatThreshold, heartbeatUrl = heartbeatUrl,
+                                engine = engine,
                             )
                             result.success(null)
                         } else {
@@ -104,7 +110,8 @@ class MainActivity : FlutterActivity() {
                                     killSwitch = killSwitch, allowIcmp = allowIcmp,
                                     blockQuic = blockQuic, ipv6Enabled = ipv6Enabled, allowTethering = allowTethering,
                                     heartbeatProbe = heartbeatProbe, heartbeatAction = heartbeatAction,
-                                    heartbeatThreshold = heartbeatThreshold, heartbeatUrl = heartbeatUrl
+                                    heartbeatThreshold = heartbeatThreshold, heartbeatUrl = heartbeatUrl,
+                                    engine = engine,
                                 )
                                 result.success(null)
                             }
@@ -114,6 +121,62 @@ class MainActivity : FlutterActivity() {
                     "disconnect" -> {
                         stopVpnService()
                         result.success(null)
+                    }
+
+                    "getAvailableEngines" -> {
+                        result.success(CoreKind.entries.filter { VpnCores.isAvailable(it) }.map { it.id })
+                    }
+
+                    // Пересохранить конфиг quick-reconnect (плитка, автозапуск) без подключения —
+                    // при смене ядра в выключенном состоянии. Во время сессии — no-op.
+                    "saveQuickConnect" -> {
+                        if (XrayVpnService.getNativeState() !in setOf("disconnected", "error")) {
+                            result.success(false)
+                            return@setMethodCallHandler
+                        }
+                        val xrayConfig = call.argument<String>("xrayConfig") ?: run {
+                            result.error("INVALID_ARGS", "xrayConfig required", null)
+                            return@setMethodCallHandler
+                        }
+                        ConnectionParams(
+                            socksPort = call.argument<Int>("socksPort") ?: 10808,
+                            excludedPackages = call.argument<List<String>>("excludedPackages") ?: emptyList(),
+                            includedPackages = call.argument<List<String>>("includedPackages") ?: emptyList(),
+                            vpnMode = call.argument<String>("vpnMode") ?: "allExcept",
+                            ssPrefix = call.argument<String>("ssPrefix"),
+                            proxyOnly = call.argument<Boolean>("proxyOnly") ?: false,
+                            showNotification = call.argument<Boolean>("showNotification") ?: true,
+                            killSwitch = call.argument<Boolean>("killSwitch") ?: false,
+                            allowIcmp = call.argument<Boolean>("allowIcmp") ?: true,
+                            blockQuic = call.argument<Boolean>("blockQuic") ?: false,
+                            ipv6Enabled = call.argument<Boolean>("ipv6Enabled") ?: false,
+                            mtu = (call.argument<Int>("mtu") ?: 1500).coerceIn(576, 9000),
+                            heartbeatProbe = call.argument<String>("heartbeatProbe") ?: "socks",
+                            heartbeatAction = call.argument<String>("heartbeatAction") ?: "reconnect",
+                            heartbeatThreshold = call.argument<Int>("heartbeatThreshold") ?: 3,
+                            heartbeatUrl = (call.argument<String>("heartbeatUrl") ?: "")
+                                .ifEmpty { "http://cp.cloudflare.com/generate_204" },
+                            allowTethering = call.argument<Boolean>("allowTethering") ?: false,
+                            engine = CoreKind.fromId(call.argument<String>("engine")).id,
+                        ).save(filesDir) { _, msg -> android.util.Log.w("TeapodVPN", msg) }
+                        File(filesDir, "xray_config.json").writeText(xrayConfig)
+                        File(filesDir, "socks_creds.json").writeText(org.json.JSONObject().apply {
+                            put("port", call.argument<Int>("socksPort") ?: 10808)
+                            put("user", call.argument<String>("socksUser") ?: "")
+                            put("pass", call.argument<String>("socksPassword") ?: "")
+                        }.toString())
+                        result.success(true)
+                    }
+
+                    "clearQuickConnect" -> {
+                        if (XrayVpnService.getNativeState() !in setOf("disconnected", "error")) {
+                            result.success(false)
+                            return@setMethodCallHandler
+                        }
+                        for (name in listOf("xray_config.json", "last_connection_meta.json", "socks_creds.json")) {
+                            File(filesDir, name).delete()
+                        }
+                        result.success(true)
                     }
 
                     "getStats" -> {
@@ -159,7 +222,7 @@ class MainActivity : FlutterActivity() {
                         val url = call.argument<String>("url") ?: ""
                         Thread {
                             val latency = try {
-                                teapodcore.Teapodcore.measureOutboundDelay(config, url)
+                                VpnCores.get(CoreKind.fromId(call.argument<String>("engine"))).measureOutbound(applicationContext, config, url)
                             } catch (e: Exception) {
                                 -1L
                             }
@@ -230,7 +293,7 @@ class MainActivity : FlutterActivity() {
                     }
 
                     "getTunnelDiag" -> {
-                        result.success(teapodcore.Teapodcore.getTunDiagnostics())
+                        result.success(VpnCores.active.diagnostics())
                     }
 
                     "setLogsEnabled" -> {
@@ -391,6 +454,7 @@ class MainActivity : FlutterActivity() {
         heartbeatAction: String = "reconnect",
         heartbeatThreshold: Int = 3,
         heartbeatUrl: String = "",
+        engine: String = "go",
     ) {
         requestBatteryOptimizationExemption()
         val intent = Intent(this, XrayVpnService::class.java).apply {
@@ -414,6 +478,7 @@ class MainActivity : FlutterActivity() {
             putExtra(XrayVpnService.EXTRA_HEARTBEAT_ACTION, heartbeatAction)
             putExtra(XrayVpnService.EXTRA_HEARTBEAT_THRESHOLD, heartbeatThreshold)
             putExtra(XrayVpnService.EXTRA_HEARTBEAT_URL, heartbeatUrl)
+            putExtra(XrayVpnService.EXTRA_ENGINE, engine)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent)
@@ -509,7 +574,8 @@ class MainActivity : FlutterActivity() {
     private fun getBinaryVersions(): Map<String, String> {
         val versions = mutableMapOf<String, String>()
         try {
-            versions["xray"] = teapodcore.Teapodcore.getXrayVersion()
+            versions.putAll(VpnCores.versions())
+            versions["xray"] = VpnCores.active.version()
             versions["tun2socks"] = "teapod-core (AAR)"
         } catch (e: Exception) {
             versions["xray"] = "Error"

@@ -24,6 +24,8 @@ internal data class ConnectionParams(
     val heartbeatUrl: String = "http://cp.cloudflare.com/generate_204",
     /// allExcept: пропускать потоки без владельца (тетеринг) при непустых исключениях.
     val allowTethering: Boolean = false,
+    /// "go" | "rust" — ядро сессии; quick-reconnect поднимает то же ядро.
+    val engine: String = "go",
 ) {
     fun save(dir: File, log: (String, String) -> Unit) {
         try {
@@ -45,6 +47,7 @@ internal data class ConnectionParams(
                 put("heartbeatAction", heartbeatAction)
                 put("heartbeatThreshold", heartbeatThreshold)
                 put("heartbeatUrl", heartbeatUrl)
+                put("engine", engine)
             }
             File(dir, "last_connection_meta.json").writeText(json.toString())
         } catch (e: Exception) {
@@ -78,6 +81,7 @@ internal data class ConnectionParams(
                 heartbeatThreshold = json.optInt("heartbeatThreshold", 3).coerceIn(1, 10),
                 heartbeatUrl = json.optString("heartbeatUrl", "http://cp.cloudflare.com/generate_204")
                     .ifEmpty { "http://cp.cloudflare.com/generate_204" },
+                engine = json.optString("engine", "go").ifEmpty { "go" },
             )
         } catch (_: Exception) {
             null

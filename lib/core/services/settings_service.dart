@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/vpn_log_entry.dart';
 import '../models/dns_config.dart';
 import '../models/heartbeat_settings.dart';
+import '../models/core_kind.dart';
 import '../models/routing_settings.dart';
 import '../models/xray_tuning.dart';
 import '../constants/app_constants.dart';
@@ -104,6 +105,9 @@ class AppSettings {
   /// пишет только warning/error.
   final bool logsEnabled;
 
+  /// VPN-ядро. Значения недоступных ядру настроек не трогаются.
+  final CoreKind core;
+
   const AppSettings({
     this.socksPort = AppConstants.defaultSocksPort,
     this.logLevel = LogLevel.info,
@@ -148,6 +152,7 @@ class AppSettings {
     this.mux = const MuxSettings(),
     this.heartbeat = const HeartbeatSettings(),
     this.logsEnabled = true,
+    this.core = CoreKind.xrayGo,
   });
 
   AppSettings copyWith({
@@ -194,6 +199,7 @@ class AppSettings {
     MuxSettings? mux,
     HeartbeatSettings? heartbeat,
     bool? logsEnabled,
+    CoreKind? core,
   }) {
     return AppSettings(
       socksPort: socksPort ?? this.socksPort,
@@ -239,6 +245,7 @@ class AppSettings {
       mux: mux ?? this.mux,
       heartbeat: heartbeat ?? this.heartbeat,
       logsEnabled: logsEnabled ?? this.logsEnabled,
+      core: core ?? this.core,
     );
   }
 
@@ -286,6 +293,7 @@ class AppSettings {
     'mux': mux.toJson(),
     'heartbeat': heartbeat.toJson(),
     'logsEnabled': logsEnabled,
+    'core': core.name,
   };
 
   static AppSettings fromJson(Map<String, dynamic> json) {
@@ -349,6 +357,7 @@ class AppSettings {
           ? HeartbeatSettings.fromJson(json['heartbeat'] as Map<String, dynamic>)
           : const HeartbeatSettings(),
       logsEnabled: json['logsEnabled'] as bool? ?? true,
+      core: CoreKind.fromName(json['core'] as String?),
     );
   }
 
@@ -410,6 +419,7 @@ class SettingsService {
   static const _muxKey = 'xray_mux';
   static const _heartbeatKey = 'heartbeat_settings';
   static const _logsEnabledKey = 'logs_enabled';
+  static const _coreKey = 'core_kind';
 
   final _secure = StorageSecureService();
 
@@ -484,6 +494,7 @@ class SettingsService {
       heartbeat: _decodeOr(prefs.getString(_heartbeatKey), HeartbeatSettings.fromJson,
           const HeartbeatSettings()),
       logsEnabled: prefs.getBool(_logsEnabledKey) ?? true,
+      core: CoreKind.fromName(prefs.getString(_coreKey)),
     );
   }
 
@@ -571,6 +582,7 @@ class SettingsService {
     await prefs.setString(_muxKey, jsonEncode(settings.mux.toJson()));
     await prefs.setString(_heartbeatKey, jsonEncode(settings.heartbeat.toJson()));
     await prefs.setBool(_logsEnabledKey, settings.logsEnabled);
+    await prefs.setString(_coreKey, settings.core.name);
     // SOCKS credentials go to encrypted storage
     await _secure.writeSocksCredentials(settings.socksUser, settings.socksPassword);
   }

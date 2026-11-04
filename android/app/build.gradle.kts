@@ -37,8 +37,9 @@ android {
 
     packaging {
         jniLibs {
-            // x86 is not supported by teapod-core
+            // teapod-core ships only arm64-v8a and x86_64
             excludes.add("lib/x86/**")
+            excludes.add("lib/armeabi-v7a/**")
         }
     }
 
@@ -61,6 +62,8 @@ android {
 
 dependencies {
     implementation(files("libs/teapod-core.aar"))
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }
 
 flutter {

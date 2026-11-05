@@ -331,7 +331,7 @@ class VpnNotifier extends Notifier<VpnState2> {
       SwitchSource.subscription =>
         all.where((c) => c.subscriptionId == current?.subscriptionId).toList(),
       SwitchSource.pinned =>
-        all.where((c) => configState.pins.any((p) => p.matches(c))).toList(),
+        all.where(configState.isPinned).toList(),
       SwitchSource.all => all.toList(),
     };
   }

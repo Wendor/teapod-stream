@@ -225,7 +225,11 @@ push_release() {
     warn "Релиз $tag уже существует, обновляю..."
     gh release upload "$tag" "${apks[@]}" --clobber
   else
-    local flags=("--title" "TeapodStream $VERSION" "--generate-notes")
+    # Тег — на текущий коммит, а не на ветку по умолчанию (master)
+    local head
+    head=$(git -C "$SCRIPT_DIR" rev-parse HEAD)
+    [[ -n "$(git -C "$SCRIPT_DIR" branch -r --contains "$head")" ]] || err "Коммит $head не запушен — сначала git push"
+    local flags=("--title" "TeapodStream $VERSION" "--generate-notes" "--target" "$head")
     [[ "$is_pre" == "true" ]] && flags+=("--prerelease")
     gh release create "$tag" "${flags[@]}" "${apks[@]}"
   fi

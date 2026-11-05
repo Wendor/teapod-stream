@@ -40,7 +40,7 @@ class DnsServerConfig {
   static const quad9DoH = DnsServerConfig(type: DnsType.doh, address: 'https://dns.quad9.net/dns-query', domain: 'dns.quad9.net', fallbackIp: '9.9.9.9');
 
   static const adguard = DnsServerConfig(type: DnsType.udp, address: '94.140.14.14');
-  static const adguardDoH = DnsServerConfig(type: DnsType.doh, address: 'https://dns.adguard.com/dns-query', domain: 'dns.adguard.com', fallbackIp: '94.140.14.14');
+  static const adguardDoH = DnsServerConfig(type: DnsType.doh, address: 'https://dns.adguard-dns.com/dns-query', domain: 'dns.adguard-dns.com', fallbackIp: '94.140.14.14');
 
   /// Все предустановленные сервера для UI
   static const List<Map<String, dynamic>> presets = [

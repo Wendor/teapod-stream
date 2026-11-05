@@ -11,7 +11,7 @@ import org.junit.Test
  *
  *     if (allowedUids.isEmpty()) -> always true
  *     lookup threw               -> true
- *     uid < 0                    -> vpnMode != "onlySelected" && !blockUnowned
+ *     uid < 0                    -> DNS to tunDns || (vpnMode != "onlySelected" && !blockUnowned)
  *     onlySelected               -> uid in allowedUids
  *     allExcept                  -> uid !in allowedUids
  *
@@ -23,6 +23,7 @@ class TunOwnerPolicyTest {
     private val excluded = 10_300
     private val other = 10_400
     private val unowned = -1
+    private val dns = "1.1.1.1"
 
     /** The Go validator, transcribed literally from the Go service. */
     private fun go(vpnMode: String, allowedUids: Set<Int>, blockUnowned: Boolean, uid: Int?): Boolean {
@@ -59,11 +60,11 @@ class TunOwnerPolicyTest {
     fun onlySelectedDropsUnownedAndUnlistedFlows() {
         val policy = TunOwnerPolicy.of("onlySelected", setOf(browser), emptyList(), allowTethering = true)
         assertTrue(policy.needsAdmission)
-        assertTrue(policy.admitFlow { browser })
+        assertTrue(policy.admitFlow(WEB, 443) { browser })
         // Tethering, an unselected app bound to tun0, or an OEM's INVALID_UID for a
         // selected app's bound socket: all dropped, as in Go.
-        assertFalse(policy.admitFlow { unowned })
-        assertFalse(policy.admitFlow { other })
+        assertFalse(policy.admitFlow(WEB, 443) { unowned })
+        assertFalse(policy.admitFlow(WEB, 443) { other })
         assertEquals(2, policy.denied)
     }
 
@@ -87,10 +88,24 @@ class TunOwnerPolicyTest {
     }
 
     @Test
+    fun unownedDnsToTunResolverIsAdmittedInEveryMode() {
+        // Android 10: netd owns resolver sockets, lookup returns INVALID_UID (issue #155).
+        val only = TunOwnerPolicy.of("onlySelected", setOf(browser), emptyList(), false, dns)
+        assertTrue(only.admitFlow(dns, 53) { unowned })
+        assertFalse(only.admitFlow(dns, 443) { unowned })
+        assertFalse(only.admitFlow("8.8.8.8", 53) { unowned })
+        assertFalse(only.admitFlow(dns, 53) { other })
+
+        val strict = TunOwnerPolicy.of("allExcept", setOf(own, excluded), listOf("x"), false, dns)
+        assertTrue(strict.admit(unowned, dns, 53))
+        assertFalse(strict.admit(unowned, "8.8.8.8", 53))
+    }
+
+    @Test
     fun failedLookupAllowsTheFlowLikeGo() {
         val policy = TunOwnerPolicy.of("onlySelected", setOf(browser), emptyList(), allowTethering = false)
-        assertTrue(policy.admitFlow { throw SecurityException("not the active VPN") })
-        assertTrue(policy.admitFlow { throw IllegalArgumentException("bad tuple") })
+        assertTrue(policy.admitFlow(WEB, 443) { throw SecurityException("not the active VPN") })
+        assertTrue(policy.admitFlow(WEB, 443) { throw IllegalArgumentException("bad tuple") })
         assertEquals(0, policy.denied)
     }
 
@@ -100,5 +115,9 @@ class TunOwnerPolicyTest {
         assertTrue(policy.admit(unowned))
         assertTrue(policy.admit(other))
         assertFalse(policy.needsAdmission)
+    }
+
+    private companion object {
+        const val WEB = "93.184.216.34"
     }
 }

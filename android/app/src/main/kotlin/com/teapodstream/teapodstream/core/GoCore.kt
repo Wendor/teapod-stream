@@ -85,13 +85,13 @@ object GoCore : VpnCore {
      */
     private fun buildTunValidator(allowedUids: Set<Int>, vpnMode: String, blockUnowned: Boolean): TunValidator? {
         val cm = connectivity ?: return null
-        val policy = TunOwnerPolicy(vpnMode == "onlySelected", allowedUids, blockUnowned)
+        val policy = TunOwnerPolicy(vpnMode == "onlySelected", allowedUids, blockUnowned, tunDnsServer)
         // «КРОМЕ» без блокировки бесхозных потоков никого не отвергает: null —
         // tun2socks пропускает всё сам, без binder-IPC на каждое соединение.
         if (!policy.needsAdmission) return null
         return object : TunValidator {
             override fun onValidate(srcIP: String, srcPort: Long, dstIP: String, dstPort: Long, protocol: Long) =
-                policy.admitFlow {
+                policy.admitFlow(dstIP, dstPort.toInt()) {
                     cm.getConnectionOwnerUid(
                         protocol.toInt(),
                         InetSocketAddress(srcIP, srcPort.toInt()),

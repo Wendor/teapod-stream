@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:math';
 
 import '../../core/interfaces/vpn_engine.dart';
-import '../../core/models/dns_config.dart';
 import '../../core/models/routing_settings.dart';
 import '../../core/models/vpn_config.dart';
 import '../../core/models/xray_tuning.dart';
@@ -374,7 +373,6 @@ class RustConfigBuilder {
     // the Go-specific inbound and policy. Native TUN traffic never uses SOCKS.
     final result = XrayConfigBuilder.build(config, options);
     result.remove('policy');
-    if (options.dnsMode == DnsMode.direct) _routeDnsDirect(result, options);
     // Resolve for IP rules only. Domain-only routing can pass the name to
     // the server (every supported protocol carries domain destinations)
     // without an extra client-side DNS round trip for every new host.
@@ -661,43 +659,6 @@ class RustConfigBuilder {
         ],
       },
     };
-  }
-
-  /// Go в режиме «напрямую» отдаёт порт 53 в freedom (до своего TUN-DNS
-  /// 1.1.1.1) и резолвит сам через `localhost`. Здесь приложения спрашивают
-  /// якорь 198.18.0.1, который freedom не достанет, а `localhost` для xray-rust —
-  /// DNS-сервер с именем localhost:53, не системный резолвер (его при StaticOnly
-  /// у ядра нет). Поэтому, как и в режиме «через VPN», запросы приложений
-  /// принимает DNS-outbound и отвечает через DNS-модуль с выбранным сервером,
-  /// но сам модуль (`dns-module`, и для своих поисков ядра) ходит в direct —
-  /// мимо туннеля, защищёнными сокетами.
-  static void _routeDnsDirect(
-    Map<String, dynamic> result,
-    VpnEngineOptions options,
-  ) {
-    result['dns'] = XrayConfigBuilder.buildResolverDnsBlock(options);
-    final rules = (result['routing'] as Map)['rules'] as List<dynamic>;
-    final goRule = rules.indexWhere(
-      (dynamic r) =>
-          r['port'] == '53' &&
-          r['outboundTag'] == 'direct' &&
-          r['inboundTag'] == null,
-    );
-    if (goRule < 0) throw StateError('Go direct-DNS rule not found');
-    rules.replaceRange(goRule, goRule + 1, <Map<String, dynamic>>[
-      {
-        'type': 'field',
-        'inboundTag': ['dns-module'],
-        'outboundTag': 'direct',
-      },
-      {
-        'type': 'field',
-        'inboundTag': ['socks-in'],
-        'port': '53',
-        'network': 'udp,tcp',
-        'outboundTag': 'dns-out',
-      },
-    ]);
   }
 
   /// Go отвечает на рекламные домены пустым NOERROR: DNS-сервер

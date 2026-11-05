@@ -265,8 +265,7 @@ void main() {
         'network': 'udp,tcp',
         'outboundTag': 'dns-out',
       });
-      // Go's port-53 → freedom rule cannot reach the 198.18.0.1 anchor, and
-      // xray-rust reads `localhost` as a DNS server named localhost:53.
+      // No port-53 → freedom rule: it could not reach the 198.18.0.1 anchor.
       expect(
         rules.where(
           (dynamic r) => r['port'] == '53' && r['outboundTag'] == 'direct',
@@ -316,17 +315,24 @@ void main() {
     expect(doh['hosts'], {'cloudflare-dns.com': '1.1.1.1'});
   });
 
-  test('the Go builder keeps its own direct DNS', () {
+  test('the Go builder resolves direct DNS with the selected server past the tunnel', () {
     final go = XrayConfigBuilder.build(
       VlessParser.parseUri(profile())!,
       options(dnsMode: DnsMode.direct),
     );
-    expect(go['dns']['servers'], ['localhost']);
-    expect((go['routing']['rules'] as List).first, {
+    expect(go['dns'], XrayConfigBuilder.buildDnsBlock(options()));
+    final rules = go['routing']['rules'] as List;
+    expect(rules.first, {
       'type': 'field',
+      'inboundTag': ['dns-module'],
+      'outboundTag': 'direct',
+    });
+    expect(rules[1], {
+      'type': 'field',
+      'inboundTag': ['socks-in'],
       'port': '53',
       'network': 'udp,tcp',
-      'outboundTag': 'direct',
+      'outboundTag': 'dns-out',
     });
   });
 

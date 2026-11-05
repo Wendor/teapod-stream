@@ -89,6 +89,7 @@ object RustCore : VpnCore {
             onlySelected = params.vpnMode == "onlySelected",
             listedUids = params.allowedUids,
             blockUnowned = params.blockUnowned,
+            tunDns = tunDnsServer,
         )
         log("info", "TUN owner check: mode=${params.vpnMode} uids=${params.allowedUids.size} " +
             "blockUnowned=${params.blockUnowned} admission=${policy.needsAdmission}")
@@ -122,7 +123,7 @@ object RustCore : VpnCore {
         val cm = service.getSystemService(ConnectivityManager::class.java)
         return XrayTunAdmissionOptions(
             callback = XrayTunFlowAdmission { flow ->
-                policy.admitFlow { cm.getConnectionOwnerUid(flow.protocol, flow.source, flow.destination) }
+                policy.admitFlow(flow.destination.address.hostAddress.orEmpty(), flow.destination.port) { cm.getConnectionOwnerUid(flow.protocol, flow.source, flow.destination) }
             },
             timeoutMs = TUN_ADMISSION_TIMEOUT_MS,
             failOpen = false,

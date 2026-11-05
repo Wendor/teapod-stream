@@ -10,11 +10,16 @@ import java.util.concurrent.atomic.AtomicLong
  * [listedUids] are the allowed UIDs in «ТОЛЬКО» (own UID removed) and the excluded
  * UIDs plus the app's own in «КРОМЕ». A uid below zero is INVALID_UID: a tethered
  * client, or an app the VPN does not apply to that bound its socket to tun0.
+ *
+ * [tunDns] — адрес из addDnsServer(). На Android 10 DNS-сокеты открывает netd от
+ * своего имени, и lookup даёт INVALID_UID: без исключения для DNS на этот адрес
+ * выбранные приложения не резолвят имена (issue #155).
  */
 internal class TunOwnerPolicy(
     val onlySelected: Boolean,
     val listedUids: Set<Int>,
     val blockUnowned: Boolean,
+    val tunDns: String = "",
 ) {
     private val deniedFlows = AtomicLong()
 
@@ -26,16 +31,16 @@ internal class TunOwnerPolicy(
      * broken lookup never cuts connectivity. An empty UID list gets Go's allow-all
      * validator.
      */
-    fun admit(uid: Int?): Boolean {
+    fun admit(uid: Int?, dstIp: String = "", dstPort: Int = 0): Boolean {
         if (listedUids.isEmpty() || uid == null) return true
-        if (uid < 0) return !onlySelected && !blockUnowned
+        if (uid < 0) return (dstPort == 53 && dstIp == tunDns) || (!onlySelected && !blockUnowned)
         return if (onlySelected) uid in listedUids else uid !in listedUids
     }
 
     /** Runs the owner [lookup] for one new flow, as Go's TunValidator.onValidate. */
-    fun admitFlow(lookup: () -> Int): Boolean {
+    fun admitFlow(dstIp: String, dstPort: Int, lookup: () -> Int): Boolean {
         val uid = try { lookup() } catch (_: Exception) { null }
-        return admit(uid).also { if (!it) deniedFlows.incrementAndGet() }
+        return admit(uid, dstIp, dstPort).also { if (!it) deniedFlows.incrementAndGet() }
     }
 
     /**
@@ -55,11 +60,13 @@ internal class TunOwnerPolicy(
             listedUids: Set<Int>,
             excludedPackages: Collection<String>,
             allowTethering: Boolean,
+            tunDns: String = "",
         ) = TunOwnerPolicy(
             onlySelected = vpnMode == "onlySelected",
             listedUids = listedUids,
             // Go: exclusions exist and the user did not opt into tethering.
             blockUnowned = excludedPackages.isNotEmpty() && !allowTethering,
+            tunDns = tunDns,
         )
     }
 }

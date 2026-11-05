@@ -110,32 +110,21 @@ class XrayConfigBuilder {
           // No xray routing rule is needed: silently dropping UDP/443 here (blackhole)
           // would force browsers to wait ~55s for QUIC retransmission to time out,
           // and rerouting QUIC to 'direct' would leak the destination outside the tunnel.
-          if (options.dnsMode == DnsMode.proxy) ...[
-            {
-              'type': 'field',
-              'inboundTag': ['dns-module'],
-              'outboundTag': 'proxy',
-            },
-            // Intercept DNS queries from user apps and handle them via xray's DNS module.
-            {
-              'type': 'field',
-              'inboundTag': ['socks-in'],
-              'port': '53',
-              'network': 'udp,tcp',
-              'outboundTag': 'dns-out',
-            },
-          ],
-          if (options.dnsMode == DnsMode.direct) ...[
-            // Direct mode: DNS queries bypass the VPN tunnel entirely.
-            // xray's own process is excluded from the TUN, so 'direct' outbound
-            // connects straight to the internet without going through the VPN.
-            {
-              'type': 'field',
-              'port': '53',
-              'network': 'udp,tcp',
-              'outboundTag': 'direct',
-            },
-          ],
+          // App DNS goes to xray's DNS module with the selected server. Its own sockets
+          // egress through the tunnel in proxy mode, or past it in direct mode (xray's
+          // process is excluded from the TUN) — as if there were no VPN.
+          {
+            'type': 'field',
+            'inboundTag': ['dns-module'],
+            'outboundTag': options.dnsMode == DnsMode.proxy ? 'proxy' : 'direct',
+          },
+          {
+            'type': 'field',
+            'inboundTag': ['socks-in'],
+            'port': '53',
+            'network': 'udp,tcp',
+            'outboundTag': 'dns-out',
+          },
           ..._buildGeoRules(routing),
           // In ONLY mode the catch-all routes to direct, so diagnostic hosts that aren't
           // in the user's rules would bypass the proxy and may be blocked locally.
@@ -257,27 +246,11 @@ class XrayConfigBuilder {
   static Map<String, dynamic> buildDnsBlock(VpnEngineOptions options) => _buildDnsBlock(options);
 
   static Map<String, dynamic> _buildDnsBlock(VpnEngineOptions options) {
-    if (options.dnsMode == DnsMode.direct) {
-      // Direct mode: DNS queries bypass the VPN via the 'direct' routing rule above.
-      // Use system resolver for xray's own domain lookups (e.g. routing decisions).
-      return {
-        'servers': ['localhost'],
-        'queryStrategy': _queryStrategy(options.dnsQueryStrategy),
-        'disableFallback': true,
-      };
-    }
-    return buildResolverDnsBlock(options);
-  }
-
-  /// DNS-модуль с выбранным сервером — блок режима «через VPN». Ядро Rust берёт его
-  /// и для режима «напрямую» (`localhost` xray-rust считает обычным DNS-сервером).
-  static Map<String, dynamic> buildResolverDnsBlock(VpnEngineOptions options) {
     final server = options.dnsServer;
     final routing = options.routing;
     final strategy = _queryStrategy(options.dnsQueryStrategy);
     List<dynamic> servers = [];
 
-    // Proxy mode: DNS queries are intercepted and handled by xray's DNS module.
     // Main server must be first: with disableFallback, xray sends every domain that
     // matches no 'domains' filter to servers[0].
     switch (server.type) {

@@ -69,6 +69,9 @@ jobs:
           dir="${ANDROID_USER_HOME:-$HOME/.android}"
           mkdir -p "$dir"
           echo "$KEYSTORE" | base64 -d > "$dir/debug.keystore"
+          fp=$(keytool -list -v -keystore "$dir/debug.keystore" -storepass android -alias androiddebugkey \
+            | awk '/SHA256:/{print $2}' | tr -d ':' | tr 'A-F' 'a-f')
+          [ "$fp" = "$CERT_SHA256" ] || { echo "::error::DEBUG_KEYSTORE_BASE64 — не тот ключ: '$fp'"; exit 1; }
 
       - name: Resolve sibling branches
         if: steps.ver.outputs.build_core
@@ -152,8 +155,11 @@ jobs:
         run: |
           signer="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
           for apk in build/app/outputs/flutter-apk/teapod-stream-*-release-*.apk; do
-            "$signer" verify --print-certs "$apk" | grep -q "SHA-256 digest: $CERT_SHA256" \
-              || { echo "::error::$apk подписан не тем ключом"; exit 1; }
+            out=$("$signer" verify --print-certs "$apk")
+            grep -q "SHA-256 digest: $CERT_SHA256" <<< "$out" || {
+              echo "$out"; find "$HOME" -name debug.keystore -not -path '*/.pub-cache/*' 2>/dev/null
+              echo "::error::$apk подписан не тем ключом"; exit 1
+            }
           done
 
       - name: Publish app

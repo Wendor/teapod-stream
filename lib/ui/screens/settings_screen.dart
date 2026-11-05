@@ -381,6 +381,15 @@ class _SettingsBody extends StatelessWidget {
           ),
           SetRowToggle(
             t: t,
+            title: 'Автоматизация',
+            hint: 'Tasker/Anubis: команды CONNECT/DISCONNECT и рассылка состояния. '
+                'Любое приложение сможет выключить VPN и узнать, что он включён',
+            value: s.automationEnabled,
+            locked: locked,
+            onChange: (v) => onUpdate(s.copyWith(automationEnabled: v)),
+          ),
+          SetRowToggle(
+            t: t,
             title: 'Уведомление',
             hint: 'Скорость и кнопка отключения в шторке',
             value: s.showNotification,

@@ -7,6 +7,7 @@ import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/core/models/routing_settings.dart';
 import 'package:teapodstream/core/interfaces/vpn_engine.dart';
 import 'package:teapodstream/core/models/dns_config.dart';
+import 'package:teapodstream/core/models/vpn_log_entry.dart' show LogLevel;
 
 VpnConfig _vlessConfig({String address = '1.2.3.4', int port = 443}) => VpnConfig(
   id: 'id',
@@ -443,5 +444,79 @@ void main() {
       });
     });
 
+  });
+
+  test('access log only at debug level', () {
+    Map<String, dynamic> logOf(LogLevel level) => XrayConfigBuilder.build(
+        _vlessConfig(),
+        VpnEngineOptions(socksPort: 1, httpPort: 0, socksUser: '', socksPassword: '', logLevel: level),
+      )['log'] as Map<String, dynamic>;
+    expect(logOf(LogLevel.debug).containsKey('access'), isFalse);
+    for (final level in [LogLevel.info, LogLevel.warning, LogLevel.error]) {
+      expect(logOf(level)['access'], 'none', reason: level.name);
+    }
+  });
+
+  group('Xray-core v26 compatibility (Go)', () {
+    VpnConfig link(String uri) => VlessParser.parseUri(uri)!;
+    Map<String, dynamic> streamOf(VpnConfig c) {
+      final json = XrayConfigBuilder.build(c, _defaultOptions());
+      final proxy = (json['outbounds'] as List).cast<Map<String, dynamic>>().firstWhere((o) => o['tag'] == 'proxy');
+      return proxy['streamSettings'] as Map<String, dynamic>;
+    }
+
+    test('profiles with removed features are reported, not started', () {
+      expect(XrayConfigBuilder.unsupportedReason(link('hy2://pw@h:443?insecure=1#n')), contains('allowInsecure'));
+      expect(XrayConfigBuilder.unsupportedReason(link('vless://u@h:443?security=tls&type=h2#n')), contains('HTTP/2'));
+      expect(XrayConfigBuilder.unsupportedReason(link('vless://u@h:443?security=tls&type=quic#n')), contains('QUIC'));
+      expect(XrayConfigBuilder.unsupportedReason(link('vless://u@h:443?security=tls&pinSHA256=zz#n')), isNotNull);
+      expect(XrayConfigBuilder.unsupportedReason(link('vless://u@h:443?security=tls&type=ws#n')), isNull);
+    });
+
+    test('ECH goes to tlsSettings.echConfigList', () {
+      final tls = streamOf(link('vless://u@h:443?security=tls&ech=AEX%2B#n'))['tlsSettings'] as Map;
+      expect(tls['echConfigList'], 'AEX+');
+      expect(tls.containsKey('echSettings'), isFalse);
+    });
+
+    test('TCP HTTP header from headerType / VMess type', () {
+      final vless = streamOf(link('vless://u@h:80?type=tcp&headerType=http&host=a.com,b.com&path=%2Fx#n'));
+      expect(vless['tcpSettings'], {
+        'header': {
+          'type': 'http',
+          'request': {
+            'path': ['/x'],
+            'headers': {'Host': ['a.com', 'b.com']},
+          },
+        },
+      });
+      final vmessBody = base64.encode(utf8.encode(jsonEncode(
+          {'v': '2', 'ps': 'n', 'add': 'h', 'port': '80', 'id': 'u', 'net': 'tcp', 'type': 'http', 'host': 'c.com'})));
+      final vmess = streamOf(link('vmess://$vmessBody'));
+      expect((vmess['tcpSettings'] as Map)['header']['request']['path'], ['/']);
+      expect(streamOf(link('vless://u@h:443?type=tcp&security=tls#n')).containsKey('tcpSettings'), isFalse);
+    });
+
+    test('mergeWithRaw drops api/metrics and allowInsecure, fails closed', () {
+      final raw = {
+        'api': {'listen': '127.0.0.1:10085', 'services': ['HandlerService']},
+        'metrics': {'listen': '127.0.0.1:11111'},
+        'inbounds': [{'tag': 'socks', 'protocol': 'socks', 'listen': '0.0.0.0', 'port': 1080}],
+        'outbounds': [
+          {
+            'tag': 'proxy',
+            'protocol': 'vless',
+            'streamSettings': {'security': 'tls', 'tlsSettings': {'serverName': 's', 'allowInsecure': true}},
+          },
+        ],
+      };
+      final cfg = jsonDecode(XrayConfigBuilder.mergeWithRaw(jsonEncode(raw), _defaultOptions())) as Map;
+      expect(cfg.containsKey('api'), isFalse);
+      expect(cfg.containsKey('metrics'), isFalse);
+      expect(cfg['outbounds'][0]['streamSettings']['tlsSettings'], {'serverName': 's'});
+      expect(cfg['inbounds'][0]['listen'], '127.0.0.1');
+      expect(() => XrayConfigBuilder.mergeWithRaw('{"inbounds": {}}', _defaultOptions()),
+          throwsFormatException);
+    });
   });
 }

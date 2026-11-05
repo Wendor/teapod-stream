@@ -96,21 +96,22 @@ void main() {
         expect(probe.keys.toSet(), {'inbounds', 'outbounds', 'dns'}, reason: reason);
         expect(probe['outbounds'], [proxyOf(vpn)], reason: reason);
         expect(probe['dns'], {'hosts': <String, dynamic>{}}, reason: reason);
-        expect(probe['inbounds'], [
-          {
-            'tag': 'probe-in',
-            'protocol': 'socks',
-            'listen': '127.0.0.1',
-            'port': 0,
-            'settings': {'auth': 'noauth', 'udp': false},
-          },
-        ], reason: reason);
+        final inbound = (probe['inbounds'] as List).single as Map;
+        expect(inbound['tag'], 'probe-in', reason: reason);
+        expect(inbound['listen'], '127.0.0.1', reason: reason);
+        expect(inbound['port'], 0, reason: reason);
+        // One-time password: a foreign app that finds the port can't use it.
+        final settings = inbound['settings'] as Map;
+        expect(settings['auth'], 'password', reason: reason);
+        expect(settings['udp'], isFalse, reason: reason);
+        final account = (settings['accounts'] as List).single as Map;
+        expect(account['user'], matches(RegExp(r'^[0-9a-f]{32}$')), reason: reason);
+        expect(account['pass'], matches(RegExp(r'^[0-9a-f]{32}$')), reason: reason);
         // Encodes without non-JSON values, as the method channel needs.
-        expect(
-          jsonDecode(RustConfigBuilder.buildProbeJson(profile.value, variant.value)),
-          probe,
-          reason: reason,
-        );
+        final encoded = jsonDecode(
+            RustConfigBuilder.buildProbeJson(profile.value, variant.value)) as Map;
+        expect(encoded['outbounds'], probe['outbounds'], reason: reason);
+        expect(encoded['inbounds'][0]['settings']['auth'], 'password', reason: reason);
       }
     }
   });

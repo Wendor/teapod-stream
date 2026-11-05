@@ -17,6 +17,10 @@ class Subscription {
   final String? announce;
   final String? announceUrl;
 
+  /// DER (base64) самоподписанного сертификата, который пользователь принял
+  /// вручную (TOFU). Автообновление доверяет только ему, а не любому сертификату.
+  final String? pinnedCertDer;
+
   const Subscription({
     required this.id,
     required this.name,
@@ -29,6 +33,7 @@ class Subscription {
     this.totalBytes,
     this.announce,
     this.announceUrl,
+    this.pinnedCertDer,
   });
 
   Map<String, dynamic> toJson() => {
@@ -43,6 +48,7 @@ class Subscription {
         'totalBytes': totalBytes,
         'announce': announce,
         'announceUrl': announceUrl,
+        'pinnedCertDer': pinnedCertDer,
       };
 
   factory Subscription.fromJson(Map<String, dynamic> json) => Subscription(
@@ -61,6 +67,7 @@ class Subscription {
         totalBytes: json['totalBytes'] as int?,
         announce: json['announce'] as String?,
         announceUrl: json['announceUrl'] as String?,
+        pinnedCertDer: json['pinnedCertDer'] as String?,
       );
 
   Subscription copyWith({
@@ -85,6 +92,7 @@ class Subscription {
       totalBytes: totalBytes ?? this.totalBytes,
       announce: announce ?? this.announce,
       announceUrl: announceUrl ?? this.announceUrl,
+      pinnedCertDer: pinnedCertDer,
     );
   }
 }

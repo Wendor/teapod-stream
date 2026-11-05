@@ -87,35 +87,23 @@ class MainActivity : FlutterActivity() {
                         val heartbeatThreshold = call.argument<Int>("heartbeatThreshold") ?: 3
                         val heartbeatUrl = call.argument<String>("heartbeatUrl") ?: ""
                         val engine = CoreKind.fromId(call.argument<String>("engine")).id
+                        val mtu = call.argument<Int>("mtu") ?: 1500
 
-                        if (proxyOnly) {
-                            // Proxy-only: no TUN tunnel, no VPN permission needed
+                        val start = {
                             startVpnService(
                                 xrayConfig, socksPort, socksUser, socksPassword,
                                 excludedPackages, includedPackages, vpnMode,
-                                ssPrefix, proxyOnly = true, showNotification = showNotification,
+                                ssPrefix, proxyOnly = proxyOnly, showNotification = showNotification,
                                 killSwitch = killSwitch, allowIcmp = allowIcmp,
                                 blockQuic = blockQuic, ipv6Enabled = ipv6Enabled, allowTethering = allowTethering,
                                 heartbeatProbe = heartbeatProbe, heartbeatAction = heartbeatAction,
                                 heartbeatThreshold = heartbeatThreshold, heartbeatUrl = heartbeatUrl,
-                                engine = engine,
+                                engine = engine, mtu = mtu,
                             )
                             result.success(null)
-                        } else {
-                            requestVpnPermission(result) {
-                                startVpnService(
-                                    xrayConfig, socksPort, socksUser, socksPassword,
-                                    excludedPackages, includedPackages, vpnMode,
-                                    ssPrefix, proxyOnly = false, showNotification = showNotification,
-                                    killSwitch = killSwitch, allowIcmp = allowIcmp,
-                                    blockQuic = blockQuic, ipv6Enabled = ipv6Enabled, allowTethering = allowTethering,
-                                    heartbeatProbe = heartbeatProbe, heartbeatAction = heartbeatAction,
-                                    heartbeatThreshold = heartbeatThreshold, heartbeatUrl = heartbeatUrl,
-                                    engine = engine,
-                                )
-                                result.success(null)
-                            }
                         }
+                        // Proxy-only: no TUN tunnel, no VPN permission needed
+                        if (proxyOnly) start() else requestVpnPermission(result, start)
                     }
 
                     "disconnect" -> {
@@ -333,8 +321,10 @@ class MainActivity : FlutterActivity() {
                     }
 
                     "getStatsHistory" -> {
-                        val history = XrayVpnService.getStatsHistory()
-                        result.success(history)
+                        result.success(XrayVpnService.getStatsHistory(
+                            call.argument<Int>("epoch") ?: -1,
+                            (call.argument<Number>("since") ?: 0).toLong(),
+                        ))
                     }
 
                     "installApk" -> {
@@ -455,6 +445,7 @@ class MainActivity : FlutterActivity() {
         heartbeatThreshold: Int = 3,
         heartbeatUrl: String = "",
         engine: String = "go",
+        mtu: Int = 1500,
     ) {
         requestBatteryOptimizationExemption()
         val intent = Intent(this, XrayVpnService::class.java).apply {
@@ -479,6 +470,7 @@ class MainActivity : FlutterActivity() {
             putExtra(XrayVpnService.EXTRA_HEARTBEAT_THRESHOLD, heartbeatThreshold)
             putExtra(XrayVpnService.EXTRA_HEARTBEAT_URL, heartbeatUrl)
             putExtra(XrayVpnService.EXTRA_ENGINE, engine)
+            putExtra(XrayVpnService.EXTRA_MTU, mtu)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent)

@@ -72,8 +72,6 @@ class VpnState2 {
 
 class VpnNotifier extends Notifier<VpnState2> {
   late final XrayEngine _engine;
-  static const _eventChannel =
-      EventChannel('${AppConstants.methodChannel}/events');
 
   StreamSubscription<dynamic>? _eventSub;
   Timer? _connectTimeout;
@@ -86,6 +84,17 @@ class VpnNotifier extends Notifier<VpnState2> {
   /// true — вкладка home на экране; история для графика тянется только тогда.
   bool _chartVisible = true;
 
+  /// История графика: натив отдаёт только точки после `_historySeq` эпохи
+  /// `_historyEpoch`; отставание (фон, скрытая вкладка дольше буфера, новая
+  /// сессия) приходит одним ответом — график сразу встаёт в актуальное состояние.
+  static const _maxHistory = 300;
+  int _historyEpoch = -1;
+  int _historySeq = 0;
+  bool _historyFetching = false;
+  /// Последний выставленный список: если в state другой, его сбросили (отключение,
+  /// таймаут) — дописывать не к чему, нужен весь буфер.
+  List<SpeedPoint> _history = const [];
+
 
   @override
   VpnState2 build() {
@@ -94,7 +103,7 @@ class VpnNotifier extends Notifier<VpnState2> {
       if (prev != null && next != null && prev != next) _onCoreChanged();
     });
 
-    _eventSub = _eventChannel.receiveBroadcastStream().listen(
+    _eventSub = XrayEngine.events.listen(
       (dynamic event) {
         if (event is Map) {
           _handleEvent(Map<String, dynamic>.from(event));
@@ -178,15 +187,12 @@ class VpnNotifier extends Notifier<VpnState2> {
           'downloadSpeed': stats.downloadSpeed,
         }));
 
-        // История (300 записей через MethodChannel) нужна только графику
-        if (_chartVisible) {
-          final history = await _engine.getStatsHistory();
-          if (history.isNotEmpty) {
-            _handleStatsHistory({'history': history});
-          }
-        }
+        // История нужна только графику
+        if (_chartVisible) await _pullHistory();
       } catch (_) {}
     });
+    // Возврат из фона / подключение: история сразу, а не через тик.
+    if (_chartVisible && state.isConnected) _pullHistory().ignore();
   }
 
   /// Вызывается из app.dart при смене вкладки: история для графика тянется
@@ -194,11 +200,7 @@ class VpnNotifier extends Notifier<VpnState2> {
   void setChartVisible(bool visible) {
     if (_chartVisible == visible) return;
     _chartVisible = visible;
-    if (visible && state.isConnected) {
-      _engine.getStatsHistory().then((history) {
-        if (history.isNotEmpty) _handleStatsHistory({'history': history});
-      }).ignore();
-    }
+    if (visible && state.isConnected) _pullHistory().ignore();
   }
 
   /// Проверка staleness подписок — вызывается при старте и resume.
@@ -248,7 +250,7 @@ class VpnNotifier extends Notifier<VpnState2> {
       case 'stats':
         break; // Ignore stats from EventChannel - we use poller instead
       case 'statsHistory':
-        _handleStatsHistory(event);
+        _applyHistory(event);
       case 'tunnel_dead':
         _runConfigSwitch((event['failures'] as num?)?.toInt() ?? 0);
     }
@@ -311,8 +313,9 @@ class VpnNotifier extends Notifier<VpnState2> {
       log.addInfo('urltest: переключение на "${best.config.name}" (${best.latency} мс)',
           source: 'urltest');
       await ref.read(configProvider.notifier).setActiveConfig(best.config.id);
-      await disconnect();
-      await connect();
+      // disconnect()+connect() здесь не работал: connect() выходил по isBusy
+      // (состояние ещё disconnecting), и VPN оставался выключенным.
+      await reconnectWithNewConfig();
     } catch (e) {
       log.addError('urltest: ошибка переключения: $e');
     } finally {
@@ -428,25 +431,47 @@ class VpnNotifier extends Notifier<VpnState2> {
     );
   }
 
-  void _handleStatsHistory(Map<String, dynamic> event) {
-    final historyRaw = event['history'];
-    if (historyRaw is! List) return;
+  Future<void> _pullHistory() async {
+    if (_historyFetching) return;
+    _historyFetching = true;
+    try {
+      final r = await _engine.getStatsHistory(_historyEpoch, _historySeq);
+      if (r != null) _applyHistory(r);
+    } finally {
+      _historyFetching = false;
+    }
+  }
 
-    final history = historyRaw
+  /// Ответ натива: `full` заменяет историю, иначе точки дописываются — только если
+  /// продолжают текущую (`from == _historySeq`), чтобы опоздавший ответ не задвоил их.
+  /// Любое несовпадение — следующий запрос за всем буфером.
+  void _applyHistory(Map<Object?, Object?> r) {
+    final full = r['full'] == true;
+    final epoch = (r['epoch'] as num?)?.toInt() ?? -1;
+    final from = (r['from'] as num?)?.toInt() ?? 0;
+    if (!full &&
+        (epoch != _historyEpoch ||
+            from != _historySeq ||
+            !identical(state.stats.speedHistory, _history))) {
+      _historyEpoch = -1;
+      return;
+    }
+    final points = (r['history'] as List? ?? const [])
         .whereType<Map<Object?, Object?>>()
         .map((m) => SpeedPoint.fromMap(Map<String, dynamic>.from(m)))
         .toList();
-
-    if (history.isEmpty) return;
-
-    // Native history is the source of truth
-    state = state.copyWith(
-      stats: state.stats.copyWith(speedHistory: history),
-    );
+    _historyEpoch = epoch;
+    _historySeq = (r['seq'] as num?)?.toInt() ?? 0;
+    if (!full && points.isEmpty) return;
+    final merged = full ? points : [..._history, ...points];
+    _history = merged.length > _maxHistory ? merged.sublist(merged.length - _maxHistory) : merged;
+    state = state.copyWith(stats: state.stats.copyWith(speedHistory: _history));
   }
 
-  Future<void> connect() async {
-    if (state.isBusy || state.isConnected) return;
+  /// [switching] — смена сервера/настроек на живом туннеле: натив пересобирает
+  /// сессию, не закрывая TUN. Отказ до вызова натива оставляет старое соединение.
+  Future<void> connect({bool switching = false}) async {
+    if (state.isBusy || (state.isConnected && !switching)) return;
 
     // Update state synchronously — button turns yellow in the same frame as tap
     state = state.copyWith(connectionState: VpnState.connecting, error: null);
@@ -469,21 +494,11 @@ class VpnNotifier extends Notifier<VpnState2> {
         ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
     final config = _resolveEffectiveConfig(configState);
     if (config == null) {
-      ref.read(logServiceProvider.notifier).addError('No configuration selected');
-      state = state.copyWith(connectionState: VpnState.error, error: 'No configuration selected');
-      _connectTimeout?.cancel();
-      _connectTimeout = null;
-      return;
+      return _failConnect('No configuration selected', switching: switching);
     }
 
     final validationError = config.validate();
-    if (validationError != null) {
-      ref.read(logServiceProvider.notifier).addError('Invalid config: $validationError');
-      state = state.copyWith(connectionState: VpnState.error, error: validationError);
-      _connectTimeout?.cancel();
-      _connectTimeout = null;
-      return;
-    }
+    if (validationError != null) return _failConnect(validationError, switching: switching);
 
     final settings =
         ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null) ??
@@ -492,56 +507,52 @@ class VpnNotifier extends Notifier<VpnState2> {
     final backend = ref.read(coreBackendProvider);
     _engine.backend = backend;
     final unsupported = backend.checkConfig(config);
-    if (unsupported != null) {
-      _failConnect(unsupported);
-      return;
-    }
+    if (unsupported != null) return _failConnect(unsupported, switching: switching);
 
-    final socksCredentials = settings.randomCredentials
-        ? XrayEngine.generateSocksCredentials()
-        : (user: settings.socksUser, password: settings.socksPassword);
-
-    final actualSocksPort = settings.randomPort
-        ? (10000 + Random().nextInt(50000))
-        : settings.socksPort;
-
+    final credentials = _socksCredentials(settings);
     final options = _buildOptions(settings, config, backend,
-        socksPort: actualSocksPort, credentials: socksCredentials);
+        socksPort: _socksPort(settings), credentials: credentials);
     final check = backend.checkOptions(config, options);
-    if (check.blocking != null) {
-      _failConnect(check.blocking!);
-      return;
-    }
+    if (check.blocking != null) return _failConnect(check.blocking!, switching: switching);
     for (final w in check.warnings) {
       ref.read(logServiceProvider.notifier).addWarning(w, source: 'core');
     }
-    state = state.copyWith(
-      activeSocksPort: actualSocksPort,
-      activeSocksUser: socksCredentials.user,
-      activeSocksPassword: socksCredentials.password,
-      appliedFingerprint: connectionFingerprint(settings),
-    );
 
     try {
       await _engine.connect(config, options);
-      // Polling is now started in _onNativeState when connected
-    } on PlatformException catch (e) {
-      ref
-          .read(logServiceProvider.notifier)
-          .addError('Connection failed: ${e.message}');
+      if (switching) _connectedAt = null;
+      // Polling is started in _onNativeState when connected
       state = state.copyWith(
-          connectionState: VpnState.error, error: e.message);
-      _connectTimeout?.cancel();
-      _connectTimeout = null;
+        activeSocksPort: options.socksPort,
+        activeSocksUser: credentials.user,
+        activeSocksPassword: credentials.password,
+        appliedFingerprint: connectionFingerprint(settings),
+      );
+    } on PlatformException catch (e) {
+      _failConnect(e.message ?? 'Connection failed', switching: switching);
     }
   }
 
-  void _failConnect(String reason) {
+  /// Подключение не начато. При [switching] натив продолжает прежнюю сессию.
+  void _failConnect(String reason, {bool switching = false}) {
     ref.read(logServiceProvider.notifier).addError(reason);
-    state = state.copyWith(connectionState: VpnState.error, error: reason);
+    state = state.copyWith(
+        connectionState: switching ? VpnState.connected : VpnState.error, error: reason);
     _connectTimeout?.cancel();
     _connectTimeout = null;
   }
+
+  /// В TUN-режиме SOCKS внутренний: без пароля им пользовалось бы любое приложение
+  /// (выход в туннель, IP сервера), поэтому пустые ручные креды заменяются
+  /// случайными. В proxy-only открытый SOCKS — выбор пользователя.
+  static ({String user, String password}) _socksCredentials(AppSettings s) =>
+      s.randomCredentials ||
+              (!s.proxyOnly && (s.socksUser.isEmpty || s.socksPassword.isEmpty))
+          ? XrayEngine.generateSocksCredentials()
+          : (user: s.socksUser, password: s.socksPassword);
+
+  static int _socksPort(AppSettings s) =>
+      s.randomPort ? 10000 + Random().nextInt(50000) : s.socksPort;
 
   VpnEngineOptions _buildOptions(
     AppSettings settings,
@@ -597,10 +608,7 @@ class VpnNotifier extends Notifier<VpnState2> {
     final options = config == null
         ? null
         : _buildOptions(settings, config, backend,
-            socksPort: settings.randomPort ? (10000 + Random().nextInt(50000)) : settings.socksPort,
-            credentials: settings.randomCredentials
-                ? XrayEngine.generateSocksCredentials()
-                : (user: settings.socksUser, password: settings.socksPassword));
+            socksPort: _socksPort(settings), credentials: _socksCredentials(settings));
     final unsupported = config == null
         ? 'Конфигурация не выбрана'
         : backend.checkConfig(config) ?? backend.checkOptions(config, options!).blocking;
@@ -687,7 +695,9 @@ class VpnNotifier extends Notifier<VpnState2> {
   }
 
   Future<void> reconnectWithNewConfig() async {
-    if (state.isConnected || state.isConnecting) {
+    // Живой туннель переключается нативно: старый TUN держит трафик до нового.
+    if (state.isConnected) return connect(switching: true);
+    if (state.isConnecting) {
       await disconnect();
       // _disconnectTimeout is 10s; wait up to 12s so the forced-disconnect fires first.
       for (int i = 0; i < 120; i++) {

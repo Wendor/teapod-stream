@@ -7,6 +7,7 @@ import '../../core/models/dns_config.dart';
 import '../../core/models/routing_settings.dart';
 import '../../core/models/vpn_config.dart';
 import '../../core/models/xray_tuning.dart';
+import 'vless_parser.dart';
 import 'xray_config_builder.dart';
 
 /// Profiles xray-rust 0.8.1 runs through Android TUN: VLESS, Trojan, VMess
@@ -79,7 +80,7 @@ class RustConfigBuilder {
     if (!_isUuid(config.uuid)) {
       return 'UUID VLESS должен быть настоящим UUID: Rust-ядро не принимает произвольные строки.';
     }
-    final params = _linkParams(config);
+    final params = VlessParser.linkParams(config);
     final carrier = _carrierReason(
       config,
       declaredTransport: params['type'],
@@ -108,7 +109,7 @@ class RustConfigBuilder {
     if (password.isEmpty || utf8.encode(password).length > 4096) {
       return 'Пароль Trojan должен быть непустым и не длиннее 4096 байт.';
     }
-    final params = _linkParams(config);
+    final params = VlessParser.linkParams(config);
     final carrier = _carrierReason(
       config,
       declaredTransport: params['type'],
@@ -130,7 +131,7 @@ class RustConfigBuilder {
     // aid из ссылки не применяется, как и в Go: alterId в конфиг не пишется,
     // клиент всегда говорит VMess AEAD, а сервер Xray/v2fly 4.28+ принимает
     // AEAD при любом своём alterId.
-    final json = _vmessJson(config);
+    final json = VlessParser.vmessJson(config);
     // Парсер считает всё, кроме точного tls, отсутствием защиты: reality из
     // ссылки молча превратился бы в VMess без TLS.
     final rawTls = json['tls']?.toString() ?? '';
@@ -159,7 +160,7 @@ class RustConfigBuilder {
     }
     final keys = _ss2022KeyReason(method, config.password ?? '');
     if (keys != null) return keys;
-    if (_linkParams(config)['plugin']?.trim().isNotEmpty ?? false) {
+    if (VlessParser.linkParams(config)['plugin']?.trim().isNotEmpty ?? false) {
       return 'Плагины Shadowsocks (SIP003, plugin=…) ядро Xray (Rust) не поддерживает.';
     }
     if (config.ssPrefix?.isNotEmpty ?? false) {
@@ -255,46 +256,6 @@ class RustConfigBuilder {
 
   static bool _isUuid(String value) => _uuid.hasMatch(value.trim());
 
-  /// Query parameters of the profile's share link, including the base64 body
-  /// of a SIP002 `ss://BASE64#name` link. Empty when the link is unreadable.
-  static Map<String, String> _linkParams(VpnConfig config) {
-    final raw = config.rawUri;
-    if (raw == null) return const {};
-    final hash = raw.indexOf('#');
-    var main = hash >= 0 ? raw.substring(0, hash) : raw;
-    if (config.protocol == VpnProtocol.shadowsocks && !main.contains('@')) {
-      try {
-        main = utf8.decode(base64Decode(_padBase64(main.substring(5))));
-      } catch (_) {
-        return const {};
-      }
-    }
-    final query = main.indexOf('?');
-    if (query < 0) return const {};
-    try {
-      return Uri.splitQueryString(main.substring(query + 1));
-    } catch (_) {
-      return const {};
-    }
-  }
-
-  /// The v2 `vmess://BASE64(JSON)` body the parser read the profile from.
-  static Map<String, dynamic> _vmessJson(VpnConfig config) {
-    final raw = config.rawUri;
-    if (raw == null || !raw.startsWith('vmess://')) return const {};
-    try {
-      final json = jsonDecode(
-        utf8.decode(base64Decode(_padBase64(raw.substring('vmess://'.length)))),
-      );
-      return json is Map<String, dynamic> ? json : const {};
-    } catch (_) {
-      return const {};
-    }
-  }
-
-  static String _padBase64(String s) =>
-      s.length % 4 == 0 ? s : s + '=' * (4 - s.length % 4);
-
   /// xray-rust 0.7.0 caps a config at 250,000 domain matchers
   /// (MAX_CONFIG_DOMAIN_MATCHERS), shared by routing and DNS-outbound rules, and
   /// expands each geosite entry into one matcher. Ad blocking alone takes about
@@ -319,7 +280,7 @@ class RustConfigBuilder {
   static String? _hysteria2UnsupportedReason(VpnConfig config) {
     // Парсер берёт пароль только у obfs=salamander: другой тип или пустой
     // пароль Go молча отбрасывает и подключается без обфускации.
-    final obfs = _linkParams(config)['obfs']?.trim() ?? '';
+    final obfs = VlessParser.linkParams(config)['obfs']?.trim() ?? '';
     if (obfs.isNotEmpty && obfs != 'none' && obfs != 'salamander') {
       return 'Обфускация Hysteria2 «$obfs» не поддерживается: Rust-ядро знает только Salamander.';
     }
@@ -511,7 +472,7 @@ class RustConfigBuilder {
     }
     if (config.protocol == VpnProtocol.vmess) {
       final user = proxy['settings']['vnext'][0]['users'][0] as Map;
-      user['security'] = _vmessCipher(_vmessJson(config));
+      user['security'] = _vmessCipher(VlessParser.vmessJson(config));
     }
     _legacyUdpHop(stream);
     if (fragment != null || noise != null) {
@@ -795,8 +756,8 @@ class RustConfigBuilder {
   /// config Android starts as a temporary core beside the running one. It has
   /// no TUN, routing, FakeDNS or DNS module: `probeOutboundUrl` dials the proxy
   /// leaf directly and passes the target name to the server. xray-rust starts
-  /// only with an inbound, so a loopback SOCKS listens on an ephemeral port and
-  /// never collides with the VPN's SOCKS port. Android pins the server name
+  /// only with an inbound, so a loopback SOCKS with a one-time password listens on
+  /// an ephemeral port and never collides with the VPN's SOCKS port. Android pins the server name
   /// into `dns.hosts` before the start, as for the VPN. Throws
   /// [FormatException] where [build] does.
   static Map<String, dynamic> buildProbe(
@@ -805,6 +766,10 @@ class RustConfigBuilder {
   ) {
     final outbounds = build(config, options)['outbounds'] as List<dynamic>;
     final proxy = outbounds.singleWhere((dynamic o) => o['tag'] == 'proxy');
+    // Пароль одноразовый: probeOutboundUrl идёт мимо inbound, а без него любое
+    // приложение, нашедшее порт, вышло бы через кандидата и узнало его IP.
+    final rnd = Random.secure();
+    String token() => [for (var i = 0; i < 16; i++) rnd.nextInt(256).toRadixString(16).padLeft(2, '0')].join();
     return {
       'inbounds': [
         {
@@ -812,7 +777,13 @@ class RustConfigBuilder {
           'protocol': 'socks',
           'listen': '127.0.0.1',
           'port': 0,
-          'settings': {'auth': 'noauth', 'udp': false},
+          'settings': {
+            'auth': 'password',
+            'accounts': [
+              {'user': token(), 'pass': token()},
+            ],
+            'udp': false,
+          },
         },
       ],
       'outbounds': [proxy],

@@ -53,15 +53,16 @@ class VpnTileService : TileService() {
     override fun onClick() {
         super.onClick()
         val currentState = XrayVpnService.getNativeState()
-        val isDisconnect = currentState == "connected" || currentState == "connecting"
-
-        setIntermediateState(isDisconnect)
-        XrayVpnService.showIntermediateNotification(this, !isDisconnect)
-
-        val intent = Intent(this, XrayVpnService::class.java).apply {
-            action = if (isDisconnect) XrayVpnService.ACTION_DISCONNECT else XrayVpnService.ACTION_CONNECT_QUICK
+        val isDisconnect = currentState in setOf("connected", "connecting", "reconnecting")
+        val toggle = {
+            setIntermediateState(isDisconnect)
+            XrayVpnService.showIntermediateNotification(this, !isDisconnect)
+            startService(Intent(this, XrayVpnService::class.java).apply {
+                action = if (isDisconnect) XrayVpnService.ACTION_DISCONNECT else XrayVpnService.ACTION_CONNECT_QUICK
+            })
         }
-        startService(intent)
+        // Выключить VPN с экрана блокировки может кто угодно — только после разблокировки.
+        if (isDisconnect && isLocked) unlockAndRun { toggle() } else toggle()
     }
 
     private fun setIntermediateState(isDisconnect: Boolean) {
@@ -82,9 +83,9 @@ class VpnTileService : TileService() {
                 tile.state = Tile.STATE_ACTIVE
                 setSubtitle("Подключено")
             }
-            "connecting", "disconnecting" -> {
+            "connecting", "reconnecting", "disconnecting" -> {
                 tile.state = Tile.STATE_UNAVAILABLE
-                setSubtitle(if (vpnState == "connecting") "Подключение…" else "Отключение…")
+                setSubtitle(if (vpnState == "disconnecting") "Отключение…" else "Подключение…")
             }
             "blocked" -> {
                 tile.state = Tile.STATE_INACTIVE

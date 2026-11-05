@@ -83,28 +83,21 @@ object GoCore : VpnCore {
      * getConnectionOwnerUid() вернёт INVALID_UID — такой обход неотличим от
      * тетеринга и блокируется при наличии исключений, если тетеринг не разрешён.
      */
-    private fun buildTunValidator(allowedUids: Set<Int>, vpnMode: String, blockUnowned: Boolean): TunValidator {
-        val cm = connectivity
-        if (allowedUids.isEmpty() || cm == null) {
-            return object : TunValidator {
-                override fun onValidate(srcIP: String, srcPort: Long, dstIP: String, dstPort: Long, protocol: Long) = true
-            }
-        }
+    private fun buildTunValidator(allowedUids: Set<Int>, vpnMode: String, blockUnowned: Boolean): TunValidator? {
+        val cm = connectivity ?: return null
+        val policy = TunOwnerPolicy(vpnMode == "onlySelected", allowedUids, blockUnowned)
+        // «КРОМЕ» без блокировки бесхозных потоков никого не отвергает: null —
+        // tun2socks пропускает всё сам, без binder-IPC на каждое соединение.
+        if (!policy.needsAdmission) return null
         return object : TunValidator {
-            override fun onValidate(srcIP: String, srcPort: Long, dstIP: String, dstPort: Long, protocol: Long): Boolean {
-                val uid = try {
+            override fun onValidate(srcIP: String, srcPort: Long, dstIP: String, dstPort: Long, protocol: Long) =
+                policy.admitFlow {
                     cm.getConnectionOwnerUid(
                         protocol.toInt(),
                         InetSocketAddress(srcIP, srcPort.toInt()),
                         InetSocketAddress(dstIP, dstPort.toInt()),
                     )
-                } catch (_: Exception) {
-                    // Lookup недоступен — пропускаем, чтобы не ломать связность.
-                    return true
                 }
-                if (uid < 0) return vpnMode != "onlySelected" && !blockUnowned
-                return if (vpnMode == "onlySelected") uid in allowedUids else uid !in allowedUids
-            }
         }
     }
 

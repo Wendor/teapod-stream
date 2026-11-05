@@ -26,21 +26,18 @@ class DeeplinkHandler {
           ? parsed.profileBundle
           : parsed.connectionsBundle;
     } else {
+      // Ссылку может открыть любой сайт или приложение, а запрос уходит мимо VPN
+      // с реального IP — только https и только после согласия пользователя.
+      final url = Uri.tryParse(parsed.urlValue ?? '');
+      if (url == null || url.scheme != 'https' || url.host.isEmpty) {
+        return _showError('Импорт по ссылке поддерживает только https');
+      }
+      if (!await _confirmFetch(url.host)) return;
       bundle = await DeeplinkRouter.fetchFromUrl(parsed);
     }
 
     if (!context.mounted) return;
-
-    if (bundle == null) {
-      final t = Theme.of(context).extension<TeapodTokens>()!;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Не удалось загрузить данные по ссылке',
-            style: AppTheme.mono(size: 12, color: t.bg)),
-        backgroundColor: t.danger,
-        duration: const Duration(seconds: 3),
-      ));
-      return;
-    }
+    if (bundle == null) return _showError('Не удалось загрузить данные по ссылке');
 
     switch (parsed.type) {
       case DeeplinkType.profile:
@@ -155,6 +152,44 @@ class DeeplinkHandler {
         ],
       ),
     );
+  }
+
+  void _showError(String message) {
+    if (!context.mounted) return;
+    final t = Theme.of(context).extension<TeapodTokens>()!;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(message, style: AppTheme.mono(size: 12, color: t.bg)),
+      backgroundColor: t.danger,
+      duration: const Duration(seconds: 3),
+    ));
+  }
+
+  Future<bool> _confirmFetch(String host) async {
+    final t = Theme.of(context).extension<TeapodTokens>()!;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: t.bg,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+        title: Text('Загрузить по ссылке?',
+            style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500)),
+        content: Text(
+            'Данные для импорта будут загружены с $host напрямую, мимо VPN: '
+            'сервер увидит ваш реальный IP.',
+            style: AppTheme.mono(size: 12, color: t.text)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Отмена', style: AppTheme.mono(size: 11, color: t.textMuted)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Загрузить', style: AppTheme.mono(size: 11, color: t.accent)),
+          ),
+        ],
+      ),
+    );
+    return ok == true && context.mounted;
   }
 
   String _formatDate(DateTime dt) {

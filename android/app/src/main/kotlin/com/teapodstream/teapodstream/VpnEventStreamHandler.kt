@@ -46,14 +46,8 @@ object VpnEventStreamHandler : EventChannel.StreamHandler {
                     "uploadSpeed" to currentStats["uploadSpeed"],
                     "downloadSpeed" to currentStats["downloadSpeed"],
                 ))
-                // Send stats history for chart
-                val history = XrayVpnService.getStatsHistory()
-                if (history.isNotEmpty()) {
-                    sendEvent(mapOf(
-                        "type" to "statsHistory",
-                        "history" to history,
-                    ))
-                }
+                // Весь буфер истории для графика (full) — клиент синхронизирует эпоху
+                sendEvent(XrayVpnService.getStatsHistory(-1, 0) + ("type" to "statsHistory"))
             }
             "connecting", "disconnecting", "reconnecting", "blocked" -> sendStateEvent(state)
             else -> sendStateEvent("disconnected")

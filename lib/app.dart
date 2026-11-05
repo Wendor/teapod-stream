@@ -17,6 +17,7 @@ import 'providers/update_provider.dart';
 import 'providers/geo_provider.dart';
 import 'providers/theme_provider.dart';
 import 'core/services/deeplink_handler.dart';
+import 'protocols/xray/xray_engine.dart';
 
 /// Индекс активной вкладки. Отдельный provider, чтобы экраны
 /// (например, Home при пустом списке конфигов) могли переключать вкладку.
@@ -81,8 +82,6 @@ class _AppShellState extends ConsumerState<_AppShell>
   bool _autoConnectAttempted = false;
   StreamSubscription? _deeplinkSubscription;
 
-  static const _eventChannel = EventChannel('com.teapodstream/vpn/events');
-
   static const _pages = [
     HomeScreen(),
     ConfigsScreen(),
@@ -104,9 +103,7 @@ class _AppShellState extends ConsumerState<_AppShell>
       _scheduleUpdateCheck();
     });
 
-    _deeplinkSubscription = _eventChannel
-        .receiveBroadcastStream()
-        .listen(_handleEvent);
+    _deeplinkSubscription = XrayEngine.events.listen(_handleEvent);
   }
 
   @override

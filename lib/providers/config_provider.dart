@@ -177,14 +177,15 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
       {String? name, bool allowSelfSigned = false, String? replaceId}) async {
     bool isTarget(Subscription s) => replaceId != null ? s.id == replaceId : s.url == url;
     final before = state.value ?? ConfigState();
-    final subId = before.subscriptions.where(isTarget).firstOrNull?.id ??
-        'sub_${DateTime.now().millisecondsSinceEpoch}';
+    final target = before.subscriptions.where(isTarget).firstOrNull;
+    final subId = target?.id ?? 'sub_${DateTime.now().millisecondsSinceEpoch}';
 
     final settings = ref.read(settingsProvider).value;
     final hwid = (settings?.hwidEnabled ?? false) ? await DeviceService.getHwidInfo() : null;
     // Сеть — вне очереди мутаций, чтобы выбор конфига не ждал загрузку.
     final (tagged, fetchResult) = await _fetchAndTagConfigs(url, subId,
-        allowSelfSigned: allowSelfSigned, hwid: hwid, userAgent: settings?.subUserAgent ?? '');
+        allowSelfSigned: allowSelfSigned, pinnedCertDer: target?.pinnedCertDer,
+        hwid: hwid, userAgent: settings?.subUserAgent ?? '');
     if (tagged.isEmpty) {
       throw Exception('Subscription returned no valid configurations');
     }
@@ -228,6 +229,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
         totalBytes: fetchResult.totalBytes,
         announce: fetchResult.announce,
         announceUrl: fetchResult.announceUrl,
+        pinnedCertDer: fetchResult.acceptedCertDer ?? existing?.pinnedCertDer,
       );
 
       // Remove old first, then add new — prevents duplicates if interrupted mid-update
@@ -255,9 +257,10 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     if (state.value?.activeConfigId == null) await setActiveConfig(newActiveId);
   }
 
-  Future<(List<VpnConfig>, SubscriptionFetchResult)> _fetchAndTagConfigs(String url, String subId, {bool allowSelfSigned = false, HwidDeviceInfo? hwid, String? userAgent}) async {
+  Future<(List<VpnConfig>, SubscriptionFetchResult)> _fetchAndTagConfigs(String url, String subId, {bool allowSelfSigned = false, String? pinnedCertDer, HwidDeviceInfo? hwid, String? userAgent}) async {
     final svc = SubscriptionService();
-    final result = await svc.fetchSubscription(url, allowSelfSigned: allowSelfSigned, hwid: hwid, userAgent: userAgent);
+    final result = await svc.fetchSubscription(url,
+        allowSelfSigned: allowSelfSigned, pinnedCertDer: pinnedCertDer, hwid: hwid, userAgent: userAgent);
     final tagged = result.configs.map((c) => c.copyWith(subscriptionId: subId)).toList();
     return (tagged, result);
   }

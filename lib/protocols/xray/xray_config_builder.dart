@@ -7,6 +7,7 @@ import '../../core/models/xray_tuning.dart';
 import '../../core/constants/xray_defaults.dart';
 import '../../core/models/vpn_log_entry.dart' show LogLevel;
 import '../../core/services/settings_service.dart' show DnsQueryStrategy, TlsFingerprint;
+import 'vless_parser.dart';
 
 class XrayConfigBuilder {
   static const _ruServicesDomains = [
@@ -35,6 +36,30 @@ class XrayConfigBuilder {
     'full:go.yandex', 'full:ru.ruwiki.ru',
   ];
 
+  /// Профили, которые xray-core v26 отвергает при старте (`PrintRemovedFeatureError`
+  /// и битый пин): без проверки они падали бы «xray failed to start» и
+  /// попадали в кандидаты urltest. null — профиль собирается.
+  static String? unsupportedReason(VpnConfig config) {
+    if (config.rawXrayConfig != null) return null;
+    if (config.transport == VpnTransport.http2 || config.transport == VpnTransport.quic) {
+      return 'Транспорты HTTP/2 и QUIC удалены из Xray-core: сервер нужно перевести на xHTTP.';
+    }
+    final pin = config.pinSHA256?.trim() ?? '';
+    if (pin.isNotEmpty) {
+      try {
+        certificatePins(pin);
+      } on FormatException catch (e) {
+        return e.message;
+      }
+    }
+    final tls = config.security == VpnSecurity.tls || config.protocol == VpnProtocol.hysteria2;
+    if (tls && config.allowInsecure && pin.isEmpty) {
+      return 'Xray-core больше не поддерживает allowInsecure: укажи pinSHA256 сертификата '
+          'сервера или используй действительный сертификат.';
+    }
+    return null;
+  }
+
   static Map<String, dynamic> build(VpnConfig config, VpnEngineOptions options) {
     final dnsBlock = _buildDnsBlock(options);
     final routing = options.routing;
@@ -42,6 +67,7 @@ class XrayConfigBuilder {
     // the connection destination. Without this, xray re-resolves the domain and
     // redirects the connection to a different IP, breaking tun2socks and leaking DNS.
     final routeOnly = options.sniffingEnabled;
+    final probeHost = Uri.tryParse(options.heartbeat.url)?.host ?? '';
 
     return {
       'log': _logBlock(options),
@@ -114,12 +140,19 @@ class XrayConfigBuilder {
           // In ONLY mode the catch-all routes to direct, so diagnostic hosts that aren't
           // in the user's rules would bypass the proxy and may be blocked locally.
           // Force them via proxy so heartbeat and IP-detection always test the tunnel.
+          // Свой URL пробы тоже: иначе она мерила бы прямой интернет, а не туннель.
           if (routing.direction == RoutingDirection.onlySelected) ...[
             {
               'type': 'field',
-              'domain': ['full:cp.cloudflare.com', 'full:ip-api.com'],
+              'domain': [
+                'full:cp.cloudflare.com',
+                'full:ip-api.com',
+                if (probeHost.isNotEmpty && !_isIpAddress(probeHost)) 'full:$probeHost',
+              ],
               'outboundTag': 'proxy',
             },
+            if (_isIpAddress(probeHost))
+              {'type': 'field', 'ip': [probeHost], 'outboundTag': 'proxy'},
           ],
           {
             'type': 'field',
@@ -145,12 +178,12 @@ class XrayConfigBuilder {
     };
   }
 
-  /// При logLevel warning/error access-log отключается на стороне xray —
-  /// иначе Go-слой формирует строку на каждое соединение (JNI → файл лога).
+  /// Access-log (строка на каждое соединение: JNI → logcat + файл лога, по сути
+  /// история посещений на диске) — только при debug. Ошибки дозвона xray пишет
+  /// в error-log уровня info, они остаются.
   static Map<String, dynamic> _logBlock(VpnEngineOptions options) => {
         'loglevel': options.logLevel.name,
-        if (options.logLevel == LogLevel.warning ||
-            options.logLevel == LogLevel.error)
+        if (options.logLevel != LogLevel.debug)
           'access': 'none',
       };
 
@@ -536,11 +569,21 @@ class XrayConfigBuilder {
             'fingerprint': fingerprint,
           if (config.alpn != null && config.alpn!.isNotEmpty)
             'alpn': config.alpn!.split(',').map((s) => s.trim()).toList(),
+          // Ключ Xray-core — echConfigList; прежний echSettings молча игнорировался.
           if (config.ech != null && config.ech!.isNotEmpty)
-            'echSettings': {
-              'enable': true,
-              'config': [config.ech],
+            'echConfigList': config.ech,
+        },
+      if (_tcpHttpHeader(config))
+        'tcpSettings': {
+          'header': {
+            'type': 'http',
+            'request': {
+              'path': _csv(config.wsPath ?? '/', fallback: '/'),
+              'headers': {
+                if (config.wsHost?.isNotEmpty ?? false) 'Host': _csv(config.wsHost!),
+              },
             },
+          },
         },
       if (config.transport == VpnTransport.ws)
         'wsSettings': {
@@ -578,6 +621,25 @@ class XrayConfigBuilder {
     };
   }
 
+  /// TCP с HTTP-маскировкой (`headerType=http`, у VMess — `type`). Полей в
+  /// [VpnConfig] нет — читаем исходную ссылку. Без заголовка сервер рвёт соединение.
+  static bool _tcpHttpHeader(VpnConfig config) {
+    if (config.transport != VpnTransport.tcp || config.protocol == VpnProtocol.hysteria2) {
+      return false;
+    }
+    final type = config.protocol == VpnProtocol.vmess
+        ? VlessParser.vmessJson(config)['type']?.toString()
+        : VlessParser.linkParams(config)['headerType'];
+    return type?.trim().toLowerCase() == 'http';
+  }
+
+  static List<String> _csv(String value, {String? fallback}) {
+    final items = [
+      for (final v in value.split(',')) if (v.trim().isNotEmpty) v.trim(),
+    ];
+    return items.isEmpty && fallback != null ? [fallback] : items;
+  }
+
   static String buildJson(VpnConfig config, VpnEngineOptions options) {
     return const JsonEncoder().convert(build(config, options));
   }
@@ -596,6 +658,16 @@ class XrayConfigBuilder {
   static String mergeWithRaw(String rawConfig, VpnEngineOptions options) {
     try {
       final cfg = jsonDecode(rawConfig) as Map<String, dynamic>;
+
+      // api/metrics с `listen` — gRPC (HandlerService.ListOutbounds: адреса, UUID,
+      // ключи) и pprof на localhost без аутентификации для любого приложения.
+      cfg..remove('api')..remove('metrics');
+
+      // allowInsecure в xray v26 роняет старт всего конфига; без него узлы с
+      // самоподписанным сертификатом отказывают только на рукопожатии.
+      for (final o in (cfg['outbounds'] as List? ?? const []).whereType<Map<String, dynamic>>()) {
+        (o['streamSettings']?['tlsSettings'] as Map?)?.remove('allowInsecure');
+      }
 
       // Preserve the original socks inbound tag so server routing rules
       // (inboundTag: ["socks", "http"]) keep matching after we replace the inbound.
@@ -683,8 +755,9 @@ class XrayConfigBuilder {
       }
 
       return jsonEncode(cfg);
-    } catch (_) {
-      return rawConfig;
+    } catch (e) {
+      // Не отдаём конфиг как есть: в нём серверные inbounds (0.0.0.0, noauth).
+      throw FormatException('Не удалось разобрать JSON-конфиг подписки: $e');
     }
   }
 

@@ -13,6 +13,12 @@ import 'xray_go_backend.dart';
 class XrayEngine implements VpnEngine {
   static const _channel = MethodChannel(AppConstants.methodChannel);
 
+  /// Единственная подписка на нативные события. Второй `receiveBroadcastStream()`
+  /// на то же имя затёр бы обработчик первого (`setMessageHandler`) — все
+  /// слушатели (VpnNotifier, диплинки) подключаются к этому broadcast-потоку.
+  static final Stream<dynamic> events =
+      const EventChannel('${AppConstants.methodChannel}/events').receiveBroadcastStream();
+
   @override
   String get protocolName => 'xray';
 
@@ -225,21 +231,15 @@ class XrayEngine implements VpnEngine {
     return (upload: 0, download: 0, uploadSpeed: 0, downloadSpeed: 0);
   }
 
-  /// Get stats history for chart.
-  Future<List<Map<String, int>>> getStatsHistory() async {
+  /// История скоростей для графика после точки [since] эпохи [epoch]
+  /// (`{epoch, seq, from, full, history}`, см. XrayVpnService.getStatsHistory).
+  Future<Map<Object?, Object?>?> getStatsHistory(int epoch, int since) async {
     try {
-      final result = await _channel.invokeMethod<List<Object?>>('getStatsHistory');
-      if (result != null) {
-        return result
-            .whereType<Map<Object?, Object?>>()
-            .map((m) => {
-                  'uploadSpeed': (m['uploadSpeed'] as num?)?.toInt() ?? 0,
-                  'downloadSpeed': (m['downloadSpeed'] as num?)?.toInt() ?? 0,
-                })
-            .toList();
-      }
-    } catch (_) {}
-    return [];
+      return await _channel.invokeMethod<Map<Object?, Object?>>(
+          'getStatsHistory', {'epoch': epoch, 'since': since});
+    } catch (_) {
+      return null;
+    }
   }
 
   VpnState _parseState(String s) => switch (s) {

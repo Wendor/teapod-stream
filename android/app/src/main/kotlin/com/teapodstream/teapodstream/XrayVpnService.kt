@@ -106,6 +106,15 @@ class XrayVpnService : VpnService() {
         @Volatile var connectedAtMs: Long = 0
             private set
 
+        /**
+         * Интеграция с Tasker/Anubis: команды [VpnCommandReceiver] и broadcast
+         * STATE_CHANGED. Оба видны любому приложению (выключить VPN, следить за ним),
+         * поэтому работают только при явно включённой опции (по умолчанию выкл.).
+         */
+        fun automationEnabled(context: android.content.Context): Boolean =
+            context.getSharedPreferences("FlutterSharedPreferences", MODE_PRIVATE)
+                .getBoolean("flutter.automation_enabled", false)
+
         @JvmStatic fun getSocksCredentials(): Map<String, Any> {
             val c = _socksCredentials.get()
             return mapOf("port" to c.port, "user" to c.user, "password" to c.password, "connectedAtMs" to connectedAtMs)
@@ -184,7 +193,7 @@ class XrayVpnService : VpnService() {
         @Volatile private var lastDownloadSpeed: Long = 0
 
         private const val MAX_STATS_HISTORY = 300
-        private val statsHistory = ArrayDeque<Pair<Long, Long>>(MAX_STATS_HISTORY)
+        private val speedHistory = SpeedHistory(MAX_STATS_HISTORY)
 
         fun getStats(): Map<String, Long> = mapOf(
             "upload" to totalUpload,
@@ -193,13 +202,8 @@ class XrayVpnService : VpnService() {
             "downloadSpeed" to lastDownloadSpeed,
         )
 
-        fun getStatsHistory(): List<Map<String, Long>> {
-            synchronized(statsHistory) {
-                return statsHistory.map { (up, down) ->
-                    mapOf("uploadSpeed" to up, "downloadSpeed" to down)
-                }
-            }
-        }
+        /** История графика после точки [since] эпохи [epoch] (см. [SpeedHistory.since]). */
+        fun getStatsHistory(epoch: Int, since: Long): Map<String, Any> = speedHistory.since(epoch, since)
 
         @JvmStatic fun showIntermediateNotification(context: android.content.Context, isConnecting: Boolean) {
             try {
@@ -319,6 +323,9 @@ class XrayVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_DISCONNECT -> {
+                // Пришли через startForegroundService (Tasker, MainActivity) в свежий
+                // процесс — без startForeground() система уронит сервис через 5 с.
+                if (!isRunning.get()) ensureForeground()
                 userRequestedDisconnect.set(true)
                 try { File(filesDir, "user_disconnected.flag").createNewFile() } catch (_: Exception) {}
                 // Signal disconnecting immediately so the button turns yellow
@@ -384,6 +391,9 @@ class XrayVpnService : VpnService() {
                 try { File(filesDir, "user_disconnected.flag").delete() } catch (_: Exception) {}
                 ensureForeground()
                 Thread {
+                    // Смена сервера/настроек на живом туннеле: старый TUN остаётся sink'ом
+                    // до establish() нового — без явного disconnect и окна утечки.
+                    if (isRunning.get()) stopVpn(reconnecting = true)
                     startVpn(xrayConfig, socksPort, socksUser, socksPassword,
                         excludedPackages, includedPackages, vpnMode, ssPrefix, proxyOnly, killSwitch,
                         allowIcmp, blockQuic, ipv6Enabled, mtu = mtu, engine = engine)
@@ -793,8 +803,10 @@ class XrayVpnService : VpnService() {
                         InetSocketAddress(client.localAddress, client.localPort)
                     )
                     uid == ownUid
+                } catch (_: SecurityException) {
+                    true // proxy-only: мы не активный VPN, lookup недоступен; слушаем только loopback
                 } catch (_: Exception) {
-                    true // lookup unavailable — don't break the tunnel
+                    false
                 }
             }
             proxy.start()
@@ -1016,7 +1028,7 @@ class XrayVpnService : VpnService() {
         lastUp = 0
         lastDown = 0
         lastTime = System.currentTimeMillis()
-        statsHistory.clear()
+        speedHistory.reset()
 
         statsThread = Thread {
             while (isRunning.get()) {
@@ -1043,12 +1055,7 @@ class XrayVpnService : VpnService() {
                     lastDown = totalDownload
                     lastTime = now
                     if (screenOn) {
-                        synchronized(statsHistory) {
-                            if (statsHistory.size >= MAX_STATS_HISTORY) {
-                                statsHistory.removeFirst()
-                            }
-                            statsHistory.addLast(Pair(lastUploadSpeed, lastDownloadSpeed))
-                        }
+                        speedHistory.add(lastUploadSpeed, lastDownloadSpeed)
                         updateNotification(lastUploadSpeed, lastDownloadSpeed)
                     }
                 } catch (_: InterruptedException) { break } catch (_: Exception) {}
@@ -1703,7 +1710,14 @@ class XrayVpnService : VpnService() {
     private fun setState(state: String) {
         currentNativeState = state
         VpnEventStreamHandler.sendStateEvent(state)
-        sendBroadcast(Intent("com.teapodstream.STATE_CHANGED").apply { putExtra("state", state) })
+        broadcastState(state)
+    }
+
+    /** Неявный broadcast читает любое приложение — только по опции и без SOCKS-порта. */
+    private fun broadcastState(state: String) {
+        if (automationEnabled(this)) {
+            sendBroadcast(Intent("com.teapodstream.STATE_CHANGED").putExtra("state", state))
+        }
     }
 
     private fun setConnected(socksPort: Int, socksUser: String, socksPassword: String) {
@@ -1729,10 +1743,7 @@ class XrayVpnService : VpnService() {
         // reset it so the connected layout is always posted.
         lastNotificationText = null
         updateNotification(0, 0)
-        sendBroadcast(Intent("com.teapodstream.STATE_CHANGED").apply {
-            putExtra("state", "connected")
-            putExtra("socksPort", socksPort)
-        })
+        broadcastState("connected")
     }
 
     private fun updateNotification(uploadSpeed: Long, downloadSpeed: Long) {

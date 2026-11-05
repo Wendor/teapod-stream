@@ -95,6 +95,11 @@ class AppSettings {
   /// Ослабляет защиту: исключённые приложения смогут выйти через tun0.
   final bool allowTethering;
   final bool autoStartOnBoot;
+
+  /// Tasker/Anubis: broadcast-команды CONNECT/DISCONNECT и STATE_CHANGED.
+  /// Видны любому приложению, поэтому по умолчанию выключено. Читает натив
+  /// (`flutter.automation_enabled`).
+  final bool automationEnabled;
   final TlsFingerprint tlsFingerprint;
   final FragmentSettings fragment;
   final NoiseSettings noise;
@@ -146,6 +151,7 @@ class AppSettings {
     this.ipv6Enabled = false,
     this.allowTethering = false,
     this.autoStartOnBoot = false,
+    this.automationEnabled = false,
     this.tlsFingerprint = TlsFingerprint.defaultFp,
     this.fragment = const FragmentSettings(),
     this.noise = const NoiseSettings(),
@@ -193,6 +199,7 @@ class AppSettings {
     bool? ipv6Enabled,
     bool? allowTethering,
     bool? autoStartOnBoot,
+    bool? automationEnabled,
     TlsFingerprint? tlsFingerprint,
     FragmentSettings? fragment,
     NoiseSettings? noise,
@@ -239,6 +246,7 @@ class AppSettings {
       ipv6Enabled: ipv6Enabled ?? this.ipv6Enabled,
       allowTethering: allowTethering ?? this.allowTethering,
       autoStartOnBoot: autoStartOnBoot ?? this.autoStartOnBoot,
+      automationEnabled: automationEnabled ?? this.automationEnabled,
       tlsFingerprint: tlsFingerprint ?? this.tlsFingerprint,
       fragment: fragment ?? this.fragment,
       noise: noise ?? this.noise,
@@ -287,6 +295,7 @@ class AppSettings {
     'ipv6Enabled': ipv6Enabled,
     'allowTethering': allowTethering,
     'autoStartOnBoot': autoStartOnBoot,
+    'automationEnabled': automationEnabled,
     'tlsFingerprint': tlsFingerprint.name,
     'fragment': fragment.toJson(),
     'noise': noise.toJson(),
@@ -342,6 +351,7 @@ class AppSettings {
       ipv6Enabled: json['ipv6Enabled'] as bool? ?? false,
       allowTethering: json['allowTethering'] as bool? ?? false,
       autoStartOnBoot: json['autoStartOnBoot'] as bool? ?? false,
+      automationEnabled: json['automationEnabled'] as bool? ?? false,
       tlsFingerprint: TlsFingerprint.values.firstWhere(
         (e) => e.name == json['tlsFingerprint'], orElse: () => TlsFingerprint.defaultFp),
       fragment: json['fragment'] is Map<String, dynamic>
@@ -413,6 +423,7 @@ class SettingsService {
   static const _ipv6EnabledKey = 'ipv6_enabled';
   static const _allowTetheringKey = 'allow_tethering';
   static const _autoStartOnBootKey = 'auto_start_on_boot';
+  static const _automationEnabledKey = 'automation_enabled';
   static const _tlsFingerprintKey = 'tls_fingerprint';
   static const _fragmentKey = 'xray_fragment';
   static const _noiseKey = 'xray_noise';
@@ -483,6 +494,7 @@ class SettingsService {
       ipv6Enabled: prefs.getBool(_ipv6EnabledKey) ?? false,
       allowTethering: prefs.getBool(_allowTetheringKey) ?? false,
       autoStartOnBoot: prefs.getBool(_autoStartOnBootKey) ?? false,
+      automationEnabled: prefs.getBool(_automationEnabledKey) ?? false,
       tlsFingerprint: TlsFingerprint.values.firstWhere(
         (e) => e.name == prefs.getString(_tlsFingerprintKey),
         orElse: () => TlsFingerprint.defaultFp,
@@ -576,6 +588,7 @@ class SettingsService {
     await prefs.setBool(_ipv6EnabledKey, settings.ipv6Enabled);
     await prefs.setBool(_allowTetheringKey, settings.allowTethering);
     await prefs.setBool(_autoStartOnBootKey, settings.autoStartOnBoot);
+    await prefs.setBool(_automationEnabledKey, settings.automationEnabled);
     await prefs.setString(_tlsFingerprintKey, settings.tlsFingerprint.name);
     await prefs.setString(_fragmentKey, jsonEncode(settings.fragment.toJson()));
     await prefs.setString(_noiseKey, jsonEncode(settings.noise.toJson()));

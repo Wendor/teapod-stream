@@ -492,6 +492,44 @@ class VlessParser {
     }
   }
 
+  /// Query-параметры исходной ссылки профиля, включая base64-тело SIP002
+  /// `ss://BASE64#name`. Пусто, если ссылки нет или она нечитаема. Нужны
+  /// билдерам для полей, которых нет в [VpnConfig] (headerType, obfs, plugin).
+  static Map<String, String> linkParams(VpnConfig config) {
+    final raw = config.rawUri;
+    if (raw == null) return const {};
+    final hash = raw.indexOf('#');
+    var main = hash >= 0 ? raw.substring(0, hash) : raw;
+    if (config.protocol == VpnProtocol.shadowsocks && !main.contains('@')) {
+      try {
+        main = utf8.decode(base64Decode(_padBase64(main.substring(5))));
+      } catch (_) {
+        return const {};
+      }
+    }
+    final query = main.indexOf('?');
+    if (query < 0) return const {};
+    try {
+      return Uri.splitQueryString(main.substring(query + 1));
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  /// JSON-тело `vmess://BASE64(JSON)`, из которого прочитан профиль.
+  static Map<String, dynamic> vmessJson(VpnConfig config) {
+    final raw = config.rawUri;
+    if (raw == null || !raw.startsWith('vmess://')) return const {};
+    try {
+      final json = jsonDecode(
+        utf8.decode(base64Decode(_padBase64(raw.substring('vmess://'.length)))),
+      );
+      return json is Map<String, dynamic> ? json : const {};
+    } catch (_) {
+      return const {};
+    }
+  }
+
   static String _padBase64(String s) {
     final mod = s.length % 4;
     if (mod == 0) return s;

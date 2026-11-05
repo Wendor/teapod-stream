@@ -5,7 +5,7 @@ import '../../core/models/heartbeat_settings.dart';
 import '../../core/models/vpn_config.dart';
 import 'xray_config_builder.dart';
 
-/// xray-core (Go) + tun2socks: поддерживает всё.
+/// xray-core (Go) + tun2socks: все возможности; профили — кроме удалённых в v26.
 class XrayGoBackend implements CoreBackend {
   const XrayGoBackend();
 
@@ -19,7 +19,7 @@ class XrayGoBackend implements CoreBackend {
   String? unavailableReason(CoreFeature feature) => null;
 
   @override
-  String? checkConfig(VpnConfig config) => null;
+  String? checkConfig(VpnConfig config) => XrayConfigBuilder.unsupportedReason(config);
 
   @override
   SettingsCheck checkOptions(VpnConfig config, VpnEngineOptions options) =>

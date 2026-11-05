@@ -116,7 +116,9 @@ jobs:
             teapodstream/android/gradle/wrapper/gradle-wrapper.properties
 
       - name: Android NDK
-        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" > /dev/null'
+        run: |
+          [ -d "$ANDROID_HOME/ndk/$NDK_VERSION" ] \
+            || "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" > /dev/null
 
       - uses: actions/setup-go@v7
         if: steps.ver.outputs.build_core

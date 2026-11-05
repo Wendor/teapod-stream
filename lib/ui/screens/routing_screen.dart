@@ -9,7 +9,8 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/hero_panel.dart';
 import '../widgets/reconnect_banner.dart';
-import '../widgets/settings_shared.dart' show SetRowChev;
+import '../widgets/pressable.dart';
+import '../widgets/settings_shared.dart' show SetRowChev, SetSquareSwitch;
 import 'split_tunnel_screen.dart';
 
 String _formatDomainLabel(String zone) {
@@ -846,7 +847,7 @@ class _ToggleWithChips extends StatelessWidget {
                             style: AppTheme.mono(size: 10, color: t.textDim)),
                       ],
                     ),
-                    _SquareSwitch(
+                    SetSquareSwitch(
                       t: t, value: enabled,
                       onChanged: locked ? null : (v) => onToggle(v),
                     ),
@@ -910,63 +911,34 @@ class _RowToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
-      decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: last ? t.line : t.lineSoft))),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: AppTheme.sans(size: 14, color: t.text)),
-                if (hint != null) ...[
-                  const SizedBox(height: 3),
-                  Text(hint!,
-                      style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5)),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(width: 14),
-          _SquareSwitch(
-            t: t, value: value,
-            onChanged: locked ? null : (v) => onChange(v),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Square switch ─────────────────────────────────────────────────
-
-class _SquareSwitch extends StatelessWidget {
-  final TeapodTokens t;
-  final bool value;
-  final void Function(bool)? onChanged;
-  const _SquareSwitch({required this.t, required this.value, this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onChanged != null ? () => onChanged!(!value) : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        width: 44, height: 22,
-        padding: const EdgeInsets.all(2),
+    // Переключает вся строка, как в настройках.
+    return Pressable(
+      onTap: locked ? null : () => onChange(!value),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
         decoration: BoxDecoration(
-          border: Border.all(color: value ? t.accent : t.line),
-          color: value ? t.accentSoft : Colors.transparent,
-        ),
-        child: Align(
-          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            width: 14, height: 14,
-            color: value ? t.accent : t.textMuted,
-          ),
+            border: Border(bottom: BorderSide(color: last ? t.line : t.lineSoft))),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: AppTheme.sans(size: 14, color: t.text)),
+                  if (hint != null) ...[
+                    const SizedBox(height: 3),
+                    Text(hint!,
+                        style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5)),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 14),
+            SetSquareSwitch(
+              t: t, value: value,
+              onChanged: locked ? null : (v) => onChange(v),
+            ),
+          ],
         ),
       ),
     );

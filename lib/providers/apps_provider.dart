@@ -24,7 +24,7 @@ final installedAppsProvider =
         isExcluded: excluded.contains(pkg),
       );
     }).toList()
-      ..sort((a, b) => a.appName.compareTo(b.appName));
+      ..sort((a, b) => a.appName.toLowerCase().compareTo(b.appName.toLowerCase()));
   } on PlatformException {
     return [];
   }

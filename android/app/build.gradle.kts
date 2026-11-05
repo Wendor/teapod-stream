@@ -47,6 +47,11 @@ android {
         buildConfig = true
     }
 
+    // JVM-тесты: заглушки android.* (Log и т.п.) возвращают значения по умолчанию.
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.

@@ -163,7 +163,9 @@ class UpdateService {
           : -1;
       sink = file.openWrite(mode: isResume ? FileMode.append : FileMode.write);
       int downloaded = isResume ? existing : 0;
-      await for (final chunk in resp) {
+      // Тайм-аут простоя: без него зависшая сеть держит загрузку вечно, а отмена
+      // подписки async* ждёт следующего чанка.
+      await for (final chunk in resp.timeout(const Duration(seconds: 30))) {
         sink.add(chunk);
         downloaded += chunk.length;
         yield DownloadProgress(downloaded: downloaded, total: total, done: false);

@@ -13,7 +13,6 @@ import '../core/models/heartbeat_settings.dart';
 import '../core/models/vpn_log_entry.dart';
 import '../core/services/log_service.dart';
 import '../core/services/settings_service.dart';
-import 'ip_info_provider.dart';
 import '../protocols/xray/xray_engine.dart';
 import '../core/cores/core_backend.dart';
 import '../core/cores/core_switch.dart';
@@ -155,10 +154,8 @@ class VpnNotifier extends Notifier<VpnState2> {
           activeSocksUser: vpnState.socksUser,
           activeSocksPassword: vpnState.socksPassword,
         );
-        // ipInfoProvider is AsyncNotifier, needs refresh to rebuild
-        // ignore: unused_result
-        ref.refresh(ipInfoProvider);
-        // Also fetch initial stats
+        // ipInfoProvider пересоберётся сам: он следит за vpnConnectionStateProvider.
+        // ref.refresh отсюда — циклическая зависимость (в debug обрывал этот блок).
         _startStatsPolling();
         // VPN уже работал до старта приложения — считаем применёнными текущие
         // настройки (точный снапшот на момент connect недоступен).
@@ -600,7 +597,9 @@ class VpnNotifier extends Notifier<VpnState2> {
 
   /// Смена ядра: отключить неподдерживаемое, пересохранить/очистить quick-reconnect.
   Future<void> _onCoreChanged() async {
-    final settings = await ref.read(settingsProvider.future);
+    // Не `.future`: в слушателе он ещё отдаёт настройки до смены ядра.
+    final settings = ref.read(settingsProvider).value;
+    if (settings == null) return;
     final backend = coreBackendFor(settings.core);
     final config = _resolveEffectiveConfig(
         ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null));

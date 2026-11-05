@@ -324,7 +324,7 @@ class AppSettings {
       customDnsAddress: json['customDnsAddress'] as String? ?? '1.1.1.1',
       customDnsType: json['customDnsType'] as String? ?? 'udp',
       enableUdp: json['enableUdp'] as bool? ?? true,
-      allowIcmp: json['allowIcmp'] as bool? ?? true,
+      allowIcmp: json['allowIcmp'] as bool? ?? false,
       randomCredentials: json['randomCredentials'] as bool? ?? true,
       socksUser: json['socksUser'] as String? ?? '',
       socksPassword: json['socksPassword'] as String? ?? '',
@@ -412,6 +412,8 @@ class SettingsService {
   static const _routingRuServicesKey = 'routing_ru_services_enabled';
   static const _updateChannelKey = 'update_channel';
   static const _fontScaleKey = 'font_scale';
+  static const _geoipUrlKey = 'geoip_url';
+  static const _geositeUrlKey = 'geosite_url';
   static const _sniffingEnabledKey = 'sniffing_enabled';
   static const _mtuKey = 'mtu';
   static const _subAutoRefreshKey = 'sub_auto_refresh';
@@ -463,7 +465,7 @@ class SettingsService {
       customDnsAddress: prefs.getString(_customDnsAddressKey) ?? '1.1.1.1',
       customDnsType: prefs.getString(_customDnsTypeKey) ?? 'udp',
       enableUdp: prefs.getBool(_enableUdpKey) ?? true,
-      allowIcmp: prefs.getBool(_allowIcmpKey) ?? true,
+      allowIcmp: prefs.getBool(_allowIcmpKey) ?? false,
       randomCredentials: prefs.getBool(_randomCredentialsKey) ?? true,
       socksUser: creds.user,
       socksPassword: creds.password,
@@ -480,6 +482,8 @@ class SettingsService {
         (e) => e.name == prefs.getString(_fontScaleKey),
         orElse: () => FontScale.normal,
       ),
+      geoipUrl: prefs.getString(_geoipUrlKey) ?? GeoPresets.defaultGeoipUrl,
+      geositeUrl: prefs.getString(_geositeUrlKey) ?? GeoPresets.defaultGeositeUrl,
       sniffingEnabled: prefs.getBool(_sniffingEnabledKey) ?? true,
       mtu: prefs.getInt(_mtuKey) ?? 1500,
       subAutoRefresh: prefs.getBool(_subAutoRefreshKey) ?? false,
@@ -577,6 +581,8 @@ class SettingsService {
     await prefs.setBool(_routingRuServicesKey, settings.routing.ruServicesEnabled);
     await prefs.setString(_updateChannelKey, settings.updateChannel.name);
     await prefs.setString(_fontScaleKey, settings.fontScale.name);
+    await prefs.setString(_geoipUrlKey, settings.geoipUrl);
+    await prefs.setString(_geositeUrlKey, settings.geositeUrl);
     await prefs.setBool(_sniffingEnabledKey, settings.sniffingEnabled);
     await prefs.setInt(_mtuKey, settings.mtu);
     await prefs.setBool(_subAutoRefreshKey, settings.subAutoRefresh);

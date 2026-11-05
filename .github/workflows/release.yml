@@ -66,7 +66,9 @@ jobs:
         run: |
           [ -n "$KEYSTORE" ] || { echo "::error::Нет секрета DEBUG_KEYSTORE_BASE64"; exit 1; }
           [ -z "$BUILD_CORE" ] || [ -n "$CORE_TOKEN" ] || { echo "::error::Нет секрета CORE_RELEASE_TOKEN"; exit 1; }
-          dir="${ANDROID_USER_HOME:-$HOME/.android}"
+          # Без ANDROID_USER_HOME AGP на runner'е берёт ~/.config/.android и генерирует новый ключ
+          dir="$HOME/.android"
+          echo "ANDROID_USER_HOME=$dir" >> "$GITHUB_ENV"
           mkdir -p "$dir"
           echo "$KEYSTORE" | base64 -d > "$dir/debug.keystore"
           fp=$(keytool -list -v -keystore "$dir/debug.keystore" -storepass android -alias androiddebugkey \

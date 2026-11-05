@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../core/models/core_kind.dart';
+import '../../providers/core_provider.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -379,6 +381,15 @@ class _SettingsBody extends StatelessWidget {
           ),
           SetRowToggle(
             t: t,
+            title: 'Автоматизация',
+            hint: 'Tasker/Anubis: команды CONNECT/DISCONNECT и рассылка состояния. '
+                'Любое приложение сможет выключить VPN и узнать, что он включён',
+            value: s.automationEnabled,
+            locked: locked,
+            onChange: (v) => onUpdate(s.copyWith(automationEnabled: v)),
+          ),
+          SetRowToggle(
+            t: t,
             title: 'Уведомление',
             hint: 'Скорость и кнопка отключения в шторке',
             value: s.showNotification,
@@ -399,6 +410,11 @@ class _SettingsBody extends StatelessWidget {
 
           // ── 0x40 NETWORK ──────────────────────────────────────
           SetSectionHeader(t: t, addr: '0x40', label: 'network'),
+          SetInlineField(
+            t: t,
+            label: 'Ядро',
+            child: const _CoreSegment(),
+          ),
           SetRowChev(
             t: t,
             title: 'Сеть',
@@ -508,6 +524,32 @@ class _KVRowTap extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ── Core segment ──────────────────────────────────────────────────
+
+/// Выбор ядра. Ядро, чьи библиотеки не грузятся на устройстве, выбрать нельзя.
+class _CoreSegment extends ConsumerWidget {
+  const _CoreSegment();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = Theme.of(context).extension<TeapodTokens>()!;
+    final settings = ref.watch(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
+    if (settings == null) return const SizedBox.shrink();
+    final available = ref.watch(availableCoresProvider).value ?? const {CoreKind.xrayGo};
+    return SetSegSquare(
+      t: t,
+      value: settings.core.name,
+      opts: const [('xrayGo', 'GO'), ('xrayRust', 'RUST')],
+      locked: available.length < 2,
+      onChanged: (v) async {
+        final core = CoreKind.fromName(v);
+        if (!available.contains(core)) return;
+        await ref.read(settingsProvider.notifier).save(settings.copyWith(core: core));
+      },
     );
   }
 }

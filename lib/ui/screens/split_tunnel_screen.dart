@@ -292,7 +292,7 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
                     final aSelected = packages.contains(a.packageName);
                     final bSelected = packages.contains(b.packageName);
                     if (aSelected != bSelected) return aSelected ? -1 : 1;
-                    return a.appName.compareTo(b.appName);
+                    return a.appName.toLowerCase().compareTo(b.appName.toLowerCase());
                   });
 
                   if (filtered.isEmpty) {

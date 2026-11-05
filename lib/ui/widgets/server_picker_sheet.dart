@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'core_support_gate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/vpn_config.dart';
 import '../../providers/config_provider.dart';
@@ -23,6 +24,11 @@ class _ServerPickerSheet extends ConsumerWidget {
   const _ServerPickerSheet();
 
   void _select(BuildContext context, WidgetRef ref, VpnConfig c) {
+    final reason = unsupportedReason(ref, c);
+    if (reason != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(reason)));
+      return;
+    }
     Navigator.pop(context);
     ref.read(configProvider.notifier).setActiveConfig(c.id);
     final vpnState = ref.read(vpnProvider);
@@ -123,7 +129,10 @@ class _PickerRow extends StatelessWidget {
       };
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      CoreSupportGate(config: config, child: _buildRow(context));
+
+  Widget _buildRow(BuildContext context) {
     final ping = config.latencyMs;
     return GestureDetector(
       onTap: onTap,

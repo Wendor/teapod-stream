@@ -15,6 +15,12 @@ Map<String, dynamic>? _parseExtra(String? raw) {
 
 class VlessParser {
   static VpnConfig? parseUri(String uri) {
+    uri = uri.trim();
+    // Chat/Markdown exports may escape URI punctuation. Only undo the
+    // punctuation escapes, preserving percent-encoded path/query values.
+    if (uri.startsWith(r'vless\://')) {
+      uri = uri.replaceAllMapped(RegExp(r'\\([:@_])'), (m) => m[1]!);
+    }
     if (uri.startsWith('vless://')) return _parseVless(uri);
     if (uri.startsWith('vmess://')) return _parseVmess(uri);
     if (uri.startsWith('trojan://')) return _parseTrojan(uri);
@@ -88,7 +94,10 @@ class VlessParser {
         flow: params['flow'],
         encryption: params['encryption'] ?? 'none',
         xhttpMode: params['mode'],
-        xhttpExtra: _parseExtra(params['extra']),
+        xhttpExtra: _parseExtra(params['extra']) ??
+            (params['x_padding_bytes'] == null
+                ? null
+                : {'xPaddingBytes': params['x_padding_bytes']}),
         finalmask: _parseExtra(params['fm']),
         alpn: params['alpn'],
         ech: params['ech'],
@@ -152,7 +161,9 @@ class VlessParser {
 
       final atIdx = main.lastIndexOf('@');
       if (atIdx < 0) return null;
-      final password = main.substring(0, atIdx);
+      // Пароль в ссылке percent-кодирован (схема trojan-gfw, v2rayN/v2rayNG
+      // декодируют его); битый % оставляет строку как есть.
+      final password = _decodeComponentOrRaw(main.substring(0, atIdx));
       final hostPart = main.substring(atIdx + 1);
 
       final qIdx = hostPart.indexOf('?');
@@ -161,6 +172,15 @@ class VlessParser {
 
       final (host, port) = _parseHostPort(hostPort, 443);
       final params = Uri.splitQueryString(queryStr);
+      // Trojan по умолчанию TLS, но ссылка может задать reality или none —
+      // раньше они молча превращались в TLS, а pbk/sid, pinSHA256, alpn и ech
+      // терялись. allowInsecure по-прежнему не читается: без пина сертификат
+      // проверяется, как и раньше.
+      final security = switch (params['security']?.trim().toLowerCase()) {
+        'reality' => VpnSecurity.reality,
+        'none' => VpnSecurity.none,
+        _ => VpnSecurity.tls,
+      };
 
       return VpnConfig(
         id: const Uuid().v4(),
@@ -170,15 +190,22 @@ class VlessParser {
         port: port,
         uuid: '',
         password: password,
-        security: VpnSecurity.tls,
+        security: security,
         transport: _parseTransport(params['type'] ?? 'tcp'),
+        pinSHA256: params['pinSHA256'],
         sni: params['sni'] ?? params['peer'],
         wsPath: params['path'],
         wsHost: params['host'],
         fingerprint: params['fp'],
+        publicKey: params['pbk'],
+        shortId: params['sid'],
+        spiderX: params['spx'],
+        postQuantumKey: params['pqv'],
         grpcServiceName: params['serviceName'],
         xhttpMode: params['mode'],
         xhttpExtra: _parseExtra(params['extra']),
+        alpn: params['alpn'],
+        ech: params['ech'],
         createdAt: DateTime.now(),
         rawUri: uri,
       );
@@ -216,11 +243,15 @@ class VlessParser {
             : hostPortRaw;
         if (qIdx >= 0) queryStr = hostPart.substring(qIdx + 1);
 
+        // SIP002: userinfo — base64url(method:password) или, для SS2022,
+        // percent-encoded `method:password`. Раньше %2B/%3D/%3A ключа
+        // оставались в пароле как есть.
+        final plainUserInfo = _decodeComponentOrRaw(userInfo);
         String decoded;
         try {
-          decoded = utf8.decode(base64Decode(_padBase64(userInfo)));
+          decoded = utf8.decode(base64Decode(_padBase64(plainUserInfo)));
         } catch (_) {
-          decoded = userInfo;
+          decoded = plainUserInfo;
         }
 
         final colonIdx = decoded.indexOf(':');
@@ -300,11 +331,33 @@ class VlessParser {
       final hostPart = main.substring(atIdx + 1);
 
       final qIdx = hostPart.indexOf('?');
-      final hostPort = qIdx >= 0 ? hostPart.substring(0, qIdx) : hostPart;
+      var hostPort = qIdx >= 0 ? hostPart.substring(0, qIdx) : hostPart;
       final queryStr = qIdx >= 0 ? hostPart.substring(qIdx + 1) : '';
+      // Официальный формат ссылки — `host:port/?…`: путь в порт не входит.
+      final slashIdx = hostPort.indexOf('/');
+      if (slashIdx >= 0) hostPort = hostPort.substring(0, slashIdx);
 
-      final (host, port) = _parseHostPort(hostPort, 443);
+      final (host, portSpec) = _splitHostPortSpec(hostPort);
       final params = Uri.splitQueryString(queryStr);
+      // Port hopping: диапазон/список вместо порта (`20000-30000`,
+      // `443,5000-6000`) или `mport` из v2rayN. Нераспознанный порт — ошибка
+      // импорта, а не тихие 443: с чужим портом профиль просто не подключится.
+      final ports = _parsePortSpec(portSpec, 443);
+      if (ports == null) return null;
+      final port = ports.$1;
+      var hopPorts = ports.$2;
+      final mport = params['mport']?.trim() ?? '';
+      if (hopPorts == null && mport.isNotEmpty) {
+        final hop = _parsePortSpec(mport, port);
+        // Нераспознанный mport (`20000:30000` из sing-box, мусор) ссылку не
+        // ломает: основной порт валиден, подключаемся к нему без hopping.
+        if (hop != null &&
+            hop.$1 >= 1 &&
+            hop.$1 <= 65535 &&
+            (hop.$2 != null || hop.$1 != port)) {
+          hopPorts = hop.$2 ?? '${hop.$1}';
+        }
+      }
 
       final obfs = params['obfs'];
       final obfsPassword =
@@ -326,11 +379,20 @@ class VlessParser {
         pinSHA256: pinSHA256,
         sni: params['sni'],
         obfsPassword: obfsPassword,
+        hopPorts: hopPorts,
         createdAt: DateTime.now(),
         rawUri: uri,
       );
     } catch (e) {
       return null;
+    }
+  }
+
+  static String _decodeComponentOrRaw(String value) {
+    try {
+      return Uri.decodeComponent(value);
+    } catch (_) {
+      return value;
     }
   }
 
@@ -357,6 +419,45 @@ class VlessParser {
     return (host, port);
   }
 
+  /// Хост и сырая строка порта; IPv6 — в квадратных скобках.
+  static (String, String) _splitHostPortSpec(String hostPort) {
+    if (hostPort.startsWith('[')) {
+      final closeBracket = hostPort.indexOf(']');
+      final rest = hostPort.substring(closeBracket + 1);
+      return (
+        hostPort.substring(1, closeBracket),
+        rest.startsWith(':') ? rest.substring(1) : '',
+      );
+    }
+    final colonIdx = hostPort.lastIndexOf(':');
+    if (colonIdx < 0) return (hostPort, '');
+    return (hostPort.substring(0, colonIdx), hostPort.substring(colonIdx + 1));
+  }
+
+  static final _portRange = RegExp(r'^(\d{1,5})(?:-(\d{1,5}))?$');
+
+  /// Порт Hysteria2: одно число или список портов/диапазонов для port
+  /// hopping. Возвращает первый порт и нормализованный список (null, если
+  /// порт один); null — строка не разобрана. Пустая строка — [defaultPort].
+  static (int, String?)? _parsePortSpec(String spec, int defaultPort) {
+    final trimmed = spec.replaceAll(' ', '');
+    if (trimmed.isEmpty) return (defaultPort, null);
+    final single = int.tryParse(trimmed);
+    // Границы одиночного порта проверяет VpnConfig.validate().
+    if (single != null) return (single, null);
+    final parts = trimmed.split(',');
+    int? first;
+    for (final part in parts) {
+      final match = _portRange.firstMatch(part);
+      if (match == null) return null;
+      final from = int.parse(match[1]!);
+      final to = match[2] == null ? from : int.parse(match[2]!);
+      if (from < 1 || to > 65535 || from > to) return null;
+      first ??= from;
+    }
+    return (first!, parts.join(','));
+  }
+
   static VpnSecurity _parseSecurity(String s) {
     switch (s.toLowerCase()) {
       case 'tls':
@@ -371,6 +472,7 @@ class VlessParser {
   static VpnTransport _parseTransport(String s) {
     switch (s.toLowerCase()) {
       case 'ws':
+      case 'websocket':
         return VpnTransport.ws;
       case 'grpc':
         return VpnTransport.grpc;
@@ -387,6 +489,44 @@ class VlessParser {
         return VpnTransport.splithttp;
       default:
         return VpnTransport.tcp;
+    }
+  }
+
+  /// Query-параметры исходной ссылки профиля, включая base64-тело SIP002
+  /// `ss://BASE64#name`. Пусто, если ссылки нет или она нечитаема. Нужны
+  /// билдерам для полей, которых нет в [VpnConfig] (headerType, obfs, plugin).
+  static Map<String, String> linkParams(VpnConfig config) {
+    final raw = config.rawUri;
+    if (raw == null) return const {};
+    final hash = raw.indexOf('#');
+    var main = hash >= 0 ? raw.substring(0, hash) : raw;
+    if (config.protocol == VpnProtocol.shadowsocks && !main.contains('@')) {
+      try {
+        main = utf8.decode(base64Decode(_padBase64(main.substring(5))));
+      } catch (_) {
+        return const {};
+      }
+    }
+    final query = main.indexOf('?');
+    if (query < 0) return const {};
+    try {
+      return Uri.splitQueryString(main.substring(query + 1));
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  /// JSON-тело `vmess://BASE64(JSON)`, из которого прочитан профиль.
+  static Map<String, dynamic> vmessJson(VpnConfig config) {
+    final raw = config.rawUri;
+    if (raw == null || !raw.startsWith('vmess://')) return const {};
+    try {
+      final json = jsonDecode(
+        utf8.decode(base64Decode(_padBase64(raw.substring('vmess://'.length)))),
+      );
+      return json is Map<String, dynamic> ? json : const {};
+    } catch (_) {
+      return const {};
     }
   }
 

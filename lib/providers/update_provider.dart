@@ -64,6 +64,10 @@ class UpdateNotifier extends Notifier<UpdateState> {
       final pkgInfo = await PackageInfo.fromPlatform();
       final currentVersion = pkgInfo.version;
       final abi = await _channel.invokeMethod<String>('getAbi') ?? 'arm64-v8a';
+      if (!AppConstants.supportedAbis.contains(abi)) {
+        state = UpdateError('Устройство не поддерживается: $abi');
+        return;
+      }
       final vpn = ref.read(vpnProvider);
       final settings = ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
       final channel = settings?.updateChannel ?? UpdateChannel.stable;

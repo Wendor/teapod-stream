@@ -93,7 +93,7 @@ class UpdateService {
       }
       return null;
     } finally {
-      client.close();
+      client.close(force: true);
     }
   }
 
@@ -163,7 +163,9 @@ class UpdateService {
           : -1;
       sink = file.openWrite(mode: isResume ? FileMode.append : FileMode.write);
       int downloaded = isResume ? existing : 0;
-      await for (final chunk in resp) {
+      // Тайм-аут простоя: без него зависшая сеть держит загрузку вечно, а отмена
+      // подписки async* ждёт следующего чанка.
+      await for (final chunk in resp.timeout(const Duration(seconds: 30))) {
         sink.add(chunk);
         downloaded += chunk.length;
         yield DownloadProgress(downloaded: downloaded, total: total, done: false);
@@ -173,7 +175,7 @@ class UpdateService {
       yield DownloadProgress(downloaded: downloaded, total: total, done: true);
     } finally {
       await sink?.close();
-      client.close();
+      client.close(force: true);
     }
   }
 

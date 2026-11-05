@@ -4,7 +4,8 @@ import '../../core/constants/app_constants.dart';
 import '../../core/interfaces/vpn_engine.dart';
 import '../../core/models/vpn_config.dart';
 import '../../core/models/vpn_log_entry.dart';
-import 'xray_config_builder.dart';
+import '../../core/cores/core_backend.dart';
+import 'xray_go_backend.dart';
 
 /// XrayEngine is a thin MethodChannel client — it sends commands to the native
 /// Android VPN service and nothing else. All state, stats, and log events are
@@ -12,43 +13,62 @@ import 'xray_config_builder.dart';
 class XrayEngine implements VpnEngine {
   static const _channel = MethodChannel(AppConstants.methodChannel);
 
+  /// Единственная подписка на нативные события. Второй `receiveBroadcastStream()`
+  /// на то же имя затёр бы обработчик первого (`setMessageHandler`) — все
+  /// слушатели (VpnNotifier, диплинки) подключаются к этому broadcast-потоку.
+  static final Stream<dynamic> events =
+      const EventChannel('${AppConstants.methodChannel}/events').receiveBroadcastStream();
+
   @override
   String get protocolName => 'xray';
+
+  /// Ядро по умолчанию для вызовов через интерфейс [VpnEngine].
+  CoreBackend backend = const XrayGoBackend();
 
   @override
   Future<void> connect(VpnConfig config, VpnEngineOptions options) async {
     final String xrayConfig;
-
-    if (config.rawXrayConfig != null) {
-      xrayConfig = XrayConfigBuilder.mergeWithRaw(config.rawXrayConfig!, options);
-    } else {
-      xrayConfig = XrayConfigBuilder.buildJson(config, options);
+    try {
+      xrayConfig = backend.buildConfig(config, options);
+    } on FormatException catch (e) {
+      throw PlatformException(code: 'UNSUPPORTED_CONFIG', message: e.message);
+    } on StateError catch (e) {
+      throw PlatformException(code: 'UNSUPPORTED_CONFIG', message: e.message);
     }
-
-    await _channel.invokeMethod('connect', {
-      'xrayConfig': xrayConfig,
-      'socksPort': options.socksPort,
-      'socksUser': options.socksUser,
-      'socksPassword': options.socksPassword,
-      'excludedPackages': options.excludedPackages.toList(),
-      'includedPackages': options.includedPackages.toList(),
-      'vpnMode': options.vpnMode.name,
-      'proxyOnly': options.proxyOnly,
-      'showNotification': options.showNotification,
-      'killSwitch': options.killSwitch,
-      'allowIcmp': options.allowIcmp,
-      'blockQuic': options.blockQuic,
-      'ipv6Enabled': options.ipv6Enabled,
-      'allowTethering': options.allowTethering,
-      'mtu': options.mtu,
-      'heartbeatProbe': options.heartbeat.probe.name,
-      'heartbeatAction': options.heartbeat.failAction.name,
-      'heartbeatThreshold': options.heartbeat.failureThreshold,
-      'heartbeatUrl': options.heartbeat.url,
-      if (config.ssPrefix != null) 'ssPrefix': config.ssPrefix,
-    });
+    await _channel.invokeMethod('connect', _connectArgs(xrayConfig, config, options));
   }
 
+  /// Конфиг quick-reconnect (плитка, автозапуск) под текущее ядро без подключения.
+  Future<void> saveQuickConnect(VpnConfig config, VpnEngineOptions options) async {
+    await _channel.invokeMethod(
+        'saveQuickConnect', _connectArgs(backend.buildConfig(config, options), config, options));
+  }
+
+  Future<void> clearQuickConnect() => _channel.invokeMethod('clearQuickConnect');
+
+  Map<String, Object?> _connectArgs(String xrayConfig, VpnConfig config, VpnEngineOptions options) => {
+        'engine': backend.kind.nativeId,
+        'xrayConfig': xrayConfig,
+        'socksPort': options.socksPort,
+        'socksUser': options.socksUser,
+        'socksPassword': options.socksPassword,
+        'excludedPackages': options.excludedPackages.toList(),
+        'includedPackages': options.includedPackages.toList(),
+        'vpnMode': options.vpnMode.name,
+        'proxyOnly': options.proxyOnly,
+        'showNotification': options.showNotification,
+        'killSwitch': options.killSwitch,
+        'allowIcmp': options.allowIcmp,
+        'blockQuic': options.blockQuic,
+        'ipv6Enabled': options.ipv6Enabled,
+        'allowTethering': options.allowTethering,
+        'mtu': options.mtu,
+        'heartbeatProbe': backend.effectiveHeartbeatProbe(options.heartbeat.probe).name,
+        'heartbeatAction': options.heartbeat.failAction.name,
+        'heartbeatThreshold': options.heartbeat.failureThreshold,
+        'heartbeatUrl': options.heartbeat.url,
+        if (config.ssPrefix != null) 'ssPrefix': config.ssPrefix,
+      };
 
   @override
   Future<void> disconnect() async {
@@ -59,10 +79,9 @@ class XrayEngine implements VpnEngine {
   /// (`Teapodcore.measureOutboundDelay`). null — сервер не ответил.
   Future<int?> measureOutbound(VpnConfig config, VpnEngineOptions options, String url) async {
     try {
-      final xrayConfig = config.rawXrayConfig != null
-          ? XrayConfigBuilder.mergeWithRaw(config.rawXrayConfig!, options)
-          : XrayConfigBuilder.buildJson(config, options);
+      final xrayConfig = backend.buildProbeConfig(config, options);
       return await _channel.invokeMethod<int>('measureOutbound', {
+        'engine': backend.kind.nativeId,
         'config': xrayConfig,
         'url': url,
       });
@@ -86,7 +105,7 @@ class XrayEngine implements VpnEngine {
   }
 
   @override
-  bool supportsConfig(VpnConfig config) => true;
+  bool supportsConfig(VpnConfig config) => backend.checkConfig(config) == null;
 
   Future<Map<String, String>> getBinaryVersions() async {
     try {
@@ -212,21 +231,15 @@ class XrayEngine implements VpnEngine {
     return (upload: 0, download: 0, uploadSpeed: 0, downloadSpeed: 0);
   }
 
-  /// Get stats history for chart.
-  Future<List<Map<String, int>>> getStatsHistory() async {
+  /// История скоростей для графика после точки [since] эпохи [epoch]
+  /// (`{epoch, seq, from, full, history}`, см. XrayVpnService.getStatsHistory).
+  Future<Map<Object?, Object?>?> getStatsHistory(int epoch, int since) async {
     try {
-      final result = await _channel.invokeMethod<List<Object?>>('getStatsHistory');
-      if (result != null) {
-        return result
-            .whereType<Map<Object?, Object?>>()
-            .map((m) => {
-                  'uploadSpeed': (m['uploadSpeed'] as num?)?.toInt() ?? 0,
-                  'downloadSpeed': (m['downloadSpeed'] as num?)?.toInt() ?? 0,
-                })
-            .toList();
-      }
-    } catch (_) {}
-    return [];
+      return await _channel.invokeMethod<Map<Object?, Object?>>(
+          'getStatsHistory', {'epoch': epoch, 'since': since});
+    } catch (_) {
+      return null;
+    }
   }
 
   VpnState _parseState(String s) => switch (s) {

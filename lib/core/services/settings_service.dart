@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/vpn_log_entry.dart';
 import '../models/dns_config.dart';
 import '../models/heartbeat_settings.dart';
+import '../models/core_kind.dart';
 import '../models/routing_settings.dart';
 import '../models/xray_tuning.dart';
 import '../constants/app_constants.dart';
@@ -94,6 +95,11 @@ class AppSettings {
   /// Ослабляет защиту: исключённые приложения смогут выйти через tun0.
   final bool allowTethering;
   final bool autoStartOnBoot;
+
+  /// Tasker/Anubis: broadcast-команды CONNECT/DISCONNECT и STATE_CHANGED.
+  /// Видны любому приложению, поэтому по умолчанию выключено. Читает натив
+  /// (`flutter.automation_enabled`).
+  final bool automationEnabled;
   final TlsFingerprint tlsFingerprint;
   final FragmentSettings fragment;
   final NoiseSettings noise;
@@ -103,6 +109,9 @@ class AppSettings {
   /// Ведение журнала (файл + UI). При выключении нативный слой
   /// пишет только warning/error.
   final bool logsEnabled;
+
+  /// VPN-ядро. Значения недоступных ядру настроек не трогаются.
+  final CoreKind core;
 
   const AppSettings({
     this.socksPort = AppConstants.defaultSocksPort,
@@ -142,12 +151,14 @@ class AppSettings {
     this.ipv6Enabled = false,
     this.allowTethering = false,
     this.autoStartOnBoot = false,
+    this.automationEnabled = false,
     this.tlsFingerprint = TlsFingerprint.defaultFp,
     this.fragment = const FragmentSettings(),
     this.noise = const NoiseSettings(),
     this.mux = const MuxSettings(),
     this.heartbeat = const HeartbeatSettings(),
     this.logsEnabled = true,
+    this.core = CoreKind.xrayGo,
   });
 
   AppSettings copyWith({
@@ -188,12 +199,14 @@ class AppSettings {
     bool? ipv6Enabled,
     bool? allowTethering,
     bool? autoStartOnBoot,
+    bool? automationEnabled,
     TlsFingerprint? tlsFingerprint,
     FragmentSettings? fragment,
     NoiseSettings? noise,
     MuxSettings? mux,
     HeartbeatSettings? heartbeat,
     bool? logsEnabled,
+    CoreKind? core,
   }) {
     return AppSettings(
       socksPort: socksPort ?? this.socksPort,
@@ -233,12 +246,14 @@ class AppSettings {
       ipv6Enabled: ipv6Enabled ?? this.ipv6Enabled,
       allowTethering: allowTethering ?? this.allowTethering,
       autoStartOnBoot: autoStartOnBoot ?? this.autoStartOnBoot,
+      automationEnabled: automationEnabled ?? this.automationEnabled,
       tlsFingerprint: tlsFingerprint ?? this.tlsFingerprint,
       fragment: fragment ?? this.fragment,
       noise: noise ?? this.noise,
       mux: mux ?? this.mux,
       heartbeat: heartbeat ?? this.heartbeat,
       logsEnabled: logsEnabled ?? this.logsEnabled,
+      core: core ?? this.core,
     );
   }
 
@@ -280,12 +295,14 @@ class AppSettings {
     'ipv6Enabled': ipv6Enabled,
     'allowTethering': allowTethering,
     'autoStartOnBoot': autoStartOnBoot,
+    'automationEnabled': automationEnabled,
     'tlsFingerprint': tlsFingerprint.name,
     'fragment': fragment.toJson(),
     'noise': noise.toJson(),
     'mux': mux.toJson(),
     'heartbeat': heartbeat.toJson(),
     'logsEnabled': logsEnabled,
+    'core': core.name,
   };
 
   static AppSettings fromJson(Map<String, dynamic> json) {
@@ -307,7 +324,7 @@ class AppSettings {
       customDnsAddress: json['customDnsAddress'] as String? ?? '1.1.1.1',
       customDnsType: json['customDnsType'] as String? ?? 'udp',
       enableUdp: json['enableUdp'] as bool? ?? true,
-      allowIcmp: json['allowIcmp'] as bool? ?? true,
+      allowIcmp: json['allowIcmp'] as bool? ?? false,
       randomCredentials: json['randomCredentials'] as bool? ?? true,
       socksUser: json['socksUser'] as String? ?? '',
       socksPassword: json['socksPassword'] as String? ?? '',
@@ -334,6 +351,7 @@ class AppSettings {
       ipv6Enabled: json['ipv6Enabled'] as bool? ?? false,
       allowTethering: json['allowTethering'] as bool? ?? false,
       autoStartOnBoot: json['autoStartOnBoot'] as bool? ?? false,
+      automationEnabled: json['automationEnabled'] as bool? ?? false,
       tlsFingerprint: TlsFingerprint.values.firstWhere(
         (e) => e.name == json['tlsFingerprint'], orElse: () => TlsFingerprint.defaultFp),
       fragment: json['fragment'] is Map<String, dynamic>
@@ -349,6 +367,7 @@ class AppSettings {
           ? HeartbeatSettings.fromJson(json['heartbeat'] as Map<String, dynamic>)
           : const HeartbeatSettings(),
       logsEnabled: json['logsEnabled'] as bool? ?? true,
+      core: CoreKind.fromName(json['core'] as String?),
     );
   }
 
@@ -393,6 +412,8 @@ class SettingsService {
   static const _routingRuServicesKey = 'routing_ru_services_enabled';
   static const _updateChannelKey = 'update_channel';
   static const _fontScaleKey = 'font_scale';
+  static const _geoipUrlKey = 'geoip_url';
+  static const _geositeUrlKey = 'geosite_url';
   static const _sniffingEnabledKey = 'sniffing_enabled';
   static const _mtuKey = 'mtu';
   static const _subAutoRefreshKey = 'sub_auto_refresh';
@@ -404,12 +425,14 @@ class SettingsService {
   static const _ipv6EnabledKey = 'ipv6_enabled';
   static const _allowTetheringKey = 'allow_tethering';
   static const _autoStartOnBootKey = 'auto_start_on_boot';
+  static const _automationEnabledKey = 'automation_enabled';
   static const _tlsFingerprintKey = 'tls_fingerprint';
   static const _fragmentKey = 'xray_fragment';
   static const _noiseKey = 'xray_noise';
   static const _muxKey = 'xray_mux';
   static const _heartbeatKey = 'heartbeat_settings';
   static const _logsEnabledKey = 'logs_enabled';
+  static const _coreKey = 'core_kind';
 
   final _secure = StorageSecureService();
 
@@ -442,7 +465,7 @@ class SettingsService {
       customDnsAddress: prefs.getString(_customDnsAddressKey) ?? '1.1.1.1',
       customDnsType: prefs.getString(_customDnsTypeKey) ?? 'udp',
       enableUdp: prefs.getBool(_enableUdpKey) ?? true,
-      allowIcmp: prefs.getBool(_allowIcmpKey) ?? true,
+      allowIcmp: prefs.getBool(_allowIcmpKey) ?? false,
       randomCredentials: prefs.getBool(_randomCredentialsKey) ?? true,
       socksUser: creds.user,
       socksPassword: creds.password,
@@ -459,6 +482,8 @@ class SettingsService {
         (e) => e.name == prefs.getString(_fontScaleKey),
         orElse: () => FontScale.normal,
       ),
+      geoipUrl: prefs.getString(_geoipUrlKey) ?? GeoPresets.defaultGeoipUrl,
+      geositeUrl: prefs.getString(_geositeUrlKey) ?? GeoPresets.defaultGeositeUrl,
       sniffingEnabled: prefs.getBool(_sniffingEnabledKey) ?? true,
       mtu: prefs.getInt(_mtuKey) ?? 1500,
       subAutoRefresh: prefs.getBool(_subAutoRefreshKey) ?? false,
@@ -473,6 +498,7 @@ class SettingsService {
       ipv6Enabled: prefs.getBool(_ipv6EnabledKey) ?? false,
       allowTethering: prefs.getBool(_allowTetheringKey) ?? false,
       autoStartOnBoot: prefs.getBool(_autoStartOnBootKey) ?? false,
+      automationEnabled: prefs.getBool(_automationEnabledKey) ?? false,
       tlsFingerprint: TlsFingerprint.values.firstWhere(
         (e) => e.name == prefs.getString(_tlsFingerprintKey),
         orElse: () => TlsFingerprint.defaultFp,
@@ -484,6 +510,7 @@ class SettingsService {
       heartbeat: _decodeOr(prefs.getString(_heartbeatKey), HeartbeatSettings.fromJson,
           const HeartbeatSettings()),
       logsEnabled: prefs.getBool(_logsEnabledKey) ?? true,
+      core: CoreKind.fromName(prefs.getString(_coreKey)),
     );
   }
 
@@ -554,6 +581,8 @@ class SettingsService {
     await prefs.setBool(_routingRuServicesKey, settings.routing.ruServicesEnabled);
     await prefs.setString(_updateChannelKey, settings.updateChannel.name);
     await prefs.setString(_fontScaleKey, settings.fontScale.name);
+    await prefs.setString(_geoipUrlKey, settings.geoipUrl);
+    await prefs.setString(_geositeUrlKey, settings.geositeUrl);
     await prefs.setBool(_sniffingEnabledKey, settings.sniffingEnabled);
     await prefs.setInt(_mtuKey, settings.mtu);
     await prefs.setBool(_subAutoRefreshKey, settings.subAutoRefresh);
@@ -565,12 +594,14 @@ class SettingsService {
     await prefs.setBool(_ipv6EnabledKey, settings.ipv6Enabled);
     await prefs.setBool(_allowTetheringKey, settings.allowTethering);
     await prefs.setBool(_autoStartOnBootKey, settings.autoStartOnBoot);
+    await prefs.setBool(_automationEnabledKey, settings.automationEnabled);
     await prefs.setString(_tlsFingerprintKey, settings.tlsFingerprint.name);
     await prefs.setString(_fragmentKey, jsonEncode(settings.fragment.toJson()));
     await prefs.setString(_noiseKey, jsonEncode(settings.noise.toJson()));
     await prefs.setString(_muxKey, jsonEncode(settings.mux.toJson()));
     await prefs.setString(_heartbeatKey, jsonEncode(settings.heartbeat.toJson()));
     await prefs.setBool(_logsEnabledKey, settings.logsEnabled);
+    await prefs.setString(_coreKey, settings.core.name);
     // SOCKS credentials go to encrypted storage
     await _secure.writeSocksCredentials(settings.socksUser, settings.socksPassword);
   }

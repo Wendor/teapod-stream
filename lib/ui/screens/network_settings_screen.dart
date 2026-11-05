@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../core/cores/core_backend.dart';
+import '../widgets/feature_gate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/heartbeat_settings.dart';
 import '../../core/models/xray_tuning.dart';
@@ -297,13 +299,17 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                           ),
                         ),
                       ],
-                      SetRowToggle(
+                      FeatureGate(
+                        feature: CoreFeature.proxyOnly,
+                        allowTurnOff: s.proxyOnly,
+                        child: SetRowToggle(
                         t: t,
                         title: 'Только прокси',
                         hint: 'Запустить SOCKS прокси без VPN-туннеля',
                         value: s.proxyOnly,
                         locked: locked,
                         onChange: (v) => _update(s.copyWith(proxyOnly: v)),
+                      ),
                       ),
                       SetSectionHeader(t: t, addr: '0x32', label: 'traffic'),
                       SetRowToggle(
@@ -314,13 +320,16 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                         locked: locked,
                         onChange: (v) => _update(s.copyWith(enableUdp: v)),
                       ),
-                      SetRowToggle(
+                      FeatureGate(
+                        feature: CoreFeature.icmpToggle,
+                        child: SetRowToggle(
                         t: t,
                         title: 'ICMP (ping)',
                         hint: 'Разрешить ping-запросы через туннель',
                         value: s.allowIcmp,
                         locked: locked,
                         onChange: (v) => _update(s.copyWith(allowIcmp: v)),
+                      ),
                       ),
                       SetRowToggle(
                         t: t,
@@ -382,7 +391,9 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                           onChange: (v) => _update(s.copyWith(ipv6Enabled: v)),
                         ),
                       if (!s.proxyOnly)
-                        SetInlineField(
+                        FeatureGate(
+                          feature: CoreFeature.customMtu,
+                          child: SetInlineField(
                           t: t,
                           label: 'MTU',
                           locked: locked,
@@ -399,7 +410,10 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             },
                           ),
                         ),
-                      SetInlineField(
+                        ),
+                      FeatureGate(
+                        feature: CoreFeature.observatory,
+                        child: SetInlineField(
                         t: t,
                         label: 'Observatory мин. интервал, сек',
                         locked: locked,
@@ -415,6 +429,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             }
                           },
                         ),
+                      ),
                       ),
                       SetSectionHeader(t: t, addr: '0x34', label: 'fragment'),
                       SetRowToggle(
@@ -529,13 +544,16 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                                   : 'Пакет не должен быть пустым, пауза — диапазон вида 10-20. Шумы не применяются.'),
                       ],
                       SetSectionHeader(t: t, addr: '0x36', label: 'mux'),
-                      SetRowToggle(
+                      FeatureGate(
+                        feature: CoreFeature.mux,
+                        child: SetRowToggle(
                         t: t,
                         title: 'Mux',
                         hint: 'Мультиплексирует несколько соединений в одно — меньше хендшейков. При XTLS Vision TCP-ветка отключается автоматически (остаётся XUDP). Не применяется к Hysteria2.',
                         value: s.mux.enabled,
                         locked: locked,
                         onChange: (v) => _update(s.copyWith(mux: s.mux.copyWith(enabled: v))),
+                      ),
                       ),
                       if (s.mux.enabled) ...[
                         SetInlineField(

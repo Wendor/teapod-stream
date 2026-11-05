@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../../providers/core_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/routing_settings.dart';
 import '../../core/models/vpn_stats.dart';
@@ -25,7 +26,12 @@ class HomeScreen extends ConsumerWidget {
     final effectiveConfig = ref.watch(effectiveConfigProvider);
     final version        = ref.watch(appVersionProvider).maybeWhen(data: (v) => v, orElse: () => 'v?');
     final t = Theme.of(context).extension<TeapodTokens>()!;
-    final canToggle = effectiveConfig != null;
+    final unsupported = effectiveConfig == null
+        ? null
+        : ref.watch(coreBackendProvider).checkConfig(effectiveConfig);
+    // Неподдерживаемый ядром профиль подключить нельзя; отключиться — можно.
+    final canToggle = effectiveConfig != null &&
+        (unsupported == null || vpnState.isConnected || vpnState.isBusy);
     final pingMs    = effectiveConfig?.latencyMs;
 
     final isConn  = vpnState.isConnected;
@@ -80,6 +86,8 @@ class HomeScreen extends ConsumerWidget {
               ),
               if (isManaged)
                 _ManagedWarning(t: t, direction: routingDirection),
+              if (unsupported != null)
+                _CoreWarning(t: t, reason: unsupported),
             ],
           ),
         ),
@@ -676,6 +684,33 @@ class _MetricsGrid extends StatelessWidget {
 }
 
 // ── Managed config warning ────────────────────────────────────────
+
+/// Активный профиль не поддерживается выбранным ядром.
+class _CoreWarning extends StatelessWidget {
+  final TeapodTokens t;
+  final String reason;
+
+  const _CoreWarning({required this.t, required this.reason});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        decoration: BoxDecoration(border: Border(top: BorderSide(color: t.line, width: 1))),
+        child: RichText(
+          text: TextSpan(
+            style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5),
+            children: [
+              TextSpan(
+                text: '[core] ',
+                style: AppTheme.mono(size: 10, color: AppColors.accentOrange, letterSpacing: 0.5),
+              ),
+              TextSpan(text: '$reason · смените ядро или конфиг'),
+            ],
+          ),
+        ),
+      );
+}
 
 class _ManagedWarning extends StatelessWidget {
   final TeapodTokens t;

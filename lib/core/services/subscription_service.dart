@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import '../constants/app_constants.dart';
 import '../models/vpn_config.dart';
 import '../../protocols/xray/vless_parser.dart';
@@ -31,6 +32,9 @@ class SubscriptionFetchResult {
   final String? announceUrl;
   final HwidStatus? hwidStatus;
 
+  /// DER (base64) принятого недоверенного сертификата: сохраняется в подписке как пин.
+  final String? acceptedCertDer;
+
   const SubscriptionFetchResult({
     required this.configs,
     this.profileTitle,
@@ -41,6 +45,7 @@ class SubscriptionFetchResult {
     this.announce,
     this.announceUrl,
     this.hwidStatus,
+    this.acceptedCertDer,
   });
 }
 
@@ -75,28 +80,37 @@ class HwidDeviceInfo {
 }
 
 class SubscriptionService {
+  static const _maxBodyBytes = 10 * 1024 * 1024;
+
   /// Fetch and parse a subscription URL.
   ///
   /// If [allowSelfSigned] is false (default) and the server presents an
   /// untrusted certificate, throws [UntrustedCertificateException] with
   /// certificate details so the caller can decide whether to retry.
   /// If [allowSelfSigned] is true, certificate validation is skipped.
+  /// [pinnedCertDer] — ранее принятый сертификат: только он проходит без проверки.
   /// If [hwidEnabled] is true, HWID headers are sent to support device limits.
   /// If [userAgent] is non-empty, it overrides the default User-Agent.
   Future<SubscriptionFetchResult> fetchSubscription(
     String url, {
     bool allowSelfSigned = false,
+    String? pinnedCertDer,
     HwidDeviceInfo? hwid,
     String? userAgent,
   }) async {
     final uri = Uri.parse(url);
-    final httpClient = HttpClient();
+    final httpClient = HttpClient()..connectionTimeout = const Duration(seconds: 15);
 
     UntrustedCertificateException? certError;
+    String? acceptedCert;
 
     httpClient.badCertificateCallback =
         (X509Certificate cert, String host, int port) {
-      if (allowSelfSigned) return true;
+      final der = base64.encode(cert.der);
+      if (allowSelfSigned || der == pinnedCertDer) {
+        acceptedCert = der;
+        return true;
+      }
       certError = UntrustedCertificateException(
         host: host,
         subject: cert.subject,
@@ -127,12 +141,20 @@ class SubscriptionService {
       }
 
       responseHeaders = response.headers;
-      body = await response.transform(utf8.decoder).join();
+      // Тайм-аут простоя и лимит размера: медленный или огромный ответ не должен
+      // висеть вечно или съесть память.
+      final bytes = BytesBuilder(copy: false);
+      await for (final chunk in response.timeout(const Duration(seconds: 15))) {
+        bytes.add(chunk);
+        if (bytes.length > _maxBodyBytes) throw Exception('Subscription body exceeds 10 MB');
+      }
+      body = utf8.decode(bytes.takeBytes());
     } on HandshakeException {
       if (certError != null) throw certError!;
       rethrow;
     } finally {
-      httpClient.close();
+      // Без force соединение с непрочитанным телом (не-200, таймаут) живёт вечно.
+      httpClient.close(force: true);
     }
 
     final meta = _parseHeaders(responseHeaders);
@@ -197,6 +219,7 @@ class SubscriptionService {
             totalBytes: meta.totalBytes,
             announce: meta.announce,
             announceUrl: meta.announceUrl,
+            acceptedCertDer: acceptedCert,
             hwidStatus: meta.hwidStatus,
           );
         }
@@ -242,6 +265,7 @@ class SubscriptionService {
       totalBytes: meta.totalBytes,
       announce: meta.announce,
       announceUrl: meta.announceUrl,
+      acceptedCertDer: acceptedCert,
       hwidStatus: meta.hwidStatus,
     );
   }

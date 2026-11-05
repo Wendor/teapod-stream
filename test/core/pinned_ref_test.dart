@@ -3,12 +3,12 @@ import 'package:teapodstream/core/models/pinned_ref.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/providers/config_provider.dart';
 
-VpnConfig cfg(String id, String name, {String? subId}) => VpnConfig(
+VpnConfig cfg(String id, String name, {String? subId, int port = 443}) => VpnConfig(
       id: id,
       name: name,
       protocol: VpnProtocol.vless,
       address: 'a.example',
-      port: 443,
+      port: port,
       uuid: 'u',
       security: VpnSecurity.none,
       transport: VpnTransport.tcp,
@@ -69,5 +69,20 @@ void main() {
     expect(PinnedRef.fromJson(pin.toJson()), pin);
     const pin2 = PinnedRef(subscriptionId: 's1', name: 'NL');
     expect(PinnedRef.fromJson(pin2.toJson()), pin2);
+  });
+
+  test('одноимённые конфиги различаются по endpoint', () {
+    final configs = [
+      cfg('a', 'VLESS Server', subId: 's1', port: 443),
+      cfg('b', 'VLESS Server', subId: 's1', port: 4446),
+    ];
+    final pin = PinnedRef.of(configs[1]);
+    final st = ConfigState(configs: configs, pins: [pin]);
+    expect(st.resolvedPins.single.$2!.id, 'b');
+    expect(st.isPinned(configs[0]), isFalse);
+    // endpoint исчез — фоллбэк на одноимённый
+    final st2 = ConfigState(configs: [configs[0]], pins: [pin]);
+    expect(st2.resolvedPins.single.$2!.id, 'a');
+    expect(PinnedRef.fromJson(pin.toJson()), pin);
   });
 }

@@ -6,6 +6,7 @@ import '../services/settings_service.dart';
 /// autoConnect, параметры подписок, geo-URL) не входит.
 String connectionFingerprint(AppSettings s) {
   final map = <String, Object?>{
+    'core': s.core.name,
     'socksPort': s.socksPort,
     'randomPort': s.randomPort,
     'randomCredentials': s.randomCredentials,

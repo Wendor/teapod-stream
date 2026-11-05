@@ -42,16 +42,18 @@ class _SparklinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (samples.isEmpty) return;
+    // Одна точка (первая секунда сессии) — горизонталь: иначе i / (n - 1) = NaN.
+    final data = samples.length == 1 ? [samples.first, samples.first] : samples;
 
-    final max = samples.fold<double>(0.5, (m, v) => v > m ? v : m);
+    final max = data.fold<double>(0.5, (m, v) => v > m ? v : m);
     final w = size.width;
     final h = size.height;
-    final n = samples.length;
+    final n = data.length;
 
     final points = <Offset>[];
     for (var i = 0; i < n; i++) {
       final x = (i / (n - 1)) * w;
-      final y = h - (samples[i] / max) * (h - 4) - 2;
+      final y = h - (data[i] / max) * (h - 4) - 2;
       points.add(Offset(x, y));
     }
 

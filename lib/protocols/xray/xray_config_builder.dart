@@ -7,6 +7,7 @@ import '../../core/models/xray_tuning.dart';
 import '../../core/constants/xray_defaults.dart';
 import '../../core/models/vpn_log_entry.dart' show LogLevel;
 import '../../core/services/settings_service.dart' show DnsQueryStrategy, TlsFingerprint;
+import 'vless_parser.dart';
 
 class XrayConfigBuilder {
   static const _ruServicesDomains = [
@@ -35,6 +36,30 @@ class XrayConfigBuilder {
     'full:go.yandex', 'full:ru.ruwiki.ru',
   ];
 
+  /// Профили, которые xray-core v26 отвергает при старте (`PrintRemovedFeatureError`
+  /// и битый пин): без проверки они падали бы «xray failed to start» и
+  /// попадали в кандидаты urltest. null — профиль собирается.
+  static String? unsupportedReason(VpnConfig config) {
+    if (config.rawXrayConfig != null) return null;
+    if (config.transport == VpnTransport.http2 || config.transport == VpnTransport.quic) {
+      return 'Транспорты HTTP/2 и QUIC удалены из Xray-core: сервер нужно перевести на xHTTP.';
+    }
+    final pin = config.pinSHA256?.trim() ?? '';
+    if (pin.isNotEmpty) {
+      try {
+        certificatePins(pin);
+      } on FormatException catch (e) {
+        return e.message;
+      }
+    }
+    final tls = config.security == VpnSecurity.tls || config.protocol == VpnProtocol.hysteria2;
+    if (tls && config.allowInsecure && pin.isEmpty) {
+      return 'Xray-core больше не поддерживает allowInsecure: укажи pinSHA256 сертификата '
+          'сервера или используй действительный сертификат.';
+    }
+    return null;
+  }
+
   static Map<String, dynamic> build(VpnConfig config, VpnEngineOptions options) {
     final dnsBlock = _buildDnsBlock(options);
     final routing = options.routing;
@@ -42,6 +67,7 @@ class XrayConfigBuilder {
     // the connection destination. Without this, xray re-resolves the domain and
     // redirects the connection to a different IP, breaking tun2socks and leaking DNS.
     final routeOnly = options.sniffingEnabled;
+    final probeHost = Uri.tryParse(options.heartbeat.url)?.host ?? '';
 
     return {
       'log': _logBlock(options),
@@ -84,42 +110,38 @@ class XrayConfigBuilder {
           // No xray routing rule is needed: silently dropping UDP/443 here (blackhole)
           // would force browsers to wait ~55s for QUIC retransmission to time out,
           // and rerouting QUIC to 'direct' would leak the destination outside the tunnel.
-          if (options.dnsMode == DnsMode.proxy) ...[
-            {
-              'type': 'field',
-              'inboundTag': ['dns-module'],
-              'outboundTag': 'proxy',
-            },
-            // Intercept DNS queries from user apps and handle them via xray's DNS module.
-            {
-              'type': 'field',
-              'inboundTag': ['socks-in'],
-              'port': '53',
-              'network': 'udp,tcp',
-              'outboundTag': 'dns-out',
-            },
-          ],
-          if (options.dnsMode == DnsMode.direct) ...[
-            // Direct mode: DNS queries bypass the VPN tunnel entirely.
-            // xray's own process is excluded from the TUN, so 'direct' outbound
-            // connects straight to the internet without going through the VPN.
-            {
-              'type': 'field',
-              'port': '53',
-              'network': 'udp,tcp',
-              'outboundTag': 'direct',
-            },
-          ],
+          // App DNS goes to xray's DNS module with the selected server. Its own sockets
+          // egress through the tunnel in proxy mode, or past it in direct mode (xray's
+          // process is excluded from the TUN) — as if there were no VPN.
+          {
+            'type': 'field',
+            'inboundTag': ['dns-module'],
+            'outboundTag': options.dnsMode == DnsMode.proxy ? 'proxy' : 'direct',
+          },
+          {
+            'type': 'field',
+            'inboundTag': ['socks-in'],
+            'port': '53',
+            'network': 'udp,tcp',
+            'outboundTag': 'dns-out',
+          },
           ..._buildGeoRules(routing),
           // In ONLY mode the catch-all routes to direct, so diagnostic hosts that aren't
           // in the user's rules would bypass the proxy and may be blocked locally.
           // Force them via proxy so heartbeat and IP-detection always test the tunnel.
+          // Свой URL пробы тоже: иначе она мерила бы прямой интернет, а не туннель.
           if (routing.direction == RoutingDirection.onlySelected) ...[
             {
               'type': 'field',
-              'domain': ['full:cp.cloudflare.com', 'full:ip-api.com'],
+              'domain': [
+                'full:cp.cloudflare.com',
+                'full:ip-api.com',
+                if (probeHost.isNotEmpty && !_isIpAddress(probeHost)) 'full:$probeHost',
+              ],
               'outboundTag': 'proxy',
             },
+            if (_isIpAddress(probeHost))
+              {'type': 'field', 'ip': [probeHost], 'outboundTag': 'proxy'},
           ],
           {
             'type': 'field',
@@ -145,12 +167,12 @@ class XrayConfigBuilder {
     };
   }
 
-  /// При logLevel warning/error access-log отключается на стороне xray —
-  /// иначе Go-слой формирует строку на каждое соединение (JNI → файл лога).
+  /// Access-log (строка на каждое соединение: JNI → logcat + файл лога, по сути
+  /// история посещений на диске) — только при debug. Ошибки дозвона xray пишет
+  /// в error-log уровня info, они остаются.
   static Map<String, dynamic> _logBlock(VpnEngineOptions options) => {
         'loglevel': options.logLevel.name,
-        if (options.logLevel == LogLevel.warning ||
-            options.logLevel == LogLevel.error)
+        if (options.logLevel != LogLevel.debug)
           'access': 'none',
       };
 
@@ -164,7 +186,10 @@ class XrayConfigBuilder {
       rules.add({'type': 'field', 'ip': ['geoip:private'], 'outboundTag': 'direct'});
     }
 
-    if (!routing.geoEnabled && !routing.domainEnabled && !routing.geositeEnabled) return rules;
+    if (!routing.geoEnabled && !routing.domainEnabled && !routing.geositeEnabled &&
+        !routing.sitesEnabled && !routing.ruServicesEnabled) {
+      return rules;
+    }
 
     final selectedOut =
         routing.direction == RoutingDirection.bypass ? 'direct' : 'proxy';
@@ -226,17 +251,6 @@ class XrayConfigBuilder {
     final strategy = _queryStrategy(options.dnsQueryStrategy);
     List<dynamic> servers = [];
 
-    if (options.dnsMode == DnsMode.direct) {
-      // Direct mode: DNS queries bypass the VPN via the 'direct' routing rule above.
-      // Use system resolver for xray's own domain lookups (e.g. routing decisions).
-      return {
-        'servers': ['localhost'],
-        'queryStrategy': strategy,
-        'disableFallback': true,
-      };
-    }
-
-    // Proxy mode: DNS queries are intercepted and handled by xray's DNS module.
     // Main server must be first: with disableFallback, xray sends every domain that
     // matches no 'domains' filter to servers[0].
     switch (server.type) {
@@ -308,9 +322,16 @@ class XrayConfigBuilder {
   static bool _dialerApplies(VpnConfig config, VpnEngineOptions options) =>
       _fragmentApplies(config, options) || _noiseApplies(options);
 
-  /// Mux бесполезен поверх hysteria2: QUIC мультиплексирует потоки сам.
+  /// Mux бесполезен поверх hysteria2 (QUIC мультиплексирует сам) и xhttp
+  /// (свой xmux; двойное мультиплексирование upstream не рекомендует).
   static bool _muxApplies(VpnConfig config, VpnEngineOptions options) =>
-      options.mux.enabled && config.protocol != VpnProtocol.hysteria2;
+      options.mux.enabled &&
+      config.protocol != VpnProtocol.hysteria2 &&
+      config.transport != VpnTransport.xhttp;
+
+  /// TCP_USER_TIMEOUT: соединение, где DPI молча дропает пакеты, рвётся через
+  /// 30 с неподтверждённых данных, а не висит в ретрансляции до tcp_retries2.
+  static const _tcpUserTimeoutMs = 30000;
 
   static Map<String, dynamic> _buildDialerOutbound(
       VpnConfig config, VpnEngineOptions options) {
@@ -319,6 +340,9 @@ class XrayConfigBuilder {
     return {
       'tag': _dialerTag,
       'protocol': 'freedom',
+      'streamSettings': {
+        'sockopt': {'tcpUserTimeout': _tcpUserTimeoutMs},
+      },
       'settings': {
         'domainStrategy': 'AsIs',
         if (_fragmentApplies(config, options))
@@ -355,6 +379,8 @@ class XrayConfigBuilder {
     final stream = _buildStreamSettings(config, options.tlsFingerprint);
     if (_dialerApplies(config, options)) {
       stream['sockopt'] = {'dialerProxy': _dialerTag};
+    } else if (config.protocol != VpnProtocol.hysteria2) {
+      stream['sockopt'] = {'tcpUserTimeout': _tcpUserTimeoutMs};
     }
     return {
       'tag': 'proxy',
@@ -425,30 +451,38 @@ class XrayConfigBuilder {
   static String _networkName(VpnTransport t) =>
       t == VpnTransport.http2 ? 'h2' : t.name;
 
-  static List<String>? _formatPinSHA256(String? pin) {
-    if (pin == null || pin.isEmpty) return null;
-    try {
-      if (pin.contains(':')) {
-        final bytes = pin.split(':').map((e) => int.parse(e, radix: 16)).toList();
-        return [base64Encode(bytes)];
+  /// `pinnedPeerCertSha256`: SHA-256 полного DER-сертификата в hex, через запятую.
+  /// `pinSHA256` из ссылки — hex (с двоеточиями или без) или base64 от 32 байт.
+  static String certificatePins(String value) {
+    final pins = <String>[];
+    for (final entry in value.split(',')) {
+      final raw = entry.trim();
+      final hex = raw.replaceAll(':', '');
+      if (RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(hex)) {
+        pins.add(hex.toLowerCase());
+        continue;
       }
-      if (RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(pin)) {
-        final bytes = <int>[];
-        for (var i = 0; i < pin.length; i += 2) {
-          bytes.add(int.parse(pin.substring(i, i + 2), radix: 16));
-        }
-        return [base64Encode(bytes)];
+      try {
+        final bytes = base64.decode(raw);
+        if (bytes.length != 32) throw const FormatException();
+        pins.add(bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join());
+      } on FormatException {
+        throw const FormatException(
+          'pinSHA256 должен быть SHA-256 сертификата: 64 hex-символа или base64 от 32 байт.',
+        );
       }
-      return [pin];
-    } catch (_) {
-      return [pin];
     }
+    return pins.join(',');
   }
 
   static Map<String, dynamic> _buildStreamSettings(VpnConfig config, TlsFingerprint fp) {
     // Глобальный override из настроек приложения; defaultFp — значение из конфига.
     final fingerprint = fp.xrayValue ?? config.fingerprint;
+    // Пин сильнее allowInsecure: принимается только этот сертификат.
+    final pin = config.pinSHA256?.trim() ?? '';
     if (config.protocol == VpnProtocol.hysteria2) {
+      final salamander = config.obfsPassword?.isNotEmpty ?? false;
+      final hopping = config.hopPorts?.isNotEmpty ?? false;
       return {
         'network': 'hysteria',
         'security': 'tls',
@@ -456,22 +490,33 @@ class XrayConfigBuilder {
           // hysteria-dialer в xray не вызывает WithDestination: при пустом serverName
           // SNI берётся из URL auth-запроса и становится литералом "hysteria".
           'serverName': (config.sni?.isNotEmpty ?? false) ? config.sni : config.address,
-          'allowInsecure': config.allowInsecure,
-          if (config.pinSHA256 != null && config.pinSHA256!.isNotEmpty)
-            'pinnedPeerCertificateChainSha256': _formatPinSHA256(config.pinSHA256),
+          'allowInsecure': config.allowInsecure && pin.isEmpty,
+          if (pin.isNotEmpty) 'pinnedPeerCertSha256': certificatePins(pin),
         },
         'hysteriaSettings': {
           'version': 2,
           'auth': config.password ?? '',
         },
-        if (config.obfsPassword != null && config.obfsPassword!.isNotEmpty)
+        if (salamander || hopping)
           'finalmask': {
             'udp': [
-              {
-                'type': 'salamander',
-                'settings': {'password': config.obfsPassword},
-              }
-            ]
+              // Xray-core ≥ v26.9.9: port hopping — UDP-маска udphop (раньше
+              // quicParams.udpHop). Маска с собственным дозвоном обязана быть
+              // первой. Новый сокет + случайный порт раз в 30 с — как в Hysteria.
+              if (hopping)
+                {
+                  'type': 'udphop',
+                  'settings': {
+                    'mode': 'intervalLocal,intervalRemote',
+                    'remotePorts': config.hopPorts,
+                  },
+                },
+              if (salamander)
+                {
+                  'type': 'salamander',
+                  'settings': {'password': config.obfsPassword},
+                },
+            ],
           },
       };
     }
@@ -491,16 +536,27 @@ class XrayConfigBuilder {
       if (config.security == VpnSecurity.tls)
         'tlsSettings': {
           'serverName': config.sni ?? '',
-          'allowInsecure': config.allowInsecure,
+          'allowInsecure': config.allowInsecure && pin.isEmpty,
+          if (pin.isNotEmpty) 'pinnedPeerCertSha256': certificatePins(pin),
           if (fingerprint != null && fingerprint.isNotEmpty)
             'fingerprint': fingerprint,
           if (config.alpn != null && config.alpn!.isNotEmpty)
             'alpn': config.alpn!.split(',').map((s) => s.trim()).toList(),
+          // Ключ Xray-core — echConfigList; прежний echSettings молча игнорировался.
           if (config.ech != null && config.ech!.isNotEmpty)
-            'echSettings': {
-              'enable': true,
-              'config': [config.ech],
+            'echConfigList': config.ech,
+        },
+      if (_tcpHttpHeader(config))
+        'tcpSettings': {
+          'header': {
+            'type': 'http',
+            'request': {
+              'path': _csv(config.wsPath ?? '/', fallback: '/'),
+              'headers': {
+                if (config.wsHost?.isNotEmpty ?? false) 'Host': _csv(config.wsHost!),
+              },
             },
+          },
         },
       if (config.transport == VpnTransport.ws)
         'wsSettings': {
@@ -538,6 +594,25 @@ class XrayConfigBuilder {
     };
   }
 
+  /// TCP с HTTP-маскировкой (`headerType=http`, у VMess — `type`). Полей в
+  /// [VpnConfig] нет — читаем исходную ссылку. Без заголовка сервер рвёт соединение.
+  static bool _tcpHttpHeader(VpnConfig config) {
+    if (config.transport != VpnTransport.tcp || config.protocol == VpnProtocol.hysteria2) {
+      return false;
+    }
+    final type = config.protocol == VpnProtocol.vmess
+        ? VlessParser.vmessJson(config)['type']?.toString()
+        : VlessParser.linkParams(config)['headerType'];
+    return type?.trim().toLowerCase() == 'http';
+  }
+
+  static List<String> _csv(String value, {String? fallback}) {
+    final items = [
+      for (final v in value.split(',')) if (v.trim().isNotEmpty) v.trim(),
+    ];
+    return items.isEmpty && fallback != null ? [fallback] : items;
+  }
+
   static String buildJson(VpnConfig config, VpnEngineOptions options) {
     return const JsonEncoder().convert(build(config, options));
   }
@@ -556,6 +631,16 @@ class XrayConfigBuilder {
   static String mergeWithRaw(String rawConfig, VpnEngineOptions options) {
     try {
       final cfg = jsonDecode(rawConfig) as Map<String, dynamic>;
+
+      // api/metrics с `listen` — gRPC (HandlerService.ListOutbounds: адреса, UUID,
+      // ключи) и pprof на localhost без аутентификации для любого приложения.
+      cfg..remove('api')..remove('metrics');
+
+      // allowInsecure в xray v26 роняет старт всего конфига; без него узлы с
+      // самоподписанным сертификатом отказывают только на рукопожатии.
+      for (final o in (cfg['outbounds'] as List? ?? const []).whereType<Map<String, dynamic>>()) {
+        (o['streamSettings']?['tlsSettings'] as Map?)?.remove('allowInsecure');
+      }
 
       // Preserve the original socks inbound tag so server routing rules
       // (inboundTag: ["socks", "http"]) keep matching after we replace the inbound.
@@ -643,8 +728,9 @@ class XrayConfigBuilder {
       }
 
       return jsonEncode(cfg);
-    } catch (_) {
-      return rawConfig;
+    } catch (e) {
+      // Не отдаём конфиг как есть: в нём серверные inbounds (0.0.0.0, noauth).
+      throw FormatException('Не удалось разобрать JSON-конфиг подписки: $e');
     }
   }
 

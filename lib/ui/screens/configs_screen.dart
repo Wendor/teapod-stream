@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/core_support_gate.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
@@ -383,6 +384,11 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
   // ── Actions ────────────────────────────────────────────────────
 
   void _selectConfig(WidgetRef ref, VpnConfig config) {
+    final reason = unsupportedReason(ref, config);
+    if (reason != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(reason)));
+      return;
+    }
     ref.read(configProvider.notifier).setActiveConfig(config.id);
     final vpnState = ref.read(vpnProvider);
     if (vpnState.isConnected || vpnState.isBusy) {
@@ -533,24 +539,10 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
     if (ok == true && controller.text.trim().isNotEmpty) {
       final updated = VlessParser.parseUri(controller.text.trim());
       if (updated != null) {
-        final renamed = VpnConfig(
+        // Все разобранные поля — из новой ссылки; от старого профиля только
+        // идентичность, задержка и подписка.
+        final renamed = updated.copyWith(
           id: config.id,
-          name: updated.name,
-          protocol: updated.protocol,
-          address: updated.address,
-          port: updated.port,
-          uuid: updated.uuid,
-          security: updated.security,
-          transport: updated.transport,
-          sni: updated.sni,
-          wsPath: updated.wsPath,
-          wsHost: updated.wsHost,
-          grpcServiceName: updated.grpcServiceName,
-          publicKey: updated.publicKey,
-          shortId: updated.shortId,
-          spiderX: updated.spiderX,
-          flow: updated.flow,
-          encryption: updated.encryption,
           createdAt: config.createdAt,
           rawUri: controller.text.trim(),
           latencyMs: config.latencyMs,
@@ -698,9 +690,9 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
     );
     if (ok == true && controller.text.trim().isNotEmpty) {
       final updatedUrl = controller.text.trim();
-      await ConfigNotifier.storage.removeSubscription(sub.id);
       try {
-        await ref.read(configProvider.notifier).addSubscriptionFromUrl(updatedUrl, name: sub.name);
+        await ref.read(configProvider.notifier)
+            .addSubscriptionFromUrl(updatedUrl, name: sub.name, replaceId: sub.id);
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Подписка обновлена по новому URL')));
@@ -1433,7 +1425,10 @@ class _ConfigRow extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      CoreSupportGate(config: config, child: _buildRow(context));
+
+  Widget _buildRow(BuildContext context) {
     final hexAddr = '0x${addr.toString().padLeft(2, '0')}';
     final ping = config.latencyMs;
     final tagColor = isActive ? t.accent : t.textDim;

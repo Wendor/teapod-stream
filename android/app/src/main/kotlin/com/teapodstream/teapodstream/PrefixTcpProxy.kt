@@ -1,6 +1,8 @@
 package com.teapodstream.teapodstream
 
 import java.io.IOException
+import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.Executors
@@ -22,7 +24,8 @@ class PrefixTcpProxy(
     // to the SS server through us. null = allow all (tests).
     private val clientAllowed: ((Socket) -> Boolean)? = null,
 ) {
-    private val serverSocket = ServerSocket(0) // random available port
+    // Только loopback: ServerSocket(0) слушал все интерфейсы, включая Wi-Fi и раздачу.
+    private val serverSocket = ServerSocket(0, 50, InetAddress.getLoopbackAddress())
     val localPort: Int = serverSocket.localPort
 
     @Volatile private var running = true
@@ -61,7 +64,7 @@ class PrefixTcpProxy(
             if (firstN <= 0) return
 
             android.util.Log.i(tag, "connecting to $targetHost:$targetPort (first chunk: $firstN bytes)")
-            val server = Socket(targetHost, targetPort)
+            val server = Socket().apply { connect(InetSocketAddress(targetHost, targetPort), 10_000) }
             android.util.Log.i(tag, "connected, sending ${prefix.size}+$firstN bytes combined")
             try {
                 // Single write: prefix + first SS data → one TCP segment

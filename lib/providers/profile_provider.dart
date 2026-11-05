@@ -165,13 +165,14 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
     final current = _current;
     if (current == null) return null;
 
+    final local = await ref.read(settingsProvider.future);
     final newId = 'profile_${DateTime.now().millisecondsSinceEpoch}';
     final profile = Profile(
       id: newId,
       name: bundle.profile.name,
       isDefault: false,
       readonly: makeReadonly,
-      settings: bundle.profile.settings,
+      settings: _keepLocalSecurity(bundle.profile.settings, local),
       createdAt: DateTime.now(),
       sourceUrl: sourceUrl ?? bundle.sourceUrl,
       lastFetchedAt: sourceUrl != null ? DateTime.now() : bundle.profile.lastFetchedAt,
@@ -192,6 +193,25 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
     if (switchToProfile) await switchProfile(newId);
     return newId;
   }
+
+  /// Чужой профиль не трогает поля, которыми вскрывается туннель: SOCKS (порт,
+  /// креды — открытый прокси на localhost), proxy-only (трафик мимо VPN), URL
+  /// пробы heartbeat (видит IP сервера), HWID и автоматизацию.
+  static AppSettings _keepLocalSecurity(AppSettings imported, AppSettings local) =>
+      imported.copyWith(
+        socksPort: local.socksPort,
+        randomPort: local.randomPort,
+        randomCredentials: local.randomCredentials,
+        socksUser: local.socksUser,
+        socksPassword: local.socksPassword,
+        proxyOnly: local.proxyOnly,
+        hwidEnabled: local.hwidEnabled,
+        automationEnabled: local.automationEnabled,
+        heartbeat: imported.heartbeat.copyWith(
+          target: local.heartbeat.target,
+          customUrl: local.heartbeat.customUrl,
+        ),
+      );
 
   Future<String?> refreshProfile(String profileId, String url) async {
     final current = _current;
@@ -214,7 +234,7 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
     final existing = current.profiles[existingIdx];
     final updated = existing.copyWith(
       name: bundle.profile.name,
-      settings: bundle.profile.settings,
+      settings: _keepLocalSecurity(bundle.profile.settings, existing.settings),
       lastFetchedAt: DateTime.now(),
     );
 

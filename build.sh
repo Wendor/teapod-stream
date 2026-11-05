@@ -8,6 +8,7 @@ set -euo pipefail
 #    ./build.sh release      — release APK (split per ABI)
 #    ./build.sh aab          — release AAB (Google Play)
 #    ./build.sh run          — запуск на подключённом устройстве
+#    ./build.sh bump X.Y.Z   — общая версия всех трёх репозиториев
 #    ./build.sh binaries     — скопировать teapod-core + скачать geodata
 #    ./build.sh clean        — очистить build артефакты
 # ─────────────────────────────────────────
@@ -115,41 +116,35 @@ strip_binary() {
 
 copy_teapod_core_binaries() {
   mkdir -p "$LIBS_DIR"
+  # Версия общая для teapodstream / teapod-core / teapod-tun2socks (pubspec.yaml) —
+  # AAR берётся строго этой версии, без «самого свежего».
+  local name="teapod-core-${VERSION}.aar"
 
-  # 1. Ищем fat AAR локально (../teapod-core/outputs/teapod-core-{VERSION}.aar)
-  #    Имя fat AAR не содержит ABI: teapod-core-1.0.0.aar, не teapod-core-arm64-v8a-1.0.0.aar
-  if [[ -d "$LOCAL_TEAPOD_CORE_DIR" ]]; then
-    local local_fat
-    local_fat=$(ls "$LOCAL_TEAPOD_CORE_DIR"/teapod-core-[0-9]*.aar 2>/dev/null | sort -V | tail -1)
-    if [[ -n "$local_fat" ]]; then
-      cp "$local_fat" "$LIBS_DIR/teapod-core.aar"
-      ok "Локальный fat AAR скопирован: $(basename "$local_fat")"
-      return 0
-    fi
+  # 1. Локальная сборка ../teapod-core/outputs
+  if [[ -f "$LOCAL_TEAPOD_CORE_DIR/$name" ]]; then
+    cp "$LOCAL_TEAPOD_CORE_DIR/$name" "$LIBS_DIR/teapod-core.aar"
+    ok "Локальный fat AAR скопирован: $name"
+    return 0
   fi
 
-  # 2. Fallback — скачиваем fat AAR из последнего релиза Wendor/teapod-core
-  log "Локальный teapod-core не найден, скачиваем с GitHub..."
-  local release_info
-  release_info=$(curl -sf "https://api.github.com/repos/Wendor/teapod-core/releases/latest") || {
-    err "Не удалось получить инфо о релизе Wendor/teapod-core"
+  # 2. Релиз v$VERSION в Wendor/teapod-core
+  log "Локального $name нет, скачиваем релиз v$VERSION с GitHub..."
+  local url="https://github.com/Wendor/teapod-core/releases/download/v${VERSION}/${name}"
+  curl -fL --progress-bar "$url" -o "$LIBS_DIR/teapod-core.aar" || {
+    rm -f "$LIBS_DIR/teapod-core.aar"
+    err "Нет $name ни в $LOCAL_TEAPOD_CORE_DIR, ни в релизе v$VERSION. Соберите: (cd ../teapod-core && ./build.sh build)"
   }
+  ok "Скачан teapod-core v$VERSION"
+}
 
-  local tag download_url
-  tag=$(echo "$release_info" | grep '"tag_name":' | cut -d'"' -f4)
-  # Fat AAR: имя вида teapod-core-{VERSION}.aar (без ABI-суффикса)
-  download_url=$(echo "$release_info" | grep "browser_download_url" \
-    | grep '"teapod-core-[^"]*\.aar"' \
-    | grep -v 'arm64\|armeabi\|x86' \
-    | cut -d'"' -f4 | head -1)
-
-  if [[ -z "$download_url" ]]; then
-    err "Не найден fat AAR в релизе $tag репозитория Wendor/teapod-core"
-  fi
-
-  log "Скачиваем teapod-core $tag..."
-  curl -L --progress-bar "$download_url" -o "$LIBS_DIR/teapod-core.aar"
-  ok "Скачан teapod-core $tag"
+# Общая версия трёх репозиториев: teapod-tun2socks и teapod-core читают её
+# из ../teapodstream/pubspec.yaml. versionCode = MAJOR*10000 + MINOR*100 + PATCH.
+bump_version() {
+  local v="${1:-}"
+  [[ "$v" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || err "Использование: ./build.sh bump X.Y.Z"
+  local code=$(( BASH_REMATCH[1] * 10000 + BASH_REMATCH[2] * 100 + BASH_REMATCH[3] ))
+  sed -i '' -E "s/^version: .*/version: ${v}+${code}/" pubspec.yaml
+  ok "Версия $VERSION → $v (+$code) для teapodstream, teapod-core, teapod-tun2socks"
 }
 
 download_binaries() {
@@ -291,6 +286,10 @@ case "${1:-help}" in
     download_binaries
     ;;
 
+  bump)
+    bump_version "${2:-}"
+    ;;
+
   push)
     push_release false
     ;;
@@ -310,7 +309,8 @@ case "${1:-help}" in
     echo "  TeapodStream build script"
     echo ""
     echo "  Команды:"
-    echo "    ./build.sh binaries     Скопировать teapod-core AAR + скачать geodata"
+    echo "    ./build.sh bump X.Y.Z   Общая версия teapodstream / teapod-core / teapod-tun2socks"
+    echo "    ./build.sh binaries     Скопировать teapod-core AAR (строго версии pubspec) + скачать geodata"
     echo "    ./build.sh debug        Собрать debug APK"
     echo "    ./build.sh release      Собрать release APK (split per ABI)"
     echo "    ./build.sh aab          Собрать AAB"

@@ -314,7 +314,7 @@ class RustConfigBuilder {
 
   /// xray-rust 0.9.0: Hysteria2 over stock QUIC TLS (h3), default BBR, with
   /// optional FinalMask Salamander and `quicParams.udpHop` in Xray-core
-  /// v26.7.28's spelling — exactly what the Go builder writes. Brutal,
+  /// v26.7.28's spelling (the Go builder's `udphop` mask is converted back). Brutal,
   /// bandwidth and other QUIC overrides and sockopt stay rejected by the core.
   static String? _hysteria2UnsupportedReason(VpnConfig config) {
     // Парсер берёт пароль только у obfs=salamander: другой тип или пустой
@@ -513,6 +513,7 @@ class RustConfigBuilder {
       final user = proxy['settings']['vnext'][0]['users'][0] as Map;
       user['security'] = _vmessCipher(_vmessJson(config));
     }
+    _legacyUdpHop(stream);
     if (fragment != null || noise != null) {
       // Salamander и udpHop Go уже записал; шум идёт после Salamander, то есть
       // сырым, как пакеты freedom под обфускацией в Go.
@@ -568,6 +569,22 @@ class RustConfigBuilder {
   static (int, int) _range(String value) {
     final parts = value.trim().split('-').map((p) => int.parse(p.trim()));
     return (parts.first, parts.last);
+  }
+
+  /// xray-rust 0.9.0 знает port hopping только как `quicParams.udpHop`
+  /// (Xray-core v26.7.28), а Go-билдер пишет UDP-маску `udphop` (v26.9.9+).
+  static void _legacyUdpHop(Map<String, dynamic> stream) {
+    final mask = stream['finalmask'] as Map?;
+    final udp = [...?mask?['udp'] as List?];
+    final hop = udp.where((dynamic m) => m['type'] == 'udphop').firstOrNull;
+    if (hop == null) return;
+    udp.remove(hop);
+    stream['finalmask'] = <String, dynamic>{
+      if (udp.isNotEmpty) 'udp': udp,
+      'quicParams': {
+        'udpHop': {'ports': hop['settings']['remotePorts']},
+      },
+    };
   }
 
   /// FinalMask `tcp` fragment for the app's fragmentation, or null where Go's

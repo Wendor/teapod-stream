@@ -398,7 +398,7 @@ void main() {
         });
       });
 
-      test('port range becomes Xray udpHop with the first port as settings.port', () {
+      test('port range becomes the udphop mask (first in udp) with the first port as settings.port', () {
         final json = XrayConfigBuilder.build(
           VlessParser.parseUri('hy2://pass@hy.example:20000-30000/?sni=s')!,
           _defaultOptions(),
@@ -407,27 +407,21 @@ void main() {
             .firstWhere((o) => (o as Map)['tag'] == 'proxy') as Map;
         expect(proxy['settings']['port'], 20000);
         expect(proxy['streamSettings']['finalmask'], {
-          'quicParams': {
-            'udpHop': {'ports': '20000-30000'},
-          },
+          'udp': [{'type': 'udphop', 'settings': {'mode': 'intervalLocal,intervalRemote', 'remotePorts': '20000-30000'}}],
         });
         expect(
           stream('hy2://pass@hy.example:443,5000-6000?obfs=salamander&obfs-password=o')['finalmask'],
           {
             'udp': [
+              {'type': 'udphop', 'settings': {'mode': 'intervalLocal,intervalRemote', 'remotePorts': '443,5000-6000'}},
               {'type': 'salamander', 'settings': {'password': 'o'}},
             ],
-            'quicParams': {
-              'udpHop': {'ports': '443,5000-6000'},
-            },
           },
         );
         expect(
           stream('hy2://pass@hy.example:443?mport=20000-30000')['finalmask'],
           {
-            'quicParams': {
-              'udpHop': {'ports': '20000-30000'},
-            },
+            'udp': [{'type': 'udphop', 'settings': {'mode': 'intervalLocal,intervalRemote', 'remotePorts': '20000-30000'}}],
           },
         );
       });

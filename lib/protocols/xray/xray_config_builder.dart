@@ -493,19 +493,24 @@ class XrayConfigBuilder {
         },
         if (salamander || hopping)
           'finalmask': {
-            if (salamander)
-              'udp': [
+            'udp': [
+              // Xray-core ≥ v26.9.9: port hopping — UDP-маска udphop (раньше
+              // quicParams.udpHop). Маска с собственным дозвоном обязана быть
+              // первой. Новый сокет + случайный порт раз в 30 с — как в Hysteria.
+              if (hopping)
+                {
+                  'type': 'udphop',
+                  'settings': {
+                    'mode': 'intervalLocal,intervalRemote',
+                    'remotePorts': config.hopPorts,
+                  },
+                },
+              if (salamander)
                 {
                   'type': 'salamander',
                   'settings': {'password': config.obfsPassword},
-                }
-              ],
-            // finalmask.quicParams.udpHop.ports — PortList "a-b,c";
-            // остальные параметры quicParams по умолчанию (смена порта раз в 30 с).
-            if (hopping)
-              'quicParams': {
-                'udpHop': {'ports': config.hopPorts},
-              },
+                },
+            ],
           },
       };
     }

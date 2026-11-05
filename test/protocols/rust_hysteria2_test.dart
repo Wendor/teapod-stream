@@ -157,10 +157,12 @@ void main() {
       expect(RustConfigBuilder.unsupportedReason(config), isNull, reason: query);
       final rust = proxy(RustConfigBuilder.build(config, options()));
       final go = proxy(XrayConfigBuilder.build(config, options()));
-      // xray-rust 0.8.1 reads Xray-core v26.7.28's spelling, which Go writes.
+      // xray-rust 0.9.0 reads Xray-core v26.7.28's spelling: Go's udphop
+      // mask becomes quicParams.udpHop, Salamander stays as is.
+      final goUdp = (go['streamSettings']['finalmask'] as Map?)?['udp'] as List?;
       expect(
-        rust['streamSettings']['finalmask'],
-        go['streamSettings']['finalmask'],
+        (rust['streamSettings']['finalmask'] as Map?)?['udp'],
+        goUdp?.where((dynamic m) => m['type'] != 'udphop').toList().nullIfEmpty,
       );
       expect(rust['settings']['port'], config.port);
       final mask = rust['streamSettings']['finalmask'] as Map;
@@ -295,4 +297,8 @@ void main() {
       }
     });
   }
+}
+
+extension<T> on List<T> {
+  List<T>? get nullIfEmpty => this.isEmpty ? null : this;
 }

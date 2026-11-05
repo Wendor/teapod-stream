@@ -93,7 +93,7 @@ class UpdateService {
       }
       return null;
     } finally {
-      client.close();
+      client.close(force: true);
     }
   }
 
@@ -173,7 +173,7 @@ class UpdateService {
       yield DownloadProgress(downloaded: downloaded, total: total, done: true);
     } finally {
       await sink?.close();
-      client.close();
+      client.close(force: true);
     }
   }
 

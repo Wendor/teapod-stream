@@ -79,7 +79,7 @@ class IpInfoNotifier extends AsyncNotifier<IpInfo?> {
     } catch (_) {
       return null;
     } finally {
-      client.close();
+      client.close(force: true);
     }
   }
 }

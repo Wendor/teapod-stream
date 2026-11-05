@@ -122,20 +122,24 @@ class GeoNotifier extends Notifier<GeoState> {
     final tmpFile = File(tmpPath);
     final destFile = File(destPath);
 
-    final req = http.Request('GET', Uri.parse(url));
-    final resp = await http.Client().send(req);
-    if (resp.statusCode != 200) {
-      throw Exception('HTTP ${resp.statusCode}');
-    }
-
-    final sink = tmpFile.openWrite();
+    final client = http.Client();
     try {
-      await for (final chunk in resp.stream) {
-        sink.add(chunk);
-        onProgress(chunk.length);
+      final resp = await client.send(http.Request('GET', Uri.parse(url)));
+      if (resp.statusCode != 200) {
+        throw Exception('HTTP ${resp.statusCode}');
+      }
+
+      final sink = tmpFile.openWrite();
+      try {
+        await for (final chunk in resp.stream) {
+          sink.add(chunk);
+          onProgress(chunk.length);
+        }
+      } finally {
+        await sink.close();
       }
     } finally {
-      await sink.close();
+      client.close();
     }
 
     if (destFile.existsSync()) await destFile.delete();

@@ -132,7 +132,8 @@ class SubscriptionService {
       if (certError != null) throw certError!;
       rethrow;
     } finally {
-      httpClient.close();
+      // Без force соединение с непрочитанным телом (не-200, таймаут) живёт вечно.
+      httpClient.close(force: true);
     }
 
     final meta = _parseHeaders(responseHeaders);

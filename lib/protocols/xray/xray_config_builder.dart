@@ -316,9 +316,16 @@ class XrayConfigBuilder {
   static bool _dialerApplies(VpnConfig config, VpnEngineOptions options) =>
       _fragmentApplies(config, options) || _noiseApplies(options);
 
-  /// Mux бесполезен поверх hysteria2: QUIC мультиплексирует потоки сам.
+  /// Mux бесполезен поверх hysteria2 (QUIC мультиплексирует сам) и xhttp
+  /// (свой xmux; двойное мультиплексирование upstream не рекомендует).
   static bool _muxApplies(VpnConfig config, VpnEngineOptions options) =>
-      options.mux.enabled && config.protocol != VpnProtocol.hysteria2;
+      options.mux.enabled &&
+      config.protocol != VpnProtocol.hysteria2 &&
+      config.transport != VpnTransport.xhttp;
+
+  /// TCP_USER_TIMEOUT: соединение, где DPI молча дропает пакеты, рвётся через
+  /// 30 с неподтверждённых данных, а не висит в ретрансляции до tcp_retries2.
+  static const _tcpUserTimeoutMs = 30000;
 
   static Map<String, dynamic> _buildDialerOutbound(
       VpnConfig config, VpnEngineOptions options) {
@@ -327,6 +334,9 @@ class XrayConfigBuilder {
     return {
       'tag': _dialerTag,
       'protocol': 'freedom',
+      'streamSettings': {
+        'sockopt': {'tcpUserTimeout': _tcpUserTimeoutMs},
+      },
       'settings': {
         'domainStrategy': 'AsIs',
         if (_fragmentApplies(config, options))
@@ -363,6 +373,8 @@ class XrayConfigBuilder {
     final stream = _buildStreamSettings(config, options.tlsFingerprint);
     if (_dialerApplies(config, options)) {
       stream['sockopt'] = {'dialerProxy': _dialerTag};
+    } else if (config.protocol != VpnProtocol.hysteria2) {
+      stream['sockopt'] = {'tcpUserTimeout': _tcpUserTimeoutMs};
     }
     return {
       'tag': 'proxy',

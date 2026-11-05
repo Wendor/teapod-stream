@@ -154,6 +154,7 @@ class XrayVpnService : VpnService() {
         // probes. Dead-tunnel detection grows to ~3 min while asleep — acceptable,
         // checkTunStallOnWake() probes immediately on SCREEN_ON.
         private const val HEARTBEAT_INTERVAL_SCREEN_OFF_MS = 60_000L
+        private const val NOTIFICATION_MIN_INTERVAL_MS = 5_000L
         // If tun2socks has more than this many active proxy goroutines the gVisor TCP
         // state machine is leaking connections. Trigger a reconnect to reset it.
         private const val TUN_CONN_LEAK_THRESHOLD = 200L
@@ -252,6 +253,7 @@ class XrayVpnService : VpnService() {
     @Volatile private var screenOn = true
     @Volatile private var deviceIdle = false
     @Volatile private var lastNotificationText: String? = null
+    @Volatile private var lastNotificationMs = 0L
     private var screenReceiver: android.content.BroadcastReceiver? = null
     private var killSwitchEnabled = false
     @Volatile private var allowIcmpEnabled = true
@@ -1740,7 +1742,12 @@ class XrayVpnService : VpnService() {
         if (!screenOn) return
         val speedText = "↑ ${formatSpeed(uploadSpeed)}  ↓ ${formatSpeed(downloadSpeed)}"
         if (speedText == lastNotificationText) return
+        // Каждый notify() будит сторонние NotificationListener (часы, синхронизация) —
+        // не чаще раза в 5 с; сброс кэша (null) обновляет сразу.
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (lastNotificationText != null && now - lastNotificationMs < NOTIFICATION_MIN_INTERVAL_MS) return
         lastNotificationText = speedText
+        lastNotificationMs = now
 
         val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(NOTIFICATION_ID, buildConnectedNotification(uploadSpeed, downloadSpeed))

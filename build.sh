@@ -39,9 +39,10 @@ warn() { echo -e "${YELLOW}⚠ $*${NC}"; }
 err()  { echo -e "${RED}✗ $*${NC}"; exit 1; }
 
 accept_sdk_licenses() {
-  export JAVA_HOME="/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home"
-  export ANDROID_HOME="/opt/homebrew/share/android-commandlinetools"
-  export ANDROID_SDK_ROOT="/opt/homebrew/share/android-commandlinetools"
+  # По умолчанию — homebrew; на CI берутся из окружения runner'а
+  export JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home}"
+  export ANDROID_HOME="${ANDROID_HOME:-/opt/homebrew/share/android-commandlinetools}"
+  export ANDROID_SDK_ROOT="$ANDROID_HOME"
 
   # Android SDK лицензии хранятся в $ANDROID_HOME/licenses/. Если папка существует
   # и не пустая — лицензии уже приняты, пропускаем. Запускать flutter doctor

@@ -1,0 +1,169 @@
+name: Release
+
+# Ручной запуск (Actions → Release → Run workflow или `gh workflow run release.yml`).
+# Собирает всю цепочку версии из pubspec.yaml: teapod-core (если его релиза v<версия> ещё нет)
+# → APK → GitHub Release. Три репозитория кладутся рядом — относительные пути build.sh работают как локально.
+on:
+  workflow_dispatch:
+    inputs:
+      prerelease:
+        description: Pre-release
+        type: boolean
+        default: true
+      rebuild_core:
+        description: Пересобрать teapod-core, даже если его релиз уже есть
+        type: boolean
+        default: false
+      core_ref:
+        description: Ветка teapod-core (пусто — одноимённая этой, иначе ветка по умолчанию)
+        type: string
+        default: ''
+      tun2socks_ref:
+        description: Ветка teapod-tun2socks (пусто — одноимённая этой, иначе ветка по умолчанию)
+        type: string
+        default: ''
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: 3.41.6
+  NDK_VERSION: 28.2.13676358
+  # SHA-256 сертификата подписи всех выпущенных APK: другой ключ сломает обновление у пользователей
+  CERT_SHA256: 1a9d47fabd88aacda435d2ae0098cf3f0666358113da858a974b2483fdd5eaaf
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: teapodstream
+
+      - name: Version
+        id: ver
+        working-directory: teapodstream
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REBUILD: ${{ inputs.rebuild_core }}
+        run: |
+          v=$(awk '/^version:/{split($2,a,"+"); print a[1]; exit}' pubspec.yaml)
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if [ "$REBUILD" = true ] || ! gh release view "v$v" -R Wendor/teapod-core >/dev/null 2>&1; then
+            echo "build_core=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Secrets and signing key
+        env:
+          KEYSTORE: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
+          CORE_TOKEN: ${{ secrets.CORE_RELEASE_TOKEN }}
+          BUILD_CORE: ${{ steps.ver.outputs.build_core }}
+        run: |
+          [ -n "$KEYSTORE" ] || { echo "::error::Нет секрета DEBUG_KEYSTORE_BASE64"; exit 1; }
+          [ -z "$BUILD_CORE" ] || [ -n "$CORE_TOKEN" ] || { echo "::error::Нет секрета CORE_RELEASE_TOKEN"; exit 1; }
+          dir="${ANDROID_USER_HOME:-$HOME/.android}"
+          mkdir -p "$dir"
+          echo "$KEYSTORE" | base64 -d > "$dir/debug.keystore"
+
+      - name: Resolve sibling branches
+        if: steps.ver.outputs.build_core
+        id: refs
+        env:
+          BRANCH: ${{ github.ref_name }}
+          CORE_REF: ${{ inputs.core_ref }}
+          TUN_REF: ${{ inputs.tun2socks_ref }}
+        run: |
+          pick() {
+            if [ -n "$2" ]; then echo "$2"
+            elif git ls-remote --exit-code --heads "https://github.com/Wendor/$1.git" "$BRANCH" >/dev/null; then echo "$BRANCH"
+            fi
+          }
+          echo "core=$(pick teapod-core "$CORE_REF")" >> "$GITHUB_OUTPUT"
+          echo "tun2socks=$(pick teapod-tun2socks "$TUN_REF")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        if: steps.ver.outputs.build_core
+        with:
+          repository: Wendor/teapod-core
+          ref: ${{ steps.refs.outputs.core }}
+          path: teapod-core
+
+      - uses: actions/checkout@v7
+        if: steps.ver.outputs.build_core
+        with:
+          repository: Wendor/teapod-tun2socks
+          ref: ${{ steps.refs.outputs.tun2socks }}
+          path: teapod-tun2socks
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+          cache-dependency-path: |
+            teapodstream/android/*.gradle.kts
+            teapodstream/android/app/build.gradle.kts
+            teapodstream/android/gradle/wrapper/gradle-wrapper.properties
+
+      - name: Android NDK
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" > /dev/null'
+
+      - uses: actions/setup-go@v7
+        if: steps.ver.outputs.build_core
+        with:
+          go-version-file: teapod-core/go.mod
+          cache-dependency-path: teapod-core/go.sum
+
+      - name: Build teapod-core
+        if: steps.ver.outputs.build_core
+        working-directory: teapod-core
+        run: |
+          m=$(awk '$1=="golang.org/x/mobile"{print $2; exit}' go.mod)
+          go install "golang.org/x/mobile/cmd/gomobile@$m" "golang.org/x/mobile/cmd/gobind@$m"
+          ./build.sh build
+
+      - name: Publish teapod-core
+        if: steps.ver.outputs.build_core
+        working-directory: teapod-core
+        env:
+          GH_TOKEN: ${{ secrets.CORE_RELEASE_TOKEN }}
+          PRE: ${{ inputs.prerelease }}
+        run: ./build.sh "$([ "$PRE" = true ] && echo pushpre || echo push)"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Build APK
+        working-directory: teapodstream
+        run: |
+          ./build.sh binaries
+          ./build.sh release
+
+      - name: Verify signature
+        working-directory: teapodstream
+        run: |
+          signer="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
+          for apk in build/app/outputs/flutter-apk/teapod-stream-*-release-*.apk; do
+            "$signer" verify --print-certs "$apk" | grep -q "SHA-256 digest: $CERT_SHA256" \
+              || { echo "::error::$apk подписан не тем ключом"; exit 1; }
+          done
+
+      - name: Publish app
+        working-directory: teapodstream
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRE: ${{ inputs.prerelease }}
+        run: ./build.sh "$([ "$PRE" = true ] && echo pushpre || echo push)"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: symbols-${{ steps.ver.outputs.version }}
+          path: teapodstream/build/app/outputs/symbols

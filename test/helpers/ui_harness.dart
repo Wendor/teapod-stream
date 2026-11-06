@@ -28,7 +28,7 @@ class FakeNative {
       'getLogs' => logs,
       'getInstalledApps' => apps,
       'getAvailableEngines' => ['go', 'rust'],
-      'getBinaryVersions' => {'xray': '26.1.1', 'tun2socks': '1.7.3'},
+      'getBinaryVersions' => {'xray': '26.1.1', 'xray-go': '26.1.1', 'xray-rust': '0.9.0', 'sing-box': '1.14.4', 'tun2socks': '1.7.3'},
       'getFilesDir' => '',
       'getAbi' => 'arm64-v8a',
       _ => null,

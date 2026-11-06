@@ -55,6 +55,7 @@ class RustConfigBuilder {
   static bool supports(VpnConfig config) => unsupportedReason(config) == null;
 
   static String? unsupportedReason(VpnConfig config) {
+    if (config.protocol.hasProtocolSettings) return config.protocol.singBoxOnlyReason;
     if (config.rawXrayConfig != null) {
       return 'Импорт полного JSON в ядре Xray (Rust) пока недоступен.';
     }
@@ -69,6 +70,7 @@ class RustConfigBuilder {
       VpnProtocol.trojan => _trojanUnsupportedReason(config),
       VpnProtocol.vmess => _vmessUnsupportedReason(config),
       VpnProtocol.shadowsocks => _shadowsocksUnsupportedReason(config),
+      VpnProtocol.wireguard || VpnProtocol.ssh || VpnProtocol.naive => config.protocol.singBoxOnlyReason,
     };
   }
 

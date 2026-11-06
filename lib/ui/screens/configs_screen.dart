@@ -544,7 +544,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
         final renamed = updated.copyWith(
           id: config.id,
           createdAt: config.createdAt,
-          rawUri: controller.text.trim(),
+          rawUri: updated.rawUri ?? controller.text.trim(),
           latencyMs: config.latencyMs,
           subscriptionId: config.subscriptionId,
         );
@@ -1414,15 +1414,7 @@ class _ConfigRow extends StatelessWidget {
     this.draggableIndex,
   });
 
-  String get _protoTag {
-    switch (config.protocol) {
-      case VpnProtocol.vless:       return 'VLESS';
-      case VpnProtocol.vmess:       return 'VMESS';
-      case VpnProtocol.trojan:      return 'TROJAN';
-      case VpnProtocol.shadowsocks: return 'SS';
-      case VpnProtocol.hysteria2:   return 'HY2';
-    }
-  }
+  String get _protoTag => config.protoTag;
 
   @override
   Widget build(BuildContext context) =>

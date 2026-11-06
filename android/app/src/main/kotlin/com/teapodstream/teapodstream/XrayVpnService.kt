@@ -441,13 +441,13 @@ class XrayVpnService : VpnService() {
                                 log("debug", "CONNECT_QUICK: loaded creds from file, user=$socksUser")
                             } else {
                                 // Fallback: extract from config
-                                val (u, p) = extractSocksFromConfig(configText)
+                                val (u, p) = extractSocksFromConfig(configText, params.engine)
                                 socksUser = u
                                 socksPassword = p
                             }
                         } catch (e: Exception) {
                             log("warning", "Failed to load socks_creds: ${e.message}")
-                            val (u, p) = extractSocksFromConfig(configText)
+                            val (u, p) = extractSocksFromConfig(configText, params.engine)
                             socksUser = u
                             socksPassword = p
                         }
@@ -494,7 +494,7 @@ class XrayVpnService : VpnService() {
                 setState("reconnecting")
                 try {
                     val configText = configFile.readText()
-                    val (socksUser, socksPassword) = extractSocksFromConfig(configText)
+                    val (socksUser, socksPassword) = extractSocksFromConfig(configText, params.engine)
                     Thread {
                         startVpn(
                             configText,
@@ -515,28 +515,9 @@ class XrayVpnService : VpnService() {
         return START_STICKY
     }
 
-    private fun extractSocksFromConfig(configJson: String): Pair<String, String> {
-        return try {
-            val inbounds = org.json.JSONObject(configJson).getJSONArray("inbounds")
-            for (i in 0 until inbounds.length()) {
-                val inbound = inbounds.getJSONObject(i)
-                if (inbound.optString("tag") == "socks-in") {
-                    val accounts = inbound.optJSONObject("settings")
-                        ?.optJSONArray("accounts") ?: continue
-                    if (accounts.length() > 0) {
-                        val acc = accounts.getJSONObject(0)
-                        val user = acc.optString("user", "")
-                        val pass = acc.optString("pass", "")
-                        log("debug", "extractSocksFromConfig: extracted user=$user")
-                        return user to pass
-                    }
-                }
-            }
-            "" to ""
-        } catch (_: Exception) {
-            "" to ""
-        }
-    }
+    /** Логин/пароль SOCKS из сохранённого конфига в формате ядра [engine]. */
+    private fun extractSocksFromConfig(configJson: String, engine: String): Pair<String, String> =
+        VpnCores.get(CoreKind.fromId(engine)).socksCredentials(configJson)
 
     private fun openApp() {
         packageManager.getLaunchIntentForPackage(packageName)
@@ -778,46 +759,28 @@ class XrayVpnService : VpnService() {
                 .map { it.toInt(16).toByte() }
                 .toByteArray()
 
-            val json = org.json.JSONObject(xrayConfig)
-            val outbounds = json.getJSONArray("outbounds")
-            var proxyOutbound: org.json.JSONObject? = null
-            for (i in 0 until outbounds.length()) {
-                val ob = outbounds.getJSONObject(i)
-                if (ob.optString("tag") == "proxy") { proxyOutbound = ob; break }
-            }
-            if (proxyOutbound == null) return null
-
-            val settings = proxyOutbound.getJSONObject("settings")
-            val servers = settings.getJSONArray("servers")
-            val server = servers.getJSONObject(0)
-            val realHost = server.getString("address")
-            val realPort = server.getInt("port")
-
-            val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
-            val ownUid = android.os.Process.myUid()
-            val proxy = PrefixTcpProxy(realHost, realPort, prefixBytes) { client ->
-                try {
-                    val uid = cm.getConnectionOwnerUid(
-                        OsConstants.IPPROTO_TCP,
-                        client.remoteSocketAddress as InetSocketAddress,
-                        InetSocketAddress(client.localAddress, client.localPort)
-                    )
-                    uid == ownUid
-                } catch (_: SecurityException) {
-                    true // proxy-only: мы не активный VPN, lookup недоступен; слушаем только loopback
-                } catch (_: Exception) {
-                    false
+            sessionCore.redirectProxyServer(xrayConfig) { realHost, realPort ->
+                val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+                val ownUid = android.os.Process.myUid()
+                val proxy = PrefixTcpProxy(realHost, realPort, prefixBytes) { client ->
+                    try {
+                        val uid = cm.getConnectionOwnerUid(
+                            OsConstants.IPPROTO_TCP,
+                            client.remoteSocketAddress as InetSocketAddress,
+                            InetSocketAddress(client.localAddress, client.localPort)
+                        )
+                        uid == ownUid
+                    } catch (_: SecurityException) {
+                        true // proxy-only: мы не активный VPN, lookup недоступен; слушаем только loopback
+                    } catch (_: Exception) {
+                        false
+                    }
                 }
+                proxy.start()
+                prefixProxy = proxy
+                log("info", "Prefix proxy: 127.0.0.1:${proxy.localPort} → $realHost:$realPort (${prefixBytes.size} prefix bytes)")
+                proxy.localPort
             }
-            proxy.start()
-            prefixProxy = proxy
-
-            // Redirect Xray to the local proxy
-            server.put("address", "127.0.0.1")
-            server.put("port", proxy.localPort)
-
-            log("info", "Prefix proxy: 127.0.0.1:${proxy.localPort} → $realHost:$realPort (${prefixBytes.size} prefix bytes)")
-            json.toString()
         } catch (e: Exception) {
             log("warning", "Failed to start prefix proxy: ${e.message}")
             null

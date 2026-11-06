@@ -1,6 +1,30 @@
 import 'dart:convert';
 
-enum VpnProtocol { vless, vmess, trojan, shadowsocks, hysteria2 }
+import 'protocol_settings.dart';
+
+enum VpnProtocol {
+  vless('VLESS', 'VLESS'),
+  vmess('VMess', 'VMESS'),
+  trojan('Trojan', 'TROJAN'),
+  shadowsocks('Shadowsocks', 'SS'),
+  hysteria2('Hysteria2', 'HY2'),
+  wireguard('WireGuard', 'WG'),
+  ssh('SSH', 'SSH'),
+  naive('NaiveProxy', 'NAIVE');
+
+  const VpnProtocol(this.label, this.shortTag);
+
+  final String label;
+
+  /// Короткая метка в списках серверов.
+  final String shortTag;
+
+  /// Причина отказа Xray-ядер для протоколов, которые есть только в sing-box.
+  String get singBoxOnlyReason => 'Протокол $label поддерживается только ядром sing-box.';
+
+  /// Протоколы, параметры которых лежат в [VpnConfig.protocolSettings].
+  bool get hasProtocolSettings => this == wireguard || this == ssh || this == naive;
+}
 
 enum VpnSecurity { none, tls, reality }
 
@@ -47,6 +71,8 @@ class VpnConfig {
   final String? alpn; // comma-separated ALPN list, e.g. "h3" or "h2,http/1.1"
   final String? ech; // base64 ECH ConfigList for TLS Encrypted Client Hello
   final String? rawXrayConfig; // pre-built xray JSON config (from managed subscriptions)
+  /// Параметры WireGuard/SSH/Naive; у остальных протоколов null.
+  final ProtocolSettings? protocolSettings;
 
   const VpnConfig({
     required this.id,
@@ -87,10 +113,20 @@ class VpnConfig {
     this.alpn,
     this.ech,
     this.rawXrayConfig,
+    this.protocolSettings,
   });
+
+  /// Метка протокола в списках: AmneziaWG отличается от WireGuard.
+  String get protoTag => switch (protocolSettings) {
+        WireGuardSettings(amnezia: != null) => 'AWG',
+        _ => protocol.shortTag,
+      };
 
   String? validate() {
     if (rawXrayConfig != null) return null;
+    if (protocol.hasProtocolSettings && protocolSettings?.type != protocol.name) {
+      return 'Нет параметров протокола ${protocol.label}';
+    }
     if (address.isEmpty) return 'Пустой адрес сервера';
     if (port < 1 || port > 65535) return 'Неверный порт: $port';
     if (protocol == VpnProtocol.vless || protocol == VpnProtocol.vmess) {
@@ -154,6 +190,7 @@ class VpnConfig {
       alpn: alpn,
       ech: ech,
       rawXrayConfig: rawXrayConfig,
+      protocolSettings: protocolSettings,
     );
   }
 
@@ -196,6 +233,7 @@ class VpnConfig {
         'alpn': alpn,
         'ech': ech,
         'rawXrayConfig': rawXrayConfig,
+        'protocolSettings': ?protocolSettings?.toJson(),
       };
 
   factory VpnConfig.fromJson(Map<String, dynamic> json) => VpnConfig(
@@ -248,6 +286,7 @@ class VpnConfig {
         alpn: json['alpn'] as String?,
         ech: json['ech'] as String?,
         rawXrayConfig: json['rawXrayConfig'] as String?,
+        protocolSettings: ProtocolSettings.fromJson(json['protocolSettings'] as Map<String, dynamic>?),
       );
 
   String toJsonString() => jsonEncode(toJson());

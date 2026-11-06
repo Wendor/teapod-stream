@@ -1,4 +1,5 @@
 import '../../core/cores/core_backend.dart';
+import '../../core/cores/options_sanitizer.dart';
 import '../../core/interfaces/vpn_engine.dart';
 import '../../core/models/core_kind.dart';
 import '../../core/models/heartbeat_settings.dart';
@@ -59,49 +60,50 @@ class XrayRustBackend implements CoreBackend {
 
   /// Опции, которые ядро не применит, заменяются допустимыми; каждая замена — предупреждение.
   ({VpnEngineOptions options, List<String> warnings}) _sanitize(VpnConfig config, VpnEngineOptions o) {
-    final warnings = <String>[];
-    var mux = o.mux;
-    var mtu = o.mtu;
-    var routing = o.routing;
-    var fragment = o.fragment;
-    var noise = o.noise;
-    var sniffing = o.sniffingEnabled;
-    if (mux.enabled && config.protocol != VpnProtocol.hysteria2) {
-      warnings.add(_unsupported[CoreFeature.mux]!);
-      mux = const MuxSettings();
-    }
-    if (mtu != 1500) {
-      warnings.add(_unsupported[CoreFeature.customMtu]!);
-      mtu = 1500;
-    }
-    if (o.allowIcmp) warnings.add(_unsupported[CoreFeature.icmpToggle]!);
+    final routing = o.routing;
     final domainRules = routing.geositeEnabled || routing.domainEnabled ||
         routing.sitesEnabled || routing.ruServicesEnabled;
-    if (routing.isActive && !sniffing && domainRules) {
-      warnings.add('Доменные правила в ядре Xray (Rust) требуют определения доменов — оно включено для этого подключения.');
-      sniffing = true;
-    }
-    if (routing.adBlockEnabled && routing.isActive && routing.geositeEnabled &&
-        routing.geositeCodes.any((c) => RustConfigBuilder.largeGeositeCodes.contains(c.trim().toLowerCase()))) {
-      warnings.add('Блокировка рекламы вместе с большой категорией GeoSite превышает лимит ядра Xray (Rust) '
-          'в 250 тыс. доменных правил — блокировка рекламы не применяется.');
-      routing = routing.copyWith(adBlockEnabled: false);
-    }
-    try {
-      RustConfigBuilder.fragmentMask(config, fragment);
-    } on FormatException catch (e) {
-      warnings.add('Фрагментация не применяется: ${e.message}');
-      fragment = fragment.copyWith(enabled: false);
-    }
-    try {
-      RustConfigBuilder.noiseMask(config, noise);
-    } on FormatException catch (e) {
-      warnings.add('Шумы не применяются: ${e.message}');
-      noise = noise.copyWith(enabled: false);
-    }
-    return (
-      options: o.copyWith(mux: mux, mtu: mtu, routing: routing, fragment: fragment, noise: noise, sniffingEnabled: sniffing),
-      warnings: warnings,
+    final s = OptionsSanitizer(o)
+      ..drop(
+        when: o.mux.enabled && config.protocol != VpnProtocol.hysteria2,
+        warning: _unsupported[CoreFeature.mux]!,
+        fix: (v) => v.copyWith(mux: const MuxSettings()),
+      )
+      ..drop(when: o.mtu != 1500, warning: _unsupported[CoreFeature.customMtu]!, fix: (v) => v.copyWith(mtu: 1500))
+      ..warn(when: o.allowIcmp, warning: _unsupported[CoreFeature.icmpToggle]!)
+      ..drop(
+        when: routing.isActive && !o.sniffingEnabled && domainRules,
+        warning: 'Доменные правила в ядре Xray (Rust) требуют определения доменов — оно включено для этого подключения.',
+        fix: (v) => v.copyWith(sniffingEnabled: true),
+      )
+      ..drop(
+        when: routing.adBlockEnabled && routing.isActive && routing.geositeEnabled &&
+            routing.geositeCodes.any((c) => RustConfigBuilder.largeGeositeCodes.contains(c.trim().toLowerCase())),
+        warning: 'Блокировка рекламы вместе с большой категорией GeoSite превышает лимит ядра Xray (Rust) '
+            'в 250 тыс. доменных правил — блокировка рекламы не применяется.',
+        fix: (v) => v.copyWith(routing: v.routing.copyWith(adBlockEnabled: false)),
+      );
+    final fragmentError = _maskError(() => RustConfigBuilder.fragmentMask(config, o.fragment));
+    s.drop(
+      when: fragmentError != null,
+      warning: 'Фрагментация не применяется: $fragmentError',
+      fix: (v) => v.copyWith(fragment: v.fragment.copyWith(enabled: false)),
     );
+    final noiseError = _maskError(() => RustConfigBuilder.noiseMask(config, o.noise));
+    s.drop(
+      when: noiseError != null,
+      warning: 'Шумы не применяются: $noiseError',
+      fix: (v) => v.copyWith(noise: v.noise.copyWith(enabled: false)),
+    );
+    return s.result;
+  }
+
+  static String? _maskError(void Function() build) {
+    try {
+      build();
+      return null;
+    } on FormatException catch (e) {
+      return e.message;
+    }
   }
 }

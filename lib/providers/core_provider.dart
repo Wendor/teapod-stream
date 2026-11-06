@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/constants/app_constants.dart';
 import '../core/cores/core_backend.dart';
 import '../core/models/core_kind.dart';
+import '../protocols/singbox/singbox_backend.dart';
 import '../protocols/xray/xray_go_backend.dart';
 import '../protocols/xray/xray_rust_backend.dart';
 import 'settings_provider.dart';
@@ -11,6 +12,7 @@ import 'settings_provider.dart';
 CoreBackend coreBackendFor(CoreKind kind) => switch (kind) {
       CoreKind.xrayGo => const XrayGoBackend(),
       CoreKind.xrayRust => const XrayRustBackend(),
+      CoreKind.singBox => const SingBoxBackend(),
     };
 
 /// Backend ядра, выбранного в настройках.

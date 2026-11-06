@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'core/services/third_party_licenses.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'app.dart';
@@ -6,6 +7,7 @@ import 'core/constants/app_constants.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  registerThirdPartyLicenses();
 
   // App version for the subscription User-Agent (single source of truth: pubspec).
   try {

@@ -33,7 +33,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  String _xrayVersion = '';
+  Map<String, String>? _coreVersions;
 
   @override
   void initState() {
@@ -47,11 +47,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final result = await channel.invokeMethod<Map>('getBinaryVersions');
       if (result != null && mounted) {
         setState(() {
-          _xrayVersion = result['xray'] ?? '—';
+          _coreVersions = result.map((k, v) => MapEntry('$k', '$v'));
         });
       }
     } catch (_) {
-      if (mounted) setState(() { _xrayVersion = '—'; });
+      if (mounted) setState(() { _coreVersions = const {}; });
     }
   }
 
@@ -92,7 +92,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   isProfileReadonly: profileReadonly,
                   hasUpdate: hasUpdate,
                   version: version,
-                  xrayVersion: _xrayVersion,
+                  coreVersion: _coreVersions == null
+                      ? ''
+                      : (_coreVersions![settings.core.versionKey] ?? '—'),
                   onUpdate: (s) => ref.read(settingsProvider.notifier).save(s),
                 ),
               ),
@@ -312,7 +314,8 @@ class _SettingsBody extends StatelessWidget {
   final bool isProfileReadonly;
   final bool hasUpdate;
   final String version;
-  final String xrayVersion;
+  /// Версия выбранного ядра; '' — ещё не загружена.
+  final String coreVersion;
   final void Function(AppSettings) onUpdate;
 
   const _SettingsBody({
@@ -320,7 +323,7 @@ class _SettingsBody extends StatelessWidget {
     required this.isProfileReadonly,
     required this.hasUpdate,
     required this.version,
-    required this.xrayVersion,
+    required this.coreVersion,
     required this.onUpdate,
   });
 
@@ -451,7 +454,13 @@ class _SettingsBody extends StatelessWidget {
           // ── 0x60 ABOUT ────────────────────────────────────────
           SetSectionHeader(t: t, addr: '0x60', label: 'about'),
           _KVRow(t: t, k: 'version',    v: version.isEmpty ? '...' : version),
-          _KVRow(t: t, k: 'xray.core',  v: xrayVersion.isEmpty ? '...' : xrayVersion),
+          _KVRow(t: t, k: 'core',       v: coreVersion.isEmpty ? '...' : '${s.core.displayName} $coreVersion'),
+          _KVRowTap(
+            t: t,
+            k: 'licenses',
+            v: 'open-source',
+            onTap: () => showLicensePage(context: context, applicationName: 'TeapodStream'),
+          ),
           _KVRowTap(
             t: t,
             k: 'source',
@@ -543,7 +552,7 @@ class _CoreSegment extends ConsumerWidget {
     return SetSegSquare(
       t: t,
       value: settings.core.name,
-      opts: const [('xrayGo', 'GO'), ('xrayRust', 'RUST')],
+      opts: [for (final k in CoreKind.values) (k.name, k.shortLabel)],
       locked: available.length < 2,
       onChanged: (v) async {
         final core = CoreKind.fromName(v);

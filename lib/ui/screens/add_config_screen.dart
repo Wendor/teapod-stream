@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/services/deeplink_router.dart';
 import '../../core/services/subscription_service.dart';
+import '../../protocols/parsers/wireguard_parser.dart';
 import '../../protocols/xray/vless_parser.dart';
 import '../../providers/config_provider.dart';
 import '../theme/app_colors.dart';
@@ -279,6 +280,13 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
       _error = null;
     });
     try {
+      if (WireGuardParser.isConf(uri)) {
+        final config = WireGuardParser.parseConf(uri);
+        await ref.read(configProvider.notifier).addConfig(config);
+        await ref.read(configProvider.notifier).setActiveConfig(config.id);
+        if (mounted) Navigator.pop(context);
+        return;
+      }
       final parsed = Uri.parse(uri);
 
       if (parsed.scheme == 'http' || parsed.scheme == 'https') {
@@ -332,8 +340,10 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
           return;
         }
         setState(() => _error =
-            'Не удалось распознать конфигурацию. Поддерживаются: vless://, vmess://, trojan://, ss://');
+            'Не удалось распознать конфигурацию. Поддерживаются: vless://, vmess://, trojan://, ss://, hy2://, wireguard://, vpn:// (AmneziaVPN) и .conf WireGuard');
       }
+    } on FormatException catch (e) {
+      setState(() => _error = e.message);
     } on UntrustedCertificateException catch (e) {
       setState(() => _loading = false);
       if (!mounted) return;

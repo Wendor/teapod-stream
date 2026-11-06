@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -548,6 +550,21 @@ void main() {
 
       await boot(configs: [_cfg('r', rawXray: _visionRaw)], activeId: 'r');
       await c.read(settingsProvider.notifier).save(_settings.copyWith(core: CoreKind.xrayRust));
+      await _settle();
+      expect(native.named('clearQuickConnect'), hasLength(1));
+    });
+
+    test('idle switch to sing-box saves a sing-box config or clears an unsupported one', () async {
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      await c.read(settingsProvider.notifier).save(_settings.copyWith(core: CoreKind.singBox));
+      await _settle();
+      final args = native.named('saveQuickConnect').single.arguments as Map;
+      expect(args['engine'], 'box');
+      final json = jsonDecode(args['xrayConfig'] as String) as Map<String, dynamic>;
+      expect(((json['inbounds'] as List).first as Map)['type'], 'mixed');
+
+      await boot(configs: [_cfg('r', rawXray: _visionRaw)], activeId: 'r');
+      await c.read(settingsProvider.notifier).save(_settings.copyWith(core: CoreKind.singBox));
       await _settle();
       expect(native.named('clearQuickConnect'), hasLength(1));
     });

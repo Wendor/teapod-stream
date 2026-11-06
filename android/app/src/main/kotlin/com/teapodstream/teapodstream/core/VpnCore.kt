@@ -3,8 +3,8 @@ package com.teapodstream.teapodstream.core
 import android.content.Context
 import android.net.VpnService
 
-enum class CoreKind(val id: String) {
-    GO("go"), RUST("rust");
+enum class CoreKind(val id: String, val versionKey: String) {
+    GO("go", "xray-go"), RUST("rust", "xray-rust"), BOX("box", "sing-box");
 
     companion object {
         fun fromId(id: String?): CoreKind = entries.firstOrNull { it.id == id } ?: GO
@@ -64,6 +64,13 @@ interface VpnCore {
 
     /** MTU TUN-интерфейса с учётом ограничений ядра. */
     fun tunMtu(requested: Int): Int = requested
+
+    /** Подменить сервер outbound'а `proxy` на 127.0.0.1:<порт из [redirect]>; null — не подменён. */
+    fun redirectProxyServer(config: String, redirect: (host: String, port: Int) -> Int?): String? =
+        ProxyRedirect.xray(config, redirect)
+
+    /** Логин/пароль локального SOCKS из сохранённого конфига (quick-connect, рестарт сервиса). */
+    fun socksCredentials(config: String): Pair<String, String> = SocksCredentials.xray(config)
 }
 
 object VpnCores {
@@ -73,6 +80,7 @@ object VpnCores {
     fun get(kind: CoreKind): VpnCore = when (kind) {
         CoreKind.GO -> GoCore
         CoreKind.RUST -> RustCore
+        CoreKind.BOX -> BoxCore
     }
 
     fun isAvailable(kind: CoreKind): Boolean = try {
@@ -83,6 +91,6 @@ object VpnCores {
     }
 
     fun versions(): Map<String, String> = CoreKind.entries.associate { kind ->
-        "xray-${kind.id}" to try { get(kind).version() } catch (_: Throwable) { "—" }
+        kind.versionKey to try { get(kind).version() } catch (_: Throwable) { "—" }
     }
 }

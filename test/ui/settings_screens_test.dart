@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:teapodstream/core/models/core_kind.dart';
 import 'package:teapodstream/core/models/profile.dart';
 import 'package:teapodstream/core/models/routing_settings.dart';
 import 'package:teapodstream/core/services/profile_storage_service.dart';
@@ -23,6 +24,31 @@ Future<void> _tapRow(WidgetTester tester, String title) async {
 AppSettings _settings(ProviderContainer c) => c.read(settingsProvider).value!;
 
 void main() {
+  group('core picker', () {
+    testWidgets('lists every core by short label and shows selected core version', (tester) async {
+      await setUpScreenTest();
+      final c = await pumpScreen(tester, const SettingsScreen());
+      for (final kind in CoreKind.values) {
+        expect(find.text(kind.shortLabel), findsOneWidget, reason: kind.name);
+      }
+      final row = find.text('Xray (Go) 26.1.1');
+      await tester.scrollUntilVisible(row, 200, scrollable: find.byType(Scrollable).first);
+      expect(row, findsOneWidget);
+      await unmount(tester, c);
+    });
+
+    testWidgets('licenses row opens the license page', (tester) async {
+      await setUpScreenTest();
+      final c = await pumpScreen(tester, const SettingsScreen());
+      final row = find.text('LICENSES');
+      await tester.scrollUntilVisible(row, 200, scrollable: find.byType(Scrollable).first);
+      await tester.tap(row);
+      await settle(tester);
+      expect(find.byType(LicensePage), findsOneWidget);
+      await unmount(tester, c);
+    });
+  });
+
   group('network settings', () {
     testWidgets('toggles are saved', (tester) async {
       await setUpScreenTest();

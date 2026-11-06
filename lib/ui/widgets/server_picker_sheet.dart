@@ -120,13 +120,7 @@ class _PickerRow extends StatelessWidget {
     required this.onTap,
   });
 
-  String get _protoTag => switch (config.protocol) {
-        VpnProtocol.vless => 'VLESS',
-        VpnProtocol.vmess => 'VMESS',
-        VpnProtocol.trojan => 'TROJAN',
-        VpnProtocol.shadowsocks => 'SS',
-        VpnProtocol.hysteria2 => 'HY2',
-      };
+  String get _protoTag => config.protoTag;
 
   @override
   Widget build(BuildContext context) =>

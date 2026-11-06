@@ -1,10 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:teapodstream/core/cores/core_resolver.dart';
+import 'package:teapodstream/core/models/core_kind.dart';
+import 'package:teapodstream/core/services/settings_service.dart';
+import 'package:teapodstream/providers/core_provider.dart';
 import 'package:teapodstream/core/cores/core_switch.dart';
 import 'package:teapodstream/core/models/protocol_settings.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/protocols/xray/rust_config_builder.dart';
 import 'package:teapodstream/protocols/xray/xray_config_builder.dart';
-import 'package:teapodstream/protocols/xray/xray_go_backend.dart';
 
 VpnConfig _cfg(VpnProtocol protocol, [ProtocolSettings? settings]) => VpnConfig(
       id: protocol.name, name: protocol.name, protocol: protocol, address: 'srv.example.com', port: 51820,
@@ -67,6 +70,7 @@ void main() {
       expect(RustConfigBuilder.unsupportedReason(_cfg(protocol, settings)), reason);
     }
     final vless = _cfg(VpnProtocol.vless).copyWith(name: 'v');
-    expect(supportedCandidates([vless, _cfg(VpnProtocol.wireguard, _wg)], const XrayGoBackend()), [vless]);
+    final goOnly = CoreResolver(const AppSettings(), {CoreKind.xrayGo}, coreBackendFor);
+    expect(supportedCandidates([vless, _cfg(VpnProtocol.wireguard, _wg)], goOnly).map((c) => c.config), [vless]);
   });
 }

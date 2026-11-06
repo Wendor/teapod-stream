@@ -1,12 +1,14 @@
 import 'dart:convert';
 import '../services/settings_service.dart';
+import 'core_kind.dart';
 
 /// Детерминированный отпечаток настроек, влияющих на активное соединение.
 /// Изменился после подключения — нужен reconnect. Косметика (тема, шрифт,
 /// autoConnect, параметры подписок, geo-URL) не входит.
-String connectionFingerprint(AppSettings s) {
+/// [core] — ядро, которым запущен (запустится) активный профиль.
+String connectionFingerprint(AppSettings s, {CoreKind? core}) {
   final map = <String, Object?>{
-    'core': s.core.name,
+    'core': core?.name,
     'socksPort': s.socksPort,
     'randomPort': s.randomPort,
     'randomCredentials': s.randomCredentials,

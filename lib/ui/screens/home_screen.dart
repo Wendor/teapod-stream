@@ -15,6 +15,8 @@ import '../../app.dart';
 import '../widgets/live_sparkline.dart';
 import '../widgets/reconnect_banner.dart';
 import '../widgets/server_picker_sheet.dart';
+import '../widgets/core_sheet.dart';
+import '../../core/cores/core_resolver.dart';
 import 'logs_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -26,9 +28,10 @@ class HomeScreen extends ConsumerWidget {
     final effectiveConfig = ref.watch(effectiveConfigProvider);
     final version        = ref.watch(appVersionProvider).maybeWhen(data: (v) => v, orElse: () => 'v?');
     final t = Theme.of(context).extension<TeapodTokens>()!;
-    final unsupported = effectiveConfig == null
+    final core = effectiveConfig == null
         ? null
-        : ref.watch(coreBackendProvider).checkConfig(effectiveConfig);
+        : ref.watch(coreResolverProvider).resolve(effectiveConfig);
+    final unsupported = core?.reason;
     // Неподдерживаемый ядром профиль подключить нельзя; отключиться — можно.
     final canToggle = effectiveConfig != null &&
         (unsupported == null || vpnState.isConnected || vpnState.isBusy);
@@ -86,8 +89,8 @@ class HomeScreen extends ConsumerWidget {
               ),
               if (isManaged)
                 _ManagedWarning(t: t, direction: routingDirection),
-              if (unsupported != null)
-                _CoreWarning(t: t, reason: unsupported),
+              if (core != null)
+                _CoreLine(t: t, core: core, onTap: () => showCoreSheet(context, effectiveConfig!)),
             ],
           ),
         ),
@@ -685,15 +688,21 @@ class _MetricsGrid extends StatelessWidget {
 
 // ── Managed config warning ────────────────────────────────────────
 
-/// Активный профиль не поддерживается выбранным ядром.
-class _CoreWarning extends StatelessWidget {
+/// Ядро активного профиля (или почему его нечем запустить); тап — подробности.
+class _CoreLine extends StatelessWidget {
   final TeapodTokens t;
-  final String reason;
+  final CoreResolution core;
+  final VoidCallback onTap;
 
-  const _CoreWarning({required this.t, required this.reason});
+  const _CoreLine({required this.t, required this.core, required this.onTap});
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) {
+    final kind = core.backend?.kind;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         decoration: BoxDecoration(border: Border(top: BorderSide(color: t.line, width: 1))),
@@ -703,13 +712,20 @@ class _CoreWarning extends StatelessWidget {
             children: [
               TextSpan(
                 text: '[core] ',
-                style: AppTheme.mono(size: 10, color: AppColors.accentOrange, letterSpacing: 0.5),
+                style: AppTheme.mono(
+                    size: 10, color: kind == null ? AppColors.accentOrange : t.accent, letterSpacing: 0.5),
               ),
-              TextSpan(text: '$reason · смените ядро или конфиг'),
+              TextSpan(
+                text: kind == null
+                    ? '${core.reason} · включите ядро в настройках или смените конфиг ›'
+                    : '${kind.displayName}${core.pinned ? ' · закреплено' : ''} ›',
+              ),
             ],
           ),
         ),
-      );
+      ),
+    );
+  }
 }
 
 class _ManagedWarning extends StatelessWidget {

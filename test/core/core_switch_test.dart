@@ -1,8 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:teapodstream/core/cores/core_resolver.dart';
+import 'package:teapodstream/core/models/core_kind.dart';
+import 'package:teapodstream/core/services/settings_service.dart';
+import 'package:teapodstream/providers/core_provider.dart';
 import 'package:teapodstream/core/cores/core_switch.dart';
 import 'package:teapodstream/core/interfaces/vpn_engine.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
-import 'package:teapodstream/protocols/xray/xray_rust_backend.dart';
 
 VpnConfig _cfg(String id, {String? raw}) => VpnConfig.fromJson({
       ...VpnConfig(
@@ -34,7 +37,12 @@ void main() {
   test('switch candidates drop profiles the core cannot run', () {
     final ok = _cfg('ok');
     final raw = _cfg('raw', raw: '{"outbounds":[]}');
-    expect(supportedCandidates([ok, raw], const XrayRustBackend()), [ok]);
-    expect(supportedCandidates([raw], const XrayRustBackend()), isEmpty);
+    final rustOnly = CoreResolver(const AppSettings(), {CoreKind.xrayRust}, coreBackendFor);
+    expect(supportedCandidates([ok, raw], rustOnly).map((c) => c.config), [ok]);
+    expect(supportedCandidates([raw], rustOnly), isEmpty);
+    final all = CoreResolver(const AppSettings(coreOrder: [CoreKind.xrayRust, CoreKind.xrayGo]),
+        CoreKind.values.toSet(), coreBackendFor);
+    expect([for (final c in supportedCandidates([ok, raw], all)) c.backend.kind],
+        [CoreKind.xrayRust, CoreKind.xrayGo]);
   });
 }

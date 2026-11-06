@@ -301,7 +301,6 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                       ],
                       FeatureGate(
                         feature: CoreFeature.proxyOnly,
-                        allowTurnOff: s.proxyOnly,
                         child: SetRowToggle(
                         t: t,
                         title: 'Только прокси',

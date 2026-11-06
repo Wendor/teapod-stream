@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'core_kind.dart';
 import 'protocol_settings.dart';
 
 enum VpnProtocol {
@@ -74,6 +75,9 @@ class VpnConfig {
   /// Параметры WireGuard/SSH/Naive; у остальных протоколов null.
   final ProtocolSettings? protocolSettings;
 
+  /// Ядро, закреплённое за профилем; null — по приоритету из настроек.
+  final CoreKind? core;
+
   const VpnConfig({
     required this.id,
     required this.name,
@@ -114,6 +118,7 @@ class VpnConfig {
     this.ech,
     this.rawXrayConfig,
     this.protocolSettings,
+    this.core,
   });
 
   /// Метка протокола в списках: AmneziaWG отличается от WireGuard.
@@ -145,6 +150,8 @@ class VpnConfig {
     DateTime? createdAt,
     int? latencyMs,
     bool clearLatency = false,
+    CoreKind? core,
+    bool clearCore = false,
     DateTime? lastPingedAt,
     String? subscriptionId,
     bool? allowInsecure,
@@ -191,6 +198,7 @@ class VpnConfig {
       ech: ech,
       rawXrayConfig: rawXrayConfig,
       protocolSettings: protocolSettings,
+      core: clearCore ? null : (core ?? this.core),
     );
   }
 
@@ -234,6 +242,7 @@ class VpnConfig {
         'ech': ech,
         'rawXrayConfig': rawXrayConfig,
         'protocolSettings': ?protocolSettings?.toJson(),
+        'core': ?core?.name,
       };
 
   factory VpnConfig.fromJson(Map<String, dynamic> json) => VpnConfig(
@@ -287,6 +296,7 @@ class VpnConfig {
         ech: json['ech'] as String?,
         rawXrayConfig: json['rawXrayConfig'] as String?,
         protocolSettings: ProtocolSettings.fromJson(json['protocolSettings'] as Map<String, dynamic>?),
+        core: CoreKind.tryName(json['core'] as String?),
       );
 
   String toJsonString() => jsonEncode(toJson());

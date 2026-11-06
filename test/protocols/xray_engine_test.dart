@@ -8,7 +8,9 @@ import 'package:teapodstream/core/models/heartbeat_settings.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/core/models/vpn_log_entry.dart';
 import 'package:teapodstream/core/services/settings_service.dart';
+import 'package:teapodstream/protocols/singbox/singbox_backend.dart';
 import 'package:teapodstream/protocols/xray/xray_engine.dart';
+import 'package:teapodstream/protocols/xray/xray_go_backend.dart';
 import 'package:teapodstream/protocols/xray/xray_rust_backend.dart';
 
 const _channel = MethodChannel(AppConstants.methodChannel);
@@ -137,14 +139,14 @@ void main() {
     test('native errors become null', () async {
       reply = (_) => throw PlatformException(code: 'X');
       expect(await XrayEngine().pingConfig(_vless()), isNull);
-      expect(await XrayEngine().measureOutbound(_vless(), _opts, 'http://x'), isNull);
+      expect(await XrayEngine().measureOutbound(_vless(), const XrayGoBackend(), _opts, 'http://x'), isNull);
     });
 
     test('measureOutbound sends a probe config', () async {
       reply = (_) => 120;
-      expect(await XrayEngine().measureOutbound(_vless(), _opts, 'http://probe'), 120);
+      expect(await XrayEngine().measureOutbound(_vless(), const SingBoxBackend(), _opts, 'http://probe'), 120);
       final args = calls.single.arguments as Map;
-      expect(args['engine'], 'go');
+      expect(args['engine'], 'box');
       expect(args['url'], 'http://probe');
       expect(jsonDecode(args['config'] as String), isA<Map<String, dynamic>>());
     });

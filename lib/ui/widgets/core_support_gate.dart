@@ -1,24 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/cores/core_backend.dart';
 import '../../core/models/vpn_config.dart';
 import '../../providers/core_provider.dart';
 
-/// Профиль, который активное ядро не запустит: приглушён, под ним причина.
+/// Профиль, который не запускает ни одно ядро: приглушён, под ним причина.
 class CoreSupportGate extends ConsumerWidget {
   final VpnConfig config;
   final Widget child;
 
-  /// Для тестов; по умолчанию — ядро из настроек.
-  final CoreBackend? backend;
-
-  const CoreSupportGate({super.key, required this.config, required this.child, this.backend});
+  const CoreSupportGate({super.key, required this.config, required this.child});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final CoreBackend core = backend ?? ref.watch(coreBackendProvider);
-    final reason = core.checkConfig(config);
+    final reason = ref.watch(coreResolverProvider).resolve(config).reason;
     if (reason == null) return child;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -36,4 +31,12 @@ class CoreSupportGate extends ConsumerWidget {
 
 /// Причина, по которой [config] нельзя выбрать для подключения, или null.
 String? unsupportedReason(WidgetRef ref, VpnConfig config) =>
-    ref.read(coreBackendProvider).checkConfig(config);
+    ref.read(coreResolverProvider).resolve(config).reason;
+
+/// Ядро профиля для строки списка — только если это не основное ядро
+/// (первое включённое): так видны лишь исключения.
+String? coreNote(WidgetRef ref, VpnConfig config) {
+  final resolver = ref.watch(coreResolverProvider);
+  final kind = resolver.resolve(config).backend?.kind;
+  return kind == null || kind == resolver.primary ? null : kind.displayName;
+}

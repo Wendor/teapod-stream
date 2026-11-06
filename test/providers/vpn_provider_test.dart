@@ -93,6 +93,8 @@ class _Native {
     switch (call.method) {
       case 'getState':
         return state;
+      case 'getAvailableEngines':
+        return ['go', 'rust', 'box'];
       case 'getLogs':
         return logs;
       case 'connect':
@@ -219,7 +221,7 @@ void main() {
       await n().connect();
       expect(st().connectionState, VpnState.connecting);
       expect(st().activeSocksPort, 2080);
-      expect(st().appliedFingerprint, connectionFingerprint(_settings));
+      expect(st().appliedFingerprint, connectionFingerprint(_settings, core: CoreKind.xrayGo));
       final args = native.lastConnect();
       expect(args['engine'], 'go');
       expect(args['socksPort'], 2080);
@@ -296,19 +298,36 @@ void main() {
       expect(st().error, 'denied');
     });
 
-    test('rust core refuses proxy-only before native', () async {
+    test('the first core by priority that can run the profile is used', () async {
       await boot(configs: [_cfg('a')], activeId: 'a',
-          settings: _settings.copyWith(core: CoreKind.xrayRust, proxyOnly: true));
+          settings: _settings.copyWith(coreOrder: [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox]));
       await n().connect();
-      expect(st().error, const XrayRustBackend().unavailableReason(CoreFeature.proxyOnly));
-      expect(native.named('connect'), isEmpty);
+      expect(native.lastConnect()['engine'], 'rust');
+
+      // proxy-only Rust не умеет — профиль уходит на следующее ядро.
+      await boot(configs: [_cfg('a')], activeId: 'a',
+          settings: _settings.copyWith(coreOrder: [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox], proxyOnly: true));
+      await n().connect();
+      expect(native.lastConnect()['engine'], 'go');
+
+      await boot(configs: [_cfg('r', rawXray: _visionRaw)], activeId: 'r',
+          settings: _settings.copyWith(coreOrder: [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox]));
+      await n().connect();
+      expect(native.lastConnect()['engine'], 'go');
     });
 
-    test('rust core refuses raw configs', () async {
-      await boot(configs: [_cfg('r', rawXray: _visionRaw)], activeId: 'r',
-          settings: _settings.copyWith(core: CoreKind.xrayRust));
+    test('a profile pinned to a core runs on it', () async {
+      await boot(configs: [_cfg('a').copyWith(core: CoreKind.singBox)], activeId: 'a');
       await n().connect();
-      expect(st().connectionState, VpnState.error);
+      expect(native.lastConnect()['engine'], 'box');
+    });
+
+    test('no enabled core can run the profile — refused before native', () async {
+      await boot(configs: [_cfg('a')], activeId: 'a',
+          settings: _settings.copyWith(
+              proxyOnly: true, disabledCores: {CoreKind.xrayGo, CoreKind.singBox}));
+      await n().connect();
+      expect(st().error, const XrayRustBackend().unavailableReason(CoreFeature.proxyOnly));
       expect(native.named('connect'), isEmpty);
     });
 
@@ -536,7 +555,8 @@ void main() {
   group('core switch', () {
     test('connected session on an unsupported config is disconnected', () async {
       await connected(configs: [_cfg('r', rawXray: _visionRaw)]);
-      await c.read(settingsProvider.notifier).save(_settings.copyWith(core: CoreKind.xrayRust));
+      await c.read(settingsProvider.notifier)
+          .save(_settings.copyWith(disabledCores: {CoreKind.xrayGo, CoreKind.singBox}));
       await _settle();
       expect(native.named('disconnect'), hasLength(1));
       expect(st().error, isNotNull);
@@ -544,19 +564,27 @@ void main() {
 
     test('idle switch saves or clears the quick-connect config', () async {
       await boot(configs: [_cfg('a')], activeId: 'a');
-      await c.read(settingsProvider.notifier).save(_settings.copyWith(core: CoreKind.xrayRust));
+      await c.read(settingsProvider.notifier).save(_settings.copyWith(coreOrder: [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox]));
       await _settle();
       expect((native.named('saveQuickConnect').single.arguments as Map)['engine'], 'rust');
 
+      // Сырой конфиг Rust не берёт — ядро активного профиля не меняется.
+      native.calls.clear();
       await boot(configs: [_cfg('r', rawXray: _visionRaw)], activeId: 'r');
-      await c.read(settingsProvider.notifier).save(_settings.copyWith(core: CoreKind.xrayRust));
+      await c.read(settingsProvider.notifier).save(_settings.copyWith(coreOrder: [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox]));
+      await _settle();
+      expect(native.named('saveQuickConnect'), isEmpty);
+      expect(native.named('clearQuickConnect'), isEmpty);
+      await c.read(settingsProvider.notifier)
+          .save(_settings.copyWith(disabledCores: {CoreKind.xrayGo, CoreKind.singBox}));
       await _settle();
       expect(native.named('clearQuickConnect'), hasLength(1));
     });
 
     test('idle switch to sing-box saves a sing-box config or clears an unsupported one', () async {
       await boot(configs: [_cfg('a')], activeId: 'a');
-      await c.read(settingsProvider.notifier).save(_settings.copyWith(core: CoreKind.singBox));
+      await c.read(settingsProvider.notifier)
+          .save(_settings.copyWith(coreOrder: [CoreKind.singBox, CoreKind.xrayGo, CoreKind.xrayRust]));
       await _settle();
       final args = native.named('saveQuickConnect').single.arguments as Map;
       expect(args['engine'], 'box');
@@ -564,7 +592,8 @@ void main() {
       expect(((json['inbounds'] as List).first as Map)['type'], 'mixed');
 
       await boot(configs: [_cfg('r', rawXray: _visionRaw)], activeId: 'r');
-      await c.read(settingsProvider.notifier).save(_settings.copyWith(core: CoreKind.singBox));
+      await c.read(settingsProvider.notifier)
+          .save(_settings.copyWith(disabledCores: {CoreKind.xrayGo, CoreKind.xrayRust}));
       await _settle();
       expect(native.named('clearQuickConnect'), hasLength(1));
     });

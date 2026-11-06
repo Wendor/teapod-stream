@@ -22,7 +22,7 @@ class XrayEngine implements VpnEngine {
   @override
   String get protocolName => 'xray';
 
-  /// Ядро по умолчанию для вызовов через интерфейс [VpnEngine].
+  /// Ядро для [connect] и [saveQuickConnect]; выставляется перед вызовом.
   CoreBackend backend = const XrayGoBackend();
 
   @override
@@ -77,7 +77,8 @@ class XrayEngine implements VpnEngine {
 
   /// Замер задержки через кандидата: временный xray-инстанс с его конфигом
   /// (`Teapodcore.measureOutboundDelay`). null — сервер не ответил.
-  Future<int?> measureOutbound(VpnConfig config, VpnEngineOptions options, String url) async {
+  Future<int?> measureOutbound(
+      VpnConfig config, CoreBackend backend, VpnEngineOptions options, String url) async {
     try {
       final xrayConfig = backend.buildProbeConfig(config, options);
       return await _channel.invokeMethod<int>('measureOutbound', {

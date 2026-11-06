@@ -196,11 +196,11 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
       final existing = current.subscriptions.where((s) => s.id == subId).firstOrNull;
       final oldConfigs = current.configs.where((c) => c.subscriptionId == subId).toList();
 
-      // Пинг переносим по address:port
+      // Пинг и закреплённое ядро переносим по address:port
       final oldByEndpoint = {for (final c in oldConfigs) '${c.address}:${c.port}': c};
       final newConfigs = tagged.map((c) {
         final old = oldByEndpoint['${c.address}:${c.port}'];
-        return old == null ? c : c.copyWith(latencyMs: old.latencyMs, lastPingedAt: old.lastPingedAt);
+        return old == null ? c : c.copyWith(latencyMs: old.latencyMs, lastPingedAt: old.lastPingedAt, core: old.core);
       }).toList();
 
       // Парсер выдаёт новые id — переносим выбор: имя+endpoint, затем endpoint,

@@ -3,9 +3,7 @@ import 'package:teapodstream/core/cores/core_backend.dart';
 import 'package:teapodstream/core/interfaces/vpn_engine.dart';
 import 'package:teapodstream/core/models/connection_fingerprint.dart';
 import 'package:teapodstream/core/models/core_kind.dart';
-import 'package:teapodstream/core/models/heartbeat_settings.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
-import 'package:teapodstream/core/models/xray_tuning.dart';
 import 'package:teapodstream/core/services/settings_service.dart';
 import 'package:teapodstream/protocols/xray/xray_config_builder.dart';
 import 'package:teapodstream/protocols/xray/xray_go_backend.dart';
@@ -19,29 +17,28 @@ VpnConfig _vless() => VpnConfig(
 const _opts = VpnEngineOptions(socksPort: 10808, httpPort: 0, socksUser: 'u', socksPassword: 'p');
 
 void main() {
-  test('core defaults to xrayGo and survives json', () {
-    expect(AppSettings.fromJson(const {}).core, CoreKind.xrayGo);
-    final s = const AppSettings().copyWith(core: CoreKind.xrayRust);
-    expect(AppSettings.fromJson(s.toJson()).core, CoreKind.xrayRust);
+  test('core order: defaults, json round trip, legacy single core goes first', () {
+    expect(AppSettings.fromJson(const {}).coreOrder, CoreKind.defaultOrder);
+    final s = const AppSettings().copyWith(
+        coreOrder: [CoreKind.xrayRust, CoreKind.singBox, CoreKind.xrayGo], disabledCores: {CoreKind.xrayGo});
+    final back = AppSettings.fromJson(s.toJson());
+    expect(back.coreOrder, s.coreOrder);
+    expect(back.disabledCores, {CoreKind.xrayGo});
+    expect(AppSettings.fromJson(const {'core': 'singBox'}).coreOrder,
+        [CoreKind.singBox, CoreKind.xrayGo, CoreKind.xrayRust]);
     expect(CoreKind.xrayGo.nativeId, 'go');
     expect(CoreKind.xrayRust.nativeId, 'rust');
   });
 
-  test('changing core changes the connection fingerprint', () {
-    const s = AppSettings();
-    expect(connectionFingerprint(s), isNot(connectionFingerprint(s.copyWith(core: CoreKind.xrayRust))));
+  test('parseOrder drops unknown names and appends missing cores', () {
+    expect(CoreKind.parseOrder(['xrayRust', 'nope']), [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox]);
+    expect(CoreKind.parseOrder(['singBox'], first: 'xrayRust').first, CoreKind.singBox);
   });
 
-  test('unsupported values survive a Go→Rust→Go round trip', () {
-    final s = const AppSettings().copyWith(
-      mtu: 1400,
-      mux: const MuxSettings(enabled: true),
-      heartbeat: const HeartbeatSettings(probe: HeartbeatProbe.xrayDelay),
-    );
-    final back = s.copyWith(core: CoreKind.xrayRust).copyWith(core: CoreKind.xrayGo);
-    expect(back.mtu, 1400);
-    expect(back.mux.enabled, isTrue);
-    expect(back.heartbeat.probe, HeartbeatProbe.xrayDelay);
+  test('the running core is part of the connection fingerprint', () {
+    const s = AppSettings();
+    expect(connectionFingerprint(s, core: CoreKind.xrayGo),
+        isNot(connectionFingerprint(s, core: CoreKind.xrayRust)));
   });
 
   group('XrayGoBackend', () {

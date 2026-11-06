@@ -92,9 +92,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   isProfileReadonly: profileReadonly,
                   hasUpdate: hasUpdate,
                   version: version,
-                  coreVersion: _coreVersions == null
-                      ? ''
-                      : (_coreVersions![settings.core.versionKey] ?? '—'),
+                  coreVersions: _coreVersions,
                   onUpdate: (s) => ref.read(settingsProvider.notifier).save(s),
                 ),
               ),
@@ -314,8 +312,8 @@ class _SettingsBody extends StatelessWidget {
   final bool isProfileReadonly;
   final bool hasUpdate;
   final String version;
-  /// Версия выбранного ядра; '' — ещё не загружена.
-  final String coreVersion;
+  /// Версии ядер по `CoreKind.versionKey`; null — ещё не загружены.
+  final Map<String, String>? coreVersions;
   final void Function(AppSettings) onUpdate;
 
   const _SettingsBody({
@@ -323,7 +321,7 @@ class _SettingsBody extends StatelessWidget {
     required this.isProfileReadonly,
     required this.hasUpdate,
     required this.version,
-    required this.coreVersion,
+    required this.coreVersions,
     required this.onUpdate,
   });
 
@@ -413,11 +411,7 @@ class _SettingsBody extends StatelessWidget {
 
           // ── 0x40 NETWORK ──────────────────────────────────────
           SetSectionHeader(t: t, addr: '0x40', label: 'network'),
-          SetInlineField(
-            t: t,
-            label: 'Ядро',
-            child: const _CoreSegment(),
-          ),
+          _CoreOrderList(t: t, settings: s, versions: coreVersions, locked: locked, onUpdate: onUpdate),
           SetRowChev(
             t: t,
             title: 'Сеть',
@@ -454,7 +448,6 @@ class _SettingsBody extends StatelessWidget {
           // ── 0x60 ABOUT ────────────────────────────────────────
           SetSectionHeader(t: t, addr: '0x60', label: 'about'),
           _KVRow(t: t, k: 'version',    v: version.isEmpty ? '...' : version),
-          _KVRow(t: t, k: 'core',       v: coreVersion.isEmpty ? '...' : '${s.core.displayName} $coreVersion'),
           _KVRowTap(
             t: t,
             k: 'licenses',
@@ -537,28 +530,114 @@ class _KVRowTap extends StatelessWidget {
   }
 }
 
-// ── Core segment ──────────────────────────────────────────────────
+// ── Core priority ─────────────────────────────────────────────────
 
-/// Выбор ядра. Ядро, чьи библиотеки не грузятся на устройстве, выбрать нельзя.
-class _CoreSegment extends ConsumerWidget {
-  const _CoreSegment();
+/// Ядра в порядке приоритета: «↑» поднимает ядро, переключатель исключает его
+/// из выбора. Последнее включённое ядро выключить нельзя.
+class _CoreOrderList extends ConsumerWidget {
+  final TeapodTokens t;
+  final AppSettings settings;
+  final Map<String, String>? versions;
+  final bool locked;
+  final void Function(AppSettings) onUpdate;
+
+  const _CoreOrderList({
+    required this.t,
+    required this.settings,
+    required this.versions,
+    required this.locked,
+    required this.onUpdate,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = Theme.of(context).extension<TeapodTokens>()!;
-    final settings = ref.watch(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
-    if (settings == null) return const SizedBox.shrink();
-    final available = ref.watch(availableCoresProvider).value ?? const {CoreKind.xrayGo};
-    return SetSegSquare(
-      t: t,
-      value: settings.core.name,
-      opts: [for (final k in CoreKind.values) (k.name, k.shortLabel)],
-      locked: available.length < 2,
-      onChanged: (v) async {
-        final core = CoreKind.fromName(v);
-        if (!available.contains(core)) return;
-        await ref.read(settingsProvider.notifier).save(settings.copyWith(core: core));
-      },
+    final usable = ref.watch(coreResolverProvider).usable;
+    final available = ref.watch(availableCoresProvider).value ?? CoreKind.values.toSet();
+    final order = settings.coreOrder;
+
+    void toggle(CoreKind k, bool on) {
+      if (!on && usable.length == 1 && usable.first == k) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(content: Text('Нужно хотя бы одно включённое ядро')));
+        return;
+      }
+      onUpdate(settings.copyWith(
+          disabledCores: on ? ({...settings.disabledCores}..remove(k)) : {...settings.disabledCores, k}));
+    }
+
+    void moveUp(int i) {
+      final next = [...order];
+      next.insert(i - 1, next.removeAt(i));
+      onUpdate(settings.copyWith(coreOrder: List.unmodifiable(next)));
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Ядра', style: AppTheme.sans(size: 14, color: t.text)),
+              const SizedBox(height: 3),
+              Text('Профиль запускает первое ядро сверху, которое его поддерживает',
+                  style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5)),
+            ],
+          ),
+        ),
+        for (final (i, k) in order.indexed)
+          Padding(
+            key: ValueKey(k),
+            padding: const EdgeInsets.fromLTRB(8, 6, 20, 6),
+            child: Row(
+              children: [
+                // Поднять ядро на позицию выше; у первого кнопки нет.
+                SizedBox(
+                  width: 40,
+                  height: 36,
+                  child: i == 0
+                      ? null
+                      : Semantics(
+                          label: 'поднять ${k.displayName}',
+                          button: true,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => locked ? showReadonlySnack(context) : moveUp(i),
+                            child: Icon(Icons.arrow_upward_rounded, size: 16, color: t.textMuted),
+                          ),
+                        ),
+                ),
+                SizedBox(
+                  width: 26,
+                  child: Text('0${i + 1}', style: AppTheme.mono(size: 10, color: t.textMuted)),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(k.displayName,
+                          style: AppTheme.sans(size: 14, color: usable.contains(k) ? t.text : t.textMuted)),
+                      const SizedBox(height: 2),
+                      Text(
+                          !available.contains(k)
+                              ? 'не загружается на устройстве'
+                              : (versions?[k.versionKey] ?? '...'),
+                          style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5)),
+                    ],
+                  ),
+                ),
+                SetSquareSwitch(
+                  t: t,
+                  value: !settings.disabledCores.contains(k),
+                  onChanged: locked ? null : (on) => toggle(k, on),
+                ),
+              ],
+            ),
+          ),
+        Container(height: 1, color: t.lineSoft),
+      ],
     );
   }
 }

@@ -123,11 +123,18 @@ void main() {
       }
     });
 
-    test('coreBackendProvider follows settings', () async {
-      expect(c.read(coreBackendProvider).kind, CoreKind.xrayGo);
+    test('coreResolverProvider follows settings and device cores', () async {
+      reply = (_) => ['rust', 'go', 'box'];
+      await c.read(availableCoresProvider.future);
       await c.read(settingsProvider.future);
-      await c.read(settingsProvider.notifier).save(const AppSettings(core: CoreKind.xrayRust));
-      expect(c.read(coreBackendProvider).kind, CoreKind.xrayRust);
+      expect(c.read(coreResolverProvider).primary, CoreKind.xrayGo);
+      await c.read(settingsProvider.notifier).save(
+          const AppSettings(coreOrder: [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox]));
+      expect(c.read(coreResolverProvider).primary, CoreKind.xrayRust);
+      reply = (_) => ['go'];
+      c.invalidate(availableCoresProvider);
+      await c.read(availableCoresProvider.future);
+      expect(c.read(coreResolverProvider).usable, [CoreKind.xrayGo]);
       await Future<void>.delayed(Duration.zero);
     });
 

@@ -2,12 +2,15 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:teapodstream/core/cores/core_resolver.dart';
+import 'package:teapodstream/core/models/core_kind.dart';
+import 'package:teapodstream/core/services/settings_service.dart';
+import 'package:teapodstream/providers/core_provider.dart';
 import 'package:teapodstream/core/constants/app_constants.dart';
 import 'package:teapodstream/core/cores/core_switch.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/core/services/subscription_service.dart';
 
-import 'package:teapodstream/protocols/singbox/singbox_backend.dart';
 import 'package:teapodstream/protocols/xray/xray_go_backend.dart';
 
 import '../helpers/local_server.dart';
@@ -35,8 +38,11 @@ void main() {
       const go = XrayGoBackend();
       expect(configs.map(go.checkConfig).skip(1),
           everyElement(endsWith('поддерживается только ядром sing-box.')));
-      expect(supportedCandidates(configs, go).map((c) => c.protocol), [VpnProtocol.vless]);
-      expect(supportedCandidates(configs, const SingBoxBackend()), hasLength(4));
+      final goOnly = CoreResolver(const AppSettings(), {CoreKind.xrayGo}, coreBackendFor);
+      expect(supportedCandidates(configs, goOnly).map((c) => c.config.protocol), [VpnProtocol.vless]);
+      final all = CoreResolver(const AppSettings(), CoreKind.values.toSet(), coreBackendFor);
+      expect(supportedCandidates(configs, all).map((c) => c.backend.kind),
+          [CoreKind.xrayGo, CoreKind.singBox, CoreKind.singBox, CoreKind.singBox]);
     });
 
     test('plain subscription of only new schemes is not mistaken for base64', () async {

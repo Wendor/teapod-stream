@@ -61,7 +61,9 @@ class XrayConfigBuilder {
               'accounts': [
                 {'user': options.socksUser, 'pass': options.socksPassword}
               ],
-            'udp': options.enableUdp,
+            // UDP ASSOCIATE нужен всегда: через него tun2socks шлёт DNS приложений.
+            // Выключенный UDP режет правило _udpBlockRule (кроме порта 53).
+            'udp': true,
           },
           'sniffing': {
             'enabled': options.sniffingEnabled,
@@ -102,6 +104,7 @@ class XrayConfigBuilder {
             'network': 'udp,tcp',
             'outboundTag': 'dns-out',
           },
+          if (!options.enableUdp) _udpBlockRule('socks-in', 'block'),
           ..._buildGeoRules(routing),
           // In ONLY mode the catch-all routes to direct, so diagnostic hosts that aren't
           // in the user's rules would bypass the proxy and may be blocked locally.
@@ -643,7 +646,9 @@ class XrayConfigBuilder {
               'accounts': [
                 {'user': options.socksUser, 'pass': options.socksPassword}
               ],
-            'udp': options.enableUdp,
+            // UDP ASSOCIATE нужен всегда: через него tun2socks шлёт DNS приложений.
+            // Выключенный UDP режет правило _udpBlockRule (кроме порта 53).
+            'udp': true,
           },
           'sniffing': {
             'enabled': options.sniffingEnabled,
@@ -686,6 +691,11 @@ class XrayConfigBuilder {
         });
       }
 
+      if (!options.enableUdp) {
+        _ensureBlackholeOutbound(cfg);
+        appRules.add(_udpBlockRule(socksTag, blackholeTag));
+      }
+
       // Only inject rules that route to 'direct' — safe regardless of server outbound names.
       // onlySelected rules (→ 'proxy') are skipped: the server's own catch-all handles routing.
       final routing = options.routing;
@@ -712,6 +722,15 @@ class XrayConfigBuilder {
       throw FormatException('Не удалось разобрать JSON-конфиг подписки: $e');
     }
   }
+
+  /// Выключенный UDP: весь UDP с socks-инбаунда, кроме DNS на порт 53, — в blackhole.
+  static Map<String, dynamic> _udpBlockRule(String inbound, String outbound) => {
+        'type': 'field',
+        'inboundTag': [inbound],
+        'network': 'udp',
+        'port': '1-52,54-65535',
+        'outboundTag': outbound,
+      };
 
   /// Tag of the blackhole outbound injected into managed configs (fallback
   /// neutralization, adblock). Injected once by [_ensureBlackholeOutbound].

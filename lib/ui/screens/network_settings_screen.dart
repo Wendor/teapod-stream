@@ -324,7 +324,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                         child: SetRowToggle(
                         t: t,
                         title: 'ICMP (ping)',
-                        hint: 'Разрешить ping-запросы через туннель',
+                        hint: 'Отвечать на ping: прокси ICMP не передаёт, ответ даёт сам VPN — время не отражает задержку до узла',
                         value: s.allowIcmp,
                         locked: locked,
                         onChange: (v) => _update(s.copyWith(allowIcmp: v)),

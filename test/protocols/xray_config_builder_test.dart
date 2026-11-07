@@ -25,6 +25,7 @@ VpnEngineOptions _defaultOptions({
   int socksPort = 10808,
   RoutingSettings? routing,
   bool sniffingEnabled = true,
+  bool enableUdp = true,
 }) => VpnEngineOptions(
   socksPort: socksPort,
   httpPort: 0,
@@ -32,6 +33,7 @@ VpnEngineOptions _defaultOptions({
   socksPassword: '',
   routing: routing ?? const RoutingSettings(),
   sniffingEnabled: sniffingEnabled,
+  enableUdp: enableUdp,
 );
 
 void main() {
@@ -329,6 +331,40 @@ void main() {
         ruServicesEnabled: true,
       ));
       expect(rules.where((r) => r['domain'] != null && r['outboundTag'] == 'direct'), isNotEmpty);
+    });
+  });
+
+  group('UDP off', () {
+    const block = {
+      'type': 'field',
+      'network': 'udp',
+      'port': '1-52,54-65535',
+    };
+
+    test('build keeps SOCKS UDP for DNS and blocks the rest after the DNS rule', () {
+      final json = XrayConfigBuilder.build(_vlessConfig(), _defaultOptions(enableUdp: false));
+      expect(json['inbounds'][0]['settings']['udp'], isTrue);
+      final rules = (json['routing']['rules'] as List).cast<Map<String, dynamic>>();
+      final dns = rules.indexWhere((r) => r['outboundTag'] == 'dns-out');
+      expect(rules[dns + 1], {...block, 'inboundTag': ['socks-in'], 'outboundTag': 'block'});
+    });
+
+    test('build adds no UDP rule when UDP is on', () {
+      final json = XrayConfigBuilder.build(_vlessConfig(), _defaultOptions());
+      expect((json['routing']['rules'] as List).where((r) => r['network'] == 'udp'), isEmpty);
+    });
+
+    test('mergeWithRaw blocks non-DNS UDP of the managed socks inbound', () {
+      final raw = {
+        'inbounds': [{'tag': 'socks', 'protocol': 'socks', 'port': 1080}],
+        'outbounds': [{'tag': 'proxy', 'protocol': 'freedom'}],
+      };
+      final cfg = jsonDecode(XrayConfigBuilder.mergeWithRaw(jsonEncode(raw), _defaultOptions(enableUdp: false)))
+          as Map<String, dynamic>;
+      expect(cfg['inbounds'][0]['settings']['udp'], isTrue);
+      expect(cfg['routing']['rules'],
+          contains(equals({...block, 'inboundTag': ['socks'], 'outboundTag': XrayConfigBuilder.blackholeTag})));
+      expect((cfg['outbounds'] as List).map((o) => o['tag']), contains(XrayConfigBuilder.blackholeTag));
     });
   });
 

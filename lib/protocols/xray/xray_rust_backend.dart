@@ -13,12 +13,12 @@ class XrayRustBackend implements CoreBackend {
   const XrayRustBackend();
 
   static const _unsupported = <CoreFeature, String>{
-    CoreFeature.proxyOnly: 'Режим «только прокси» недоступен в ядре Xray (Rust): оно работает только через TUN.',
-    CoreFeature.icmpToggle: 'ICMP обрабатывается ядром Xray (Rust) локально; настройка не применяется.',
-    CoreFeature.customMtu: 'Ядро Xray (Rust) работает с MTU 1500; другое значение не применяется.',
-    CoreFeature.mux: 'Mux недоступен в ядре Xray (Rust) и не применяется.',
-    CoreFeature.observatory: 'Observatory и управляемые JSON-конфиги недоступны в ядре Xray (Rust).',
-    CoreFeature.rawConfig: 'Полный JSON-конфиг недоступен в ядре Xray (Rust).',
+    CoreFeature.proxyOnly: 'Режим «только прокси» недоступен в ядре xray-rust: оно работает только через TUN.',
+    CoreFeature.icmpToggle: 'ICMP обрабатывается ядром xray-rust локально; настройка не применяется.',
+    CoreFeature.customMtu: 'Ядро xray-rust работает с MTU 1500; другое значение не применяется.',
+    CoreFeature.mux: 'Mux недоступен в ядре xray-rust и не применяется.',
+    CoreFeature.observatory: 'Observatory и управляемые JSON-конфиги недоступны в ядре xray-rust.',
+    CoreFeature.rawConfig: 'Полный JSON-конфиг недоступен в ядре xray-rust.',
   };
 
   @override
@@ -73,13 +73,13 @@ class XrayRustBackend implements CoreBackend {
       ..warn(when: o.allowIcmp, warning: _unsupported[CoreFeature.icmpToggle]!)
       ..drop(
         when: routing.isActive && !o.sniffingEnabled && domainRules,
-        warning: 'Доменные правила в ядре Xray (Rust) требуют определения доменов — оно включено для этого подключения.',
+        warning: 'Доменные правила в ядре xray-rust требуют определения доменов — оно включено для этого подключения.',
         fix: (v) => v.copyWith(sniffingEnabled: true),
       )
       ..drop(
         when: routing.adBlockEnabled && routing.isActive && routing.geositeEnabled &&
             routing.geositeCodes.any((c) => RustConfigBuilder.largeGeositeCodes.contains(c.trim().toLowerCase())),
-        warning: 'Блокировка рекламы вместе с большой категорией GeoSite превышает лимит ядра Xray (Rust) '
+        warning: 'Блокировка рекламы вместе с большой категорией GeoSite превышает лимит ядра xray-rust '
             'в 250 тыс. доменных правил — блокировка рекламы не применяется.',
         fix: (v) => v.copyWith(routing: v.routing.copyWith(adBlockEnabled: false)),
       );

@@ -74,6 +74,9 @@ class HomeScreen extends ConsumerWidget {
                 onToggle: () => ref.read(vpnProvider.notifier).toggle(),
                 // Без конфигов кнопка ведёт на вкладку «Конфиги»
                 onDisabledTap: () => ref.read(tabIndexProvider.notifier).set(1),
+                coreLine: core == null
+                    ? null
+                    : _CoreLine(t: t, core: core, onTap: () => showCoreSheet(context, effectiveConfig!)),
               ),
               _MetricsGrid(
                 t: t,
@@ -89,8 +92,6 @@ class HomeScreen extends ConsumerWidget {
               ),
               if (isManaged)
                 _ManagedWarning(t: t, direction: routingDirection),
-              if (core != null)
-                _CoreLine(t: t, core: core, onTap: () => showCoreSheet(context, effectiveConfig!)),
             ],
           ),
         ),
@@ -160,6 +161,7 @@ class _HeroPanel extends StatelessWidget {
   final bool canToggle;
   final VoidCallback onToggle;
   final VoidCallback onDisabledTap;
+  final Widget? coreLine;
 
   const _HeroPanel({
     required this.t,
@@ -169,6 +171,7 @@ class _HeroPanel extends StatelessWidget {
     required this.canToggle,
     required this.onToggle,
     required this.onDisabledTap,
+    this.coreLine,
   });
 
   @override
@@ -208,6 +211,7 @@ class _HeroPanel extends StatelessWidget {
                   vpnState: vpnState,
                   pingMs: pingMs,
                 ),
+                ?coreLine,
               ],
             ),
           ),
@@ -702,11 +706,10 @@ class _CoreLine extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        decoration: BoxDecoration(border: Border(top: BorderSide(color: t.line, width: 1))),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 10),
         child: RichText(
+          textAlign: TextAlign.center,
           text: TextSpan(
             style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5),
             children: [

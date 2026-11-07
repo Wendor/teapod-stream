@@ -14,7 +14,7 @@ void main() {
       settings: const AppSettings(disabledCores: {CoreKind.xrayRust}),
     );
     final c = await pumpScreen(tester, const HomeScreen());
-    final line = find.textContaining('Xray (Go) ›', findRichText: true);
+    final line = find.textContaining('xray-core ›', findRichText: true);
     expect(line, findsOneWidget);
 
     await tester.tap(line);
@@ -23,7 +23,7 @@ void main() {
     expect(find.text('совместимо'), findsOneWidget); // sing-box
     expect(find.text('Выключено в настройках.'), findsOneWidget); // Rust
     // Выключенное ядро закрепить нельзя.
-    expect(find.text('RUST'), findsNothing);
+    expect(find.text('XRAY-RUST'), findsNothing);
 
     await tester.tap(find.text('SING-BOX'));
     await settle(tester);

@@ -1,7 +1,7 @@
 /// VPN-ядро.
 enum CoreKind {
-  xrayGo('go', 'Xray (Go)', 'GO', 'xray-go'),
-  xrayRust('rust', 'Xray (Rust)', 'RUST', 'xray-rust'),
+  xrayGo('go', 'xray-core', 'XRAY-CORE', 'xray-go'),
+  xrayRust('rust', 'xray-rust', 'XRAY-RUST', 'xray-rust'),
   singBox('box', 'sing-box', 'SING-BOX', 'sing-box');
 
   const CoreKind(this.nativeId, this.displayName, this.shortLabel, this.versionKey);

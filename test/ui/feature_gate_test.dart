@@ -29,7 +29,7 @@ void main() {
     await tester.pumpWidget(_host(const AppSettings(), () => taps++));
     await tester.tap(find.text('mux'));
     expect(taps, 1);
-    expect(find.text('Не поддерживается: sing-box, Xray (Rust).'), findsOneWidget);
+    expect(find.text('Не поддерживается: sing-box, xray-rust.'), findsOneWidget);
   });
 
   testWidgets('disabled cores are not listed', (tester) async {

@@ -6,7 +6,7 @@ import 'dart:io';
 import 'adb.dart';
 import 'agent_client.dart';
 import 'device_guard.dart';
-import 'matrix.dart' show collectDiag;
+import 'matrix.dart' show collectDiag, dumpGoroutines;
 import 'probes.dart';
 
 enum Fault {
@@ -186,6 +186,7 @@ class Soak {
 
   Future<void> _diag(FaultResult r) async {
     final d = Directory('${dir.path}/fault-${++_diagN}-${r.fault.cli}')..createSync(recursive: true);
+    await dumpGoroutines(agent, d, (e) => _event('note', {'text': e}));
     await collectDiag(shell, d);
     File('${d.path}/logcat.txt').writeAsStringSync('${_recent.join('\n')}\n');
     File('${d.path}/result.json').writeAsStringSync(jsonEncode(r.toJson()));

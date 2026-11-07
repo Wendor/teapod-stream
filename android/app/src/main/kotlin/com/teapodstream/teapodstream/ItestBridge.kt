@@ -8,6 +8,8 @@ import android.util.Log
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
 import org.json.JSONObject
+import teapodcore.Teapodcore
+import java.io.File
 
 /**
  * Мост интеграционных тестов (tool/itest). Работает только в itest-сборке
@@ -65,6 +67,15 @@ object ItestBridge {
                 Intent(context, XrayVpnService::class.java).setAction(XrayVpnService.ACTION_ITEST_DROP)
             )
             emit(mapOf("id" to json.optString("id"), "ok" to true))
+            return true
+        }
+        if (json.optString("op") == "goroutines") {
+            // Дамп горутин Go до disconnect: зависание видно только пока ядро живо.
+            // Ответ длинный — файлом, как у агента (раннер читает через run-as).
+            val id = json.optString("id")
+            val file = File(context.filesDir, "itest_$id.json")
+            file.writeText(JSONObject(mapOf("id" to id, "ok" to true, "data" to Teapodcore.dumpGoroutines())).toString())
+            emit(mapOf("id" to id, "ok" to true, "file" to file.path))
             return true
         }
         main.post {

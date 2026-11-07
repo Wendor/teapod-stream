@@ -265,6 +265,12 @@ List<MatrixCase> buildMatrix(
   return caseGlob == null ? cases : cases.where((c) => globMatch(caseGlob, c.id)).toList();
 }
 
+/// Кейс неприменим ещё до подключения.
+class _Skip implements Exception {
+  final String note;
+  const _Skip(this.note);
+}
+
 /// Прогон одного кейса: настройки → подключение → проверка → отключение.
 Future<CaseResult> runCase(MatrixCase mc, CaseCtx ctx, RunDir run, Shell shell, Stream<String> logcat) async {
   final started = DateTime.now();
@@ -273,8 +279,11 @@ Future<CaseResult> runCase(MatrixCase mc, CaseCtx ctx, RunDir run, Shell shell, 
   final logs = File('${dir.path}/logcat.txt').openWrite();
   final sub = logcat.listen(logs.writeln);
   void step(String s) => steps.writeln('${DateTime.now().toIso8601String()} $s');
+  ctx.probes.log = step;
   Outcome out;
   try {
+    final usesEcho = jsonEncode(mc.settingsPatch).contains(echoHostPlaceholder);
+    if (usesEcho && ctx.pair == null) throw const _Skip('need 2 usable echo services');
     final host = ctx.pair == null ? '' : Uri.parse(ctx.pair!.$1).host;
     final patch = jsonDecode(jsonEncode(mc.settingsPatch).replaceAll(echoHostPlaceholder, host)) as Map<String, dynamic>;
     step('reset settings $patch');
@@ -290,6 +299,8 @@ Future<CaseResult> runCase(MatrixCase mc, CaseCtx ctx, RunDir run, Shell shell, 
       await Future<void>.delayed(const Duration(seconds: 2));
       out = await mc.check(ctx);
     }
+  } on _Skip catch (e) {
+    out = (v: Verdict.skip, note: e.note);
   } on ItestAgentError catch (e) {
     out = e.message.contains('connect: Bad state: core')
         ? (v: Verdict.skip, note: 'unsupported: ${e.message}')
@@ -301,6 +312,7 @@ Future<CaseResult> runCase(MatrixCase mc, CaseCtx ctx, RunDir run, Shell shell, 
     out = (v: Verdict.fail, note: 'internal: $e');
   }
   step('verdict ${out.v.name}: ${out.note}');
+  if (out.v != Verdict.pass) await dumpGoroutines(ctx.agent, dir, step);
   try {
     // Запоздалый маркер этого кейса не должен попасть в ожидание следующего.
     ctx.agent.lastState = null;
@@ -315,10 +327,20 @@ Future<CaseResult> runCase(MatrixCase mc, CaseCtx ctx, RunDir run, Shell shell, 
     step('diag: $e');
   }
   if (!mc.owned && out.v == Verdict.fail) out = (v: Verdict.skip, note: 'unreachable (not owned): ${out.note}');
+  ctx.probes.log = null;
   await sub.cancel();
   await logs.close();
   await steps.close();
   return CaseResult(mc.id, out.v, out.note, DateTime.now().difference(started), run.relative(dir));
+}
+
+/// Горутины Go-ядер до отключения — разбор зависаний (`goroutines.txt`).
+Future<void> dumpGoroutines(AgentClient agent, Directory dir, void Function(String) step) async {
+  try {
+    File('${dir.path}/goroutines.txt').writeAsStringSync(await agent.send('goroutines') as String);
+  } catch (e) {
+    step('goroutines: $e');
+  }
 }
 
 /// Снимок для разбора провала: сеть и журнал приложения.

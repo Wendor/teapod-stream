@@ -72,7 +72,17 @@ void main() {
     expect(await Probes(FakeShell({'checkip': '203.0.113.7\n'})).ip('https://checkip.amazonaws.com/'),
         '203.0.113.7');
     expect(await Probes(FakeShell({'ifconfig': '2001:db8::1'})).ip('https://ifconfig.co/ip'), '2001:db8::1');
-    expect(await Probes(FakeShell({'mail.ru': '<html>blocked</html>'})).ip('https://ip.mail.ru'), isNull);
+    expect(await Probes(FakeShell({'mail.ru': '<html>blocked</html>'})).ip('https://ip.mail.ru', retries: 0), isNull);
+  });
+
+  test('ip() strips the status line, retries a failed probe and logs the raw answer', () async {
+    expect(await Probes(FakeShell({'ifconfig': '203.0.113.7\n\n200'})).ip('https://ifconfig.co/ip'), '203.0.113.7');
+    final shell = FakeShell({'ifconfig': 'rate limited\n429'});
+    final log = <String>[];
+    final p = Probes(shell)..log = log.add;
+    expect(await p.ip('https://ifconfig.co/ip'), isNull);
+    expect(shell.calls, hasLength(2));
+    expect(log, ['probe https://ifconfig.co/ip #1: rate limited 429', 'probe https://ifconfig.co/ip #2: rate limited 429']);
   });
 
   test('baseline keeps direct IP per service and drops loopback answers', () async {

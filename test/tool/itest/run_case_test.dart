@@ -51,4 +51,20 @@ void main() {
     expect(r.note, contains('internal'));
     expect(shell.ops, contains('disconnect'));
   });
+
+  test('echo-host rule without two usable echo services → SKIP before connect', () async {
+    final tmp = Directory.systemTemp.createTempSync('itest_case');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    final logcat = StreamController<String>.broadcast();
+    final shell = ScriptedShell(logcat);
+    final ctx = CaseCtx(AgentClient(shell, logcat.stream), Probes(shell), const Baseline({}, null, null),
+        DeviceGuard(shell), null);
+    final mc = MatrixCase('opt/x/route-sites-only', 'cfg', 'cfg', 'rust',
+        const {'routing': {'sites': [echoHostPlaceholder]}}, (_) async => (v: Verdict.pass, note: ''), true);
+
+    final r = await runCase(mc, ctx, RunDir(tmp), shell, logcat.stream);
+
+    expect(r.verdict, Verdict.skip);
+    expect(shell.ops, isNot(contains('connect')));
+  });
 }

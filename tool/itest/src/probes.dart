@@ -31,13 +31,31 @@ class Probes {
   final Shell shell;
   Probes(this.shell);
 
+  /// Журнал кейса: сюда пишется сырой ответ проваленной пробы.
+  void Function(String)? log;
+
   Future<String> _curl(String args, Duration timeout) async =>
       (await shell.run(['shell', 'curl -s -m ${timeout.inSeconds} $args'], timeout: timeout + const Duration(seconds: 5)))
           .out
           .trim();
 
-  Future<String?> ip(String url, {Duration timeout = const Duration(seconds: 10), String extra = ''}) async {
-    final out = await _curl('$extra $url'.trim(), timeout);
+  /// IP клиента по echo-сервису; пустой ответ повторяется [retries] раз через 2 с —
+  /// одиночный сбой echo-сервиса (лимит запросов, таймаут) не должен ронять кейс.
+  Future<String?> ip(String url,
+      {Duration timeout = const Duration(seconds: 10), String extra = '', int retries = 1}) async {
+    for (var i = 0;; i++) {
+      final out = await _curl('$extra -w "\\n%{http_code}" $url'.trim(), timeout);
+      final nl = out.lastIndexOf('\n');
+      final ip = _parseIp(url, (nl < 0 ? out : out.substring(0, nl)).trim());
+      if (ip != null) return ip;
+      final body = out.replaceAll(RegExp(r'\s+'), ' ');
+      log?.call('probe $url #${i + 1}: ${body.length > 160 ? '${body.substring(0, 160)}…' : body}');
+      if (i >= retries) return null;
+      await Future<void>.delayed(const Duration(seconds: 2));
+    }
+  }
+
+  String? _parseIp(String url, String out) {
     if (_htmlEcho.contains(url)) {
       return RegExp(r'\b(?:\d{1,3}\.){3}\d{1,3}\b')
           .allMatches(out)

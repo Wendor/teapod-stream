@@ -273,7 +273,10 @@ class SubscriptionService {
   static List<String> _splitLines(String s) =>
       s.split(RegExp(r'\r?\n')).where((l) => l.trim().isNotEmpty).toList();
 
-  static const _uriSchemes = ['vless://', 'vmess://', 'trojan://', 'ss://', 'hy2://', 'hysteria2://'];
+  static const _uriSchemes = [
+    'vless://', 'vmess://', 'trojan://', 'ss://', 'hy2://', 'hysteria2://',
+    'wireguard://', 'wg://', 'ssh://', 'naive+https://', 'naive+quic://', 'vpn://',
+  ];
 
   static bool _isKnownUri(String line) {
     final t = line.trim();

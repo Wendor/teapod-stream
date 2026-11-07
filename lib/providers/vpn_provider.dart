@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,7 +13,8 @@ import '../core/models/vpn_log_entry.dart';
 import '../core/services/log_service.dart';
 import '../core/services/settings_service.dart';
 import '../protocols/xray/xray_engine.dart';
-import '../core/cores/core_backend.dart';
+import '../core/cores/core_resolver.dart';
+import '../core/cores/engine_options.dart';
 import '../core/cores/core_switch.dart';
 import 'core_provider.dart';
 import 'settings_provider.dart';
@@ -98,7 +98,8 @@ class VpnNotifier extends Notifier<VpnState2> {
   @override
   VpnState2 build() {
     _engine = XrayEngine();
-    ref.listen(settingsProvider.select((s) => s.value?.core), (prev, next) {
+    // Ядро активного профиля сменилось (приоритет, выключение, закрепление).
+    ref.listen(activeCoreProvider, (prev, next) {
       if (prev != null && next != null && prev != next) _onCoreChanged();
     });
 
@@ -160,7 +161,10 @@ class VpnNotifier extends Notifier<VpnState2> {
         // VPN уже работал до старта приложения — считаем применёнными текущие
         // настройки (точный снапшот на момент connect недоступен).
         final s = await ref.read(settingsProvider.future);
-        state = state.copyWith(appliedFingerprint: connectionFingerprint(s));
+        await ref.read(configProvider.future);
+        await ref.read(availableCoresProvider.future);
+        state = state.copyWith(
+            appliedFingerprint: connectionFingerprint(s, core: ref.read(activeCoreProvider)?.kind));
       }
     });
 
@@ -270,10 +274,10 @@ class VpnNotifier extends Notifier<VpnState2> {
           ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
       if (configState == null) return;
       final current = _resolveEffectiveConfig(configState);
-      final backend = ref.read(coreBackendProvider);
-      _engine.backend = backend;
+      await ref.read(availableCoresProvider.future);
       final candidates = supportedCandidates(
-          _switchCandidates(configState, settings.heartbeat.switchSource, current), backend);
+          _switchCandidates(configState, settings.heartbeat.switchSource, current),
+          ref.read(coreResolverProvider));
       if (candidates.isEmpty) {
         log.addError('urltest: нет кандидатов для переключения (провалов: $failures)');
         return;
@@ -296,8 +300,8 @@ class VpnNotifier extends Notifier<VpnState2> {
         mux: settings.mux,
       );
       final probed = await Future.wait(candidates.map((c) async {
-        final ms = await _engine.measureOutbound(c, options, settings.heartbeat.url);
-        return (config: c, latency: ms);
+        final ms = await _engine.measureOutbound(c.config, c.backend, options, settings.heartbeat.url);
+        return (config: c.config, latency: ms);
       }));
       final alive = probed.where((r) => r.latency != null).toList()
         ..sort((a, b) => a.latency!.compareTo(b.latency!));
@@ -501,13 +505,15 @@ class VpnNotifier extends Notifier<VpnState2> {
         ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null) ??
             const AppSettings();
 
-    final backend = ref.read(coreBackendProvider);
+    await ref.read(availableCoresProvider.future);
+    final resolution = ref.read(coreResolverProvider).resolve(config);
+    final backend = resolution.backend;
+    if (backend == null) return _failConnect(resolution.reason!, switching: switching);
     _engine.backend = backend;
-    final unsupported = backend.checkConfig(config);
-    if (unsupported != null) return _failConnect(unsupported, switching: switching);
+    _logCoreChoice(resolution);
 
     final credentials = _socksCredentials(settings);
-    final options = _buildOptions(settings, config, backend,
+    final options = buildEngineOptions(settings, config, backend,
         socksPort: _socksPort(settings), credentials: credentials);
     final check = backend.checkOptions(config, options);
     if (check.blocking != null) return _failConnect(check.blocking!, switching: switching);
@@ -523,7 +529,7 @@ class VpnNotifier extends Notifier<VpnState2> {
         activeSocksPort: options.socksPort,
         activeSocksUser: credentials.user,
         activeSocksPassword: credentials.password,
-        appliedFingerprint: connectionFingerprint(settings),
+        appliedFingerprint: connectionFingerprint(settings, core: backend.kind),
       );
     } on PlatformException catch (e) {
       _failConnect(e.message ?? 'Connection failed', switching: switching);
@@ -551,76 +557,42 @@ class VpnNotifier extends Notifier<VpnState2> {
   static int _socksPort(AppSettings s) =>
       s.randomPort ? 10000 + Random().nextInt(50000) : s.socksPort;
 
-  VpnEngineOptions _buildOptions(
-    AppSettings settings,
-    VpnConfig config,
-    CoreBackend backend, {
-    required int socksPort,
-    required ({String user, String password}) credentials,
-  }) =>
-      VpnEngineOptions(
-        socksPort: socksPort,
-        httpPort: 0,
-        socksUser: credentials.user,
-        socksPassword: credentials.password,
-        excludedPackages: settings.splitTunnelingEnabled
-            ? (settings.vpnMode == VpnMode.allExcept ? settings.excludedPackages : <String>{})
-            : {},
-        includedPackages: settings.splitTunnelingEnabled
-            ? (settings.vpnMode == VpnMode.onlySelected ? settings.includedPackages : <String>{})
-            : {},
-        logLevel: settings.logLevel,
-        enableUdp: settings.enableUdp,
-        allowIcmp: settings.allowIcmp,
-        dnsMode: settings.dnsMode,
-        dnsServer: settings.dnsServer,
-        vpnMode: settings.splitTunnelingEnabled ? settings.vpnMode : VpnMode.allExcept,
-        proxyOnly: settings.proxyOnly,
-        showNotification: settings.showNotification,
-        killSwitch: settings.killSwitchEnabled,
-        routing: settings.routing,
-        sniffingEnabled: settings.sniffingEnabled,
-        mtu: settings.mtu,
-        dnsQueryStrategy: settings.dnsQueryStrategy,
-        // Vision отвергает UDP/443: браузеры ретраят QUIC ~30 с перед откатом на
-        // TCP. Политика блокировки — у ядра.
-        blockQuic: backend.effectiveQuicBlock(requested: settings.blockQuic, flow: _visionFlow(config)),
-        ipv6Enabled: settings.ipv6Enabled,
-        allowTethering: settings.allowTethering,
-        obsProbeIntervalSec: settings.obsProbeIntervalSec,
-        tlsFingerprint: settings.tlsFingerprint,
-        fragment: settings.fragment,
-        noise: settings.noise,
-        mux: settings.mux,
-        heartbeat: settings.heartbeat,
-      );
+  /// В лог — каким ядром запущен профиль и почему пропущены ядра выше.
+  void _logCoreChoice(CoreResolution r) {
+    final skipped = [
+      for (final v in r.verdicts.takeWhile((v) => v.reason != null))
+        if (v.reason != CoreResolver.disabledReason) '${v.kind.displayName}: ${v.reason}',
+    ];
+    ref.read(logServiceProvider.notifier).addInfo(
+        '${r.backend!.kind.displayName}${r.pinned ? ' (закреплено)' : ''}'
+        '${skipped.isEmpty ? '' : ' — пропущены: ${skipped.join('; ')}'}',
+        source: 'core');
+  }
 
-  /// Смена ядра: отключить неподдерживаемое, пересохранить/очистить quick-reconnect.
+  /// Ядро активного профиля сменилось: отключить, если профиль больше ничем
+  /// не запускается, иначе пересохранить/очистить quick-reconnect.
   Future<void> _onCoreChanged() async {
-    // Не `.future`: в слушателе он ещё отдаёт настройки до смены ядра.
     final settings = ref.read(settingsProvider).value;
     if (settings == null) return;
-    final backend = coreBackendFor(settings.core);
     final config = _resolveEffectiveConfig(
         ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null));
-    _engine.backend = backend;
-    final options = config == null
-        ? null
-        : _buildOptions(settings, config, backend,
-            socksPort: _socksPort(settings), credentials: _socksCredentials(settings));
-    final unsupported = config == null
-        ? 'Конфигурация не выбрана'
-        : backend.checkConfig(config) ?? backend.checkOptions(config, options!).blocking;
+    final resolution = config == null ? null : ref.read(coreResolverProvider).resolve(config);
+    final backend = resolution?.backend;
+    final unsupported = config == null ? 'Конфигурация не выбрана' : resolution!.reason;
     try {
       switch (coreSwitchAction(state: state.connectionState, unsupported: unsupported)) {
         case CoreSwitchAction.none:
           break;
         case CoreSwitchAction.disconnect:
           await disconnect();
-          ref.read(logServiceProvider.notifier).addError('${backend.kind.displayName}: $unsupported');
+          ref.read(logServiceProvider.notifier).addError('Ядро: $unsupported');
           state = state.copyWith(error: unsupported);
         case CoreSwitchAction.saveQuickConnect:
-          await _engine.saveQuickConnect(config!, options!);
+          _engine.backend = backend!;
+          await _engine.saveQuickConnect(
+              config!,
+              buildEngineOptions(settings, config, backend,
+                  socksPort: _socksPort(settings), credentials: _socksCredentials(settings)));
         case CoreSwitchAction.clearQuickConnect:
           await _engine.clearQuickConnect();
       }
@@ -709,31 +681,6 @@ class VpnNotifier extends Notifier<VpnState2> {
 
   VpnConfig? _resolveEffectiveConfig(ConfigState? cs) =>
       cs == null ? null : ref.read(effectiveConfigProvider);
-
-  /// True when the config's outbound(s) use xtls-rprx-vision — such outbounds
-  /// reject UDP/443, so QUIC must be fast-failed on the TUN side.
-  static String? _visionFlow(VpnConfig config) {
-    final flow = config.flow;
-    if (flow != null && flow.contains('vision')) return flow;
-    final raw = config.rawXrayConfig;
-    if (raw == null) return null;
-    try {
-      final cfg = jsonDecode(raw) as Map<String, dynamic>;
-      final outbounds = cfg['outbounds'] as List<dynamic>? ?? [];
-      for (final o in outbounds.whereType<Map<String, dynamic>>()) {
-        if (o['protocol'] != 'vless') continue;
-        final vnext = (o['settings'] as Map<String, dynamic>?)?['vnext'] as List<dynamic>? ?? [];
-        for (final v in vnext.whereType<Map<String, dynamic>>()) {
-          final users = v['users'] as List<dynamic>? ?? [];
-          for (final u in users.whereType<Map<String, dynamic>>()) {
-            final userFlow = u['flow'] as String?;
-            if (userFlow != null && userFlow.contains('vision')) return userFlow;
-          }
-        }
-      }
-    } catch (_) {}
-    return null;
-  }
 
   Future<void> pingAllConfigs() async {
     if (_isPinging) return;
@@ -833,5 +780,5 @@ final pendingReconnectProvider = Provider<bool>((ref) {
   if (!vpn.isConnected || vpn.appliedFingerprint == null) return false;
   final s = ref.watch(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
   if (s == null) return false;
-  return connectionFingerprint(s) != vpn.appliedFingerprint;
+  return connectionFingerprint(s, core: ref.watch(activeCoreProvider)?.kind) != vpn.appliedFingerprint;
 });

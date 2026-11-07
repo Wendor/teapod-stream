@@ -196,11 +196,18 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
       final existing = current.subscriptions.where((s) => s.id == subId).firstOrNull;
       final oldConfigs = current.configs.where((c) => c.subscriptionId == subId).toList();
 
-      // Пинг переносим по address:port
-      final oldByEndpoint = {for (final c in oldConfigs) '${c.address}:${c.port}': c};
+      // Пинг (TCP до address:port) переносим по endpoint. Закреплённое ядро —
+      // по имени+endpoint или по endpoint, если он в подписке один.
+      final oldByEndpoint = <String, List<VpnConfig>>{};
+      for (final c in oldConfigs) {
+        (oldByEndpoint['${c.address}:${c.port}'] ??= []).add(c);
+      }
       final newConfigs = tagged.map((c) {
-        final old = oldByEndpoint['${c.address}:${c.port}'];
-        return old == null ? c : c.copyWith(latencyMs: old.latencyMs, lastPingedAt: old.lastPingedAt);
+        final olds = oldByEndpoint['${c.address}:${c.port}'];
+        if (olds == null) return c;
+        final same = olds.where((o) => o.name == c.name).firstOrNull ?? (olds.length == 1 ? olds.first : null);
+        final ping = same ?? olds.last;
+        return c.copyWith(latencyMs: ping.latencyMs, lastPingedAt: ping.lastPingedAt, core: same?.core);
       }).toList();
 
       // Парсер выдаёт новые id — переносим выбор: имя+endpoint, затем endpoint,

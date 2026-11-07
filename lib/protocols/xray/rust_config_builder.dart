@@ -55,13 +55,14 @@ class RustConfigBuilder {
   static bool supports(VpnConfig config) => unsupportedReason(config) == null;
 
   static String? unsupportedReason(VpnConfig config) {
+    if (config.protocol.hasProtocolSettings) return config.protocol.singBoxOnlyReason;
     if (config.rawXrayConfig != null) {
-      return 'Импорт полного JSON в ядре Xray (Rust) пока недоступен.';
+      return 'Импорт полного JSON в ядре xray-rust пока недоступен.';
     }
     // Go вставляет fm из ссылки в streamSettings как есть; xray-rust принимает
     // лишь узкое подмножество FinalMask, которое собирает сам этот билдер.
     if (config.finalmask?.isNotEmpty ?? false) {
-      return 'Параметр fm (finalmask) из ссылки ядро Xray (Rust) не применяет. Фрагментацию и шумы задай в настройках сети.';
+      return 'Параметр fm (finalmask) из ссылки ядро xray-rust не применяет. Фрагментацию и шумы задай в настройках сети.';
     }
     return switch (config.protocol) {
       VpnProtocol.hysteria2 => _hysteria2UnsupportedReason(config),
@@ -69,12 +70,13 @@ class RustConfigBuilder {
       VpnProtocol.trojan => _trojanUnsupportedReason(config),
       VpnProtocol.vmess => _vmessUnsupportedReason(config),
       VpnProtocol.shadowsocks => _shadowsocksUnsupportedReason(config),
+      VpnProtocol.wireguard || VpnProtocol.ssh || VpnProtocol.naive => config.protocol.singBoxOnlyReason,
     };
   }
 
   static String? _vlessUnsupportedReason(VpnConfig config) {
     if (config.encryption != null && config.encryption != 'none') {
-      return 'Ядро Xray (Rust) пока принимает VLESS с encryption=none.';
+      return 'Ядро xray-rust пока принимает VLESS с encryption=none.';
     }
     if (!_isUuid(config.uuid)) {
       return 'UUID VLESS должен быть настоящим UUID: Rust-ядро не принимает произвольные строки.';
@@ -88,7 +90,7 @@ class RustConfigBuilder {
     if (carrier != null) return carrier;
     if (config.security != VpnSecurity.tls &&
         config.security != VpnSecurity.reality) {
-      return 'Для VLESS в ядре Xray (Rust) выбери TLS или Reality.';
+      return 'Для VLESS в ядре xray-rust выбери TLS или Reality.';
     }
     final flow = config.flow ?? '';
     if (flow.isNotEmpty && !visionFlows.contains(flow)) {
@@ -118,7 +120,7 @@ class RustConfigBuilder {
     // xray-rust отвергает Trojan без TLS/Reality для публичного сервера.
     if (config.security != VpnSecurity.tls &&
         config.security != VpnSecurity.reality) {
-      return 'Trojan в ядре Xray (Rust) работает только с TLS или Reality.';
+      return 'Trojan в ядре xray-rust работает только с TLS или Reality.';
     }
     return null;
   }
@@ -136,7 +138,7 @@ class RustConfigBuilder {
     final rawTls = json['tls']?.toString() ?? '';
     final tls = rawTls.trim().toLowerCase();
     if (tls.isNotEmpty && tls != 'tls' && tls != 'none') {
-      return 'VMess с security=$tls из ссылки ядро Xray (Rust) не поддерживает: доступны TLS и транспорт без шифрования.';
+      return 'VMess с security=$tls из ссылки ядро xray-rust не поддерживает: доступны TLS и транспорт без шифрования.';
     }
     // «TLS» или « tls» парсер тоже не узнаёт: профиль ушёл бы на TLS-порт
     // голым VMess.
@@ -160,10 +162,10 @@ class RustConfigBuilder {
     final keys = _ss2022KeyReason(method, config.password ?? '');
     if (keys != null) return keys;
     if (VlessParser.linkParams(config)['plugin']?.trim().isNotEmpty ?? false) {
-      return 'Плагины Shadowsocks (SIP003, plugin=…) ядро Xray (Rust) не поддерживает.';
+      return 'Плагины Shadowsocks (SIP003, plugin=…) ядро xray-rust не поддерживает.';
     }
     if (config.ssPrefix?.isNotEmpty ?? false) {
-      return 'Префикс Outline (prefix=…) для Shadowsocks ядро Xray (Rust) не поддерживает.';
+      return 'Префикс Outline (prefix=…) для Shadowsocks ядро xray-rust не поддерживает.';
     }
     return null;
   }
@@ -197,7 +199,7 @@ class RustConfigBuilder {
       return _insecureReason;
     }
     if (config.ech?.isNotEmpty ?? false) {
-      return 'ECH пока недоступен в ядре Xray (Rust).';
+      return 'ECH пока недоступен в ядре xray-rust.';
     }
     return null;
   }
@@ -304,7 +306,7 @@ class RustConfigBuilder {
     }
     if (_insecureWithoutPin(config)) return _insecureReason;
     if (config.ech?.isNotEmpty ?? false) {
-      return 'ECH пока недоступен в ядре Xray (Rust).';
+      return 'ECH пока недоступен в ядре xray-rust.';
     }
     return null;
   }
@@ -328,7 +330,7 @@ class RustConfigBuilder {
     if (reason != null) throw FormatException(reason);
     if (options.proxyOnly || options.httpPort != 0) {
       throw const FormatException(
-        'В ядре Xray (Rust) доступен только режим VPN (TUN).',
+        'В ядре xray-rust доступен только режим VPN (TUN).',
       );
     }
     // Go не применяет Mux к Hysteria2 (QUIC сам мультиплексирует потоки),
@@ -336,12 +338,12 @@ class RustConfigBuilder {
     final hysteria2 = config.protocol == VpnProtocol.hysteria2;
     if (options.mux.enabled && !hysteria2) {
       throw const FormatException(
-        'Mux недоступен в ядре Xray (Rust): выключи его в настройках сети.',
+        'Mux недоступен в ядре xray-rust: выключи его в настройках сети.',
       );
     }
     if (options.mtu != 1500) {
       throw const FormatException(
-        'Ядро Xray (Rust) работает с MTU 1500: верни это значение в настройках сети.',
+        'Ядро xray-rust работает с MTU 1500: верни это значение в настройках сети.',
       );
     }
     final fragment = fragmentMask(config, options.fragment);

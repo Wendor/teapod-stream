@@ -1,6 +1,7 @@
 import '../interfaces/vpn_engine.dart';
 import '../models/vpn_config.dart';
 import 'core_backend.dart';
+import 'core_resolver.dart';
 
 enum CoreSwitchAction { none, disconnect, saveQuickConnect, clearQuickConnect }
 
@@ -16,6 +17,10 @@ CoreSwitchAction coreSwitchAction({required VpnState state, required String? uns
       VpnState.disconnecting => CoreSwitchAction.none,
     };
 
-/// Кандидаты автопереключения, которые [backend] может запустить.
-List<VpnConfig> supportedCandidates(Iterable<VpnConfig> configs, CoreBackend backend) =>
-    configs.where((c) => backend.checkConfig(c) == null).toList();
+/// Кандидаты автопереключения, которые запускает хоть одно ядро, — с этим ядром.
+List<({VpnConfig config, CoreBackend backend})> supportedCandidates(
+        Iterable<VpnConfig> configs, CoreResolver resolver) =>
+    [
+      for (final c in configs)
+        if (resolver.resolve(c).backend case final backend?) (config: c, backend: backend),
+    ];

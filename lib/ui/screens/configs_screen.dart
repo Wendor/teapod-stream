@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../widgets/core_support_gate.dart';
+import '../widgets/core_sheet.dart';
+import '../../providers/core_provider.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
@@ -453,6 +455,14 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
                 ref.read(configProvider.notifier).togglePin(config);
               },
             ),
+            _SheetTile(
+              t: t,
+              label: 'Ядро · ${ref.read(coreResolverProvider).resolve(config).backend?.kind.displayName ?? 'нет'}',
+              onTap: () {
+                Navigator.pop(ctx);
+                showCoreSheet(context, config);
+              },
+            ),
             _SheetTile(t: t, label: 'Переименовать', onTap: () async {
               Navigator.pop(ctx);
               if (!context.mounted) return;
@@ -540,13 +550,14 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
       final updated = VlessParser.parseUri(controller.text.trim());
       if (updated != null) {
         // Все разобранные поля — из новой ссылки; от старого профиля только
-        // идентичность, задержка и подписка.
+        // идентичность, задержка, подписка и закреплённое ядро.
         final renamed = updated.copyWith(
           id: config.id,
           createdAt: config.createdAt,
-          rawUri: controller.text.trim(),
+          rawUri: updated.rawUri ?? controller.text.trim(),
           latencyMs: config.latencyMs,
           subscriptionId: config.subscriptionId,
+          core: config.core,
         );
         ref.read(configProvider.notifier).updateConfig(renamed);
       } else if (context.mounted) {
@@ -1414,15 +1425,7 @@ class _ConfigRow extends StatelessWidget {
     this.draggableIndex,
   });
 
-  String get _protoTag {
-    switch (config.protocol) {
-      case VpnProtocol.vless:       return 'VLESS';
-      case VpnProtocol.vmess:       return 'VMESS';
-      case VpnProtocol.trojan:      return 'TROJAN';
-      case VpnProtocol.shadowsocks: return 'SS';
-      case VpnProtocol.hysteria2:   return 'HY2';
-    }
-  }
+  String get _protoTag => config.protoTag;
 
   @override
   Widget build(BuildContext context) =>
@@ -1505,9 +1508,14 @@ class _ConfigRow extends StatelessWidget {
                                 letterSpacing: -0.2),
                             overflow: TextOverflow.ellipsis),
                         const SizedBox(height: 2),
-                        Text('${config.address}:${config.port}',
-                            style: AppTheme.mono(size: 10, color: t.textMuted),
-                            overflow: TextOverflow.ellipsis),
+                        Consumer(builder: (_, ref, _) {
+                          // Ядро — только если профиль ушёл не на основное.
+                          final core = coreNote(ref, config);
+                          return Text(
+                              '${config.address}:${config.port}${core == null ? '' : ' · $core'}',
+                              style: AppTheme.mono(size: 10, color: t.textMuted),
+                              overflow: TextOverflow.ellipsis);
+                        }),
                       ],
                     ),
                   ),

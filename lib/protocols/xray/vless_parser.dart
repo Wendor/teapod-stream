@@ -1,6 +1,10 @@
 import 'dart:convert';
 import 'package:uuid/uuid.dart';
 import '../../core/models/vpn_config.dart';
+import '../parsers/amnezia_key_parser.dart';
+import '../parsers/naive_parser.dart';
+import '../parsers/ssh_parser.dart';
+import '../parsers/wireguard_parser.dart';
 
 Map<String, dynamic>? _parseExtra(String? raw) {
   if (raw == null || raw.isEmpty) return null;
@@ -21,6 +25,17 @@ class VlessParser {
     if (uri.startsWith(r'vless\://')) {
       uri = uri.replaceAllMapped(RegExp(r'\\([:@_])'), (m) => m[1]!);
     }
+    if (WireGuardParser.isConf(uri)) {
+      try {
+        return WireGuardParser.parseConf(uri);
+      } on FormatException {
+        return null;
+      }
+    }
+    if (uri.startsWith('wireguard://') || uri.startsWith('wg://')) return WireGuardParser.parseUri(uri);
+    if (uri.startsWith('vpn://')) return AmneziaKeyParser.parse(uri);
+    if (uri.startsWith('ssh://')) return SshParser.parseUri(uri);
+    if (uri.startsWith('naive+https://') || uri.startsWith('naive+quic://')) return NaiveParser.parseUri(uri);
     if (uri.startsWith('vless://')) return _parseVless(uri);
     if (uri.startsWith('vmess://')) return _parseVmess(uri);
     if (uri.startsWith('trojan://')) return _parseTrojan(uri);

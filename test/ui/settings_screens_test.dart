@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:teapodstream/core/models/core_kind.dart';
 import 'package:teapodstream/core/models/profile.dart';
 import 'package:teapodstream/core/models/routing_settings.dart';
 import 'package:teapodstream/core/services/profile_storage_service.dart';
@@ -10,6 +11,7 @@ import 'package:teapodstream/providers/settings_provider.dart';
 import 'package:teapodstream/ui/screens/network_settings_screen.dart';
 import 'package:teapodstream/ui/screens/routing_screen.dart';
 import 'package:teapodstream/ui/screens/settings_screen.dart';
+import 'package:teapodstream/ui/widgets/settings_shared.dart';
 
 import '../helpers/ui_harness.dart';
 
@@ -23,6 +25,47 @@ Future<void> _tapRow(WidgetTester tester, String title) async {
 AppSettings _settings(ProviderContainer c) => c.read(settingsProvider).value!;
 
 void main() {
+  group('core picker', () {
+    testWidgets('lists cores by priority with versions; ↑ and switches are saved', (tester) async {
+      await setUpScreenTest();
+      final c = await pumpScreen(tester, const SettingsScreen());
+      for (final kind in CoreKind.values) {
+        expect(find.text(kind.displayName), findsOneWidget, reason: kind.name);
+      }
+      expect(find.text('1.14.4'), findsOneWidget);
+
+      await tester.tap(find.bySemanticsLabel('поднять sing-box'));
+      await settle(tester);
+      expect(_settings(c).coreOrder, [CoreKind.singBox, CoreKind.xrayGo, CoreKind.xrayRust]);
+
+      Finder switchOf(CoreKind k) =>
+          find.descendant(of: find.byKey(ValueKey(k)), matching: find.byType(SetSquareSwitch));
+      await tester.ensureVisible(switchOf(CoreKind.xrayRust));
+      await tester.tap(switchOf(CoreKind.singBox));
+      await settle(tester);
+      expect(_settings(c).disabledCores, {CoreKind.singBox});
+      await tester.tap(switchOf(CoreKind.xrayGo));
+      await settle(tester);
+      await tester.tap(switchOf(CoreKind.xrayRust));
+      await settle(tester);
+      // Последнее включённое ядро не выключается.
+      expect(_settings(c).disabledCores, {CoreKind.singBox, CoreKind.xrayGo});
+      expect(find.text('Нужно хотя бы одно включённое ядро'), findsOneWidget);
+      await unmount(tester, c);
+    });
+
+    testWidgets('licenses row opens the license page', (tester) async {
+      await setUpScreenTest();
+      final c = await pumpScreen(tester, const SettingsScreen());
+      final row = find.text('LICENSES');
+      await tester.scrollUntilVisible(row, 200, scrollable: find.byType(Scrollable).first);
+      await tester.tap(row);
+      await settle(tester);
+      expect(find.byType(LicensePage), findsOneWidget);
+      await unmount(tester, c);
+    });
+  });
+
   group('network settings', () {
     testWidgets('toggles are saved', (tester) async {
       await setUpScreenTest();

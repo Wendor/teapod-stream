@@ -15,6 +15,8 @@ import '../../app.dart';
 import '../widgets/live_sparkline.dart';
 import '../widgets/reconnect_banner.dart';
 import '../widgets/server_picker_sheet.dart';
+import '../widgets/core_sheet.dart';
+import '../../core/cores/core_resolver.dart';
 import 'logs_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -26,9 +28,10 @@ class HomeScreen extends ConsumerWidget {
     final effectiveConfig = ref.watch(effectiveConfigProvider);
     final version        = ref.watch(appVersionProvider).maybeWhen(data: (v) => v, orElse: () => 'v?');
     final t = Theme.of(context).extension<TeapodTokens>()!;
-    final unsupported = effectiveConfig == null
+    final core = effectiveConfig == null
         ? null
-        : ref.watch(coreBackendProvider).checkConfig(effectiveConfig);
+        : ref.watch(coreResolverProvider).resolve(effectiveConfig);
+    final unsupported = core?.reason;
     // Неподдерживаемый ядром профиль подключить нельзя; отключиться — можно.
     final canToggle = effectiveConfig != null &&
         (unsupported == null || vpnState.isConnected || vpnState.isBusy);
@@ -71,6 +74,9 @@ class HomeScreen extends ConsumerWidget {
                 onToggle: () => ref.read(vpnProvider.notifier).toggle(),
                 // Без конфигов кнопка ведёт на вкладку «Конфиги»
                 onDisabledTap: () => ref.read(tabIndexProvider.notifier).set(1),
+                coreLine: core == null
+                    ? null
+                    : _CoreLine(t: t, core: core, onTap: () => showCoreSheet(context, effectiveConfig!)),
               ),
               _MetricsGrid(
                 t: t,
@@ -86,8 +92,6 @@ class HomeScreen extends ConsumerWidget {
               ),
               if (isManaged)
                 _ManagedWarning(t: t, direction: routingDirection),
-              if (unsupported != null)
-                _CoreWarning(t: t, reason: unsupported),
             ],
           ),
         ),
@@ -157,6 +161,7 @@ class _HeroPanel extends StatelessWidget {
   final bool canToggle;
   final VoidCallback onToggle;
   final VoidCallback onDisabledTap;
+  final Widget? coreLine;
 
   const _HeroPanel({
     required this.t,
@@ -166,6 +171,7 @@ class _HeroPanel extends StatelessWidget {
     required this.canToggle,
     required this.onToggle,
     required this.onDisabledTap,
+    this.coreLine,
   });
 
   @override
@@ -205,6 +211,7 @@ class _HeroPanel extends StatelessWidget {
                   vpnState: vpnState,
                   pingMs: pingMs,
                 ),
+                ?coreLine,
               ],
             ),
           ),
@@ -685,31 +692,43 @@ class _MetricsGrid extends StatelessWidget {
 
 // ── Managed config warning ────────────────────────────────────────
 
-/// Активный профиль не поддерживается выбранным ядром.
-class _CoreWarning extends StatelessWidget {
+/// Ядро активного профиля (или почему его нечем запустить); тап — подробности.
+class _CoreLine extends StatelessWidget {
   final TeapodTokens t;
-  final String reason;
+  final CoreResolution core;
+  final VoidCallback onTap;
 
-  const _CoreWarning({required this.t, required this.reason});
+  const _CoreLine({required this.t, required this.core, required this.onTap});
 
   @override
-  Widget build(BuildContext context) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        decoration: BoxDecoration(border: Border(top: BorderSide(color: t.line, width: 1))),
+  Widget build(BuildContext context) {
+    final kind = core.backend?.kind;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 10),
         child: RichText(
+          textAlign: TextAlign.center,
           text: TextSpan(
             style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5),
             children: [
               TextSpan(
                 text: '[core] ',
-                style: AppTheme.mono(size: 10, color: AppColors.accentOrange, letterSpacing: 0.5),
+                style: AppTheme.mono(
+                    size: 10, color: kind == null ? AppColors.accentOrange : t.accent, letterSpacing: 0.5),
               ),
-              TextSpan(text: '$reason · смените ядро или конфиг'),
+              TextSpan(
+                text: kind == null
+                    ? '${core.reason} · включите ядро в настройках или смените конфиг ›'
+                    : '${kind.displayName}${core.pinned ? ' · закреплено' : ''} ›',
+              ),
             ],
           ),
         ),
-      );
+      ),
+    );
+  }
 }
 
 class _ManagedWarning extends StatelessWidget {

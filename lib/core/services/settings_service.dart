@@ -110,8 +110,11 @@ class AppSettings {
   /// пишет только warning/error.
   final bool logsEnabled;
 
-  /// VPN-ядро. Значения недоступных ядру настроек не трогаются.
-  final CoreKind core;
+  /// Ядра в порядке приоритета: профиль запускает первое, которое его может.
+  final List<CoreKind> coreOrder;
+
+  /// Ядра, исключённые из выбора.
+  final Set<CoreKind> disabledCores;
 
   const AppSettings({
     this.socksPort = AppConstants.defaultSocksPort,
@@ -158,7 +161,8 @@ class AppSettings {
     this.mux = const MuxSettings(),
     this.heartbeat = const HeartbeatSettings(),
     this.logsEnabled = true,
-    this.core = CoreKind.xrayGo,
+    this.coreOrder = CoreKind.defaultOrder,
+    this.disabledCores = const {},
   });
 
   AppSettings copyWith({
@@ -206,7 +210,8 @@ class AppSettings {
     MuxSettings? mux,
     HeartbeatSettings? heartbeat,
     bool? logsEnabled,
-    CoreKind? core,
+    List<CoreKind>? coreOrder,
+    Set<CoreKind>? disabledCores,
   }) {
     return AppSettings(
       socksPort: socksPort ?? this.socksPort,
@@ -253,7 +258,8 @@ class AppSettings {
       mux: mux ?? this.mux,
       heartbeat: heartbeat ?? this.heartbeat,
       logsEnabled: logsEnabled ?? this.logsEnabled,
-      core: core ?? this.core,
+      coreOrder: coreOrder ?? this.coreOrder,
+      disabledCores: disabledCores ?? this.disabledCores,
     );
   }
 
@@ -302,7 +308,8 @@ class AppSettings {
     'mux': mux.toJson(),
     'heartbeat': heartbeat.toJson(),
     'logsEnabled': logsEnabled,
-    'core': core.name,
+    'coreOrder': [for (final k in coreOrder) k.name],
+    'disabledCores': [for (final k in disabledCores) k.name],
   };
 
   static AppSettings fromJson(Map<String, dynamic> json) {
@@ -367,7 +374,9 @@ class AppSettings {
           ? HeartbeatSettings.fromJson(json['heartbeat'] as Map<String, dynamic>)
           : const HeartbeatSettings(),
       logsEnabled: json['logsEnabled'] as bool? ?? true,
-      core: CoreKind.fromName(json['core'] as String?),
+      coreOrder: CoreKind.parseOrder((json['coreOrder'] as List?)?.cast<String>(),
+          first: json['core'] as String?),
+      disabledCores: _coreSet((json['disabledCores'] as List?)?.cast<String>()),
     );
   }
 
@@ -432,7 +441,10 @@ class SettingsService {
   static const _muxKey = 'xray_mux';
   static const _heartbeatKey = 'heartbeat_settings';
   static const _logsEnabledKey = 'logs_enabled';
-  static const _coreKey = 'core_kind';
+  /// До приоритетов — одно выбранное ядро; читается только для миграции.
+  static const _legacyCoreKey = 'core_kind';
+  static const _coreOrderKey = 'core_order';
+  static const _disabledCoresKey = 'cores_disabled';
 
   final _secure = StorageSecureService();
 
@@ -510,7 +522,9 @@ class SettingsService {
       heartbeat: _decodeOr(prefs.getString(_heartbeatKey), HeartbeatSettings.fromJson,
           const HeartbeatSettings()),
       logsEnabled: prefs.getBool(_logsEnabledKey) ?? true,
-      core: CoreKind.fromName(prefs.getString(_coreKey)),
+      coreOrder: CoreKind.parseOrder(prefs.getStringList(_coreOrderKey),
+          first: prefs.getString(_legacyCoreKey)),
+      disabledCores: _coreSet(prefs.getStringList(_disabledCoresKey)),
     );
   }
 
@@ -601,8 +615,12 @@ class SettingsService {
     await prefs.setString(_muxKey, jsonEncode(settings.mux.toJson()));
     await prefs.setString(_heartbeatKey, jsonEncode(settings.heartbeat.toJson()));
     await prefs.setBool(_logsEnabledKey, settings.logsEnabled);
-    await prefs.setString(_coreKey, settings.core.name);
+    await prefs.setStringList(_coreOrderKey, [for (final k in settings.coreOrder) k.name]);
+    await prefs.setStringList(_disabledCoresKey, [for (final k in settings.disabledCores) k.name]);
     // SOCKS credentials go to encrypted storage
     await _secure.writeSocksCredentials(settings.socksUser, settings.socksPassword);
   }
 }
+
+Set<CoreKind> _coreSet(Iterable<String>? names) =>
+    Set.unmodifiable(names?.map(CoreKind.tryName).nonNulls ?? const <CoreKind>[]);

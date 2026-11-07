@@ -70,7 +70,8 @@ const _custom = AppSettings(
   mux: MuxSettings(enabled: true, concurrency: 2),
   heartbeat: HeartbeatSettings(probe: HeartbeatProbe.passive, failureThreshold: 9),
   logsEnabled: false,
-  core: CoreKind.xrayRust,
+  coreOrder: [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox],
+  disabledCores: {CoreKind.singBox},
 );
 
 void main() {

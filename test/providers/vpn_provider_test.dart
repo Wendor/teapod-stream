@@ -312,6 +312,7 @@ void main() {
 
       await boot(configs: [_cfg('r', rawXray: _visionRaw)], activeId: 'r',
           settings: _settings.copyWith(coreOrder: [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox]));
+      native.calls.clear();
       await n().connect();
       expect(native.lastConnect()['engine'], 'go');
     });

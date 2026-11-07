@@ -3,6 +3,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:teapodstream/core/models/connections_bundle.dart';
+import 'package:teapodstream/core/models/core_kind.dart';
 import 'package:teapodstream/core/models/pinned_ref.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/core/models/vpn_log_entry.dart';
@@ -364,6 +365,33 @@ void main() {
       expect(await storage.loadActiveConfigId(), s().activeConfigId);
       expect(s().configs.where((c) => c.id == 'local'), hasLength(1));
       expect((await storage.loadConfigs()).length, 4);
+    });
+
+    test('refresh keeps a pinned core only on the matching profile', () async {
+      final url = server.url('/sub');
+      await boot(
+        configs: [
+          _cfg('o1', subId: 's', name: 'A', address: 'x.example').copyWith(core: CoreKind.singBox),
+          _cfg('o2', subId: 's', name: 'B', address: 'x.example'),
+          _cfg('o3', subId: 's', name: 'C', address: 'y.example').copyWith(core: CoreKind.xrayRust),
+          _cfg('o4', subId: 's', name: 'D', address: 'z.example').copyWith(core: CoreKind.singBox),
+          _cfg('o5', subId: 's', name: 'E', address: 'z.example'),
+        ],
+        subs: [_sub('s', url: url)],
+      );
+      server.serve([
+        _trojan('x.example', 'B'),
+        _trojan('x.example', 'A'),
+        _trojan('y.example', 'C renamed'),
+        _trojan('z.example', 'F'),
+      ].join('\n'));
+      await n().addSubscriptionFromUrl(url);
+      expect({for (final c in s().configs) c.name: c.core}, {
+        'B': null,
+        'A': CoreKind.singBox,
+        'C renamed': CoreKind.xrayRust, // endpoint один — ядро переносится
+        'F': null, // endpoint не однозначен, имя не совпало
+      });
     });
 
     test('explicit name wins; replaceId changes the URL in place', () async {

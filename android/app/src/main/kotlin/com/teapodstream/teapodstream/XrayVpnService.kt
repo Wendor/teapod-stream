@@ -50,6 +50,7 @@ class XrayVpnService : VpnService() {
         const val ACTION_CONNECT = "com.teapodstream.CONNECT"
         const val ACTION_DISCONNECT = "com.teapodstream.DISCONNECT"
         const val ACTION_CONNECT_QUICK = "com.teapodstream.CONNECT_QUICK" // reconnect from notification
+        const val ACTION_ITEST_DROP = "com.teapodstream.ITEST_DROP" // itest: неожиданный обрыв
         const val EXTRA_XRAY_CONFIG = "xray_config"
         const val EXTRA_SOCKS_PORT = "socks_port"
         const val EXTRA_SOCKS_USER = "socks_user"
@@ -321,6 +322,17 @@ class XrayVpnService : VpnService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_ITEST_DROP) {
+            // Только itest-сборка: обрыв по пути сбоя (explicit=false), как при
+            // неожиданной смерти туннеля — kill switch оставляет TUN-sink.
+            if (!BuildConfig.ITEST || !isRunning.get()) {
+                if (!isRunning.get()) stopSelf(startId)
+                return START_NOT_STICKY
+            }
+            log("warning", "itest: simulated unexpected drop")
+            Thread { stopVpn(resultState = "error", explicit = false) }.start()
+            return START_STICKY
+        }
         when (intent?.action) {
             ACTION_DISCONNECT -> {
                 // Пришли через startForegroundService (Tasker, MainActivity) в свежий

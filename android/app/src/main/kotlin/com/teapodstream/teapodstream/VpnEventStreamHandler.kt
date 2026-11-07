@@ -82,6 +82,7 @@ object VpnEventStreamHandler : EventChannel.StreamHandler {
 
     fun sendStateEvent(state: String) {
         sendEvent(mapOf("type" to "state", "value" to state))
+        ItestBridge.state(state)
         // Обновляем плитку и уведомление при изменении состояния
         appContext?.let { ctx ->
             VpnTileService.updateTile(ctx)
@@ -99,6 +100,10 @@ object VpnEventStreamHandler : EventChannel.StreamHandler {
             "socksUser" to socksUser,
             "socksPassword" to socksPassword,
             "connectedAtMs" to XrayVpnService.connectedAtMs,
+        ))
+        ItestBridge.emit(mapOf(
+            "ev" to "state", "value" to "connected", "t" to System.currentTimeMillis(),
+            "socksPort" to socksPort, "socksUser" to socksUser, "socksPassword" to socksPassword,
         ))
         appContext?.let { VpnTileService.updateTile(it) }
     }

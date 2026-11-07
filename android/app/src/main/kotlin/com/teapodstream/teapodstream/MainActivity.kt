@@ -33,6 +33,13 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
+        if (BuildConfig.ITEST) {
+            // Команды раннера приходят интентом в активити: при погасшем экране или
+            // локскрине она не резюмится и интент не доходит до Dart.
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        }
+        if (ItestBridge.onIntent(this, intent)) return
         intent?.let { handleIncomingIntentForPending(it) }
     }
 
@@ -52,6 +59,7 @@ class MainActivity : FlutterActivity() {
         // Event channel for native → Flutter events
         EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL)
             .setStreamHandler(VpnEventStreamHandler)
+        ItestBridge.attach(flutterEngine.dartExecutor.binaryMessenger)
 
         // Send pending deeplink if the app was launched via a link
         pendingDeeplink?.let { uri ->
@@ -372,6 +380,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (ItestBridge.onIntent(this, intent)) return
         handleIncomingIntent(intent)
     }
 

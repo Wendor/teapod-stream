@@ -33,6 +33,12 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
+        // TEAPOD_ITEST=1 (./build.sh itest): отдельный пакет для интеграционных
+        // тестов на устройстве — ставится рядом с основным, его данные не трогает.
+        val itest = providers.environmentVariable("TEAPOD_ITEST").orNull == "1"
+        if (itest) applicationIdSuffix = ".itest"
+        manifestPlaceholders["appLabel"] = if (itest) "teapod itest" else "TeapodStream"
+        buildConfigField("boolean", "ITEST", itest.toString())
     }
 
     packaging {

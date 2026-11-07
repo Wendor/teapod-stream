@@ -8,6 +8,7 @@ set -euo pipefail
 #    ./build.sh release      — release APK (split per ABI)
 #    ./build.sh aab          — release AAB (Google Play)
 #    ./build.sh run          — запуск на подключённом устройстве
+#    ./build.sh itest        — сборка и установка пакета …itest для интеграционных тестов
 #    ./build.sh bump X.Y.Z   — общая версия всех трёх репозиториев
 #    ./build.sh binaries     — скопировать teapod-core + скачать geodata
 #    ./build.sh clean        — очистить build артефакты
@@ -249,6 +250,26 @@ case "${1:-help}" in
     rename_apks
     ;;
 
+  itest)
+    # Пакет com.teapodstream.teapodstream.itest с агентом (tool/itest/).
+    # Основное приложение не переустанавливается.
+    log "Сборка ITEST APK..."
+    check_binaries || true
+    ensure_pub
+    TEAPOD_ITEST=1 flutter build apk --debug --no-pub --target-platform android-arm64 --dart-define=ITEST=true
+    apk="build/app/outputs/flutter-apk/app-debug.apk"
+    pkg="com.teapodstream.teapodstream.itest"
+    aapt=$(ls -d "${ANDROID_HOME:-/opt/homebrew/share/android-commandlinetools}"/build-tools/*/aapt2 2>/dev/null | tail -1)
+    # Без проверки APK не ставим: не-itest сборка встала бы поверх основного приложения.
+    [ -n "$aapt" ] || err "aapt2 не найден (ANDROID_HOME) — не могу проверить пакет, установка отменена"
+    "$aapt" dump packagename "$apk" | grep -qx "$pkg" || err "APK собран не как $pkg — установка отменена"
+    adb install -r "$apk"
+    adb shell appops set "$pkg" ACTIVATE_VPN allow
+    adb shell pm grant "$pkg" android.permission.POST_NOTIFICATIONS || true
+    adb shell dumpsys deviceidle whitelist +"$pkg" >/dev/null
+    ok "Установлен $pkg"
+    ;;
+
   release)
     log "Сборка RELEASE APK (arm64 + x86_64)..."
     accept_sdk_licenses
@@ -320,6 +341,7 @@ case "${1:-help}" in
     echo "    ./build.sh release      Собрать release APK (split per ABI)"
     echo "    ./build.sh aab          Собрать AAB"
     echo "    ./build.sh run          Запустить debug на устройстве"
+    echo "    ./build.sh itest        Собрать и установить пакет …itest (интеграционные тесты)"
     echo "    ./build.sh run-release  Запустить release на устройстве"
     echo "    ./build.sh pushpre      Опубликовать Pre-release на GitHub"
     echo "    ./build.sh push         Опубликовать Release на GitHub"

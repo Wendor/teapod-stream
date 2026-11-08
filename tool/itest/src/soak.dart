@@ -120,6 +120,7 @@ class Soak {
   var _diagN = 0;
   var _onWifi = true;
   var _lteOk = true;
+  String? _tunnelIp;
 
   Soak({
     required this.agent,
@@ -154,8 +155,11 @@ class Soak {
     var (u, ip) = (url, await get(url));
     if (ip == null && urls.length > 1) (u, ip) = (urls[1], await get(urls[1]));
     // Вне Wi-Fi из baseline прямой IP другой — «не прямой» ещё не значит «через VPN».
-    final byEgress = egress != null && (strictEgress || !_onWifi);
-    final ok = ip != null && (byEgress ? ip == egress : urls.isEmpty || ip != baseline.direct[u]);
+    // Ожидаемый выход — подтверждённый на Wi-Fi (адрес входа сервера может отличаться).
+    final expected = strictEgress ? egress : _tunnelIp ?? egress;
+    final byEgress = expected != null && (strictEgress || !_onWifi);
+    final ok = ip != null && (byEgress ? ip == expected : urls.isEmpty || ip != baseline.direct[u]);
+    if (ok && _onWifi && urls.isNotEmpty) _tunnelIp = ip;
     final s = (t: DateTime.now(), ok: ok, appState: agent.lastState);
     _event('probe', {'ip': ip, 'ok': ok, 'onWifi': _onWifi, 'state': agent.lastState});
     return s;

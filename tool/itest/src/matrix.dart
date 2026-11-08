@@ -173,6 +173,9 @@ Future<Outcome> _proxyOnly(CaseCtx c) async {
 const _coreOptions = {
   'proxy-only': {'go'},
   'icmp-off': {'go', 'box'},
+  'mux': {'go'},
+  'noise': {'go', 'rust'},
+  'mtu-1280': {'go', 'box'},
 };
 
 /// Опционные кейсы: имя → (патч настроек, проверка).
@@ -297,7 +300,7 @@ Future<CaseResult> runCase(MatrixCase mc, CaseCtx ctx, RunDir run, Shell shell, 
   void step(String s) => steps.writeln('${DateTime.now().toIso8601String()} $s');
   ctx.probes.log = step;
   Outcome out;
-  var connected = false;
+  var connectSent = false, connected = false;
   try {
     final usesEcho = jsonEncode(mc.settingsPatch).contains(echoHostPlaceholder);
     if (usesEcho && ctx.pair == null) throw const _Skip('need 2 usable echo services');
@@ -307,6 +310,7 @@ Future<CaseResult> runCase(MatrixCase mc, CaseCtx ctx, RunDir run, Shell shell, 
     await ctx.agent.send('reset', {'keepConfigs': true, 'settings': patch});
     ctx.agent.lastState = null;
     step('connect ${mc.configName} on ${coreNames[mc.core]}');
+    connectSent = true;
     await ctx.agent.send('connect', {'configId': mc.configId, 'core': mc.core});
     final state = await ctx.agent.waitState({'connected', 'error', 'blocked'}, const Duration(seconds: 60));
     step('state $state');
@@ -345,7 +349,7 @@ Future<CaseResult> runCase(MatrixCase mc, CaseCtx ctx, RunDir run, Shell shell, 
     step('diag: $e');
   }
   // Чужой сервер мог просто не ответить; после подключения провал — уже наш.
-  if (!mc.owned && !connected && out.v == Verdict.fail) {
+  if (!mc.owned && connectSent && !connected && out.v == Verdict.fail) {
     out = (v: Verdict.skip, note: 'unreachable (not owned): ${out.note}');
   }
   ctx.probes.log = null;

@@ -67,16 +67,28 @@ class Adb implements Shell {
   Future<Stream<String>> logcat(IOSink sink, {String Function(String) mask = _same}) async {
     await run(['logcat', '-c']);
     final out = StreamController<String>.broadcast();
-    String? last;
+    String? last, lastLine;
     Future<void> start() async {
       if (_stopped) return;
       final p = await Process.start(
           'adb', ['-s', serial, 'logcat', '-v', 'threadtime', if (last != null) ...['-T', last!]]);
       _logcat = p;
+      // После перезапуска с `-T` повторяются строки до последней полученной
+      // включительно — их пропускаем, иначе старый маркер состояния сочтётся новым.
+      var replay = last != null;
       _sub = p.stdout.transform(_utf8).transform(const LineSplitter()).listen((l) {
         if (_stopped) return;
         final t = _logTime.firstMatch(l)?[0];
+        if (replay) {
+          if (t != null && t.compareTo(last!) > 0) {
+            replay = false;
+          } else {
+            if (l == lastLine) replay = false;
+            return;
+          }
+        }
         if (t != null) last = t;
+        lastLine = l;
         sink.writeln(mask(l));
         out.add(l);
       }, onError: (Object e) {

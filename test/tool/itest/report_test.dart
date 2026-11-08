@@ -43,6 +43,20 @@ void main() {
     expect(r.render(), contains(r"--case 'base/x/it'\''s'"));
   });
 
+  test('maskSecrets hides credential fields of agent JSON markers', () {
+    final m = maskSecrets('{"ev":"state","value":"connected","socksPort":1,"socksUser":"u1","socksPassword":"p@ss"}');
+    expect(m, isNot(contains('p@ss')));
+    expect(m, isNot(contains('"u1"')));
+    expect(m, contains('"value":"connected"'));
+  });
+
+  test('ids that normalize to the same dir get distinct dirs', () {
+    final run = RunDir(tmp);
+    final a = run.caseDir('base/x/a..b'), b = run.caseDir('base/x/a_b');
+    expect(a.path, isNot(b.path));
+    expect(run.caseDir('base/x/a..b').path, a.path);
+  });
+
   test('write produces md and json', () {
     sample().write();
     expect(File('${tmp.path}/report.md').existsSync(), isTrue);

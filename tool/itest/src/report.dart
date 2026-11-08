@@ -18,9 +18,18 @@ class RunDir {
     return RunDir(Directory('$base/$t'));
   }
 
-  Directory caseDir(String id) =>
-      Directory('${root.path}/cases/${id.replaceAll(RegExp(r'[^\w.\-/]'), '_').replaceAll('..', '_')}')
-        ..createSync(recursive: true);
+  final _caseDirs = <String, Directory>{};
+
+  /// Каталог кейса; разные id, совпавшие после нормализации, получают суффикс.
+  Directory caseDir(String id) => _caseDirs[id] ??= () {
+        final base = '${root.path}/cases/${id.replaceAll(RegExp(r'[^\w.\-/]'), '_').replaceAll('..', '_')}';
+        final taken = _caseDirs.values.map((d) => d.path).toSet();
+        var path = base;
+        for (var i = 2; taken.contains(path); i++) {
+          path = '$base-$i';
+        }
+        return Directory(path)..createSync(recursive: true);
+      }();
 
   Directory soakDir(String core) => Directory('${root.path}/soak/$core')..createSync(recursive: true);
 
@@ -36,7 +45,11 @@ String maskSecrets(String s) => s
         RegExp(r'\b(pbk|sid|pqv|password|publickey|privatekey|key|token|auth)=[^&\s#]+', caseSensitive: false),
         (m) => '${m[1]}=***')
     .replaceAll(RegExp(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', caseSensitive: false), '***')
-    .replaceAllMapped(RegExp(r'(/sub/)[^\s/?#]+'), (m) => '${m[1]}***');
+    .replaceAllMapped(RegExp(r'(/sub/)[^\s/?#]+'), (m) => '${m[1]}***')
+    // JSON-маркеры агента (например, `connected` несёт socksPassword).
+    .replaceAllMapped(
+        RegExp(r'"(\w*(?:password|pass|token|key|auth|user))"\s*:\s*"[^"]*"', caseSensitive: false),
+        (m) => '"${m[1]}":"***"');
 
 /// Отчёт прогона; пишется после каждого результата, чтобы прерванный прогон
 /// оставлял актуальный `report.md`.

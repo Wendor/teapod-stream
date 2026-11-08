@@ -1055,7 +1055,7 @@ class XrayVpnService : VpnService() {
                     // Trigger if network changed (prev→current) OR if prev was null but we now
                     // have a network (covers WiFi→LTE when onLost fired before onAvailable).
                     if (current != null && prev != current) {
-                        scheduleNetworkChanged()
+                        scheduleNetworkChanged(switched = true)
                     }
                 }
 
@@ -1078,7 +1078,7 @@ class XrayVpnService : VpnService() {
                     }
                     updateUnderlyingNetworks(cm)
                     if (prev != null && lastUnderlyingNetwork != null && prev != lastUnderlyingNetwork) {
-                        scheduleNetworkChanged()
+                        scheduleNetworkChanged(switched = true)
                     }
                 }
 
@@ -1098,7 +1098,8 @@ class XrayVpnService : VpnService() {
                             // режима полёта): сокеты ядра остались на прежней сети.
                             val switched = prev != null && lastUnderlyingNetwork != null &&
                                 prev != lastUnderlyingNetwork
-                            if (!validated || switched) scheduleNetworkChanged()
+                            if (!validated) scheduleNetworkChanged()
+                            else if (switched) scheduleNetworkChanged(switched = true)
                         }
                     }
                 }
@@ -1169,45 +1170,47 @@ class XrayVpnService : VpnService() {
         }
     }
 
-    private fun scheduleNetworkChanged() {
+    /// [switched] — сменилась физическая сеть: перед реконнектом сверяемся с сетью,
+    /// на которой подключились (вернулись на неё — сокеты ядра живы, реконнект не нужен).
+    private fun scheduleNetworkChanged(switched: Boolean = false) {
         // Only reconnect when fully connected — prevents spurious reconnects during the
         // initial startVpn() phase when onAvailable fires right after registration.
         if (currentNativeState != "connected") return
         // On mobile data Android fires onAvailable/onCapabilitiesChanged right after VPN
-        // connects, causing an immediate false reconnect loop. Ignore changes within 5s of
-        // connection — real network switches happen on a longer timescale.
-        // Настоящую смену сети в этом окне не теряем: по его окончании сверяем
-        // физическую сеть с той, на которой подключились.
-        val msSinceConnect = System.currentTimeMillis() - lastConnectedMs
-        if (lastConnectedMs > 0 && msSinceConnect < 5_000L) {
-            log("debug", "Network change: deferred (VPN just connected ${msSinceConnect}ms ago)")
-            val atConnect = connectedNetwork
-            val connectedStamp = lastConnectedMs
-            pendingNetworkRunnable?.let { networkChangeHandler.removeCallbacks(it) }
-            val r = Runnable {
-                if (currentNativeState != "connected" || lastConnectedMs != connectedStamp) return@Runnable
-                val now = findPhysicalNetwork()
-                if (atConnect != null && now != null && now != atConnect) {
-                    log("info", "Network change: $atConnect → $now right after connect, reconnecting")
-                    reconnectInternal()
-                }
-            }
-            pendingNetworkRunnable = r
-            networkChangeHandler.postDelayed(r, 5_000L - msSinceConnect + RECONNECT_DEBOUNCE_MS)
-            return
-        }
-        log("info", "Network change: reconnect scheduled in ${RECONNECT_DEBOUNCE_MS}ms")
+        // connects. В первые 5 с не реконнектимся сразу: по окончании окна сверяем
+        // физическую сеть с сетью подключения — настоящая смена не теряется.
+        val session = lastConnectedMs
+        val msSinceConnect = System.currentTimeMillis() - session
+        val settling = session > 0 && msSinceConnect < 5_000L
+        val checkNetwork = switched || settling
+        val delay = if (settling) 5_000L - msSinceConnect + RECONNECT_DEBOUNCE_MS else RECONNECT_DEBOUNCE_MS
+        log(if (settling) "debug" else "info",
+            "Network change: ${if (checkNetwork) "check" else "reconnect"} scheduled in ${delay}ms")
         pendingNetworkRunnable?.let { networkChangeHandler.removeCallbacks(it) }
-        val r = Runnable { reconnectInternal() }
+        val r = Runnable {
+            if (currentNativeState != "connected" || lastConnectedMs != session) return@Runnable
+            if (checkNetwork) {
+                val now = findPhysicalNetwork() ?: return@Runnable
+                if (now == connectedNetwork) {
+                    log("debug", "Network change: still on $now, no reconnect")
+                    return@Runnable
+                }
+                log("info", "Network change: ${connectedNetwork ?: "unknown"} → $now, reconnecting")
+            }
+            reconnectInternal(session)
+        }
         pendingNetworkRunnable = r
-        networkChangeHandler.postDelayed(r, RECONNECT_DEBOUNCE_MS)
+        networkChangeHandler.postDelayed(r, delay)
     }
 
-    private fun reconnectInternal() {
+    /// [session] — `lastConnectedMs` сессии, для которой запланирован реконнект;
+    /// новая сессия (ACTION_CONNECT) отменяет его. 0 — без привязки.
+    private fun reconnectInternal(session: Long = 0L) {
         if (userRequestedDisconnect.get()) return
         if (!isRunning.get()) return
         networkChangeHandler.post {
             if (userRequestedDisconnect.get() || !isRunning.get()) return@post
+            if (session != 0L && lastConnectedMs != session) return@post
             log("info", "reconnectInternal: starting reconnect cycle")
             reconnectAttempts.set(0)
             Thread {

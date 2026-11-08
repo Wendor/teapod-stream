@@ -12,7 +12,10 @@ class Secrets {
   /// nativeId ядра → имя опорного конфига (необязательно).
   final Map<String, String> reference;
 
-  const Secrets(this.configs, this.subs, this.reference);
+  /// Glob по `host:port`: такие конфиги (обычно из подписки) не тестируются.
+  final List<String> exclude;
+
+  const Secrets(this.configs, this.subs, this.reference, [this.exclude = const []]);
 
   factory Secrets.fromJson(Map<String, dynamic> j) => Secrets(
         [
@@ -24,6 +27,7 @@ class Secrets {
             (url: s['url'] as String, owned: s['owned'] as bool? ?? true),
         ],
         (j['reference'] as Map? ?? const {}).cast<String, String>(),
+        (j['exclude'] as List? ?? const []).cast<String>(),
       );
 
   static Secrets load(String path) {

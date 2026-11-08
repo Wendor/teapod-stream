@@ -241,7 +241,8 @@ Future<Imported> importAll(AgentClient agent, Secrets s, RunReport report) async
       owned[id] = sub.owned;
     }
   }
-  final configs = (await agent.send('list') as List).cast<Map<String, dynamic>>().map(agentConfigFromJson).toList();
+  final configs = (await agent.send('list') as List).cast<Map<String, dynamic>>().map(agentConfigFromJson).toList()
+    ..removeWhere((c) => s.exclude.any((g) => globMatch(g, '${c.host}:${c.port}')));
   // Без явного egressIp ожидаемый выход — IP хоста сервера (подсказка, не строго).
   final strict = {for (final e in egress.entries) if (e.value != null) e.key};
   for (final c in configs) {

@@ -253,6 +253,8 @@ class XrayVpnService : VpnService() {
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     @Volatile private var lastUnderlyingNetwork: Network? = null
     @Volatile private var lastConnectedMs: Long = 0L
+    // Физическая сеть на момент connected — с ней сверяется отложенная проверка смены сети.
+    @Volatile private var connectedNetwork: Network? = null
     private var prefixProxy: PrefixTcpProxy? = null
     @Volatile private var showNotification = true
     @Volatile private var screenOn = true
@@ -1086,12 +1088,17 @@ class XrayVpnService : VpnService() {
                 ) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                         if (cm.activeNetwork == network) {
+                            val prev = lastUnderlyingNetwork
                             updateUnderlyingNetworks(cm)
                             // Captive portal / temporary internet loss: VALIDATED is removed
                             // without triggering onLost/onAvailable — detect and reconnect.
                             val validated = networkCapabilities.hasCapability(
                                 NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-                            if (!validated) scheduleNetworkChanged()
+                            // Сеть стала основной уже после onAvailable (LTE → Wi-Fi после
+                            // режима полёта): сокеты ядра остались на прежней сети.
+                            val switched = prev != null && lastUnderlyingNetwork != null &&
+                                prev != lastUnderlyingNetwork
+                            if (!validated || switched) scheduleNetworkChanged()
                         }
                     }
                 }
@@ -1169,9 +1176,24 @@ class XrayVpnService : VpnService() {
         // On mobile data Android fires onAvailable/onCapabilitiesChanged right after VPN
         // connects, causing an immediate false reconnect loop. Ignore changes within 5s of
         // connection — real network switches happen on a longer timescale.
+        // Настоящую смену сети в этом окне не теряем: по его окончании сверяем
+        // физическую сеть с той, на которой подключились.
         val msSinceConnect = System.currentTimeMillis() - lastConnectedMs
         if (lastConnectedMs > 0 && msSinceConnect < 5_000L) {
-            log("debug", "Network change: ignored (VPN just connected ${msSinceConnect}ms ago)")
+            log("debug", "Network change: deferred (VPN just connected ${msSinceConnect}ms ago)")
+            val atConnect = connectedNetwork
+            val connectedStamp = lastConnectedMs
+            pendingNetworkRunnable?.let { networkChangeHandler.removeCallbacks(it) }
+            val r = Runnable {
+                if (currentNativeState != "connected" || lastConnectedMs != connectedStamp) return@Runnable
+                val now = findPhysicalNetwork()
+                if (atConnect != null && now != null && now != atConnect) {
+                    log("info", "Network change: $atConnect → $now right after connect, reconnecting")
+                    reconnectInternal()
+                }
+            }
+            pendingNetworkRunnable = r
+            networkChangeHandler.postDelayed(r, 5_000L - msSinceConnect + RECONNECT_DEBOUNCE_MS)
             return
         }
         log("info", "Network change: reconnect scheduled in ${RECONNECT_DEBOUNCE_MS}ms")
@@ -1701,6 +1723,7 @@ class XrayVpnService : VpnService() {
         val now = System.currentTimeMillis()
         connectedAtMs = now
         lastConnectedMs = now
+        connectedNetwork = lastUnderlyingNetwork
         _socksCredentials.set(SocksCredentials(socksPort, socksUser, socksPassword))
         // Save credentials to file for CONNECT_QUICK reconnect
         try {

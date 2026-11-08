@@ -366,6 +366,17 @@ void main() {
           contains(equals({...block, 'inboundTag': ['socks'], 'outboundTag': XrayConfigBuilder.blackholeTag})));
       expect((cfg['outbounds'] as List).map((o) => o['tag']), contains(XrayConfigBuilder.blackholeTag));
     });
+
+    test('mergeWithRaw replaces a non-blackhole outbound that took our tag', () {
+      final raw = {
+        'inbounds': [{'tag': 'socks', 'protocol': 'socks', 'port': 1080}],
+        'outbounds': [{'tag': XrayConfigBuilder.blackholeTag, 'protocol': 'freedom'}],
+      };
+      final cfg = jsonDecode(XrayConfigBuilder.mergeWithRaw(jsonEncode(raw), _defaultOptions(enableUdp: false)))
+          as Map<String, dynamic>;
+      final ours = (cfg['outbounds'] as List).where((o) => o['tag'] == XrayConfigBuilder.blackholeTag).toList();
+      expect(ours.map((o) => o['protocol']), ['blackhole']);
+    });
   });
 
   group('certificate pins', () {

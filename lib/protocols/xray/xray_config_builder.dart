@@ -790,10 +790,9 @@ class XrayConfigBuilder {
 
   static void _ensureBlackholeOutbound(Map<String, dynamic> cfg) {
     final outbounds = cfg['outbounds'] as List<dynamic>? ?? (cfg['outbounds'] = <dynamic>[]);
-    final exists = outbounds
-        .whereType<Map<String, dynamic>>()
-        .any((o) => o['tag'] == blackholeTag);
-    if (!exists) {
+    // Чужой outbound с нашим тегом (не blackhole) выпустил бы блокируемый трафик наружу.
+    outbounds.removeWhere((o) => o is Map && o['tag'] == blackholeTag && o['protocol'] != 'blackhole');
+    if (!outbounds.any((o) => o is Map && o['tag'] == blackholeTag)) {
       outbounds.add({'tag': blackholeTag, 'protocol': 'blackhole', 'settings': {}});
     }
   }

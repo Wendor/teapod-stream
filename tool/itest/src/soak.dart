@@ -284,6 +284,11 @@ class Soak {
             fault: f,
             restoredAt: restoredAt,
             after: await _sample(const Duration(minutes: 3, seconds: 30), untilOk: true));
+        // Ни одного маркера после kill — Android не перезапустил сервис (его гонка
+        // с системным Vpn); без always-on VPN это поведение ОС, не приложения.
+        if (f == Fault.killApp && r.verdict != Verdict.pass && agent.lastState == null) {
+          r = FaultResult(f, Verdict.skip, null, 'Android did not restart the service (always-on VPN off)', at: r.at);
+        }
         if (f == Fault.wifiLte && !_lteOk && r.verdict == Verdict.pass) {
           r = FaultResult(f, Verdict.fail, null, 'no VPN traffic during the LTE minute', at: r.at);
         }

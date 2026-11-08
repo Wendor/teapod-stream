@@ -367,15 +367,22 @@ void main() {
       expect((cfg['outbounds'] as List).map((o) => o['tag']), contains(XrayConfigBuilder.blackholeTag));
     });
 
-    test('mergeWithRaw replaces a non-blackhole outbound that took our tag', () {
+    test('mergeWithRaw keeps a server outbound that took our tag and blocks UDP via a free tag', () {
+      const tag = XrayConfigBuilder.blackholeTag;
+      final serverRule = {'type': 'field', 'network': 'tcp', 'outboundTag': tag};
       final raw = {
         'inbounds': [{'tag': 'socks', 'protocol': 'socks', 'port': 1080}],
-        'outbounds': [{'tag': XrayConfigBuilder.blackholeTag, 'protocol': 'freedom'}],
+        'outbounds': [{'tag': tag, 'protocol': 'freedom'}],
+        'routing': {'rules': [serverRule]},
       };
       final cfg = jsonDecode(XrayConfigBuilder.mergeWithRaw(jsonEncode(raw), _defaultOptions(enableUdp: false)))
           as Map<String, dynamic>;
-      final ours = (cfg['outbounds'] as List).where((o) => o['tag'] == XrayConfigBuilder.blackholeTag).toList();
-      expect(ours.map((o) => o['protocol']), ['blackhole']);
+      final protocols = {for (final o in cfg['outbounds'] as List) o['tag']: o['protocol']};
+      expect(protocols[tag], 'freedom');
+      expect(protocols['$tag-2'], 'blackhole');
+      final rules = cfg['routing']['rules'] as List;
+      expect(rules, contains(equals(serverRule)));
+      expect(rules, contains(equals({...block, 'inboundTag': ['socks'], 'outboundTag': '$tag-2'})));
     });
   });
 

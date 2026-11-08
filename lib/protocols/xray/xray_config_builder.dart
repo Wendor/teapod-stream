@@ -675,11 +675,10 @@ class XrayConfigBuilder {
       // block belongs to the server), so block ad domains via a routing rule to
       // the injected blackhole. Requires sniffing (routeOnly) for domain matching.
       if (options.routing.adBlockEnabled) {
-        _ensureBlackholeOutbound(cfg);
         appRules.add({
           'type': 'field',
           'domain': [XrayDefaults.adBlockGeosite, 'geosite:win-spy'],
-          'outboundTag': blackholeTag,
+          'outboundTag': _ensureBlackholeOutbound(cfg),
         });
       }
 
@@ -692,8 +691,7 @@ class XrayConfigBuilder {
       }
 
       if (!options.enableUdp) {
-        _ensureBlackholeOutbound(cfg);
-        appRules.add(_udpBlockRule(socksTag, blackholeTag));
+        appRules.add(_udpBlockRule(socksTag, _ensureBlackholeOutbound(cfg)));
       }
 
       // Only inject rules that route to 'direct' — safe regardless of server outbound names.
@@ -765,8 +763,7 @@ class XrayConfigBuilder {
       if (proxy != null) {
         b['fallbackTag'] = proxy;
       } else {
-        _ensureBlackholeOutbound(cfg);
-        b['fallbackTag'] = blackholeTag;
+        b['fallbackTag'] = _ensureBlackholeOutbound(cfg);
       }
     }
   }
@@ -788,13 +785,21 @@ class XrayConfigBuilder {
     return null;
   }
 
-  static void _ensureBlackholeOutbound(Map<String, dynamic> cfg) {
+  /// Тег blackhole-outbound'а. Если тег [blackholeTag] занят серверным outbound'ом
+  /// другого протокола, он остаётся как есть (на него могут вести правила сервера),
+  /// а blackhole получает свободный тег с суффиксом.
+  static String _ensureBlackholeOutbound(Map<String, dynamic> cfg) {
     final outbounds = cfg['outbounds'] as List<dynamic>? ?? (cfg['outbounds'] = <dynamic>[]);
-    // Чужой outbound с нашим тегом (не blackhole) выпустил бы блокируемый трафик наружу.
-    outbounds.removeWhere((o) => o is Map && o['tag'] == blackholeTag && o['protocol'] != 'blackhole');
-    if (!outbounds.any((o) => o is Map && o['tag'] == blackholeTag)) {
-      outbounds.add({'tag': blackholeTag, 'protocol': 'blackhole', 'settings': {}});
+    final byTag = {
+      for (final o in outbounds.whereType<Map<String, dynamic>>())
+        if (o['tag'] case final String t) t: o['protocol'],
+    };
+    var tag = blackholeTag;
+    for (var i = 2; byTag.containsKey(tag) && byTag[tag] != 'blackhole'; i++) {
+      tag = '$blackholeTag-$i';
     }
+    if (!byTag.containsKey(tag)) outbounds.add({'tag': tag, 'protocol': 'blackhole', 'settings': {}});
+    return tag;
   }
 
   /// Managed configs often ship aggressive observatory settings (e.g. probeInterval

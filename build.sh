@@ -254,6 +254,7 @@ case "${1:-help}" in
     # Пакет com.teapodstream.teapodstream.itest с агентом (tool/itest/).
     # Основное приложение не переустанавливается.
     log "Сборка ITEST APK..."
+    accept_sdk_licenses
     check_binaries || true
     ensure_pub
     TEAPOD_ITEST=1 flutter build apk --debug --no-pub --target-platform android-arm64 --dart-define=ITEST=true

@@ -14,6 +14,10 @@ void main() {
       expect(r.v, Verdict.skip);
       expect(r.note, 'echo');
     });
+    test('only the network-routed service answered → skip, not a pass', () {
+      final r = classifyTunnel(baseline: base, observed: {a: null, b: '144.0.0.1'}, egress: '144.0.0.1');
+      expect(r.v, Verdict.skip);
+    });
     test('nothing observed → fail', () {
       expect(classifyTunnel(baseline: base, observed: {a: null, b: null}).v, Verdict.fail);
     });
@@ -113,6 +117,10 @@ void main() {
     });
     test('other provider in proxy mode → pass', () {
       expect(classifyDns(baseline: isp, observed: (ip: '1.1.1.1', geo: 'Norway - Cloudflare'), proxy: true).v,
+          Verdict.pass);
+    });
+    test('empty geo on both sides is not the same provider', () {
+      expect(classifyDns(baseline: (ip: '9.9.9.9', geo: ''), observed: (ip: '1.1.1.1', geo: ''), proxy: true).v,
           Verdict.pass);
     });
     test('no answer → fail; direct mode only needs an answer', () {

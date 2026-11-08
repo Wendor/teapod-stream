@@ -91,8 +91,9 @@ class CaseResult {
   final String note;
   final Duration took;
   final String dir;
+  final String? configId;
 
-  const CaseResult(this.id, this.verdict, this.note, this.took, this.dir);
+  const CaseResult(this.id, this.verdict, this.note, this.took, this.dir, {this.configId});
 
   Map<String, Object?> toJson() =>
       {'id': id, 'verdict': verdict.name, 'note': note, 'tookMs': took.inMilliseconds, 'dir': dir};
@@ -201,9 +202,11 @@ final Map<String, (Map<String, dynamic>, Check)> optionCases = {
     _route('global', {'adBlockEnabled': true}),
     (c) async => combine([
           await c.tunnel(),
-          await c.probes.reachable('https://ad.doubleclick.net')
-              ? (v: Verdict.fail, note: 'ad domain reachable')
-              : (v: Verdict.pass, note: 'ad blocked'),
+          switch (await c.probes.reachable('https://ad.doubleclick.net')) {
+            true => (v: Verdict.fail, note: 'ad domain reachable'),
+            false => (v: Verdict.pass, note: 'ad blocked'),
+            null => (v: Verdict.fail, note: 'probe failed: no HTTP status'),
+          },
         ]),
   ),
   'dns-proxy-ipv4': ({'dnsMode': 'proxy', 'dnsQueryStrategy': 'ipv4Only'}, (c) => _dns(c, proxy: true)),
@@ -290,10 +293,11 @@ Future<CaseResult> runCase(MatrixCase mc, CaseCtx ctx, RunDir run, Shell shell, 
   final dir = run.caseDir(mc.id);
   final steps = File('${dir.path}/steps.log').openWrite();
   final logs = File('${dir.path}/logcat.txt').openWrite();
-  final sub = logcat.listen(logs.writeln);
+  final sub = logcat.listen((l) => logs.writeln(maskSecrets(l)));
   void step(String s) => steps.writeln('${DateTime.now().toIso8601String()} $s');
   ctx.probes.log = step;
   Outcome out;
+  var connected = false;
   try {
     final usesEcho = jsonEncode(mc.settingsPatch).contains(echoHostPlaceholder);
     if (usesEcho && ctx.pair == null) throw const _Skip('need 2 usable echo services');
@@ -309,6 +313,7 @@ Future<CaseResult> runCase(MatrixCase mc, CaseCtx ctx, RunDir run, Shell shell, 
     if (state != 'connected') {
       out = (v: Verdict.fail, note: 'connect: $state');
     } else {
+      connected = true;
       await Future<void>.delayed(const Duration(seconds: 2));
       out = await mc.check(ctx);
     }
@@ -339,12 +344,16 @@ Future<CaseResult> runCase(MatrixCase mc, CaseCtx ctx, RunDir run, Shell shell, 
   } catch (e) {
     step('diag: $e');
   }
-  if (!mc.owned && out.v == Verdict.fail) out = (v: Verdict.skip, note: 'unreachable (not owned): ${out.note}');
+  // Чужой сервер мог просто не ответить; после подключения провал — уже наш.
+  if (!mc.owned && !connected && out.v == Verdict.fail) {
+    out = (v: Verdict.skip, note: 'unreachable (not owned): ${out.note}');
+  }
   ctx.probes.log = null;
   await sub.cancel();
   await logs.close();
   await steps.close();
-  return CaseResult(mc.id, out.v, out.note, DateTime.now().difference(started), run.relative(dir));
+  return CaseResult(mc.id, out.v, out.note, DateTime.now().difference(started), run.relative(dir),
+      configId: mc.configId);
 }
 
 /// Горутины Go-ядер до отключения — разбор зависаний (`goroutines.txt`).

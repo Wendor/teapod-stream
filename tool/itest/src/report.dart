@@ -19,7 +19,8 @@ class RunDir {
   }
 
   Directory caseDir(String id) =>
-      Directory('${root.path}/cases/${id.replaceAll(RegExp(r'[^\w.\-/]'), '_')}')..createSync(recursive: true);
+      Directory('${root.path}/cases/${id.replaceAll(RegExp(r'[^\w.\-/]'), '_').replaceAll('..', '_')}')
+        ..createSync(recursive: true);
 
   Directory soakDir(String core) => Directory('${root.path}/soak/$core')..createSync(recursive: true);
 
@@ -59,7 +60,7 @@ class RunReport {
   /// Замечание о прогоне (что не проверено и почему).
   void note(String text) {
     notes.add(text);
-    stdout.writeln('  ! $text');
+    stdout.writeln('  ! ${maskSecrets(text)}');
     write();
   }
 
@@ -111,7 +112,7 @@ class RunReport {
     if (failed.isNotEmpty || badFaults.isNotEmpty) {
       b.writeln('\n## Перезапуск провалов\n\n```bash');
       for (final c in failed) {
-        b.writeln("dart run tool/itest/main.dart --skip-install --phase matrix --case '${c.id}'");
+        b.writeln("dart run tool/itest/main.dart --skip-install --phase matrix --case '${c.id.replaceAll("'", r"'\''")}'");
       }
       for (final f in badFaults.map((f) => '${f.core}|${f.r.fault.cli}').toSet()) {
         final [core, fault] = f.split('|');

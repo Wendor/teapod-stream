@@ -35,6 +35,14 @@ void main() {
     expect(sample().render(), contains('основного приложения'));
   });
 
+  test('case dir stays inside the run dir and rerun command quotes the id', () {
+    final run = RunDir(tmp);
+    expect(run.caseDir('base/x/../../evil').path, startsWith('${tmp.path}/cases/'));
+    expect(run.caseDir('base/x/../../evil').path, isNot(contains('..')));
+    final r = RunReport(run)..add(const CaseResult("base/x/it's", Verdict.fail, 'n', Duration.zero, 'd'));
+    expect(r.render(), contains(r"--case 'base/x/it'\''s'"));
+  });
+
   test('write produces md and json', () {
     sample().write();
     expect(File('${tmp.path}/report.md').existsSync(), isTrue);

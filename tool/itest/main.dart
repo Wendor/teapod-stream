@@ -64,7 +64,7 @@ Future<void> _main(List<String> argv) async {
 
   final run = RunDir.create('runs');
   final logSink = run.file('logcat.txt').openWrite();
-  final logcat = await adb.logcat(logSink);
+  final logcat = await adb.logcat(logSink, mask: maskSecrets);
   final agent = AgentClient(adb, logcat);
   final device = DeviceGuard(adb);
   final probes = Probes(adb);
@@ -109,7 +109,10 @@ Future<void> _main(List<String> argv) async {
     if (args.flag('list')) {
       final all = buildMatrix(configs,
           owned: imported.owned,
-          reference: {for (final c in coreNames.keys) c: '?'},
+          reference: {
+            for (final core in coreNames.keys)
+              if (configs.where((c) => c.cores.contains(core)).firstOrNull case final c?) core: c.id,
+          },
           configGlob: glob('config'),
           coreGlob: glob('core'),
           caseGlob: glob('case'));
@@ -122,14 +125,15 @@ Future<void> _main(List<String> argv) async {
 
     // Чужой VPN (например, основного приложения) исказил бы baseline: подключение
     // itest-VPN его вытесняет.
-    if (configs.isNotEmpty && configs.first.cores.isNotEmpty) {
+    // Отключение — всегда: VPN мог остаться от прерванного прогона.
+    if (configs.where((c) => c.cores.isNotEmpty).firstOrNull case final c?) {
       try {
-        await agent.send('connect', {'configId': configs.first.id, 'core': configs.first.cores.first});
+        await agent.send('connect', {'configId': c.id, 'core': c.cores.first});
         await agent.waitState({'connected', 'error', 'blocked'}, const Duration(seconds: 60));
       } catch (_) {}
-      await agent.send('disconnect');
-      await agent.waitState({'disconnected', 'error'}, const Duration(seconds: 15)).catchError((_) => '');
     }
+    await agent.send('disconnect');
+    await agent.waitState({'disconnected', 'error'}, const Duration(seconds: 15)).catchError((_) => '');
     final baseline = await measureBaseline(probes);
     report.baseline = baseline;
     run.file('baseline.json').writeAsStringSync(jsonEncode(baseline.toJson()));
@@ -140,12 +144,15 @@ Future<void> _main(List<String> argv) async {
         strictEgress: imported.strict.contains(configId));
 
     final reference = <String, String>{};
+    // Опорный конфиг — из тех же, что выбирает --config.
+    final inScope = buildMatrix(configs, owned: imported.owned, configGlob: glob('config')).map((m) => m.configId).toSet();
+    final refPool = configs.where((c) => inScope.contains(c.id)).toList();
     if (args.option('phase') != 'soak') {
       final base = cases.where((c) => c.id.startsWith('base/')).toList();
       for (final mc in base) {
         report.add(await runCase(mc, ctxFor(mc.configId), run, adb, logcat));
       }
-      reference.addAll(pickReference(configs, imported.owned, secrets.reference, report.cases));
+      reference.addAll(pickReference(refPool, imported.owned, secrets.reference, report.cases));
       for (final core in coreNames.keys) {
         final ranBase = report.cases.any((c) => c.id.startsWith('base/${coreNames[core]}/'));
         if (!reference.containsKey(core) && ranBase) {
@@ -163,7 +170,7 @@ Future<void> _main(List<String> argv) async {
         report.add(await runCase(mc, ctxFor(mc.configId), run, adb, logcat));
       }
     } else {
-      reference.addAll(pickReference(configs, imported.owned, secrets.reference, const []));
+      reference.addAll(pickReference(refPool, imported.owned, secrets.reference, const []));
     }
 
     if (args.option('phase') != 'matrix') {
@@ -183,6 +190,7 @@ Future<void> _main(List<String> argv) async {
           configId: configId,
           core: core,
           egress: imported.egress[configId],
+          strictEgress: imported.strict.contains(configId),
           faults: faults,
           repeat: int.parse(args.option('repeat')!),
           duration: parseDuration(args.option('duration')!),
@@ -195,6 +203,10 @@ Future<void> _main(List<String> argv) async {
         stdout.writeln('▶ soak ${coreNames[core]}');
         await soak.run();
       }
+    }
+    final bad = {Verdict.fail, Verdict.zombie};
+    if (report.cases.any((c) => bad.contains(c.verdict)) || report.faults.any((f) => bad.contains(f.r.verdict))) {
+      exitCode = 2;
     }
   } catch (e, st) {
     stderr.writeln('✗ $e\n$st');
@@ -264,7 +276,8 @@ Map<String, String> pickReference(
     final passed = configs.where((c) =>
         owned[c.id] == true &&
         c.cores.contains(core) &&
-        results.any((r) => r.id.startsWith('base/${coreNames[core]}/${c.name}') && r.verdict == Verdict.pass));
+        results.any((r) =>
+            r.configId == c.id && r.id.startsWith('base/${coreNames[core]}/') && r.verdict == Verdict.pass));
     final ref = pinned ?? passed.firstOrNull ?? (results.isEmpty ? configs.where((c) => owned[c.id] == true && c.cores.contains(core)).firstOrNull : null);
     if (ref != null) out[core] = ref.id;
   }

@@ -82,8 +82,12 @@ class Probes {
     }
   }
 
-  Future<bool> reachable(String url) async =>
-      (await _curl('-o /dev/null -w %{http_code} $url', const Duration(seconds: 10))) != '000';
+  /// Есть HTTP-ответ; `null` — проба не выполнилась (нет кода статуса).
+  Future<bool?> reachable(String url) async {
+    final code = await _curl('-o /dev/null -w %{http_code} $url', const Duration(seconds: 10));
+    if (code == '000') return false;
+    return RegExp(r'^[1-5]\d\d$').hasMatch(code) ? true : null;
+  }
 
   Future<bool> ping(String host) async =>
       (await shell.run(['shell', 'ping -c 2 -W 3 $host'], timeout: const Duration(seconds: 15))).ok;
@@ -149,7 +153,11 @@ Outcome classifyTunnel({
   if (strictEgress && egress != null && seen.any((ip) => ip != egress)) {
     return (v: Verdict.fail, note: 'unexpected egress ${seen.join(',')}');
   }
-  final proof = informative(baseline, egress).where((u) => observed[u] != null);
+  final useful = informative(baseline, egress);
+  final proof = useful.where((u) => observed[u] != null);
+  if (useful.isNotEmpty && proof.isEmpty) {
+    return (v: Verdict.skip, note: 'informative echo services silent; only ${seen.join(',')} (= direct)');
+  }
   return proof.isEmpty
       ? (v: Verdict.pass, note: 'traffic ok via ${seen.join(',')}; egress = direct IP, leak undetectable')
       : (v: Verdict.pass, note: 'via ${seen.join(',')}');
@@ -169,7 +177,8 @@ Outcome classifyDirect({required String? baseline, required String? observed, St
 /// провайдер (geo), а не IP: у провайдера anycast-пул резолверов.
 Outcome classifyDns({required Resolver? baseline, required Resolver? observed, required bool proxy}) {
   if (observed == null) return (v: Verdict.fail, note: 'dns resolve failed');
-  if (proxy && baseline != null && (observed.ip == baseline.ip || observed.geo == baseline.geo)) {
+  final sameGeo = observed.geo.isNotEmpty && observed.geo == baseline?.geo;
+  if (proxy && baseline != null && (observed.ip == baseline.ip || sameGeo)) {
     return (v: Verdict.fail, note: 'dns leak: ${observed.geo} ${observed.ip}');
   }
   return (v: Verdict.pass, note: 'resolver ${observed.geo} ${observed.ip}');

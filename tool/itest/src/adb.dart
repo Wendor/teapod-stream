@@ -60,21 +60,24 @@ class Adb implements Shell {
     return ProcResult(code, await out, await err);
   }
 
-  /// Поток logcat с текущего момента; каждая строка дописывается в [sink].
-  /// Если `adb logcat` оборвался (USB, перезапуск adb-сервера), он
-  /// перезапускается с хвоста — иначе раннер перестал бы видеть ответы агента.
-  Future<Stream<String>> logcat(IOSink sink) async {
+  /// Поток logcat с текущего момента; каждая строка дописывается в [sink]
+  /// (через [mask]). Если `adb logcat` оборвался (USB, перезапуск adb-сервера),
+  /// он перезапускается с времени последней строки — ответ агента, пришедший во
+  /// время перезапуска, не теряется (повтор строки безвреден: ответы по id).
+  Future<Stream<String>> logcat(IOSink sink, {String Function(String) mask = _same}) async {
     await run(['logcat', '-c']);
     final out = StreamController<String>.broadcast();
-    var first = true;
+    String? last;
     Future<void> start() async {
       if (_stopped) return;
-      final p = await Process.start('adb', ['-s', serial, 'logcat', '-v', 'threadtime', if (!first) ...['-T', '1']]);
-      first = false;
+      final p = await Process.start(
+          'adb', ['-s', serial, 'logcat', '-v', 'threadtime', if (last != null) ...['-T', last!]]);
       _logcat = p;
       _sub = p.stdout.transform(_utf8).transform(const LineSplitter()).listen((l) {
         if (_stopped) return;
-        sink.writeln(l);
+        final t = _logTime.firstMatch(l)?[0];
+        if (t != null) last = t;
+        sink.writeln(mask(l));
         out.add(l);
       }, onError: (Object e) {
         if (!_stopped) sink.writeln('ITEST_RUNNER logcat error: $e');
@@ -90,6 +93,9 @@ class Adb implements Shell {
     await start();
     return out.stream;
   }
+
+  static final _logTime = RegExp(r'^\d\d-\d\d \d\d:\d\d:\d\d\.\d{3}');
+  static String _same(String s) => s;
 
   Process? _logcat;
   StreamSubscription<String>? _sub;

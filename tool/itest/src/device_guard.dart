@@ -19,7 +19,10 @@ class DeviceGuard {
       final v = await _sh('settings get global $k');
       if (int.tryParse(v) != null) _original[k] = v;
     }
+    _screenWasOff = RegExp('Asleep|Dozing').hasMatch(await _sh('dumpsys power | grep -m1 mWakefulness='));
   }
+
+  var _screenWasOff = false;
 
   /// [undo] — команды отката, null — параметр вернулся в исходное. Откат
   /// регистрируется до команды: Ctrl+C посреди неё всё равно откатит.
@@ -79,6 +82,8 @@ class DeviceGuard {
   Future<void> parkApp() async {
     await _sh('am start -a android.intent.action.MAIN -c android.intent.category.HOME');
     await _sh('am force-stop $itestPackage');
+    // Прогон будит экран (screen(true), activity агента) — гасим, если был погашен.
+    if (_screenWasOff) await _sh('input keyevent SLEEP');
   }
 
   /// Откат всех изменённых параметров; дальше новые сбои не принимаются.

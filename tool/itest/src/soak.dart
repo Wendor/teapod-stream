@@ -8,6 +8,7 @@ import 'agent_client.dart';
 import 'device_guard.dart';
 import 'matrix.dart' show collectDiag, dumpGoroutines;
 import 'probes.dart';
+import 'report.dart' show maskSecrets;
 
 enum Fault {
   wifiLte('wifi-lte'),
@@ -107,6 +108,7 @@ class Soak {
   final String configId;
   final String core;
   final String? egress;
+  final bool strictEgress;
   final List<Fault> faults;
   final int repeat;
   final Duration duration;
@@ -117,6 +119,7 @@ class Soak {
   final _recent = ListQueue<String>();
   var _diagN = 0;
   var _onWifi = true;
+  var _lteOk = true;
 
   Soak({
     required this.agent,
@@ -129,6 +132,7 @@ class Soak {
     required this.configId,
     required this.core,
     required this.egress,
+    this.strictEgress = false,
     required this.faults,
     required this.repeat,
     required this.duration,
@@ -149,7 +153,9 @@ class Soak {
         fast ? probes.ip(u, timeout: const Duration(seconds: 5), retries: 0) : probes.ip(u);
     var (u, ip) = (url, await get(url));
     if (ip == null && urls.length > 1) (u, ip) = (urls[1], await get(urls[1]));
-    final ok = ip != null && (urls.isEmpty || ip != baseline.direct[u]);
+    // Вне Wi-Fi из baseline прямой IP другой — «не прямой» ещё не значит «через VPN».
+    final byEgress = egress != null && (strictEgress || !_onWifi);
+    final ok = ip != null && (byEgress ? ip == egress : urls.isEmpty || ip != baseline.direct[u]);
     final s = (t: DateTime.now(), ok: ok, appState: agent.lastState);
     _event('probe', {'ip': ip, 'ok': ok, 'onWifi': _onWifi, 'state': agent.lastState});
     return s;
@@ -192,7 +198,7 @@ class Soak {
     final d = Directory('${dir.path}/fault-${++_diagN}-${r.fault.cli}')..createSync(recursive: true);
     await dumpGoroutines(agent, d, (e) => _event('note', {'text': e}));
     await collectDiag(shell, d);
-    File('${d.path}/logcat.txt').writeAsStringSync('${_recent.join('\n')}\n');
+    File('${d.path}/logcat.txt').writeAsStringSync('${maskSecrets(_recent.join('\n'))}\n');
     File('${d.path}/result.json').writeAsStringSync(jsonEncode(r.toJson()));
   }
 
@@ -208,7 +214,7 @@ class Soak {
     switch (f) {
       case Fault.wifiLte:
         await device.wifi(false);
-        await _sample(const Duration(minutes: 1));
+        _lteOk = (await _sample(const Duration(minutes: 1))).any((s) => s.ok);
         await device.wifi(true);
       case Fault.offline10s || Fault.offline1m || Fault.offline5m:
         await device.airplane(true);
@@ -270,10 +276,13 @@ class Soak {
         if (!DateTime.now().isBefore(deadline) || (repeat > 1 && i >= schedule.length)) break;
         final f = schedule[i++ % schedule.length];
         final restoredAt = await _inject(f);
-        final r = classifyRecovery(
+        var r = classifyRecovery(
             fault: f,
             restoredAt: restoredAt,
             after: await _sample(const Duration(minutes: 3, seconds: 30), untilOk: true));
+        if (f == Fault.wifiLte && !_lteOk && r.verdict == Verdict.pass) {
+          r = FaultResult(f, Verdict.fail, null, 'no VPN traffic during the LTE minute', at: r.at);
+        }
         _report(r);
         if (r.verdict != Verdict.pass) {
           await _diag(r);

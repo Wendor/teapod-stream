@@ -167,6 +167,13 @@ Future<Outcome> _proxyOnly(CaseCtx c) async {
       strictEgress: c.strictEgress);
 }
 
+/// Опции, поддержанные не всеми ядрами (`CoreBackend.supports`): имя → ядра.
+/// xray-rust отвечает на ping сам, выключить ICMP в нём нельзя.
+const _coreOptions = {
+  'proxy-only': {'go'},
+  'icmp-off': {'go', 'box'},
+};
+
 /// Опционные кейсы: имя → (патч настроек, проверка).
 final Map<String, (Map<String, dynamic>, Check)> optionCases = {
   'route-sites-direct': (
@@ -222,6 +229,12 @@ final Map<String, (Map<String, dynamic>, Check)> optionCases = {
         ? (v: Verdict.pass, note: 'ping ok')
         : (v: Verdict.fail, note: 'ping failed'),
   ),
+  'icmp-off': (
+    {'allowIcmp': false},
+    (c) async => await c.probes.ping('1.1.1.1')
+        ? (v: Verdict.fail, note: 'ping passed with ICMP off')
+        : (v: Verdict.pass, note: 'ping blocked'),
+  ),
   'udp-off': ({'enableUdp': false}, _tunnelOnly),
   'quic-block': ({'blockQuic': true}, _tunnelOnly),
   'mux': ({'mux': {'enabled': true}}, _tunnelOnly),
@@ -259,7 +272,7 @@ List<MatrixCase> buildMatrix(
       if (coreOk(core))
         for (final c in configs.where((c) => c.id == refId))
           for (final MapEntry(key: name, value: (patch, check)) in optionCases.entries)
-            if (name != 'proxy-only' || core == 'go')
+            if (_coreOptions[name]?.contains(core) ?? true)
               MatrixCase('opt/${coreNames[core]}/$name', c.id, label(c), core, patch, check, owned[c.id] ?? false),
   ];
   return caseGlob == null ? cases : cases.where((c) => globMatch(caseGlob, c.id)).toList();

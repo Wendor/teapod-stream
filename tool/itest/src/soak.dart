@@ -139,12 +139,16 @@ class Soak {
   void _event(String kind, [Map<String, Object?> extra = const {}]) =>
       _timeline.writeln(jsonEncode({'t': DateTime.now().toIso8601String(), 'kind': kind, ...extra}));
 
-  Future<ProbeSample> _probe() async {
+  /// [fast] — замер восстановления: без повтора и с коротким таймаутом,
+  /// чтобы время восстановления не включало ретраи упавших попыток.
+  Future<ProbeSample> _probe({bool fast = false}) async {
     // Различимый сервис: ответ ≠ его прямому IP; иначе достаточно любого ответа.
     final urls = egress != null && egress == baseline.directRuIp ? const <String>[] : informative(baseline.direct, egress);
     final url = urls.isEmpty ? echoMain.first : urls.first;
-    var (u, ip) = (url, await probes.ip(url));
-    if (ip == null && urls.length > 1) (u, ip) = (urls[1], await probes.ip(urls[1]));
+    Future<String?> get(String u) =>
+        fast ? probes.ip(u, timeout: const Duration(seconds: 5), retries: 0) : probes.ip(u);
+    var (u, ip) = (url, await get(url));
+    if (ip == null && urls.length > 1) (u, ip) = (urls[1], await get(urls[1]));
     final ok = ip != null && (urls.isEmpty || ip != baseline.direct[u]);
     final s = (t: DateTime.now(), ok: ok, appState: agent.lastState);
     _event('probe', {'ip': ip, 'ok': ok, 'onWifi': _onWifi, 'state': agent.lastState});
@@ -156,10 +160,10 @@ class Soak {
     final out = <ProbeSample>[];
     final end = DateTime.now().add(d);
     while (DateTime.now().isBefore(end)) {
-      final s = await _probe();
+      final s = await _probe(fast: untilOk);
       out.add(s);
       if (untilOk && s.ok) break;
-      await Future<void>.delayed(probeInterval);
+      await Future<void>.delayed(untilOk ? const Duration(seconds: 2) : probeInterval);
     }
     return out;
   }

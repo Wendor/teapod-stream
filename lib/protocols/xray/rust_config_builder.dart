@@ -427,6 +427,8 @@ class RustConfigBuilder {
     outbounds.removeWhere((dynamic out) => out['tag'] == 'dialer-out');
     if (options.routing.adBlockEnabled) _blockAdsInDnsOutbound(result);
     final rules = (result['routing'] as Map)['rules'] as List<dynamic>;
+    // Выключенный UDP Go закрывает правилом socks-in; здесь его заменяет _blockTunUdp.
+    rules.removeWhere((dynamic r) => r['network'] == 'udp' && r['inboundTag']?.first == 'socks-in');
     for (final dynamic rule in rules) {
       final tags = rule['inboundTag'];
       if (tags is List && tags.contains('socks-in')) {
@@ -497,8 +499,8 @@ class RustConfigBuilder {
     return result;
   }
 
-  /// Go отбрасывает UDP/443 (и весь UDP при выключенном переключателе) в
-  /// tun2socks до xray. Здесь то же делает правило TUN → blackhole сразу после
+  /// Go отбрасывает UDP/443 в tun2socks до xray, а выключенный UDP — правилом
+  /// socks-in → blackhole (кроме порта 53). Здесь то же делает правило TUN → blackhole сразу после
   /// DNS-правил: порт 53 уже ушёл в dns-out, а DNS-модуль ядра (`dns-module`)
   /// и сам транспорт к серверу (QUIC Hysteria2, UDP Shadowsocks) не трогаются.
   /// Blackhole `none` молча гасит UDP-поток (без ICMP «порт недоступен»,

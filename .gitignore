@@ -64,3 +64,8 @@ AGENTS.md
 wiki/
 redesign/
 docs/superpowers/
+
+# Интеграционные тесты на устройстве (tool/itest)
+runs/
+tool/itest/secrets.json
+.superpowers/

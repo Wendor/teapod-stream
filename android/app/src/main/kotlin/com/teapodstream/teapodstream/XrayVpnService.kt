@@ -50,6 +50,7 @@ class XrayVpnService : VpnService() {
         const val ACTION_CONNECT = "com.teapodstream.CONNECT"
         const val ACTION_DISCONNECT = "com.teapodstream.DISCONNECT"
         const val ACTION_CONNECT_QUICK = "com.teapodstream.CONNECT_QUICK" // reconnect from notification
+        const val ACTION_ITEST_DROP = "com.teapodstream.ITEST_DROP" // itest: неожиданный обрыв
         const val EXTRA_XRAY_CONFIG = "xray_config"
         const val EXTRA_SOCKS_PORT = "socks_port"
         const val EXTRA_SOCKS_USER = "socks_user"
@@ -252,6 +253,8 @@ class XrayVpnService : VpnService() {
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     @Volatile private var lastUnderlyingNetwork: Network? = null
     @Volatile private var lastConnectedMs: Long = 0L
+    // Физическая сеть на момент connected — с ней сверяется отложенная проверка смены сети.
+    @Volatile private var connectedNetwork: Network? = null
     private var prefixProxy: PrefixTcpProxy? = null
     @Volatile private var showNotification = true
     @Volatile private var screenOn = true
@@ -264,6 +267,11 @@ class XrayVpnService : VpnService() {
     @Volatile private var blockQuicEnabled = false
     private var proxyOnlyMode = false
     private val networkChangeHandler = Handler(Looper.getMainLooper())
+    // Смена сессии (ACTION_CONNECT) и остановка по отложенному реконнекту — под одним
+    // замком: устаревший реконнект не остановит уже новую сессию.
+    private val sessionLock = Any()
+    // Среди отложенных событий была потеря VALIDATED — реконнект без сверки сети.
+    @Volatile private var pendingForce = false
     private var pendingNetworkRunnable: Runnable? = null
     private var heartbeatThread: Thread? = null
     private val heartbeatFailures = AtomicInteger(0)
@@ -321,6 +329,17 @@ class XrayVpnService : VpnService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_ITEST_DROP) {
+            // Только itest-сборка: обрыв по пути сбоя (explicit=false), как при
+            // неожиданной смерти туннеля — kill switch оставляет TUN-sink.
+            if (!BuildConfig.ITEST || !isRunning.get()) {
+                if (!isRunning.get()) stopSelf(startId)
+                return START_NOT_STICKY
+            }
+            log("warning", "itest: simulated unexpected drop")
+            Thread { stopVpn(resultState = "error", explicit = false) }.start()
+            return START_STICKY
+        }
         when (intent?.action) {
             ACTION_DISCONNECT -> {
                 // Пришли через startForegroundService (Tasker, MainActivity) в свежий
@@ -335,7 +354,7 @@ class XrayVpnService : VpnService() {
                 // Run cleanup off the main thread — Go calls (stopTun2Socks/stopXray)
                 // can block if goroutines are stuck after long uptime or network changes.
                 Thread {
-                    val stopThread = Thread { stopVpn(explicit = true) }
+                    val stopThread = Thread { synchronized(sessionLock) { stopVpn(explicit = true) } }
                     stopThread.start()
                     try {
                         stopThread.join(STOP_THREAD_TIMEOUT_MS)
@@ -393,10 +412,17 @@ class XrayVpnService : VpnService() {
                 Thread {
                     // Смена сервера/настроек на живом туннеле: старый TUN остаётся sink'ом
                     // до establish() нового — без явного disconnect и окна утечки.
-                    if (isRunning.get()) stopVpn(reconnecting = true)
-                    startVpn(xrayConfig, socksPort, socksUser, socksPassword,
-                        excludedPackages, includedPackages, vpnMode, ssPrefix, proxyOnly, killSwitch,
-                        allowIcmp, blockQuic, ipv6Enabled, mtu = mtu, engine = engine)
+                    synchronized(sessionLock) {
+                        // Пользователь успел отключиться, пока ждали замок.
+                        if (userRequestedDisconnect.get()) {
+                            log("info", "CONNECT cancelled: user disconnected meanwhile")
+                            return@Thread
+                        }
+                        if (isRunning.get()) stopVpn(reconnecting = true)
+                        startVpn(xrayConfig, socksPort, socksUser, socksPassword,
+                            excludedPackages, includedPackages, vpnMode, ssPrefix, proxyOnly, killSwitch,
+                            allowIcmp, blockQuic, ipv6Enabled, mtu = mtu, engine = engine)
+                    }
                 }.start()
                 return START_STICKY
             }
@@ -452,13 +478,15 @@ class XrayVpnService : VpnService() {
                             socksPassword = p
                         }
                         Thread {
-                            startVpn(
-                                configText,
-                                params.socksPort, socksUser, socksPassword,
-                                params.excludedPackages, params.includedPackages, params.vpnMode,
-                                params.ssPrefix, params.proxyOnly, params.killSwitch,
-                                params.allowIcmp, params.blockQuic, params.ipv6Enabled, mtu = params.mtu, isReconnect = true, engine = params.engine
-                            )
+                            startQuickLocked {
+                                startVpn(
+                                    configText,
+                                    params.socksPort, socksUser, socksPassword,
+                                    params.excludedPackages, params.includedPackages, params.vpnMode,
+                                    params.ssPrefix, params.proxyOnly, params.killSwitch,
+                                    params.allowIcmp, params.blockQuic, params.ipv6Enabled, mtu = params.mtu, isReconnect = true, engine = params.engine
+                                )
+                            }
                         }.start()
                     }
                 } else {
@@ -496,13 +524,15 @@ class XrayVpnService : VpnService() {
                     val configText = configFile.readText()
                     val (socksUser, socksPassword) = extractSocksFromConfig(configText, params.engine)
                     Thread {
-                        startVpn(
-                            configText,
-                            params.socksPort, socksUser, socksPassword,
-                            params.excludedPackages, params.includedPackages, params.vpnMode,
-                            params.ssPrefix, params.proxyOnly, params.killSwitch,
-                            params.allowIcmp, params.blockQuic, params.ipv6Enabled, mtu = params.mtu, isReconnect = true, engine = params.engine
-                        )
+                        startQuickLocked {
+                            startVpn(
+                                configText,
+                                params.socksPort, socksUser, socksPassword,
+                                params.excludedPackages, params.includedPackages, params.vpnMode,
+                                params.ssPrefix, params.proxyOnly, params.killSwitch,
+                                params.allowIcmp, params.blockQuic, params.ipv6Enabled, mtu = params.mtu, isReconnect = true, engine = params.engine
+                            )
+                        }
                     }.start()
                     return START_STICKY
                 } catch (e: Exception) {
@@ -821,6 +851,7 @@ class XrayVpnService : VpnService() {
         lastConnectedMs = 0L
         pendingNetworkRunnable?.let { networkChangeHandler.removeCallbacks(it) }
         pendingNetworkRunnable = null
+        pendingForce = false
 
         var keptTunAsSink = false
         try {
@@ -1041,7 +1072,7 @@ class XrayVpnService : VpnService() {
                     // Trigger if network changed (prev→current) OR if prev was null but we now
                     // have a network (covers WiFi→LTE when onLost fired before onAvailable).
                     if (current != null && prev != current) {
-                        scheduleNetworkChanged()
+                        scheduleNetworkChanged(switched = true)
                     }
                 }
 
@@ -1064,7 +1095,7 @@ class XrayVpnService : VpnService() {
                     }
                     updateUnderlyingNetworks(cm)
                     if (prev != null && lastUnderlyingNetwork != null && prev != lastUnderlyingNetwork) {
-                        scheduleNetworkChanged()
+                        scheduleNetworkChanged(switched = true)
                     }
                 }
 
@@ -1074,12 +1105,18 @@ class XrayVpnService : VpnService() {
                 ) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                         if (cm.activeNetwork == network) {
+                            val prev = lastUnderlyingNetwork
                             updateUnderlyingNetworks(cm)
                             // Captive portal / temporary internet loss: VALIDATED is removed
                             // without triggering onLost/onAvailable — detect and reconnect.
                             val validated = networkCapabilities.hasCapability(
                                 NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                            // Сеть стала основной уже после onAvailable (LTE → Wi-Fi после
+                            // режима полёта): сокеты ядра остались на прежней сети.
+                            val switched = prev != null && lastUnderlyingNetwork != null &&
+                                prev != lastUnderlyingNetwork
                             if (!validated) scheduleNetworkChanged()
+                            else if (switched) scheduleNetworkChanged(switched = true)
                         }
                     }
                 }
@@ -1150,30 +1187,63 @@ class XrayVpnService : VpnService() {
         }
     }
 
-    private fun scheduleNetworkChanged() {
+    /// [switched] — сменилась физическая сеть: перед реконнектом сверяемся с сетью,
+    /// на которой подключились (вернулись на неё — сокеты ядра живы, реконнект не нужен).
+    private fun scheduleNetworkChanged(switched: Boolean = false) {
         // Only reconnect when fully connected — prevents spurious reconnects during the
         // initial startVpn() phase when onAvailable fires right after registration.
         if (currentNativeState != "connected") return
         // On mobile data Android fires onAvailable/onCapabilitiesChanged right after VPN
-        // connects, causing an immediate false reconnect loop. Ignore changes within 5s of
-        // connection — real network switches happen on a longer timescale.
-        val msSinceConnect = System.currentTimeMillis() - lastConnectedMs
-        if (lastConnectedMs > 0 && msSinceConnect < 5_000L) {
-            log("debug", "Network change: ignored (VPN just connected ${msSinceConnect}ms ago)")
-            return
-        }
-        log("info", "Network change: reconnect scheduled in ${RECONNECT_DEBOUNCE_MS}ms")
+        // connects. В первые 5 с не реконнектимся сразу: по окончании окна сверяем
+        // физическую сеть с сетью подключения — настоящая смена не теряется.
+        val session = lastConnectedMs
+        val msSinceConnect = System.currentTimeMillis() - session
+        val settling = session > 0 && msSinceConnect < 5_000L
+        // Потеря VALIDATED вне окна — реконнект обязателен, даже если следом придёт
+        // событие смены сети и сеть окажется прежней.
+        if (!switched && !settling) pendingForce = true
+        val checkNetwork = (switched || settling) && !pendingForce
+        val delay = if (settling) 5_000L - msSinceConnect + RECONNECT_DEBOUNCE_MS else RECONNECT_DEBOUNCE_MS
+        log(if (settling) "debug" else "info",
+            "Network change: ${if (checkNetwork) "check" else "reconnect"} scheduled in ${delay}ms")
         pendingNetworkRunnable?.let { networkChangeHandler.removeCallbacks(it) }
-        val r = Runnable { reconnectInternal() }
+        val r = Runnable {
+            val force = pendingForce
+            pendingForce = false
+            if (currentNativeState != "connected" || lastConnectedMs != session) return@Runnable
+            if (checkNetwork && !force) {
+                val now = findPhysicalNetwork() ?: return@Runnable
+                if (now == connectedNetwork) {
+                    log("debug", "Network change: still on $now, no reconnect")
+                    return@Runnable
+                }
+                log("info", "Network change: ${connectedNetwork ?: "unknown"} → $now, reconnecting")
+            }
+            reconnectInternal(session)
+        }
         pendingNetworkRunnable = r
-        networkChangeHandler.postDelayed(r, RECONNECT_DEBOUNCE_MS)
+        networkChangeHandler.postDelayed(r, delay)
     }
 
-    private fun reconnectInternal() {
+    /// Перезапуск по сохранённым параметрам (CONNECT_QUICK, рестарт системой) — под
+    /// [sessionLock], как ACTION_CONNECT и остановки: не начнётся, пока идёт остановка
+    /// старой сессии, и не стартует поверх живой или после отключения пользователем.
+    private fun startQuickLocked(start: () -> Unit) = synchronized(sessionLock) {
+        if (userRequestedDisconnect.get() || isRunning.get()) {
+            log("info", "quick start skipped (disconnected by user or already running)")
+            return@synchronized
+        }
+        start()
+    }
+
+    /// [session] — `lastConnectedMs` сессии, для которой запланирован реконнект;
+    /// новая сессия (ACTION_CONNECT) отменяет его. 0 — без привязки.
+    private fun reconnectInternal(session: Long = 0L) {
         if (userRequestedDisconnect.get()) return
         if (!isRunning.get()) return
         networkChangeHandler.post {
             if (userRequestedDisconnect.get() || !isRunning.get()) return@post
+            if (session != 0L && lastConnectedMs != session) return@post
             log("info", "reconnectInternal: starting reconnect cycle")
             reconnectAttempts.set(0)
             Thread {
@@ -1185,7 +1255,14 @@ class XrayVpnService : VpnService() {
                         .also { it.acquire(40_000) }
                 } catch (_: Exception) { null }
                 try {
-                    stopVpn(resultState = "connecting", reconnecting = true)
+                    val stopped = synchronized(sessionLock) {
+                        if (session != 0L && lastConnectedMs != session) false
+                        else { stopVpn(resultState = "connecting", reconnecting = true); true }
+                    }
+                    if (!stopped) {
+                        log("info", "reconnectInternal: session replaced, skipped")
+                        return@Thread
+                    }
                     log("info", "reconnectInternal: waiting for direct internet (deadline +30s)")
                     val deadline = System.currentTimeMillis() + 30_000
                     while (!userRequestedDisconnect.get() && System.currentTimeMillis() < deadline) {
@@ -1689,6 +1766,7 @@ class XrayVpnService : VpnService() {
         val now = System.currentTimeMillis()
         connectedAtMs = now
         lastConnectedMs = now
+        connectedNetwork = lastUnderlyingNetwork
         _socksCredentials.set(SocksCredentials(socksPort, socksUser, socksPassword))
         // Save credentials to file for CONNECT_QUICK reconnect
         try {

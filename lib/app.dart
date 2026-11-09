@@ -18,6 +18,8 @@ import 'providers/geo_provider.dart';
 import 'providers/theme_provider.dart';
 import 'core/services/deeplink_handler.dart';
 import 'protocols/xray/xray_engine.dart';
+import 'itest/itest_agent.dart';
+import 'itest/itest_protocol.dart';
 
 /// Индекс активной вкладки. Отдельный provider, чтобы экраны
 /// (например, Home при пустом списке конфигов) могли переключать вкладку.
@@ -94,6 +96,7 @@ class _AppShellState extends ConsumerState<_AppShell>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (kItest) ItestAgent.start(ProviderScope.containerOf(context, listen: false));
       ref.read(vpnProvider.notifier).syncNativeState();
       ref.read(vpnProvider.notifier).pingStaleConfigs();
       ref.read(geoProvider.notifier).check();

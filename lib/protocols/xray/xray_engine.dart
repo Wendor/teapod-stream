@@ -48,6 +48,7 @@ class XrayEngine implements VpnEngine {
 
   Map<String, Object?> _connectArgs(String xrayConfig, VpnConfig config, VpnEngineOptions options) => {
         'engine': backend.kind.nativeId,
+        'configName': config.name,
         'xrayConfig': xrayConfig,
         'socksPort': options.socksPort,
         'socksUser': options.socksUser,

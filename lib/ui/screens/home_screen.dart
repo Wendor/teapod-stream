@@ -72,8 +72,11 @@ class HomeScreen extends ConsumerWidget {
                 pingMs: pingMs,
                 canToggle: canToggle,
                 onToggle: () => ref.read(vpnProvider.notifier).toggle(),
-                // Без конфигов кнопка ведёт на вкладку «Конфиги»
-                onDisabledTap: () => ref.read(tabIndexProvider.notifier).set(1),
+                // Без конфигов кнопка ведёт на вкладку «Конфиги»; пока они грузятся
+                // (сразу после запуска) — ничего, иначе тап «Подключить» уводил туда (#151).
+                onDisabledTap: () {
+                  if (ref.read(configProvider).hasValue) ref.read(tabIndexProvider.notifier).set(1);
+                },
                 coreLine: core == null
                     ? null
                     : _CoreLine(t: t, core: core, onTap: () => showCoreSheet(context, effectiveConfig!)),

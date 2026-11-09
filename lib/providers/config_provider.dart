@@ -7,6 +7,7 @@ import '../core/services/subscription_service.dart' show SubscriptionService, Su
 import '../core/services/device_service.dart';
 import '../core/services/log_service.dart';
 import 'settings_provider.dart';
+import 'vpn_provider.dart';
 
 class ConfigState {
   final List<VpnConfig> configs;
@@ -267,7 +268,8 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
   Future<(List<VpnConfig>, SubscriptionFetchResult)> _fetchAndTagConfigs(String url, String subId, {bool allowSelfSigned = false, String? pinnedCertDer, HwidDeviceInfo? hwid, String? userAgent}) async {
     final svc = SubscriptionService();
     final result = await svc.fetchSubscription(url,
-        allowSelfSigned: allowSelfSigned, pinnedCertDer: pinnedCertDer, hwid: hwid, userAgent: userAgent);
+        allowSelfSigned: allowSelfSigned, pinnedCertDer: pinnedCertDer, hwid: hwid, userAgent: userAgent,
+        socks: ref.read(tunnelSocksProvider));
     final tagged = result.configs.map((c) => c.copyWith(subscriptionId: subId)).toList();
     return (tagged, result);
   }

@@ -10,6 +10,7 @@ import 'package:teapodstream/core/models/vpn_log_entry.dart';
 import 'package:teapodstream/core/services/config_storage_service.dart';
 import 'package:teapodstream/core/services/log_service.dart';
 import 'package:teapodstream/providers/config_provider.dart';
+import 'package:teapodstream/providers/vpn_provider.dart';
 
 import '../helpers/local_server.dart';
 
@@ -59,7 +60,7 @@ void main() {
     await storage.savePins(pins);
     await storage.saveActiveConfigId(activeId);
     await storage.saveActiveSubscriptionId(activeSubId);
-    c = ProviderContainer();
+    c = ProviderContainer(overrides: [tunnelSocksProvider.overrideWithValue(null)]);
     addTearDown(c.dispose);
     await c.read(configProvider.future);
   }

@@ -12,6 +12,7 @@ import '../core/models/heartbeat_settings.dart';
 import '../core/models/vpn_log_entry.dart';
 import '../core/services/log_service.dart';
 import '../core/services/settings_service.dart';
+import '../core/services/tunnel_socks.dart';
 import '../protocols/xray/xray_engine.dart';
 import '../core/cores/core_resolver.dart';
 import '../core/cores/engine_options.dart';
@@ -48,6 +49,11 @@ class VpnState2 {
   bool get isBlocked => connectionState == VpnState.blocked;
   bool get isBusy => isConnecting || isDisconnecting;
 
+  /// SOCKS туннеля для собственных загрузок приложения; null — VPN не подключён.
+  TunnelSocks? get tunnelSocks => isConnected && activeSocksPort > 0
+      ? TunnelSocks(activeSocksPort, activeSocksUser, activeSocksPassword)
+      : null;
+
   VpnState2 copyWith({
     VpnState? connectionState,
     VpnStats? stats,
@@ -68,6 +74,9 @@ class VpnState2 {
     );
   }
 }
+
+/// SOCKS туннеля для собственных загрузок (подписки, гео-базы); null — VPN не подключён.
+final tunnelSocksProvider = Provider<TunnelSocks?>((ref) => ref.watch(vpnProvider).tunnelSocks);
 
 class VpnNotifier extends Notifier<VpnState2> {
   late final XrayEngine _engine;

@@ -108,6 +108,7 @@ class MainActivity : FlutterActivity() {
                                 heartbeatThreshold = heartbeatThreshold, heartbeatUrl = heartbeatUrl,
                                 engine = engine, mtu = mtu,
                             )
+                            VpnTileService.saveConfigName(this, call.argument<String>("configName"))
                             result.success(null)
                         }
                         // Proxy-only: no TUN tunnel, no VPN permission needed
@@ -161,6 +162,7 @@ class MainActivity : FlutterActivity() {
                             put("user", call.argument<String>("socksUser") ?: "")
                             put("pass", call.argument<String>("socksPassword") ?: "")
                         }.toString())
+                        VpnTileService.saveConfigName(this, call.argument<String>("configName"))
                         result.success(true)
                     }
 
@@ -172,6 +174,7 @@ class MainActivity : FlutterActivity() {
                         for (name in listOf("xray_config.json", "last_connection_meta.json", "socks_creds.json")) {
                             File(filesDir, name).delete()
                         }
+                        VpnTileService.saveConfigName(this, null)
                         result.success(true)
                     }
 

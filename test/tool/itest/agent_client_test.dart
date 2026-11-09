@@ -66,7 +66,8 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     logcat.add('TEAPOD_ITEST {"id":"${_id(shell.calls.first)}","ok":true,"file":"/data/user/0/p/files/itest_x.json"}');
     expect(await f, [1, 2, 3]);
-    expect(shell.calls.last, contains('run-as $itestPackage cat /data/user/0/p/files/itest_x.json'));
+    expect(shell.calls, contains(contains('run-as $itestPackage cat /data/user/0/p/files/itest_x.json')));
+    expect(shell.calls.last, contains('rm -f /data/user/0/p/files/itest_x.json'), reason: 'reply file is removed');
   });
 
   test('waitState completes on native state marker', () async {

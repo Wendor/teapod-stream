@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:teapodstream/core/models/core_kind.dart';
 import 'package:teapodstream/itest/itest_agent.dart';
 import 'package:teapodstream/providers/config_provider.dart';
 import 'package:teapodstream/providers/settings_provider.dart';
@@ -50,6 +51,19 @@ void main() {
     final r = await agent.handle({'id': '3', 'op': 'connect', 'configId': id, 'core': 'go'});
     expect(r['ok'], isFalse);
     expect(native.named('connect'), isEmpty);
+  });
+
+  test('connect pins the core, activates the profile and calls native connect', () async {
+    await agent.handle({'id': '1', 'op': 'import', 'uris': [_vless, _hy2]});
+    final rows = ((await agent.handle({'id': '2', 'op': 'list'}))['data'] as List).cast<Map>();
+    final id = rows.firstWhere((r) => r['name'] == 'H1')['id'] as String;
+    final r = await agent.handle({'id': '3', 'op': 'connect', 'configId': id, 'core': 'box'});
+    expect(r['ok'], isTrue, reason: '$r');
+    final state = container.read(configProvider).value!;
+    expect(state.activeConfigId, id);
+    expect(state.activeSubscriptionId, isNull);
+    expect(state.activeConfig!.core, CoreKind.singBox);
+    expect(native.named('connect'), hasLength(1));
   });
 
   test('reset clears configs unless keepConfigs and applies settings', () async {

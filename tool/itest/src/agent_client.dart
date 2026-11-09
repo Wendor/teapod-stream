@@ -80,6 +80,7 @@ class AgentClient {
     });
     if (m['file'] is String) {
       final r = await shell.run(['shell', 'run-as $pkg cat ${m['file']}']);
+      unawaited(shell.run(['shell', 'run-as $pkg rm -f ${m['file']}']));
       m = jsonDecode(r.out) as Map<String, dynamic>;
     }
     if (m['ok'] != true) throw ItestAgentError('$op: ${m['error']}');

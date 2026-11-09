@@ -129,6 +129,15 @@ void main() {
     });
   });
 
+  test('reachable: HTTP status → true, 000 → false, no/garbled status → null', () async {
+    Future<bool?> r(String out) => Probes(FakeShell({'curl': out})).reachable('https://x');
+    expect(await r('204'), isTrue);
+    expect(await r('000'), isFalse);
+    expect(await r(''), isNull);
+    expect(await r('error: device offline'), isNull);
+    expect(await r('99'), isNull);
+  });
+
   test('dnsResolverIp parses edns.ip-api.com', () async {
     final p = Probes(FakeShell({'edns': '{"dns":{"geo":"X","ip":"74.125.1.1"}}'}));
     expect(await p.dnsResolver(), (ip: '74.125.1.1', geo: 'X'));

@@ -267,6 +267,11 @@ class XrayVpnService : VpnService() {
     @Volatile private var blockQuicEnabled = false
     private var proxyOnlyMode = false
     private val networkChangeHandler = Handler(Looper.getMainLooper())
+    // Смена сессии (ACTION_CONNECT) и остановка по отложенному реконнекту — под одним
+    // замком: устаревший реконнект не остановит уже новую сессию.
+    private val sessionLock = Any()
+    // Среди отложенных событий была потеря VALIDATED — реконнект без сверки сети.
+    @Volatile private var pendingForce = false
     private var pendingNetworkRunnable: Runnable? = null
     private var heartbeatThread: Thread? = null
     private val heartbeatFailures = AtomicInteger(0)
@@ -407,10 +412,12 @@ class XrayVpnService : VpnService() {
                 Thread {
                     // Смена сервера/настроек на живом туннеле: старый TUN остаётся sink'ом
                     // до establish() нового — без явного disconnect и окна утечки.
-                    if (isRunning.get()) stopVpn(reconnecting = true)
-                    startVpn(xrayConfig, socksPort, socksUser, socksPassword,
-                        excludedPackages, includedPackages, vpnMode, ssPrefix, proxyOnly, killSwitch,
-                        allowIcmp, blockQuic, ipv6Enabled, mtu = mtu, engine = engine)
+                    synchronized(sessionLock) {
+                        if (isRunning.get()) stopVpn(reconnecting = true)
+                        startVpn(xrayConfig, socksPort, socksUser, socksPassword,
+                            excludedPackages, includedPackages, vpnMode, ssPrefix, proxyOnly, killSwitch,
+                            allowIcmp, blockQuic, ipv6Enabled, mtu = mtu, engine = engine)
+                    }
                 }.start()
                 return START_STICKY
             }
@@ -835,6 +842,7 @@ class XrayVpnService : VpnService() {
         lastConnectedMs = 0L
         pendingNetworkRunnable?.let { networkChangeHandler.removeCallbacks(it) }
         pendingNetworkRunnable = null
+        pendingForce = false
 
         var keptTunAsSink = false
         try {
@@ -1182,14 +1190,19 @@ class XrayVpnService : VpnService() {
         val session = lastConnectedMs
         val msSinceConnect = System.currentTimeMillis() - session
         val settling = session > 0 && msSinceConnect < 5_000L
-        val checkNetwork = switched || settling
+        // Потеря VALIDATED вне окна — реконнект обязателен, даже если следом придёт
+        // событие смены сети и сеть окажется прежней.
+        if (!switched && !settling) pendingForce = true
+        val checkNetwork = (switched || settling) && !pendingForce
         val delay = if (settling) 5_000L - msSinceConnect + RECONNECT_DEBOUNCE_MS else RECONNECT_DEBOUNCE_MS
         log(if (settling) "debug" else "info",
             "Network change: ${if (checkNetwork) "check" else "reconnect"} scheduled in ${delay}ms")
         pendingNetworkRunnable?.let { networkChangeHandler.removeCallbacks(it) }
         val r = Runnable {
+            val force = pendingForce
+            pendingForce = false
             if (currentNativeState != "connected" || lastConnectedMs != session) return@Runnable
-            if (checkNetwork) {
+            if (checkNetwork && !force) {
                 val now = findPhysicalNetwork() ?: return@Runnable
                 if (now == connectedNetwork) {
                     log("debug", "Network change: still on $now, no reconnect")
@@ -1222,7 +1235,14 @@ class XrayVpnService : VpnService() {
                         .also { it.acquire(40_000) }
                 } catch (_: Exception) { null }
                 try {
-                    stopVpn(resultState = "connecting", reconnecting = true)
+                    val stopped = synchronized(sessionLock) {
+                        if (session != 0L && lastConnectedMs != session) false
+                        else { stopVpn(resultState = "connecting", reconnecting = true); true }
+                    }
+                    if (!stopped) {
+                        log("info", "reconnectInternal: session replaced, skipped")
+                        return@Thread
+                    }
                     log("info", "reconnectInternal: waiting for direct internet (deadline +30s)")
                     val deadline = System.currentTimeMillis() + 30_000
                     while (!userRequestedDisconnect.get() && System.currentTimeMillis() < deadline) {

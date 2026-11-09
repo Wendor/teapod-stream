@@ -121,6 +121,7 @@ class Soak {
   var _onWifi = true;
   var _lteOk = true;
   String? _tunnelIp;
+  List<String>? _faultLog;
 
   Soak({
     required this.agent,
@@ -201,7 +202,12 @@ class Soak {
   Future<void> _diag(FaultResult r) async {
     final d = Directory('${dir.path}/fault-${++_diagN}-${r.fault.cli}')..createSync(recursive: true);
     await dumpGoroutines(agent, d, (e) => _event('note', {'text': e}));
-    await collectDiag(shell, d);
+    try {
+      await collectDiag(shell, d);
+    } catch (e) {
+      // Без диагностики результат всё равно должен попасть в отчёт.
+      _event('note', {'text': 'diag: $e'});
+    }
     File('${d.path}/logcat.txt').writeAsStringSync('${maskSecrets(_recent.join('\n'))}\n');
     File('${d.path}/result.json').writeAsStringSync(jsonEncode(r.toJson()));
   }
@@ -239,6 +245,7 @@ class Soak {
         await device.stayAwake(true);
         await device.whitelist(itestPackage, true);
       case Fault.killApp:
+        _faultLog = [];
         await device.killApp(itestPackage);
         // Убитый процесс маркеров не шлёт: прежнее `connected` дало бы ложный ZOMBIE.
         agent.lastState = null;
@@ -253,6 +260,7 @@ class Soak {
   Future<void> run() async {
     final sub = logcat.listen((l) {
       _recent.addLast(l);
+      _faultLog?.add(l);
       if (_recent.length > 20000) _recent.removeFirst();
     });
     final deadline = DateTime.now().add(duration);
@@ -284,9 +292,14 @@ class Soak {
             fault: f,
             restoredAt: restoredAt,
             after: await _sample(const Duration(minutes: 3, seconds: 30), untilOk: true));
-        // Ни одного маркера после kill — Android не перезапустил сервис (его гонка
-        // с системным Vpn); без always-on VPN это поведение ОС, не приложения.
-        if (f == Fault.killApp && r.verdict != Verdict.pass && agent.lastState == null) {
+        // Android не перезапустил сервис — его гонка с системным Vpn (отвязка до
+        // обработки смерти процесса); без always-on VPN это поведение ОС. Только
+        // при подтверждении в logcat, иначе провал остаётся FAIL.
+        final log = _faultLog ?? const <String>[];
+        _faultLog = null;
+        final osRace = log.any((l) => l.contains('Exception when unbinding service $itestPackage/')) &&
+            !log.any((l) => l.contains('Scheduling restart of crashed service $itestPackage/'));
+        if (f == Fault.killApp && r.verdict != Verdict.pass && agent.lastState == null && osRace) {
           r = FaultResult(f, Verdict.skip, null, 'Android did not restart the service (always-on VPN off)', at: r.at);
         }
         if (f == Fault.wifiLte && !_lteOk && r.verdict == Verdict.pass) {

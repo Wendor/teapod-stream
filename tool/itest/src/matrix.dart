@@ -237,9 +237,12 @@ final Map<String, (Map<String, dynamic>, Check)> optionCases = {
   ),
   'icmp-off': (
     {'allowIcmp': false},
-    (c) async => await c.probes.ping('1.1.1.1')
-        ? (v: Verdict.fail, note: 'ping passed with ICMP off')
-        : (v: Verdict.pass, note: 'ping blocked'),
+    // Без VPN 1.1.1.1 не отвечает на ping — блокировку проверить нечем.
+    (c) async => c.baseline.ping == false
+        ? (v: Verdict.skip, note: 'no direct ping to 1.1.1.1')
+        : await c.probes.ping('1.1.1.1')
+            ? (v: Verdict.fail, note: 'ping passed with ICMP off')
+            : (v: Verdict.pass, note: 'ping blocked'),
   ),
   'udp-off': ({'enableUdp': false}, _tunnelOnly),
   'quic-block': ({'blockQuic': true}, _tunnelOnly),

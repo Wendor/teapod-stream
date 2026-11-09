@@ -73,9 +73,13 @@ object ItestBridge {
             // Дамп горутин Go до disconnect: зависание видно только пока ядро живо.
             // Ответ длинный — файлом, как у агента (раннер читает через run-as).
             val id = json.optString("id")
-            val file = File(context.filesDir, "itest_$id.json")
-            file.writeText(JSONObject(mapOf("id" to id, "ok" to true, "data" to Teapodcore.dumpGoroutines())).toString())
-            emit(mapOf("id" to id, "ok" to true, "file" to file.path))
+            try {
+                val file = File(context.filesDir, "itest_$id.json")
+                file.writeText(JSONObject(mapOf("id" to id, "ok" to true, "data" to Teapodcore.dumpGoroutines())).toString())
+                emit(mapOf("id" to id, "ok" to true, "file" to file.path))
+            } catch (e: Exception) {
+                emit(mapOf("id" to id, "ok" to false, "error" to "goroutines: ${e.message}"))
+            }
             return true
         }
         main.post {

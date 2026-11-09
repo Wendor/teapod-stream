@@ -109,12 +109,16 @@ class Baseline {
   final String? directRuIp;
   final Resolver? dnsResolver;
 
-  const Baseline(this.direct, this.directRuIp, this.dnsResolver);
+  /// Ответил ли 1.1.1.1 на ping без VPN (контроль для icmp-off); null — не мерили.
+  final bool? ping;
+
+  const Baseline(this.direct, this.directRuIp, this.dnsResolver, {this.ping});
 
   Map<String, Object?> toJson() => {
         'direct': direct,
         'directRuIp': directRuIp,
         'dnsResolver': dnsResolver == null ? null : {'ip': dnsResolver!.ip, 'geo': dnsResolver!.geo},
+        'ping': ping,
       };
 }
 
@@ -122,7 +126,8 @@ class Baseline {
 Future<Baseline> measureBaseline(Probes p) async {
   final ips = await p.ips(echoMain);
   return Baseline({for (var i = 0; i < echoMain.length; i++) echoMain[i]: ips[i]},
-      await p.ip(echoRu), await p.dnsResolver());
+      await p.ip(echoRu), await p.dnsResolver(),
+      ping: await p.ping('1.1.1.1'));
 }
 
 /// Сервисы, по которым туннель с выходом [egress] отличим от прямого пути.

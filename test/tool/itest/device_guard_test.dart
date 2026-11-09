@@ -69,13 +69,40 @@ void main() {
     expect(() => g.airplane(true), throwsStateError);
   });
 
-  test('snapshot with empty answers keeps wifi untouched on restore', () async {
+  test('unknown original wifi state: the fault is refused, nothing to restore', () async {
     final s = FakeShell();
     final g = DeviceGuard(s);
     await g.snapshot();
-    await g.wifi(false);
+    await expectLater(g.wifi(false), throwsStateError);
+    expect(s.calls, isNot(contains(contains('set-wifi-enabled'))));
     s.calls.clear();
     await g.restore();
     expect(s.calls, isEmpty, reason: 'unknown original state must not be "restored" by guessing');
+  });
+
+  test('failed restore command is kept and retried, others still run', () async {
+    final s = FakeShell({'settings get global wifi_on': '1', 'settings get global airplane_mode_on': '0'});
+    final g = DeviceGuard(s);
+    await g.snapshot();
+    await g.wifi(false);
+    await g.airplane(true);
+    s.codes.addAll([1, 0]); // откат wifi падает, airplane — нет
+    await g.restore();
+    s.calls.clear();
+    await g.restore();
+    expect(s.calls.where((c) => c.contains('set-wifi-enabled enabled')), hasLength(1));
+    expect(s.calls.where((c) => c.contains('airplane-mode')), isEmpty);
+  });
+
+  test('a failed command back to the original keeps the undo', () async {
+    final s = FakeShell({'settings get global airplane_mode_on': '0'});
+    final g = DeviceGuard(s);
+    await g.snapshot();
+    await g.airplane(true);
+    s.codes.add(1);
+    await expectLater(g.airplane(false), throwsStateError);
+    s.calls.clear();
+    await g.restore();
+    expect(s.calls, [contains('airplane-mode disable')]);
   });
 }

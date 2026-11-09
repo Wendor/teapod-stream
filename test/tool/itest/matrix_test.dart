@@ -24,7 +24,7 @@ void main() {
 
   test('config filter is a case-insensitive glob over names', () {
     final ids = buildMatrix(configs, owned: {}, configGlob: 'REAL*').map((c) => c.id);
-    expect(ids, everyElement(endsWith('/reality')));
+    expect(ids, unorderedEquals(['base/xray-core/reality', 'base/xray-rust/reality', 'base/sing-box/reality']));
   });
 
   test('option cases only for cores with a reference config', () {

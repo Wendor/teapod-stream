@@ -33,11 +33,16 @@ class ItestAgent {
 
   static void start(ProviderContainer container) {
     final agent = ItestAgent(container);
+    // Раннер повторяет `am start` с тем же id, если adb завис: повтор не должен
+    // выполнить команду (например, import) второй раз — отдаём тот же ответ.
+    final seen = <String, Future<Map<String, Object?>>>{};
     _channel.setMethodCallHandler((call) async {
       if (call.method != 'command') return;
-      final resp = await agent.handle(jsonDecode(call.arguments as String) as Map<String, dynamic>);
+      final cmd = jsonDecode(call.arguments as String) as Map<String, dynamic>;
+      final resp = await (seen['${cmd['id']}'] ??= agent.handle(cmd));
+      if (seen.length > 64) seen.remove(seen.keys.first);
       final line = itestMarker(resp);
-      if (line.length <= _maxInline) {
+      if (utf8.encode(line).length <= _maxInline) {
         debugPrint(line);
         return;
       }

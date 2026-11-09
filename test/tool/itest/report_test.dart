@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -48,6 +49,17 @@ void main() {
     expect(m, isNot(contains('p@ss')));
     expect(m, isNot(contains('"u1"')));
     expect(m, contains('"value":"connected"'));
+  });
+
+  test('report.json stays valid JSON after masking', () {
+    final r = RunReport(RunDir(tmp))
+      ..add(const CaseResult('x', Verdict.fail, 'sub https://h/sub/TOKEN and k?token=abc', Duration.zero, 'd'))
+      ..note('import vless://uuid@h:1?pbk=KEY');
+    r.write();
+    final j = jsonDecode(File('${tmp.path}/report.json').readAsStringSync());
+    expect(j, isA<Map>());
+    expect(jsonEncode(j), isNot(contains('TOKEN')));
+    expect(jsonEncode(j), isNot(contains('abc')));
   });
 
   test('ids that normalize to the same dir get distinct dirs', () {

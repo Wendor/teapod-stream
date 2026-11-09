@@ -67,28 +67,39 @@ class Adb implements Shell {
   Future<Stream<String>> logcat(IOSink sink, {String Function(String) mask = _same}) async {
     await run(['logcat', '-c']);
     final out = StreamController<String>.broadcast();
-    String? last, lastLine;
+    // Позиция: время последней строки и сколько строк с этим временем уже отдано.
+    String? last;
+    var sameTime = 0;
     Future<void> start() async {
       if (_stopped) return;
       final p = await Process.start(
           'adb', ['-s', serial, 'logcat', '-v', 'threadtime', if (last != null) ...['-T', last!]]);
       _logcat = p;
-      // После перезапуска с `-T` повторяются строки до последней полученной
-      // включительно — их пропускаем, иначе старый маркер состояния сочтётся новым.
-      var replay = last != null;
+      // После перезапуска с `-T` повторяются строки с времени последней полученной:
+      // пропускаем более ранние и уже отданные с тем же временем, иначе старый
+      // маркер состояния сочтётся новым. Новые строки с тем же временем проходят.
+      final replayFrom = last;
+      var replaySkip = sameTime;
       _sub = p.stdout.transform(_utf8).transform(const LineSplitter()).listen((l) {
         if (_stopped) return;
         final t = _logTime.firstMatch(l)?[0];
-        if (replay) {
-          if (t != null && t.compareTo(last!) > 0) {
-            replay = false;
-          } else {
-            if (l == lastLine) replay = false;
-            return;
+        if (replayFrom != null) {
+          if (t == null) {
+            if (replaySkip >= 0) return; // заголовки logcat до первой новой строки
+          } else if (replaySkip >= 0) {
+            final c = t.compareTo(replayFrom);
+            if (c < 0) return;
+            if (c == 0 && replaySkip > 0) {
+              replaySkip--;
+              return;
+            }
+            replaySkip = -1;
           }
         }
-        if (t != null) last = t;
-        lastLine = l;
+        if (t != null) {
+          sameTime = t == last ? sameTime + 1 : 1;
+          last = t;
+        }
         sink.writeln(mask(l));
         out.add(l);
       }, onError: (Object e) {

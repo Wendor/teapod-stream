@@ -367,6 +367,21 @@ void main() {
       expect((cfg['outbounds'] as List).map((o) => o['tag']), contains(XrayConfigBuilder.blackholeTag));
     });
 
+    test('mergeWithRaw puts the UDP block before server rules that route UDP to freedom', () {
+      final raw = {
+        'inbounds': [{'tag': 'socks', 'protocol': 'socks', 'port': 1080}],
+        'outbounds': [{'tag': 'out', 'protocol': 'freedom'}],
+        'routing': {'rules': [{'type': 'field', 'network': 'tcp,udp', 'outboundTag': 'out'}]},
+      };
+      final cfg = jsonDecode(XrayConfigBuilder.mergeWithRaw(jsonEncode(raw), _defaultOptions(enableUdp: false)))
+          as Map<String, dynamic>;
+      final rules = (cfg['routing']['rules'] as List).cast<Map>();
+      final blockAt = rules.indexWhere((r) => r['outboundTag'] == XrayConfigBuilder.blackholeTag);
+      final serverAt = rules.indexWhere((r) => r['outboundTag'] == 'out');
+      expect(blockAt, greaterThanOrEqualTo(0));
+      expect(blockAt, lessThan(serverAt));
+    });
+
     test('mergeWithRaw keeps a server outbound that took our tag and blocks UDP via a free tag', () {
       const tag = XrayConfigBuilder.blackholeTag;
       final serverRule = {'type': 'field', 'network': 'tcp', 'outboundTag': tag};

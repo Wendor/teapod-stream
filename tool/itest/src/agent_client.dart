@@ -79,9 +79,12 @@ class AgentClient {
       throw ItestTimeout('$op: нет ответа агента за ${timeout.inSeconds} с');
     });
     if (m['file'] is String) {
-      final r = await shell.run(['shell', 'run-as $pkg cat ${m['file']}']);
-      unawaited(shell.run(['shell', 'run-as $pkg rm -f ${m['file']}']));
+      final file = m['file'];
+      final r = await shell.run(['shell', 'run-as $pkg cat $file']);
+      if (!r.ok) throw ItestAgentError('$op: не прочитан $file (${r.code})');
       m = jsonDecode(r.out) as Map<String, dynamic>;
+      // Удаляем только прочитанный файл; сбой очистки ответу не мешает.
+      unawaited(shell.run(['shell', 'run-as $pkg rm -f $file']).then((_) {}, onError: (_) {}));
     }
     if (m['ok'] != true) throw ItestAgentError('$op: ${m['error']}');
     return m['data'];

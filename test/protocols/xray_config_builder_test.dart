@@ -380,6 +380,9 @@ void main() {
       final serverAt = rules.indexWhere((r) => r['outboundTag'] == 'out');
       expect(blockAt, greaterThanOrEqualTo(0));
       expect(blockAt, lessThan(serverAt));
+      expect(rules[blockAt], {...block, 'inboundTag': ['socks'], 'outboundTag': XrayConfigBuilder.blackholeTag});
+      final bh = (cfg['outbounds'] as List).firstWhere((o) => o['tag'] == XrayConfigBuilder.blackholeTag);
+      expect(bh['protocol'], 'blackhole');
     });
 
     test('mergeWithRaw keeps a server outbound that took our tag and blocks UDP via a free tag', () {

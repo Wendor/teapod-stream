@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'adb.dart';
 import 'agent_client.dart';
 
@@ -113,9 +115,14 @@ class DeviceGuard {
           var ok = true;
           for (final c in cmds) {
             try {
-              ok = (await shell.run(['shell', c])).ok && ok;
-            } catch (_) {
+              final r = await shell.run(['shell', c]);
+              if (!r.ok) {
+                ok = false;
+                stderr.writeln('  ! откат не удался: $c (${r.code}) ${r.err.trim()}');
+              }
+            } catch (e) {
               ok = false;
+              stderr.writeln('  ! откат не удался: $c ($e)');
             }
           }
           if (ok) _undo.remove(key);

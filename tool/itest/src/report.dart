@@ -42,13 +42,15 @@ class RunDir {
 String maskSecrets(String s) => s
     .replaceAllMapped(RegExp(r'([a-z][a-z0-9+.\-]*://)[^@\s/"]+@', caseSensitive: false), (m) => '${m[1]}***@')
     .replaceAllMapped(
-        RegExp(r'\b(pbk|sid|pqv|password|publickey|privatekey|key|token|auth)=[^&\s#"\\]+', caseSensitive: false),
+        // Значение до разделителя URL; JSON-экранирование (\" и \\) — часть значения.
+        RegExp(r'\b(pbk|sid|pqv|password|publickey|privatekey|key|token|auth)=(?:\\.|[^&\s#"\\])+',
+            caseSensitive: false),
         (m) => '${m[1]}=***')
     .replaceAll(RegExp(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', caseSensitive: false), '***')
-    .replaceAllMapped(RegExp(r'(/sub/)[^\s/?#"\\]+'), (m) => '${m[1]}***')
+    .replaceAllMapped(RegExp(r'(/sub/)(?:\\.|[^\s/?#"\\])+'), (m) => '${m[1]}***')
     // JSON-маркеры агента (например, `connected` несёт socksPassword).
     .replaceAllMapped(
-        RegExp(r'"(\w*(?:password|pass|token|key|auth|user))"\s*:\s*"[^"]*"', caseSensitive: false),
+        RegExp(r'"(\w*(?:password|pass|token|key|auth|user))"\s*:\s*"(?:\\.|[^"\\])*"', caseSensitive: false),
         (m) => '"${m[1]}":"***"');
 
 /// Отчёт прогона; пишется после каждого результата, чтобы прерванный прогон

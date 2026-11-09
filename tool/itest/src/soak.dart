@@ -212,6 +212,16 @@ class Soak {
     File('${d.path}/result.json').writeAsStringSync(jsonEncode(r.toJson()));
   }
 
+  /// Always-on VPN точно выключен (`null`); при ошибке или любом пакете — нет.
+  Future<bool> _alwaysOnOff() async {
+    try {
+      final r = await shell.run(['shell', 'settings get secure always_on_vpn_app']);
+      return r.ok && r.out.trim() == 'null';
+    } catch (_) {
+      return false;
+    }
+  }
+
   void _report(FaultResult r) {
     _event('result', r.toJson());
     onResult(r);
@@ -299,7 +309,8 @@ class Soak {
         _faultLog = null;
         final osRace = log.any((l) => l.contains('Exception when unbinding service $itestPackage/')) &&
             !log.any((l) => l.contains('Scheduling restart of crashed service $itestPackage/'));
-        if (f == Fault.killApp && r.verdict != Verdict.pass && agent.lastState == null && osRace) {
+        if (f == Fault.killApp && r.verdict != Verdict.pass && agent.lastState == null && osRace &&
+            await _alwaysOnOff()) {
           r = FaultResult(f, Verdict.skip, null, 'Android did not restart the service (always-on VPN off)', at: r.at);
         }
         if (f == Fault.wifiLte && !_lteOk && r.verdict == Verdict.pass) {

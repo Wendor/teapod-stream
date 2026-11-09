@@ -51,6 +51,15 @@ void main() {
     expect(m, contains('"value":"connected"'));
   });
 
+  test('masking covers JSON-escaped quotes and backslashes inside secrets', () {
+    final m = maskSecrets(r'{"note":"x?token=ab\"cd\\ef&y=1 https://h/sub/T\"OK","socksPassword":"p\"w"}');
+    expect(m, isNot(contains('cd')));
+    expect(m, isNot(contains('ef')));
+    expect(m, isNot(contains('OK')));
+    expect(m, isNot(contains('p\\"w')));
+    expect(jsonDecode(m), isA<Map>());
+  });
+
   test('report.json stays valid JSON after masking', () {
     final r = RunReport(RunDir(tmp))
       ..add(const CaseResult('x', Verdict.fail, 'sub https://h/sub/TOKEN and k?token=abc', Duration.zero, 'd'))

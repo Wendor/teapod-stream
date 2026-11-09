@@ -70,6 +70,17 @@ void main() {
     expect(shell.calls.last, contains('rm -f /data/user/0/p/files/itest_x.json'), reason: 'reply file is removed');
   });
 
+  test('unreadable reply file is an error and is not deleted', () async {
+    shell = FakeShell();
+    client = AgentClient(shell, logcat.stream);
+    final f = client.send('list');
+    await Future<void>.delayed(Duration.zero);
+    shell.codes.add(1); // cat падает
+    logcat.add('TEAPOD_ITEST {"id":"${_id(shell.calls.first)}","ok":true,"file":"/f.json"}');
+    await expectLater(f, throwsA(isA<ItestAgentError>()));
+    expect(shell.calls.where((c) => c.contains('rm -f')), isEmpty);
+  });
+
   test('waitState completes on native state marker', () async {
     final f = client.waitState({'connected', 'error'}, const Duration(seconds: 1));
     logcat.add('TEAPOD_ITEST {"ev":"state","value":"connecting","t":1}');

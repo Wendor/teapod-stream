@@ -354,7 +354,7 @@ class XrayVpnService : VpnService() {
                 // Run cleanup off the main thread — Go calls (stopTun2Socks/stopXray)
                 // can block if goroutines are stuck after long uptime or network changes.
                 Thread {
-                    val stopThread = Thread { stopVpn(explicit = true) }
+                    val stopThread = Thread { synchronized(sessionLock) { stopVpn(explicit = true) } }
                     stopThread.start()
                     try {
                         stopThread.join(STOP_THREAD_TIMEOUT_MS)
@@ -413,6 +413,11 @@ class XrayVpnService : VpnService() {
                     // Смена сервера/настроек на живом туннеле: старый TUN остаётся sink'ом
                     // до establish() нового — без явного disconnect и окна утечки.
                     synchronized(sessionLock) {
+                        // Пользователь успел отключиться, пока ждали замок.
+                        if (userRequestedDisconnect.get()) {
+                            log("info", "CONNECT cancelled: user disconnected meanwhile")
+                            return@Thread
+                        }
                         if (isRunning.get()) stopVpn(reconnecting = true)
                         startVpn(xrayConfig, socksPort, socksUser, socksPassword,
                             excludedPackages, includedPackages, vpnMode, ssPrefix, proxyOnly, killSwitch,
@@ -473,13 +478,15 @@ class XrayVpnService : VpnService() {
                             socksPassword = p
                         }
                         Thread {
-                            startVpn(
-                                configText,
-                                params.socksPort, socksUser, socksPassword,
-                                params.excludedPackages, params.includedPackages, params.vpnMode,
-                                params.ssPrefix, params.proxyOnly, params.killSwitch,
-                                params.allowIcmp, params.blockQuic, params.ipv6Enabled, mtu = params.mtu, isReconnect = true, engine = params.engine
-                            )
+                            startQuickLocked {
+                                startVpn(
+                                    configText,
+                                    params.socksPort, socksUser, socksPassword,
+                                    params.excludedPackages, params.includedPackages, params.vpnMode,
+                                    params.ssPrefix, params.proxyOnly, params.killSwitch,
+                                    params.allowIcmp, params.blockQuic, params.ipv6Enabled, mtu = params.mtu, isReconnect = true, engine = params.engine
+                                )
+                            }
                         }.start()
                     }
                 } else {
@@ -517,13 +524,15 @@ class XrayVpnService : VpnService() {
                     val configText = configFile.readText()
                     val (socksUser, socksPassword) = extractSocksFromConfig(configText, params.engine)
                     Thread {
-                        startVpn(
-                            configText,
-                            params.socksPort, socksUser, socksPassword,
-                            params.excludedPackages, params.includedPackages, params.vpnMode,
-                            params.ssPrefix, params.proxyOnly, params.killSwitch,
-                            params.allowIcmp, params.blockQuic, params.ipv6Enabled, mtu = params.mtu, isReconnect = true, engine = params.engine
-                        )
+                        startQuickLocked {
+                            startVpn(
+                                configText,
+                                params.socksPort, socksUser, socksPassword,
+                                params.excludedPackages, params.includedPackages, params.vpnMode,
+                                params.ssPrefix, params.proxyOnly, params.killSwitch,
+                                params.allowIcmp, params.blockQuic, params.ipv6Enabled, mtu = params.mtu, isReconnect = true, engine = params.engine
+                            )
+                        }
                     }.start()
                     return START_STICKY
                 } catch (e: Exception) {
@@ -1214,6 +1223,17 @@ class XrayVpnService : VpnService() {
         }
         pendingNetworkRunnable = r
         networkChangeHandler.postDelayed(r, delay)
+    }
+
+    /// Перезапуск по сохранённым параметрам (CONNECT_QUICK, рестарт системой) — под
+    /// [sessionLock], как ACTION_CONNECT и остановки: не начнётся, пока идёт остановка
+    /// старой сессии, и не стартует поверх живой или после отключения пользователем.
+    private fun startQuickLocked(start: () -> Unit) = synchronized(sessionLock) {
+        if (userRequestedDisconnect.get() || isRunning.get()) {
+            log("info", "quick start skipped (disconnected by user or already running)")
+            return@synchronized
+        }
+        start()
     }
 
     /// [session] — `lastConnectedMs` сессии, для которой запланирован реконнект;

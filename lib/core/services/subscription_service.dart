@@ -100,12 +100,10 @@ class SubscriptionService {
     String? userAgent,
     TunnelSocks? socks,
   }) =>
-      // Недоверенный сертификат — решение пользователя, напрямую не повторяем.
       TunnelSocks.orDirect(
           socks,
           (s) => _fetch(url,
-              allowSelfSigned: allowSelfSigned, pinnedCertDer: pinnedCertDer, hwid: hwid, userAgent: userAgent, socks: s),
-          keep: (e) => e is UntrustedCertificateException);
+              allowSelfSigned: allowSelfSigned, pinnedCertDer: pinnedCertDer, hwid: hwid, userAgent: userAgent, socks: s));
 
   Future<SubscriptionFetchResult> _fetch(
     String url, {
@@ -136,7 +134,7 @@ class SubscriptionService {
     }
 
     httpClient.badCertificateCallback = onBadCertificate;
-    socks?.apply(httpClient, onBadCertificate: (cert) => onBadCertificate(cert, uri.host, uri.port));
+    socks?.apply(httpClient, onBadCertificate: onBadCertificate);
 
     String body;
     HttpHeaders responseHeaders;

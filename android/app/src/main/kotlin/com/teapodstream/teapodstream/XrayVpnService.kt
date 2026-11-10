@@ -73,6 +73,7 @@ class XrayVpnService : VpnService() {
         const val EXTRA_HEARTBEAT_THRESHOLD = "heartbeat_threshold" // провалов подряд до действия
         const val EXTRA_HEARTBEAT_URL = "heartbeat_url"          // куда стучится проба
         const val EXTRA_ENGINE = "engine"                        // "go" | "rust"
+        const val EXTRA_CONFIG_NAME = "config_name"              // имя конфига для плитки
 
         // Static state tracker for querying from Dart
         @Volatile private var currentNativeState: String = "disconnected"
@@ -229,11 +230,11 @@ class XrayVpnService : VpnService() {
                 else -> { lastIntermediate = null; return }
             }
             if (!notificationsEnabled(context) || lastIntermediate == connecting) return
-            lastIntermediate = connecting
             try {
                 val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 ensureNotificationChannels(manager)
                 manager.notify(NOTIFICATION_ID, buildIntermediateNotification(context, connecting))
+                lastIntermediate = connecting
             } catch (_: Exception) { }
         }
 
@@ -444,6 +445,8 @@ class XrayVpnService : VpnService() {
                     vpnMode, ssPrefix, proxyOnly, showNotification, killSwitch, allowIcmp, blockQuic, ipv6Enabled, mtu,
                     heartbeatProbe, heartbeatAction, heartbeatThreshold, heartbeatUrl, allowTethering, engine)
                     .save(filesDir, ::log)
+                // Вместе с параметрами quick-reconnect — плитка показывает то, что подключит.
+                VpnTileService.saveConfigName(this, intent.getStringExtra(EXTRA_CONFIG_NAME))
                 userRequestedDisconnect.set(false)
                 reconnectAttempts.set(0)
                 try { File(filesDir, "user_disconnected.flag").delete() } catch (_: Exception) {}
@@ -488,7 +491,7 @@ class XrayVpnService : VpnService() {
                 if (params != null && configFile.exists()) {
                     val needsPermission = !params.proxyOnly && VpnService.prepare(this) != null
                     if (needsPermission) {
-                        openApp()
+                        abortQuickConnect()
                     } else {
                         userRequestedDisconnect.set(false)
                         try { File(filesDir, "user_disconnected.flag").delete() } catch (_: Exception) {}
@@ -529,7 +532,7 @@ class XrayVpnService : VpnService() {
                         }.start()
                     }
                 } else {
-                    openApp()
+                    abortQuickConnect()
                 }
                 return START_STICKY
             }
@@ -1763,6 +1766,14 @@ class XrayVpnService : VpnService() {
         } catch (e: Exception) {
             log("warning", "startForeground failed: ${e.message}")
         }
+    }
+
+    /** CONNECT_QUICK не запустился (нет конфига или разрешения VPN): плитка и
+     *  уведомление не должны остаться на «Подключение…»; дальше — в приложении. */
+    private fun abortQuickConnect() {
+        showDisconnectedNotification()
+        VpnTileService.updateTile(this)
+        openApp()
     }
 
     private fun showDisconnectedNotification(text: String = "Отключено") {

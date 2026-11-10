@@ -106,9 +106,8 @@ class MainActivity : FlutterActivity() {
                                 blockQuic = blockQuic, ipv6Enabled = ipv6Enabled, allowTethering = allowTethering,
                                 heartbeatProbe = heartbeatProbe, heartbeatAction = heartbeatAction,
                                 heartbeatThreshold = heartbeatThreshold, heartbeatUrl = heartbeatUrl,
-                                engine = engine, mtu = mtu,
+                                engine = engine, mtu = mtu, configName = call.argument<String>("configName"),
                             )
-                            VpnTileService.saveConfigName(this, call.argument<String>("configName"))
                             result.success(null)
                         }
                         // Proxy-only: no TUN tunnel, no VPN permission needed
@@ -458,6 +457,7 @@ class MainActivity : FlutterActivity() {
         heartbeatUrl: String = "",
         engine: String = "go",
         mtu: Int = 1500,
+        configName: String? = null,
     ) {
         requestBatteryOptimizationExemption()
         val intent = Intent(this, XrayVpnService::class.java).apply {
@@ -483,6 +483,7 @@ class MainActivity : FlutterActivity() {
             putExtra(XrayVpnService.EXTRA_HEARTBEAT_URL, heartbeatUrl)
             putExtra(XrayVpnService.EXTRA_ENGINE, engine)
             putExtra(XrayVpnService.EXTRA_MTU, mtu)
+            putExtra(XrayVpnService.EXTRA_CONFIG_NAME, configName)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent)

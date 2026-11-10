@@ -492,7 +492,8 @@ class XrayVpnService : VpnService() {
                 if (params != null && configFile.exists()) {
                     val needsPermission = !params.proxyOnly && VpnService.prepare(this) != null
                     if (needsPermission) {
-                        abortQuickConnect(params.killSwitch)
+                        // Разрешение отозвано — наш TUN система уже отключила, блокировать нечем.
+                        abortQuickConnect(killSwitch = false)
                     } else {
                         userRequestedDisconnect.set(false)
                         try { File(filesDir, "user_disconnected.flag").delete() } catch (_: Exception) {}

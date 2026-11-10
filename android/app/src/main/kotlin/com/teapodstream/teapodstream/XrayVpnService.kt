@@ -295,7 +295,8 @@ class XrayVpnService : VpnService() {
     @Volatile private var connectedNetwork: Network? = null
     private var prefixProxy: PrefixTcpProxy? = null
     private var showNotification: Boolean
-        get() = showNotificationFlag ?: true
+        // До загрузки параметров (ACTION_DISCONNECT в свежем процессе) — с диска.
+        get() = notificationsEnabled(this)
         set(value) { showNotificationFlag = value }
     @Volatile private var screenOn = true
     @Volatile private var deviceIdle = false
@@ -491,7 +492,7 @@ class XrayVpnService : VpnService() {
                 if (params != null && configFile.exists()) {
                     val needsPermission = !params.proxyOnly && VpnService.prepare(this) != null
                     if (needsPermission) {
-                        abortQuickConnect()
+                        abortQuickConnect(params.killSwitch)
                     } else {
                         userRequestedDisconnect.set(false)
                         try { File(filesDir, "user_disconnected.flag").delete() } catch (_: Exception) {}
@@ -532,7 +533,7 @@ class XrayVpnService : VpnService() {
                         }.start()
                     }
                 } else {
-                    abortQuickConnect()
+                    abortQuickConnect(params?.killSwitch == true)
                 }
                 return START_STICKY
             }
@@ -1769,10 +1770,14 @@ class XrayVpnService : VpnService() {
     }
 
     /** CONNECT_QUICK не запустился (нет конфига или разрешения VPN): плитка и
-     *  уведомление не должны остаться на «Подключение…»; дальше — в приложении. */
-    private fun abortQuickConnect() {
-        showDisconnectedNotification()
-        VpnTileService.updateTile(this)
+     *  уведомление не должны остаться на «Подключение…»; дальше — в приложении.
+     *  После `reconnectInternal` state ещё `connected`, а TUN удержан как sink: с kill
+     *  switch оставляем его блокировкой, без — закрываем. */
+    private fun abortQuickConnect(killSwitch: Boolean) {
+        val blocked = killSwitch && tunInterface != null
+        if (!blocked) closeTunSink()
+        setState(if (blocked) "blocked" else "disconnected")
+        showDisconnectedNotification(if (blocked) "Kill switch: трафик заблокирован" else "Отключено")
         openApp()
     }
 

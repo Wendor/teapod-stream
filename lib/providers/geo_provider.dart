@@ -2,9 +2,12 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants/app_constants.dart';
+import '../core/services/tunnel_socks.dart';
 import 'settings_provider.dart';
+import 'vpn_provider.dart';
 
 sealed class GeoState {}
 
@@ -75,17 +78,17 @@ class GeoNotifier extends Notifier<GeoState> {
     }
 
     state = GeoDownloading(downloaded: 0, total: -1);
-    int totalDownloaded = 0;
-    int grandTotal = -1;
 
-    try {
-      final lenGeoip = await _contentLength(settings.geoipUrl);
-      final lenGeosite = await _contentLength(settings.geositeUrl);
-      if (lenGeoip > 0 && lenGeosite > 0) grandTotal = lenGeoip + lenGeosite;
+    // GitHub CDN часто блокируют — при подключённом VPN качаем через туннель (#150).
+    Future<void> run(TunnelSocks? socks) async {
+      int totalDownloaded = 0;
+      int grandTotal = -1;
+      try {
+        final lenGeoip = await _contentLength(settings.geoipUrl, socks);
+        final lenGeosite = await _contentLength(settings.geositeUrl, socks);
+        if (lenGeoip > 0 && lenGeosite > 0) grandTotal = lenGeoip + lenGeosite;
+      } catch (_) {}
       state = GeoDownloading(downloaded: 0, total: grandTotal);
-    } catch (_) {}
-
-    try {
       for (final (url, name) in [
         (settings.geoipUrl, 'geoip.dat'),
         (settings.geositeUrl, 'geosite.dat'),
@@ -93,12 +96,17 @@ class GeoNotifier extends Notifier<GeoState> {
         await _downloadFile(
           url: url,
           destPath: '$dir/$name',
+          socks: socks,
           onProgress: (bytes) {
             totalDownloaded += bytes;
             state = GeoDownloading(downloaded: totalDownloaded, total: grandTotal);
           },
         );
       }
+    }
+
+    try {
+      await TunnelSocks.orDirect(ref.read(tunnelSocksProvider), run);
       final now = DateTime.now();
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt(_kLastUpdated, now.millisecondsSinceEpoch);
@@ -108,30 +116,46 @@ class GeoNotifier extends Notifier<GeoState> {
     }
   }
 
-  Future<int> _contentLength(String url) async {
-    final resp = await http.head(Uri.parse(url));
-    return int.tryParse(resp.headers['content-length'] ?? '') ?? -1;
+  static http.Client _client(TunnelSocks? socks) {
+    if (socks == null) return http.Client();
+    final c = HttpClient()..connectionTimeout = const Duration(seconds: 15);
+    socks.apply(c);
+    return IOClient(c);
+  }
+
+  Future<int> _contentLength(String url, TunnelSocks? socks) async {
+    final client = _client(socks);
+    try {
+      final resp = await client.head(Uri.parse(url)).timeout(const Duration(seconds: 15));
+      return int.tryParse(resp.headers['content-length'] ?? '') ?? -1;
+    } finally {
+      client.close();
+    }
   }
 
   Future<void> _downloadFile({
     required String url,
     required String destPath,
+    required TunnelSocks? socks,
     required void Function(int bytes) onProgress,
   }) async {
     final tmpPath = '$destPath.tmp';
     final tmpFile = File(tmpPath);
     final destFile = File(destPath);
 
-    final client = http.Client();
+    final client = _client(socks);
     try {
-      final resp = await client.send(http.Request('GET', Uri.parse(url)));
+      final resp = await client
+          .send(http.Request('GET', Uri.parse(url)))
+          .timeout(const Duration(seconds: 30));
       if (resp.statusCode != 200) {
         throw Exception('HTTP ${resp.statusCode}');
       }
 
       final sink = tmpFile.openWrite();
       try {
-        await for (final chunk in resp.stream) {
+        // Тайм-аут простоя: зависший туннель не должен держать загрузку вечно.
+        await for (final chunk in resp.stream.timeout(const Duration(seconds: 30))) {
           sink.add(chunk);
           onProgress(chunk.length);
         }

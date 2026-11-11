@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:teapodstream/core/constants/app_constants.dart';
 import 'package:teapodstream/core/services/settings_service.dart';
 import 'package:teapodstream/providers/geo_provider.dart';
+import 'package:teapodstream/providers/vpn_provider.dart';
 
 const _channel = MethodChannel(AppConstants.methodChannel);
 
@@ -32,7 +33,7 @@ void main() {
     SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
     FlutterSecureStorage.setMockInitialValues({});
     await SettingsService().save(const AppSettings(geoipUrl: 'https://g/ip.dat', geositeUrl: 'https://g/site.dat'));
-    c = ProviderContainer();
+    c = ProviderContainer(overrides: [tunnelSocksProvider.overrideWithValue(null)]);
     addTearDown(() {
       c.dispose();
       dir.deleteSync(recursive: true);

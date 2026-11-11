@@ -119,9 +119,10 @@ class _AppShellState extends ConsumerState<_AppShell>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      ref.read(vpnProvider.notifier).syncNativeState();
-      // Часовой фоновый таймер убран — staleness подписок проверяется здесь
-      ref.read(vpnProvider.notifier).refreshStaleSubscriptionsIfDue();
+      // Часовой фоновый таймер убран — staleness подписок проверяется здесь,
+      // после синхронизации: обновление должно видеть актуальный SOCKS туннеля.
+      final vpn = ref.read(vpnProvider.notifier);
+      vpn.syncNativeState().then((_) => vpn.refreshStaleSubscriptionsIfDue());
     } else if (state == AppLifecycleState.paused) {
       // Не гонять MethodChannel-опрос статистики каждую секунду в фоне —
       // syncNativeState() перезапустит его при возврате.

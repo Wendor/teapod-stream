@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
@@ -72,6 +73,7 @@ class XrayVpnService : VpnService() {
         const val EXTRA_HEARTBEAT_THRESHOLD = "heartbeat_threshold" // провалов подряд до действия
         const val EXTRA_HEARTBEAT_URL = "heartbeat_url"          // куда стучится проба
         const val EXTRA_ENGINE = "engine"                        // "go" | "rust"
+        const val EXTRA_CONFIG_NAME = "config_name"              // имя конфига для плитки
 
         // Static state tracker for querying from Dart
         @Volatile private var currentNativeState: String = "disconnected"
@@ -206,29 +208,65 @@ class XrayVpnService : VpnService() {
         /** История графика после точки [since] эпохи [epoch] (см. [SpeedHistory.since]). */
         fun getStatsHistory(epoch: Int, since: Long): Map<String, Any> = speedHistory.since(epoch, since)
 
-        @JvmStatic fun showIntermediateNotification(context: android.content.Context, isConnecting: Boolean) {
+        // showNotification последнего подключения. null — сервис в этом процессе ещё не
+        // грузил параметры (тайл/события раньше сервиса): берём с диска (issue #76).
+        @Volatile private var showNotificationFlag: Boolean? = null
+        // Последнее выложенное промежуточное состояние: повторный notify() того же текста
+        // съедает лимит частоты обновлений (система молча отбрасывает лишние), и финальное
+        // «подключено» терялось — уведомление «зависало» на «Подключение…» (issue #76).
+        @Volatile private var lastIntermediate: Boolean? = null
+        // Постоянный `when`: иначе каждое обновление поднимает уведомление наверх шторки.
+        private val notificationWhen = System.currentTimeMillis()
+
+        private fun notificationsEnabled(context: Context): Boolean =
+            showNotificationFlag
+                ?: (ConnectionParams.load(context.filesDir)?.showNotification ?: true).also { showNotificationFlag = it }
+
+        /** Уведомление по смене состояния: промежуточное для connecting/disconnecting/reconnecting. */
+        @JvmStatic fun onStateNotification(context: Context, state: String) {
+            val connecting = when (state) {
+                "connecting", "reconnecting" -> true
+                "disconnecting" -> false
+                else -> { lastIntermediate = null; return }
+            }
+            if (!notificationsEnabled(context) || lastIntermediate == connecting) return
             try {
-                val manager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-                ensureNotificationChannel(manager)
-                val text = if (isConnecting) "Подключение…" else "Отключение…"
-                val notification = androidx.core.app.NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
-                    .setContentTitle("TeapodStream VPN")
-                    .setContentText(text)
-                    .setSmallIcon(android.R.drawable.ic_lock_lock)
-                    .setOngoing(true)
-                    .setPriority(androidx.core.app.NotificationCompat.PRIORITY_LOW)
-                    .setProgress(0, 0, true)
-                    .build()
-                manager.notify(NOTIFICATION_ID, notification)
+                val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                ensureNotificationChannels(manager)
+                manager.notify(NOTIFICATION_ID, buildIntermediateNotification(context, connecting))
+                lastIntermediate = connecting
             } catch (_: Exception) { }
         }
 
-        private fun ensureNotificationChannel(manager: android.app.NotificationManager) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                manager.createNotificationChannel(
-                    android.app.NotificationChannel(NOTIFICATION_CHANNEL_ID, "VPN статус", android.app.NotificationManager.IMPORTANCE_LOW)
-                )
-            }
+        private fun buildIntermediateNotification(context: Context, connecting: Boolean): Notification =
+            baseNotification(context, NOTIFICATION_CHANNEL_ID)
+                .setContentText(if (connecting) "Подключение…" else "Отключение…")
+                .setProgress(0, 0, true)
+                .build()
+
+        private fun baseNotification(context: Context, channel: String): NotificationCompat.Builder =
+            NotificationCompat.Builder(context, channel)
+                .setContentTitle("TeapodStream VPN")
+                .setSmallIcon(android.R.drawable.ic_lock_lock)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setSilent(true)
+                .setWhen(notificationWhen)
+                .setShowWhen(false)
+                .setCategory(NotificationCompat.CATEGORY_SERVICE)
+                // Android 12+ иначе откладывает показ FGS-уведомления на 10 с.
+                .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+
+        private fun ensureNotificationChannels(manager: NotificationManager) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+            manager.createNotificationChannel(
+                NotificationChannel(NOTIFICATION_CHANNEL_ID, "VPN статус", NotificationManager.IMPORTANCE_LOW)
+                    .apply { description = "Скорость и управление VPN" }
+            )
+            manager.createNotificationChannel(
+                NotificationChannel(NOTIFICATION_CHANNEL_MINIMAL_ID, "VPN (фоновый режим)", NotificationManager.IMPORTANCE_MIN)
+                    .apply { description = "Фоновый VPN-сервис" }
+            )
         }
 
         fun prepareBinaries(context: android.content.Context): Boolean {
@@ -256,7 +294,10 @@ class XrayVpnService : VpnService() {
     // Физическая сеть на момент connected — с ней сверяется отложенная проверка смены сети.
     @Volatile private var connectedNetwork: Network? = null
     private var prefixProxy: PrefixTcpProxy? = null
-    @Volatile private var showNotification = true
+    private var showNotification: Boolean
+        // До загрузки параметров (ACTION_DISCONNECT в свежем процессе) — с диска.
+        get() = notificationsEnabled(this)
+        set(value) { showNotificationFlag = value }
     @Volatile private var screenOn = true
     @Volatile private var deviceIdle = false
     @Volatile private var lastNotificationText: String? = null
@@ -344,7 +385,7 @@ class XrayVpnService : VpnService() {
             ACTION_DISCONNECT -> {
                 // Пришли через startForegroundService (Tasker, MainActivity) в свежий
                 // процесс — без startForeground() система уронит сервис через 5 с.
-                if (!isRunning.get()) ensureForeground()
+                if (!isRunning.get()) ensureForeground(connecting = false)
                 userRequestedDisconnect.set(true)
                 try { File(filesDir, "user_disconnected.flag").createNewFile() } catch (_: Exception) {}
                 // Signal disconnecting immediately so the button turns yellow
@@ -405,6 +446,8 @@ class XrayVpnService : VpnService() {
                     vpnMode, ssPrefix, proxyOnly, showNotification, killSwitch, allowIcmp, blockQuic, ipv6Enabled, mtu,
                     heartbeatProbe, heartbeatAction, heartbeatThreshold, heartbeatUrl, allowTethering, engine)
                     .save(filesDir, ::log)
+                // Вместе с параметрами quick-reconnect — плитка показывает то, что подключит.
+                VpnTileService.saveConfigName(this, intent.getStringExtra(EXTRA_CONFIG_NAME))
                 userRequestedDisconnect.set(false)
                 reconnectAttempts.set(0)
                 try { File(filesDir, "user_disconnected.flag").delete() } catch (_: Exception) {}
@@ -449,7 +492,8 @@ class XrayVpnService : VpnService() {
                 if (params != null && configFile.exists()) {
                     val needsPermission = !params.proxyOnly && VpnService.prepare(this) != null
                     if (needsPermission) {
-                        openApp()
+                        // Разрешение отозвано — наш TUN система уже отключила, блокировать нечем.
+                        abortQuickConnect(killSwitch = false)
                     } else {
                         userRequestedDisconnect.set(false)
                         try { File(filesDir, "user_disconnected.flag").delete() } catch (_: Exception) {}
@@ -490,7 +534,7 @@ class XrayVpnService : VpnService() {
                         }.start()
                     }
                 } else {
-                    openApp()
+                    abortQuickConnect(params?.killSwitch == true)
                 }
                 return START_STICKY
             }
@@ -922,6 +966,8 @@ class XrayVpnService : VpnService() {
                 // TUN-sink остался открытым (kill switch) — трафик заблокирован,
                 // сообщаем отличимое от disconnected состояние.
                 setState(if (keptTunAsSink) "blocked" else resultState)
+                // Иначе после ошибки подключения висело «Подключение…» (issue #76).
+                showDisconnectedNotification(if (keptTunAsSink) "Kill switch: трафик заблокирован" else "Отключено")
             } else {
                 // Clear credentials so startVpn picks up fresh ones from configFile
                 _socksCredentials.set(SocksCredentials(0, "", ""))
@@ -935,6 +981,8 @@ class XrayVpnService : VpnService() {
         try { unregisterReceiver(screenReceiver) } catch (_: Exception) {}
         screenReceiver = null
         stopVpn()
+        // stopVpn выложил «Отключено» — после смерти сервиса оно осталось бы сиротой.
+        try { (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).cancel(NOTIFICATION_ID) } catch (_: Exception) {}
         flushLogBuffer(filesDir)
         super.onDestroy()
     }
@@ -1679,55 +1727,38 @@ class XrayVpnService : VpnService() {
             packageManager.getLaunchIntentForPackage(packageName)
                 ?.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), flags)
         val speedText = "↑ ${formatSpeed(uploadSpeed)}  ↓ ${formatSpeed(downloadSpeed)}"
-        return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-            .setContentTitle("TeapodStream VPN")
+        return baseNotification(this, NOTIFICATION_CHANNEL_ID)
             .setContentText(speedText)
-            .setSmallIcon(android.R.drawable.ic_lock_lock)
-            .setOngoing(true)
             .setContentIntent(openIntent)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Отключить", stopIntent)
             .build()
     }
 
-    private fun buildDisconnectedNotification(): Notification {
+    private fun buildDisconnectedNotification(text: String): Notification {
         val flags = pendingFlags()
         val connectIntent = PendingIntent.getService(this, 1,
             Intent(this, XrayVpnService::class.java).apply { action = ACTION_CONNECT_QUICK }, flags)
         val openIntent = PendingIntent.getActivity(this, 0,
             packageManager.getLaunchIntentForPackage(packageName)
                 ?.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), flags)
-        return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-            .setContentTitle("TeapodStream VPN")
-            .setContentText("Отключено")
-            .setSmallIcon(android.R.drawable.ic_lock_lock)
-            .setOngoing(true)
+        return baseNotification(this, NOTIFICATION_CHANNEL_ID)
+            .setContentText(text)
             .setContentIntent(openIntent)
             .addAction(android.R.drawable.ic_media_play, "Подключить", connectIntent)
             .build()
     }
 
     private fun buildMinimalNotification(): Notification =
-        NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_MINIMAL_ID)
-            .setContentTitle("TeapodStream VPN")
-            .setSmallIcon(android.R.drawable.ic_lock_lock)
-            .setOngoing(true)
+        baseNotification(this, NOTIFICATION_CHANNEL_MINIMAL_ID)
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .build()
 
     /** Ensure the service is in foreground. Safe to call multiple times. */
-    private fun ensureForeground() {
-        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            manager.createNotificationChannel(
-                NotificationChannel(NOTIFICATION_CHANNEL_ID, "VPN статус", NotificationManager.IMPORTANCE_LOW)
-                    .apply { description = "Скорость и управление VPN" }
-            )
-            manager.createNotificationChannel(
-                NotificationChannel(NOTIFICATION_CHANNEL_MINIMAL_ID, "VPN (фоновый режим)", NotificationManager.IMPORTANCE_MIN)
-                    .apply { description = "Фоновый VPN-сервис" }
-            )
-        }
-        val notification = if (showNotification) buildDisconnectedNotification() else buildMinimalNotification()
+    private fun ensureForeground(connecting: Boolean = true) {
+        ensureNotificationChannels(getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
+        // Сразу промежуточное состояние: «Отключено» на время подключения сбивало с толку.
+        val notification = if (showNotification) buildIntermediateNotification(this, connecting) else buildMinimalNotification()
+        lastIntermediate = if (showNotification) connecting else null
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
@@ -1739,11 +1770,24 @@ class XrayVpnService : VpnService() {
         }
     }
 
-    private fun showDisconnectedNotification() {
+    /** CONNECT_QUICK не запустился (нет конфига или разрешения VPN): плитка и
+     *  уведомление не должны остаться на «Подключение…»; дальше — в приложении.
+     *  После `reconnectInternal` state ещё `connected`, а TUN удержан как sink: с kill
+     *  switch оставляем его блокировкой, без — закрываем. */
+    private fun abortQuickConnect(killSwitch: Boolean) {
+        val blocked = killSwitch && tunInterface != null
+        if (!blocked) closeTunSink()
+        setState(if (blocked) "blocked" else "disconnected")
+        showDisconnectedNotification(if (blocked) "Kill switch: трафик заблокирован" else "Отключено")
+        openApp()
+    }
+
+    private fun showDisconnectedNotification(text: String = "Отключено") {
+        lastIntermediate = null
         if (!showNotification) return
         try {
             val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-            manager.notify(NOTIFICATION_ID, buildDisconnectedNotification())
+            manager.notify(NOTIFICATION_ID, buildDisconnectedNotification(text))
         } catch (_: Exception) {}
     }
 
@@ -1783,7 +1827,16 @@ class XrayVpnService : VpnService() {
         // The "Отключено"/intermediate notification bypasses the dedupe cache —
         // reset it so the connected layout is always posted.
         lastNotificationText = null
+        lastIntermediate = null
         updateNotification(0, 0)
+        // Если notify() отброшен лимитом частоты (тайл → промежуточное → connected за
+        // доли секунды), повтор через 2 с гарантирует финальный вид (issue #76).
+        networkChangeHandler.postDelayed({
+            if (currentNativeState == "connected") {
+                lastNotificationText = null
+                updateNotification(lastUploadSpeed, lastDownloadSpeed)
+            }
+        }, 2_000)
         broadcastState("connected")
     }
 

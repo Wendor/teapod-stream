@@ -72,8 +72,13 @@ class HomeScreen extends ConsumerWidget {
                 pingMs: pingMs,
                 canToggle: canToggle,
                 onToggle: () => ref.read(vpnProvider.notifier).toggle(),
-                // Без конфигов кнопка ведёт на вкладку «Конфиги»
-                onDisabledTap: () => ref.read(tabIndexProvider.notifier).set(1),
+                // Без конфигов (или при ошибке загрузки) кнопка ведёт на вкладку «Конфиги»;
+                // пока они грузятся (сразу после запуска) — ничего, иначе тап «Подключить»
+                // уводил туда (#151).
+                onDisabledTap: () {
+                  final configs = ref.read(configProvider);
+                  if (configs.hasValue || configs.hasError) ref.read(tabIndexProvider.notifier).set(1);
+                },
                 coreLine: core == null
                     ? null
                     : _CoreLine(t: t, core: core, onTap: () => showCoreSheet(context, effectiveConfig!)),
@@ -708,22 +713,27 @@ class _CoreLine extends StatelessWidget {
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.only(top: 10),
-        child: RichText(
-          textAlign: TextAlign.center,
-          text: TextSpan(
-            style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5),
-            children: [
-              TextSpan(
-                text: '[core] ',
-                style: AppTheme.mono(
-                    size: 10, color: kind == null ? AppColors.accentOrange : t.accent, letterSpacing: 0.5),
-              ),
-              TextSpan(
-                text: kind == null
-                    ? '${core.reason} · включите ядро в настройках или смените конфиг ›'
-                    : '${kind.displayName}${core.pinned ? ' · закреплено' : ''} ›',
-              ),
-            ],
+        // Смена ядра (закрепление, приоритет) — плавно, иначе неясно, применилось ли.
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 250),
+          child: RichText(
+            key: ValueKey('${kind?.name}|${core.pinned}|${core.reason}'),
+            textAlign: TextAlign.center,
+            text: TextSpan(
+              style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5),
+              children: [
+                TextSpan(
+                  text: '[core] ',
+                  style: AppTheme.mono(
+                      size: 10, color: kind == null ? AppColors.accentOrange : t.accent, letterSpacing: 0.5),
+                ),
+                TextSpan(
+                  text: kind == null
+                      ? '${core.reason} · включите ядро в настройках или смените конфиг ›'
+                      : '${kind.displayName}${core.pinned ? ' · закреплено' : ''} ›',
+                ),
+              ],
+            ),
           ),
         ),
       ),

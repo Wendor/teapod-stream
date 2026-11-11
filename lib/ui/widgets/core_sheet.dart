@@ -127,7 +127,8 @@ class _VerdictRow extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
         decoration: BoxDecoration(
           color: active ? t.accentFade : Colors.transparent,

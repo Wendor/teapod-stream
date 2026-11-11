@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import '../constants/app_constants.dart';
 import '../models/vpn_config.dart';
+import 'tunnel_socks.dart';
 import '../../protocols/xray/vless_parser.dart';
 
 /// Thrown when the subscription server presents an untrusted TLS certificate.
@@ -97,6 +98,20 @@ class SubscriptionService {
     String? pinnedCertDer,
     HwidDeviceInfo? hwid,
     String? userAgent,
+    TunnelSocks? socks,
+  }) =>
+      TunnelSocks.orDirect(
+          socks,
+          (s) => _fetch(url,
+              allowSelfSigned: allowSelfSigned, pinnedCertDer: pinnedCertDer, hwid: hwid, userAgent: userAgent, socks: s));
+
+  Future<SubscriptionFetchResult> _fetch(
+    String url, {
+    required bool allowSelfSigned,
+    required String? pinnedCertDer,
+    required HwidDeviceInfo? hwid,
+    required String? userAgent,
+    required TunnelSocks? socks,
   }) async {
     final uri = Uri.parse(url);
     final httpClient = HttpClient()..connectionTimeout = const Duration(seconds: 15);
@@ -104,8 +119,7 @@ class SubscriptionService {
     UntrustedCertificateException? certError;
     String? acceptedCert;
 
-    httpClient.badCertificateCallback =
-        (X509Certificate cert, String host, int port) {
+    bool onBadCertificate(X509Certificate cert, String host, int port) {
       final der = base64.encode(cert.der);
       if (allowSelfSigned || der == pinnedCertDer) {
         acceptedCert = der;
@@ -117,12 +131,15 @@ class SubscriptionService {
         issuer: cert.issuer,
       );
       return false;
-    };
+    }
+
+    httpClient.badCertificateCallback = onBadCertificate;
+    socks?.apply(httpClient, onBadCertificate: onBadCertificate);
 
     String body;
     HttpHeaders responseHeaders;
     try {
-      final request = await httpClient.getUrl(uri);
+      final request = await httpClient.getUrl(uri).timeout(const Duration(seconds: 15));
       final ua = userAgent?.trim() ?? '';
       request.headers.set('User-Agent', ua.isNotEmpty ? ua : AppConstants.subscriptionUserAgent);
 

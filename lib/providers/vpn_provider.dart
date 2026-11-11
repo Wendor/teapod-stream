@@ -12,6 +12,7 @@ import '../core/models/heartbeat_settings.dart';
 import '../core/models/vpn_log_entry.dart';
 import '../core/services/log_service.dart';
 import '../core/services/settings_service.dart';
+import '../core/services/tunnel_socks.dart';
 import '../protocols/xray/xray_engine.dart';
 import '../core/cores/core_resolver.dart';
 import '../core/cores/engine_options.dart';
@@ -48,6 +49,11 @@ class VpnState2 {
   bool get isBlocked => connectionState == VpnState.blocked;
   bool get isBusy => isConnecting || isDisconnecting;
 
+  /// SOCKS туннеля для собственных загрузок приложения; null — VPN не подключён.
+  TunnelSocks? get tunnelSocks => isConnected && activeSocksPort > 0
+      ? TunnelSocks(activeSocksPort, activeSocksUser, activeSocksPassword)
+      : null;
+
   VpnState2 copyWith({
     VpnState? connectionState,
     VpnStats? stats,
@@ -68,6 +74,9 @@ class VpnState2 {
     );
   }
 }
+
+/// SOCKS туннеля для собственных загрузок (подписки, гео-базы); null — VPN не подключён.
+final tunnelSocksProvider = Provider<TunnelSocks?>((ref) => ref.watch(vpnProvider).tunnelSocks);
 
 class VpnNotifier extends Notifier<VpnState2> {
   late final XrayEngine _engine;
@@ -129,46 +138,53 @@ class VpnNotifier extends Notifier<VpnState2> {
 
     // Sync state on init (for case when VPN is already running from tile/notification)
     Future.microtask(() async {
-      // Auto-refresh stale subscriptions on startup
-      await refreshStaleSubscriptionsIfDue();
-
-      // Native persists logsEnabled in its own prefs — resync in case they
-      // diverged (fresh install with restored Flutter prefs, etc.).
-      final s0 = await ref.read(settingsProvider.future);
-      await _engine.setLogsEnabled(s0.logsEnabled);
-
-      // Restore log history (previous + current session files) even when
-      // disconnected — needed to diagnose failures that ended the last session.
-      final logEntries = await _engine.getLogs();
-      if (logEntries.isNotEmpty) {
-        ref.read(logServiceProvider.notifier).loadFromEntries(logEntries);
-      }
-
-      final vpnState = await _engine.getVpnState();
-      if (vpnState.state == VpnState.connected && vpnState.socksPort > 0) {
-        if (vpnState.connectedAtMs > 0) {
-          _connectedAt = DateTime.fromMillisecondsSinceEpoch(vpnState.connectedAtMs);
-        }
-        state = VpnState2(
-          connectionState: VpnState.connected,
-          activeSocksPort: vpnState.socksPort,
-          activeSocksUser: vpnState.socksUser,
-          activeSocksPassword: vpnState.socksPassword,
-        );
-        // ipInfoProvider пересоберётся сам: он следит за vpnConnectionStateProvider.
-        // ref.refresh отсюда — циклическая зависимость (в debug обрывал этот блок).
-        _startStatsPolling();
-        // VPN уже работал до старта приложения — считаем применёнными текущие
-        // настройки (точный снапшот на момент connect недоступен).
-        final s = await ref.read(settingsProvider.future);
-        await ref.read(configProvider.future);
-        await ref.read(availableCoresProvider.future);
-        state = state.copyWith(
-            appliedFingerprint: connectionFingerprint(s, core: ref.read(activeCoreProvider)?.kind));
+      try {
+        await _syncOnStartup();
+      } finally {
+        // Только после синхронизации с нативом: иначе tunnelSocks ещё пуст и подписка
+        // при уже поднятом (с плитки) VPN ушла бы мимо туннеля.
+        if (ref.mounted) await refreshStaleSubscriptionsIfDue();
       }
     });
 
     return const VpnState2();
+  }
+
+  Future<void> _syncOnStartup() async {
+    // Native persists logsEnabled in its own prefs — resync in case they
+    // diverged (fresh install with restored Flutter prefs, etc.).
+    final s0 = await ref.read(settingsProvider.future);
+    await _engine.setLogsEnabled(s0.logsEnabled);
+
+    // Restore log history (previous + current session files) even when
+    // disconnected — needed to diagnose failures that ended the last session.
+    final logEntries = await _engine.getLogs();
+    if (logEntries.isNotEmpty) {
+      ref.read(logServiceProvider.notifier).loadFromEntries(logEntries);
+    }
+
+    final vpnState = await _engine.getVpnState();
+    if (vpnState.state == VpnState.connected && vpnState.socksPort > 0) {
+      if (vpnState.connectedAtMs > 0) {
+        _connectedAt = DateTime.fromMillisecondsSinceEpoch(vpnState.connectedAtMs);
+      }
+      state = VpnState2(
+        connectionState: VpnState.connected,
+        activeSocksPort: vpnState.socksPort,
+        activeSocksUser: vpnState.socksUser,
+        activeSocksPassword: vpnState.socksPassword,
+      );
+      // ipInfoProvider пересоберётся сам: он следит за vpnConnectionStateProvider.
+      // ref.refresh отсюда — циклическая зависимость (в debug обрывал этот блок).
+      _startStatsPolling();
+      // VPN уже работал до старта приложения — считаем применёнными текущие
+      // настройки (точный снапшот на момент connect недоступен).
+      final s = await ref.read(settingsProvider.future);
+      await ref.read(configProvider.future);
+      await ref.read(availableCoresProvider.future);
+      state = state.copyWith(
+          appliedFingerprint: connectionFingerprint(s, core: ref.read(activeCoreProvider)?.kind));
+    }
   }
 
   void _startStatsPolling() {

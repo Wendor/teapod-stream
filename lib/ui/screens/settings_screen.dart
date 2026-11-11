@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/models/core_kind.dart';
 import '../../providers/core_provider.dart';
@@ -534,7 +535,7 @@ class _KVRowTap extends StatelessWidget {
 
 /// Ядра в порядке приоритета: «↑» поднимает ядро, переключатель исключает его
 /// из выбора. Последнее включённое ядро выключить нельзя.
-class _CoreOrderList extends ConsumerWidget {
+class _CoreOrderList extends ConsumerStatefulWidget {
   final TeapodTokens t;
   final AppSettings settings;
   final Map<String, String>? versions;
@@ -550,7 +551,25 @@ class _CoreOrderList extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_CoreOrderList> createState() => _CoreOrderListState();
+}
+
+class _CoreOrderListState extends ConsumerState<_CoreOrderList> {
+  /// Только что поднятое ядро — коротко подсвечивается, иначе перестановка незаметна.
+  CoreKind? _moved;
+  Timer? _movedTimer;
+
+  @override
+  void dispose() {
+    _movedTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final TeapodTokens t = widget.t;
+    final settings = widget.settings;
+    final locked = widget.locked;
     final usable = ref.watch(coreResolverProvider).usable;
     final available = ref.watch(availableCoresProvider).value ?? CoreKind.values.toSet();
     final order = settings.coreOrder;
@@ -562,14 +581,19 @@ class _CoreOrderList extends ConsumerWidget {
           ..showSnackBar(const SnackBar(content: Text('Нужно хотя бы одно включённое ядро')));
         return;
       }
-      onUpdate(settings.copyWith(
+      widget.onUpdate(settings.copyWith(
           disabledCores: on ? ({...settings.disabledCores}..remove(k)) : {...settings.disabledCores, k}));
     }
 
     void moveUp(int i) {
       final next = [...order];
       next.insert(i - 1, next.removeAt(i));
-      onUpdate(settings.copyWith(coreOrder: List.unmodifiable(next)));
+      widget.onUpdate(settings.copyWith(coreOrder: List.unmodifiable(next)));
+      setState(() => _moved = order[i]);
+      _movedTimer?.cancel();
+      _movedTimer = Timer(const Duration(milliseconds: 700), () {
+        if (mounted) setState(() => _moved = null);
+      });
     }
 
     return Column(
@@ -588,8 +612,10 @@ class _CoreOrderList extends ConsumerWidget {
           ),
         ),
         for (final (i, k) in order.indexed)
-          Padding(
+          AnimatedContainer(
             key: ValueKey(k),
+            duration: const Duration(milliseconds: 300),
+            color: _moved == k ? t.accentFade : t.accentFade.withValues(alpha: 0),
             padding: const EdgeInsets.fromLTRB(8, 6, 20, 6),
             child: Row(
               children: [
@@ -623,7 +649,7 @@ class _CoreOrderList extends ConsumerWidget {
                       Text(
                           !available.contains(k)
                               ? 'не загружается на устройстве'
-                              : (versions?[k.versionKey] ?? '...'),
+                              : (widget.versions?[k.versionKey] ?? '...'),
                           style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5)),
                     ],
                   ),

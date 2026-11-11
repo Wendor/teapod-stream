@@ -323,7 +323,8 @@ class SetSegSquare extends StatelessWidget {
           final active = value == val;
           return GestureDetector(
             onTap: locked ? () => showReadonlySnack(context) : () => onChanged(val),
-            child: Container(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: active ? t.accentSoft : Colors.transparent,
@@ -333,11 +334,13 @@ class SetSegSquare extends StatelessWidget {
                       : BorderSide.none,
                 ),
               ),
-              child: Text(lab,
+              child: AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 200),
                   style: AppTheme.mono(
                       size: 11,
                       color: active ? t.accent : t.textDim,
-                      letterSpacing: 0.5)),
+                      letterSpacing: 0.5),
+                  child: Text(lab)),
             ),
           );
         }).toList(),

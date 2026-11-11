@@ -713,22 +713,27 @@ class _CoreLine extends StatelessWidget {
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.only(top: 10),
-        child: RichText(
-          textAlign: TextAlign.center,
-          text: TextSpan(
-            style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5),
-            children: [
-              TextSpan(
-                text: '[core] ',
-                style: AppTheme.mono(
-                    size: 10, color: kind == null ? AppColors.accentOrange : t.accent, letterSpacing: 0.5),
-              ),
-              TextSpan(
-                text: kind == null
-                    ? '${core.reason} · включите ядро в настройках или смените конфиг ›'
-                    : '${kind.displayName}${core.pinned ? ' · закреплено' : ''} ›',
-              ),
-            ],
+        // Смена ядра (закрепление, приоритет) — плавно, иначе неясно, применилось ли.
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 250),
+          child: RichText(
+            key: ValueKey('${kind?.name}|${core.pinned}|${core.reason}'),
+            textAlign: TextAlign.center,
+            text: TextSpan(
+              style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5),
+              children: [
+                TextSpan(
+                  text: '[core] ',
+                  style: AppTheme.mono(
+                      size: 10, color: kind == null ? AppColors.accentOrange : t.accent, letterSpacing: 0.5),
+                ),
+                TextSpan(
+                  text: kind == null
+                      ? '${core.reason} · включите ядро в настройках или смените конфиг ›'
+                      : '${kind.displayName}${core.pinned ? ' · закреплено' : ''} ›',
+                ),
+              ],
+            ),
           ),
         ),
       ),

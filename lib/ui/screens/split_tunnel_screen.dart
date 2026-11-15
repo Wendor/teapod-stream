@@ -34,12 +34,12 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
     if (isOnlySelected) {
       final newIncluded = Set<String>.from(settings.includedPackages);
       newIncluded.contains(pkg) ? newIncluded.remove(pkg) : newIncluded.add(pkg);
-      ref.read(settingsProvider.notifier).save(
+      saveSettings(context, ref, 
             settings.copyWith(includedPackages: newIncluded));
     } else {
       final newExcluded = Set<String>.from(settings.excludedPackages);
       newExcluded.contains(pkg) ? newExcluded.remove(pkg) : newExcluded.add(pkg);
-      ref.read(settingsProvider.notifier).save(
+      saveSettings(context, ref, 
             settings.copyWith(excludedPackages: newExcluded));
     }
   }
@@ -136,8 +136,7 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
               value: settings?.splitTunnelingEnabled ?? false,
               onChange: (v) {
                 if (settings != null) {
-                  ref.read(settingsProvider.notifier)
-                      .save(settings.copyWith(splitTunnelingEnabled: v));
+                  saveSettings(context, ref, settings.copyWith(splitTunnelingEnabled: v));
                 }
               },
             ),
@@ -162,7 +161,7 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
                           GestureDetector(
                             onTap: () {
                               if (settings != null) {
-                                ref.read(settingsProvider.notifier).save(
+                                saveSettings(context, ref, 
                                       settings.copyWith(vpnMode: mode));
                               }
                             },
@@ -203,9 +202,8 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
                 value: settings.allowTethering,
                 onChange: (v) async {
                   if (v && !await _confirmTethering(t)) return;
-                  ref
-                      .read(settingsProvider.notifier)
-                      .save(settings.copyWith(allowTethering: v));
+                  if (!context.mounted) return;
+                  saveSettings(context, ref, settings.copyWith(allowTethering: v));
                 },
               ),
               if (settings.allowTethering)

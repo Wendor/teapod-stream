@@ -63,11 +63,12 @@ void main() {
     final c = await pumpScreen(tester, const ConfigsScreen());
     expect(find.text('total [03]'), findsOneWidget);
     expect(find.text('My Sub'), findsOneWidget);
-    // Группы свёрнуты; раскрытие показывает конфиги.
-    expect(find.text('Server 1'), findsNothing);
+    // [local] раскрыта по умолчанию, подписки свёрнуты; тап сворачивает.
+    expect(find.text('Server 1'), findsOneWidget);
+    expect(find.text('Server 2'), findsNothing);
     await tester.tap(find.text('[local]'));
     await settle(tester);
-    expect(find.text('Server 1'), findsOneWidget);
+    expect(find.text('Server 1'), findsNothing);
     await unmount(tester, c);
   });
 

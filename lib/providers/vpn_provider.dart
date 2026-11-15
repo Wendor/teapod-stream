@@ -47,6 +47,7 @@ class VpnState2 {
   bool get isConnecting => connectionState == VpnState.connecting;
   bool get isDisconnecting => connectionState == VpnState.disconnecting;
   bool get isBlocked => connectionState == VpnState.blocked;
+  bool get isError => connectionState == VpnState.error;
   bool get isBusy => isConnecting || isDisconnecting;
 
   /// SOCKS туннеля для собственных загрузок приложения; null — VPN не подключён.
@@ -251,7 +252,8 @@ class VpnNotifier extends Notifier<VpnState2> {
             );
           }
         }
-        _onNativeState(newState, isReconnect: isReconnect);
+        _onNativeState(newState,
+            isReconnect: isReconnect, error: event['error'] as String?);
       case 'log':
         final level = event['level'] as String? ?? 'info';
         final msg = event['message'] as String? ?? '';
@@ -367,7 +369,8 @@ class VpnNotifier extends Notifier<VpnState2> {
         _ => VpnState.disconnected,
       };
 
-  void _onNativeState(VpnState nativeState, {bool isReconnect = false}) {
+  /// [error] — причина неудачного старта от натива (для error/blocked).
+  void _onNativeState(VpnState nativeState, {bool isReconnect = false, String? error}) {
     if (nativeState == VpnState.connected) {
       _connectedAt ??= DateTime.now();
       _connectTimeout?.cancel();
@@ -392,7 +395,7 @@ class VpnNotifier extends Notifier<VpnState2> {
         _connectTimeout ??= Timer(const Duration(seconds: 45), () {
           if (state.connectionState == VpnState.connecting) {
             state = state.copyWith(
-                connectionState: VpnState.error, error: 'Connection timeout');
+                connectionState: VpnState.error, error: 'Таймаут подключения');
             _connectTimeout = null;
             _engine.disconnect().ignore();
           }
@@ -418,9 +421,11 @@ class VpnNotifier extends Notifier<VpnState2> {
         connectionState: nativeState,
         // Reset stats including speedHistory
         stats: const VpnStats(),
-        error: nativeState == VpnState.error
-            ? (state.error ?? 'Connection error')
-            : null,
+        error: switch (nativeState) {
+          VpnState.error => error ?? state.error ?? 'Ошибка подключения',
+          VpnState.blocked => error,
+          _ => null,
+        },
       );
     } else {
       state = state.copyWith(connectionState: nativeState);
@@ -498,7 +503,7 @@ class VpnNotifier extends Notifier<VpnState2> {
     _connectTimeout = Timer(const Duration(seconds: 45), () {
       if (state.connectionState == VpnState.connecting) {
         state = state.copyWith(
-            connectionState: VpnState.error, error: 'Connection timeout');
+            connectionState: VpnState.error, error: 'Таймаут подключения');
         _connectTimeout = null;
         _engine.disconnect().ignore();
       }
@@ -511,7 +516,7 @@ class VpnNotifier extends Notifier<VpnState2> {
         ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
     final config = _resolveEffectiveConfig(configState);
     if (config == null) {
-      return _failConnect('No configuration selected', switching: switching);
+      return _failConnect('Конфигурация не выбрана', switching: switching);
     }
 
     final validationError = config.validate();

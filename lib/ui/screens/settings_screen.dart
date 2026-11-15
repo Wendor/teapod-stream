@@ -459,10 +459,9 @@ class _SettingsBody extends StatelessWidget {
             t: t,
             k: 'source',
             v: 'github.com/Wendor/teapod-stream',
-            onTap: () async {
-              final uri = Uri.parse('https://github.com/Wendor/teapod-stream');
-              if (await canLaunchUrl(uri)) launchUrl(uri, mode: LaunchMode.externalApplication);
-            },
+            onTap: () => launchUrl(Uri.parse('https://github.com/Wendor/teapod-stream'),
+                    mode: LaunchMode.externalApplication)
+                .ignore(),
           ),
           const SizedBox(height: 32),
         ],

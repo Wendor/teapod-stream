@@ -96,15 +96,13 @@ class VlessParser {
         allowInsecure: allowInsecure,
         pinSHA256: pinSHA256,
         sni: params['sni'] ?? params['serverName'],
-        wsPath: Uri.decodeComponent(params['path'] ?? '/'),
+        wsPath: params['path'] ?? '/',
         wsHost: params['host'],
         grpcServiceName: params['serviceName'],
         fingerprint: params['fp'],
         publicKey: params['pbk'],
         shortId: params['sid'],
-        spiderX: params['spx'] != null
-            ? Uri.decodeComponent(params['spx']!)
-            : null,
+        spiderX: params['spx'],
         postQuantumKey: params['pqv'],
         flow: params['flow'],
         encryption: params['encryption'] ?? 'none',

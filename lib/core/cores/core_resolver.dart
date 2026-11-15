@@ -40,7 +40,11 @@ class CoreResolver {
   final Set<CoreKind> available;
   final CoreBackend Function(CoreKind) backendFor;
 
-  const CoreResolver(this.settings, this.available, this.backendFor);
+  CoreResolver(this.settings, this.available, this.backendFor);
+
+  /// Резолвер пересоздаётся при смене настроек/ядер, VpnConfig неизменяем — результат
+  /// кешируется по экземпляру: строки списка конфигов зовут resolve на каждый ребилд.
+  final _cache = Expando<CoreResolution>();
 
   static const unavailableReason = 'Не загружается на этом устройстве.';
   static const disabledReason = 'Выключено в настройках.';
@@ -54,7 +58,9 @@ class CoreResolver {
   /// Ядро, которым запускается большинство профилей.
   CoreKind? get primary => usable.firstOrNull;
 
-  CoreResolution resolve(VpnConfig config) {
+  CoreResolution resolve(VpnConfig config) => _cache[config] ??= _resolve(config);
+
+  CoreResolution _resolve(VpnConfig config) {
     final pin = config.core;
     final order = [?pin, ...settings.coreOrder.where((k) => k != pin)];
     final verdicts = [for (final k in order) (kind: k, reason: _check(k, config))];

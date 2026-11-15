@@ -188,10 +188,13 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
         allowSelfSigned: allowSelfSigned, pinnedCertDer: target?.pinnedCertDer,
         hwid: hwid, userAgent: settings?.subUserAgent ?? '');
     if (tagged.isEmpty) {
-      throw Exception('Subscription returned no valid configurations');
+      // Провайдер обычно объясняет пустой ответ: лимит устройств HWID или announce.
+      throw Exception(fetchResult.hwidStatus?.maxDevicesReached == true
+          ? 'Достигнут лимит устройств подписки (HWID)'
+          : fetchResult.announce ?? 'Подписка не вернула ни одной конфигурации');
     }
 
-    final newActiveId = await _serial(() async {
+    await _serial(() async {
       // Состояние перечитывается под очередью: за время загрузки его могли изменить.
       final current = state.value ?? ConfigState();
       final existing = current.subscriptions.where((s) => s.id == subId).firstOrNull;
@@ -223,6 +226,9 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
                 newConfigs.where((c) => c.name == oldActive.name).firstOrNull)
             ?.id;
       }
+      // Активного нет (или он пропал из подписки) — первый новый. Режим авто-выбора
+      // подписки (activeSubscriptionId) при этом не сбрасывается.
+      activeId ??= newConfigs.first.id;
 
       final sub = Subscription(
         id: subId,
@@ -256,13 +262,8 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
             ? current.subscriptions.map((s) => s.id == subId ? sub : s).toList()
             : [...current.subscriptions, sub],
         activeConfigId: activeId,
-        clearActive: activeId == null,
       ));
-      return activeId ?? newConfigs.first.id;
     });
-
-    // Set first new config as active if none active
-    if (state.value?.activeConfigId == null) await setActiveConfig(newActiveId);
   }
 
   Future<(List<VpnConfig>, SubscriptionFetchResult)> _fetchAndTagConfigs(String url, String subId, {bool allowSelfSigned = false, String? pinnedCertDer, HwidDeviceInfo? hwid, String? userAgent}) async {
@@ -289,7 +290,10 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     await storage.removeSubscription(subId);
     final clearActiveSub = current.activeSubscriptionId == subId;
     if (clearActiveSub) await storage.saveActiveSubscriptionId(null);
+    final pins = current.pins.where((p) => p.subscriptionId != subId).toList();
+    if (pins.length != current.pins.length) await storage.savePins(pins);
     state = AsyncData(current.copyWith(
+      pins: pins,
       configs: current.configs.where((c) => c.subscriptionId != subId).toList(),
       subscriptions: current.subscriptions.where((s) => s.id != subId).toList(),
       clearActive: current.activeConfigId != null &&

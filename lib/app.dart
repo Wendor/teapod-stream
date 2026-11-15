@@ -142,8 +142,8 @@ class _AppShellState extends ConsumerState<_AppShell>
   Future<void> _tryAutoConnect() async {
     final settings = await ref.read(settingsProvider.future);
     if (!mounted || !settings.autoConnect) return;
-    final configState = await ref.read(configProvider.future);
-    if (!mounted || configState.activeConfig == null) return;
+    await ref.read(configProvider.future);
+    if (!mounted || ref.read(effectiveConfigProvider) == null) return;
     final vpnState = ref.read(vpnProvider);
     if (!vpnState.isConnected && !vpnState.isConnecting) {
       await ref.read(vpnProvider.notifier).connect();

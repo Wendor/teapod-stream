@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -304,6 +305,18 @@ void main() {
       expect(await storage.loadActiveSubscriptionId(), isNull);
     });
 
+    test('remove drops pins of the subscription', () async {
+      final keep = PinnedRef.of(_cfg('2'));
+      await boot(
+        configs: [_cfg('1', subId: 's'), _cfg('2')],
+        subs: [_sub('s')],
+        pins: [PinnedRef.of(_cfg('1', subId: 's')), keep],
+      );
+      await n().removeSubscription('s');
+      expect(s().pins, [keep]);
+      expect(await storage.loadPins(), [keep]);
+    });
+
     test('remove keeps an unrelated selection', () async {
       await boot(configs: [_cfg('1', subId: 's'), _cfg('2')], subs: [_sub('s')], activeId: '2');
       await n().removeSubscription('s');
@@ -395,6 +408,21 @@ void main() {
       });
     });
 
+    test('refresh in subscription mode keeps the mode when the selected server is gone', () async {
+      final url = server.url('/sub');
+      await boot(
+        configs: [_cfg('o1', subId: 's', address: 'gone.example')],
+        subs: [_sub('s', url: url)],
+        activeId: 'o1',
+        activeSubId: 's',
+      );
+      server.serve(_trojan('a.example', 'A'));
+      await n().addSubscriptionFromUrl(url);
+      expect(s().activeSubscriptionId, 's');
+      expect(await storage.loadActiveSubscriptionId(), 's');
+      expect(s().activeConfig!.address, 'a.example');
+    });
+
     test('explicit name wins; replaceId changes the URL in place', () async {
       await boot(subs: [_sub('s', url: 'https://old')]);
       server.serve(_trojan('a.example', 'A'));
@@ -413,6 +441,16 @@ void main() {
       await expectLater(n().addSubscriptionFromUrl(server.url()), throwsA(isA<Exception>()));
       expect(s().configs.single.id, '1');
       expect((await storage.loadConfigs()).single.id, '1');
+    });
+
+    test('empty answer explains HWID limit or shows the announce', () async {
+      await boot();
+      server.serve('', headers: {'x-hwid-max-devices-reached': 'true'});
+      await expectLater(n().addSubscriptionFromUrl(server.url()),
+          throwsA(predicate((e) => '$e'.contains('HWID'))));
+      server.serve('', headers: {'announce': 'base64:${base64Encode(utf8.encode('Оплатите подписку'))}'});
+      await expectLater(n().addSubscriptionFromUrl(server.url()),
+          throwsA(predicate((e) => '$e'.contains('Оплатите подписку'))));
     });
 
     test('refreshStaleSubscriptions refreshes only stale ones and backs off on failure', () async {

@@ -77,6 +77,9 @@ class XrayVpnService : VpnService() {
 
         // Static state tracker for querying from Dart
         @Volatile private var currentNativeState: String = "disconnected"
+        /** Причина последнего неудачного старта; уходит во Flutter с состоянием error/blocked. */
+        @Volatile var lastError: String? = null
+            private set
         // Tracks whether we are in TUN mode (not proxy-only). Used by getNativeState() to detect
         // a TUN fd closed externally (e.g. during a phone call) without onRevoke() being called.
         @Volatile private var tunModeActive = false
@@ -481,13 +484,18 @@ class XrayVpnService : VpnService() {
                     heartbeatUrl = params.heartbeatUrl
                     allowTethering = params.allowTethering
                 }
-                ensureForeground()
                 if (isRunning.get()) {
                     // startVpn would bail on its CAS anyway — bail here instead so the
                     // state isn't left stuck at "reconnecting" over a live tunnel.
+                    // startForegroundService требует startForeground — повторяем его с
+                    // уведомлением живой сессии: «Подключение…» повисло бы до смены скорости.
+                    val live = currentNativeState == "connected" && showNotification
+                    if (live) lastNotificationText = null  // следующий тик статистики обновит скорость
+                    ensureForeground(override = if (live) buildConnectedNotification(0, 0) else null)
                     log("info", "CONNECT_QUICK ignored: VPN already running")
                     return START_STICKY
                 }
+                ensureForeground()
                 val configFile = File(filesDir, "xray_config.json")
                 if (params != null && configFile.exists()) {
                     val needsPermission = !params.proxyOnly && VpnService.prepare(this) != null
@@ -624,6 +632,9 @@ class XrayVpnService : VpnService() {
         // new one is established: establish() atomically replaces the interface, so
         // app traffic is blackholed by the old TUN instead of leaking while xray starts.
         var previousTun = tunInterface
+        // Ручной connect с kill switch держит sink после неудачи, только если трафик
+        // уже был заблокирован (BLOCKED) — иначе битый конфиг запирал бы сеть.
+        val keepSinkOnFailure = killSwitch && (isReconnect || previousTun != null)
         tunInterface = null
         killSwitchEnabled = killSwitch
         tunModeActive = !proxyOnly
@@ -770,7 +781,8 @@ class XrayVpnService : VpnService() {
                     && reconnectAttempts.incrementAndGet() <= MAX_RECONNECT_ATTEMPTS
             // On final failure with kill switch keep the sink (explicit=false) so
             // traffic stays blocked instead of silently leaking past the VPN.
-            stopVpn(resultState = "error", explicit = !willRetry && !killSwitch, reconnecting = willRetry)
+            if (!willRetry) lastError = e.message ?: e.javaClass.simpleName
+            stopVpn(resultState = "error", explicit = !willRetry && !keepSinkOnFailure, reconnecting = willRetry)
             if (willRetry) {
                 val attempt = reconnectAttempts.get()
                 val delayMs = RECONNECT_RETRY_BASE_MS * attempt
@@ -971,6 +983,8 @@ class XrayVpnService : VpnService() {
             } else {
                 // Clear credentials so startVpn picks up fresh ones from configFile
                 _socksCredentials.set(SocksCredentials(0, "", ""))
+                // TUN уже sink: трафик не идёт, пока ждём сеть (до 30 с) — не «connected».
+                setState("reconnecting")
             }
             log("info", "stopVpn: done (state=${if (reconnecting) "reconnecting" else if (keptTunAsSink) "blocked" else resultState})")
             flushLogBuffer(filesDir)
@@ -1184,24 +1198,18 @@ class XrayVpnService : VpnService() {
 
         val caps = cm.getNetworkCapabilities(activeNetwork)
         if (caps == null || caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) {
-            // Active is VPN — find WiFi first (preferred over LTE)
-            val wifiNetwork = try {
-                cm.allNetworks.firstOrNull { n ->
-                    val c = cm.getNetworkCapabilities(n)
-                    c?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true &&
-                    c?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
-                }
-            } catch (e: Exception) { null }
-
-            if (wifiNetwork != null) return wifiNetwork
-
-            // No WiFi — try any other internet network
+            // Active is VPN — pick a physical internet network: VALIDATED first (Wi-Fi
+            // without internet must not win over working LTE), then Wi-Fi over others.
             return try {
-                cm.allNetworks.firstOrNull { n ->
-                    val c = cm.getNetworkCapabilities(n)
-                    c?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true &&
-                    !c.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
-                }
+                cm.allNetworks.mapNotNull { n -> cm.getNetworkCapabilities(n)?.let { n to it } }
+                    .filter { (_, c) ->
+                        c.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                            !c.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+                    }
+                    .maxByOrNull { (_, c) ->
+                        (if (c.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) 2 else 0) +
+                            (if (c.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) 1 else 0)
+                    }?.first
             } catch (e: Exception) { null }
         }
 
@@ -1650,22 +1658,18 @@ class XrayVpnService : VpnService() {
                 byteArrayOf((destPort shr 8).toByte(), destPort.toByte())
             )
 
-            val replyVer = inp.read()
-            val replyRep = inp.read()
-            val replyRsv = inp.read()
-            val replyAtyp = inp.read()
-            if (replyVer != 5 || replyRep != 0) throw Exception("SOCKS connect failed: $replyRep")
-            if (replyAtyp == 1) {
-                val buf = ByteArray(6)
-                var read = 0; while (read < buf.size) read += inp.read(buf, read, buf.size - read)
-            } else if (replyAtyp == 4) {
-                val buf = ByteArray(18)
-                var read = 0; while (read < buf.size) read += inp.read(buf, read, buf.size - read)
-            } else if (replyAtyp == 3) {
-                val len = inp.read()
-                val buf = ByteArray(len + 2)
-                var read = 0; while (read < buf.size) read += inp.read(buf, read, buf.size - read)
+            val reply = ByteArray(4)
+            readFully(inp, reply)
+            val replyRep = reply[1].toInt() and 0xFF
+            if (reply[0].toInt() != 5 || replyRep != 0) throw Exception("SOCKS connect failed: $replyRep")
+            // BND.ADDR + BND.PORT; readFully бросает на EOF (раньше -1 зацикливал чтение)
+            val bndLen = when (reply[3].toInt()) {
+                1 -> 6
+                4 -> 18
+                3 -> inp.read().also { if (it < 0) throw Exception("EOF while reading SOCKS response") } + 2
+                else -> 0
             }
+            readFully(inp, ByteArray(bndLen))
 
             stage = "http_request"
             val request = "GET ${probeUrl.path} HTTP/1.1\r\nHost: $destHost\r\nConnection: close\r\n\r\n"
@@ -1754,11 +1758,12 @@ class XrayVpnService : VpnService() {
             .build()
 
     /** Ensure the service is in foreground. Safe to call multiple times. */
-    private fun ensureForeground(connecting: Boolean = true) {
+    private fun ensureForeground(connecting: Boolean = true, override: Notification? = null) {
         ensureNotificationChannels(getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
         // Сразу промежуточное состояние: «Отключено» на время подключения сбивало с толку.
-        val notification = if (showNotification) buildIntermediateNotification(this, connecting) else buildMinimalNotification()
-        lastIntermediate = if (showNotification) connecting else null
+        val notification = override
+            ?: if (showNotification) buildIntermediateNotification(this, connecting) else buildMinimalNotification()
+        lastIntermediate = if (showNotification && override == null) connecting else null
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
@@ -1792,6 +1797,7 @@ class XrayVpnService : VpnService() {
     }
 
     private fun setState(state: String) {
+        if (state != "error" && state != "blocked") lastError = null
         currentNativeState = state
         VpnEventStreamHandler.sendStateEvent(state)
         broadcastState(state)

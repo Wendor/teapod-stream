@@ -133,6 +133,13 @@ void main() {
       });
     });
 
+    test('VLESS path and spx are decoded once (%25 survives)', () {
+      final config = VlessParser.parseUri(
+          'vless://u@h.com:443?type=ws&path=%2Fa%2550b&security=reality&pbk=k&spx=%2F%25x#n')!;
+      expect(config.wsPath, '/a%50b');
+      expect(config.spiderX, '/%x');
+    });
+
     group('Shadowsocks', () {
       test('SIP002 format parses correctly', () {
         final userInfo = base64Encode(utf8.encode('chacha20-ietf-poly1305:mypassword'));

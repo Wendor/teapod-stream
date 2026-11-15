@@ -165,7 +165,7 @@ class SubscriptionService {
         bytes.add(chunk);
         if (bytes.length > _maxBodyBytes) throw Exception('Subscription body exceeds 10 MB');
       }
-      body = utf8.decode(bytes.takeBytes());
+      body = utf8.decode(bytes.takeBytes(), allowMalformed: true);
     } on HandshakeException {
       if (certError != null) throw certError!;
       rethrow;
@@ -255,7 +255,7 @@ class SubscriptionService {
       try {
         final cleaned = body.replaceAll(RegExp(r'\s'), '');
         final padded = cleaned.padRight((cleaned.length + 3) ~/ 4 * 4, '=');
-        final decoded = utf8.decode(base64Decode(padded));
+        final decoded = utf8.decode(base64Decode(padded), allowMalformed: true);
         final decodedLines = _splitLines(decoded);
         if (decodedLines.any(_isKnownUri)) lines = decodedLines;
       } catch (_) {

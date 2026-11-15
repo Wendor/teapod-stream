@@ -428,13 +428,26 @@ void main() {
       expect((st().isError, st().error), (true, 'bad config'));
     });
 
-    test('late stats after a failure keep the reason; connected config id is tracked', () async {
-      await connected();
-      expect(n().connectedConfigId, 'a');
+    test('late history after a failure keeps the reason; tunnel config is tracked', () async {
+      final a = _cfg('a');
+      await connected(configs: [a]);
+      expect(n().runsConfig(a), isTrue);
+      expect(n().runsConfig(a.copyWith(rawUri: 'trojan://edited')), isFalse);
       emit({'type': 'state', 'value': 'error', 'error': 'bad config'});
-      emit({'type': 'stats', 'upload': 5, 'download': 5});
+      emit({'type': 'statsHistory', 'full': true, 'epoch': 1, 'seq': 1,
+          'history': [{'uploadSpeed': 1, 'downloadSpeed': 1}]});
       await _settle();
-      expect((st().error, st().stats.uploadBytes, n().connectedConfigId), ('bad config', 0, null));
+      expect(st().error, 'bad config');
+      expect(st().stats.speedHistory, isEmpty);
+      expect(n().runsConfig(a), isFalse);
+    });
+
+    test('repeated error state updates the reason', () async {
+      await connected();
+      emit({'type': 'state', 'value': 'error'});
+      emit({'type': 'state', 'value': 'error', 'error': 'port busy'});
+      await _settle();
+      expect(st().error, 'port busy');
     });
 
     test('log events go to the log with level', () async {

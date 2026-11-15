@@ -107,8 +107,12 @@ class VpnNotifier extends Notifier<VpnState2> {
   /// Конфиг, с которым запущен туннель из приложения; null — неизвестно (VPN поднят
   /// плиткой/автостартом или отключён). Эффективный конфиг подписки может смениться
   /// после пинга, пока туннель работает на прежнем.
-  String? _connectedConfigId;
-  String? get connectedConfigId => _connectedConfigId;
+  VpnConfig? _connectedConfig;
+
+  /// Туннель уже работает на [c]: тот же id и URI (правка URI сохраняет id), не в
+  /// процессе переключения — выбор не требует переподключения.
+  bool runsConfig(VpnConfig c) =>
+      state.isConnected && _connectedConfig?.id == c.id && _connectedConfig?.rawUri == c.rawUri;
 
 
   @override
@@ -387,7 +391,7 @@ class VpnNotifier extends Notifier<VpnState2> {
         nativeState == VpnState.error ||
         nativeState == VpnState.blocked) {
       _connectedAt = null;
-      _connectedConfigId = null;
+      _connectedConfig = null;
       _connectTimeout?.cancel();
       _connectTimeout = null;
       _disconnectTimeout?.cancel();
@@ -417,7 +421,13 @@ class VpnNotifier extends Notifier<VpnState2> {
       });
     }
 
-    if (state.connectionState == nativeState) return;
+    if (state.connectionState == nativeState) {
+      // Таймаут Flutter мог выставить error раньше, чем натив прислал причину.
+      if (error != null && (nativeState == VpnState.error || nativeState == VpnState.blocked)) {
+        state = state.copyWith(error: error);
+      }
+      return;
+    }
 
     if (nativeState == VpnState.disconnected ||
         nativeState == VpnState.error ||
@@ -554,7 +564,7 @@ class VpnNotifier extends Notifier<VpnState2> {
 
     try {
       await _engine.connect(config, options);
-      _connectedConfigId = config.id;
+      _connectedConfig = config;
       if (switching) _connectedAt = null;
       // Polling is started in _onNativeState when connected
       state = state.copyWith(

@@ -12,8 +12,13 @@ class StorageMigrationService {
 
   static Future<void> runIfNeeded() async {
     if (_done) return;
-    await (_run ??= _migrate());
-    _done = true;
+    try {
+      await (_run ??= _migrate());
+      _done = true;
+    } catch (_) {
+      _run = null; // сбой до переноса (напр. getInstance) — следующий вызов повторит
+      rethrow;
+    }
   }
 
   static Future<void> _migrate() async {

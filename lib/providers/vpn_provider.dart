@@ -104,6 +104,12 @@ class VpnNotifier extends Notifier<VpnState2> {
   /// таймаут) — дописывать не к чему, нужен весь буфер.
   List<SpeedPoint> _history = const [];
 
+  /// Конфиг, с которым запущен туннель из приложения; null — неизвестно (VPN поднят
+  /// плиткой/автостартом или отключён). Эффективный конфиг подписки может смениться
+  /// после пинга, пока туннель работает на прежнем.
+  String? _connectedConfigId;
+  String? get connectedConfigId => _connectedConfigId;
+
 
   @override
   VpnState2 build() {
@@ -381,6 +387,7 @@ class VpnNotifier extends Notifier<VpnState2> {
         nativeState == VpnState.error ||
         nativeState == VpnState.blocked) {
       _connectedAt = null;
+      _connectedConfigId = null;
       _connectTimeout?.cancel();
       _connectTimeout = null;
       _disconnectTimeout?.cancel();
@@ -433,6 +440,8 @@ class VpnNotifier extends Notifier<VpnState2> {
   }
 
   void _handleStats(Map<String, dynamic> event) {
+    // Опоздавший ответ после обрыва: copyWith сбросил бы причину error/blocked.
+    if (!state.isConnected) return;
     // Handle both int and Long (from Kotlin)
     final upload = (event['upload'] as num?)?.toInt() ?? 0;
     final download = (event['download'] as num?)?.toInt() ?? 0;
@@ -468,6 +477,7 @@ class VpnNotifier extends Notifier<VpnState2> {
   /// продолжают текущую (`from == _historySeq`), чтобы опоздавший ответ не задвоил их.
   /// Любое несовпадение — следующий запрос за всем буфером.
   void _applyHistory(Map<Object?, Object?> r) {
+    if (!state.isConnected) return;
     final full = r['full'] == true;
     final epoch = (r['epoch'] as num?)?.toInt() ?? -1;
     final from = (r['from'] as num?)?.toInt() ?? 0;
@@ -544,6 +554,7 @@ class VpnNotifier extends Notifier<VpnState2> {
 
     try {
       await _engine.connect(config, options);
+      _connectedConfigId = config.id;
       if (switching) _connectedAt = null;
       // Polling is started in _onNativeState when connected
       state = state.copyWith(

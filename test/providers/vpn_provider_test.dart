@@ -428,6 +428,15 @@ void main() {
       expect((st().isError, st().error), (true, 'bad config'));
     });
 
+    test('late stats after a failure keep the reason; connected config id is tracked', () async {
+      await connected();
+      expect(n().connectedConfigId, 'a');
+      emit({'type': 'state', 'value': 'error', 'error': 'bad config'});
+      emit({'type': 'stats', 'upload': 5, 'download': 5});
+      await _settle();
+      expect((st().error, st().stats.uploadBytes, n().connectedConfigId), ('bad config', 0, null));
+    });
+
     test('log events go to the log with level', () async {
       await boot();
       emit({'type': 'log', 'level': 'warning', 'message': 'w'});

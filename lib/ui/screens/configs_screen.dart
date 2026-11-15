@@ -389,7 +389,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
       return;
     }
     // Тот же конфиг, что уже подключён, — без пересоздания туннеля.
-    final unchanged = ref.read(effectiveConfigProvider)?.id == config.id;
+    final unchanged = ref.read(vpnProvider.notifier).connectedConfigId == config.id;
     ref.read(configProvider.notifier).setActiveConfig(config.id);
     final vpnState = ref.read(vpnProvider);
     if (!unchanged && (vpnState.isConnected || vpnState.isBusy)) {

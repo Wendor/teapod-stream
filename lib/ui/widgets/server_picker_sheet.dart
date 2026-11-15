@@ -31,7 +31,7 @@ class _ServerPickerSheet extends ConsumerWidget {
     }
     Navigator.pop(context);
     // Тот же конфиг, что уже подключён, — без пересоздания туннеля.
-    final unchanged = ref.read(effectiveConfigProvider)?.id == c.id;
+    final unchanged = ref.read(vpnProvider.notifier).connectedConfigId == c.id;
     ref.read(configProvider.notifier).setActiveConfig(c.id);
     final vpnState = ref.read(vpnProvider);
     if (!unchanged && (vpnState.isConnected || vpnState.isBusy)) {

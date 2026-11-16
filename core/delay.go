@@ -47,8 +47,13 @@ func measureDelayVia(ctx context.Context, dial func(ctx context.Context, network
 			lastErr = err
 			continue
 		}
-		_, _ = io.Copy(io.Discard, resp.Body)
+		_, err = io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
+		if err != nil {
+			// Headers came but the body stalled until the deadline: not a working path.
+			lastErr = fmt.Errorf("read response body: %w", err)
+			continue
+		}
 
 		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 			lastErr = fmt.Errorf("unexpected status: %s", resp.Status)

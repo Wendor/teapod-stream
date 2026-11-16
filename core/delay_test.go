@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func directDial(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -56,5 +57,22 @@ func TestMeasureDelayViaDefaultURL(t *testing.T) {
 	}
 	if len(addrs) == 0 || addrs[0] != "www.google.com:443" {
 		t.Fatalf("dialed %v; want www.google.com:443", addrs)
+	}
+}
+
+// Headers followed by a stalled body until the deadline is a failed probe, not a delay.
+func TestMeasureDelayViaStalledBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush()
+		<-r.Context().Done()
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	ms, err := measureDelayVia(ctx, directDial, srv.URL)
+	if ms != -1 || err == nil {
+		t.Fatalf("got %d, %v; want -1, error", ms, err)
 	}
 }

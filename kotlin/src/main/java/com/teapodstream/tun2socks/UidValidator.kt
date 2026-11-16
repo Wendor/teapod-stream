@@ -1,28 +1,28 @@
 package com.teapodstream.tun2socks
 
 /**
- * Интерфейс валидации UID-соединений.
+ * UID connection validation interface.
  *
- * Реализация этого интерфейса передаётся в слой Go через gomobile-биндинг
- * и вызывается синхронно для каждого нового TCP/UDP соединения до того,
- * как трафик будет перенаправлен в SOCKS5 прокси.
+ * An implementation of this interface is passed to the Go layer via the gomobile binding
+ * and called synchronously for every new TCP/UDP connection before
+ * the traffic is redirected to the SOCKS5 proxy.
  *
- * Если [validate] возвращает false, соединение блокируется:
- *  - Для TCP: отправляется RST-пакет обратно в TUN
- *  - Для UDP: пакет молча дропается
+ * If [validate] returns false, the connection is blocked:
+ *  - TCP: an RST packet is sent back into TUN
+ *  - UDP: the packet is silently dropped
  */
 interface UidValidator {
 
     /**
-     * Вызывается из Go-слоя для проверки нового соединения.
+     * Called from the Go layer to check a new connection.
      *
-     * @param srcAddr  IP-адрес источника (локальный, из TUN)
-     * @param srcPort  Порт источника
-     * @param dstAddr  IP-адрес назначения (целевой сервер)
-     * @param dstPort  Порт назначения
-     * @param protocol Номер протора: [android.system.OsConstants.IPPROTO_TCP] (6)
-     *                 или [android.system.OsConstants.IPPROTO_UDP] (17)
-     * @return true если соединение разрешено, false если заблокировано
+     * @param srcAddr  Source IP address (local, from TUN)
+     * @param srcPort  Source port
+     * @param dstAddr  Destination IP address (the target server)
+     * @param dstPort  Destination port
+     * @param protocol Protocol number: [android.system.OsConstants.IPPROTO_TCP] (6)
+     *                 or [android.system.OsConstants.IPPROTO_UDP] (17)
+     * @return true if the connection is allowed, false if blocked
      */
     fun validate(
         srcAddr: String,

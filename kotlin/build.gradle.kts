@@ -10,7 +10,7 @@ android {
     defaultConfig {
         minSdk = 29
 
-        // ProGuard rules для потребителей библиотеки
+        // ProGuard rules for library consumers
         consumerProguardFiles("proguard-rules.pro")
     }
 
@@ -33,22 +33,22 @@ android {
 }
 
 dependencies {
-    // Сгенерированный Go AAR — собирается командой ./build.sh из корня проекта.
-    // Используем compileOnly для компиляции (Kotlin код использует Go классы)
+    // The generated Go AAR — built by ./build.sh from the project root.
+    // compileOnly is used for compilation (the Kotlin code uses Go classes)
     compileOnly(files("../output/teapod-tun2socks.aar"))
 
     implementation("androidx.annotation:annotation:1.9.1")
 }
 
-// Директория для JNI библиотек из Go AAR
+// Directory for JNI libraries from the Go AAR
 val jniLibsDir = layout.buildDirectory.dir("generated/jniLibs")
 
-// Задача для извлечения .so файлов из Go AAR
+// Task that extracts .so files from the Go AAR
 tasks.register<Copy>("extractGoNativeLibs") {
     val goAarFile = file("../output/teapod-tun2socks.aar")
     val targetArch = project.findProperty("targetArch") as? String
     
-    // Используем closure для отложенного вычисления zipTree
+    // A closure defers evaluating zipTree
     from(provider { zipTree(goAarFile) }) {
         if (!targetArch.isNullOrBlank()) {
             include("jni/$targetArch/**/*.so")
@@ -61,27 +61,27 @@ tasks.register<Copy>("extractGoNativeLibs") {
     onlyIf { goAarFile.exists() }
 }
 
-// Настраиваем JNI source sets — чтобы .so файлы попали в AAR
+// Configure JNI source sets so the .so files end up in the AAR
 android.sourceSets.getByName("main") {
     jniLibs.srcDir(jniLibsDir)
 }
 
-// Убеждаемся, что JNI библиотеки извлекаются перед сборкой
+// Make sure JNI libraries are extracted before the build
 tasks.configureEach {
     if (name.startsWith("merge") && name.contains("JniLibFolders")) {
         dependsOn("extractGoNativeLibs")
     }
 }
 
-// Задача для создания итогового fat AAR
+// Task that creates the final fat AAR
 tasks.register("assembleFatAar") {
     dependsOn("assembleRelease")
     
     doLast {
-        // Читаем целевую архитектуру из параметров (если есть)
+        // Read the target architecture from the parameters (if any)
         val targetArch = project.findProperty("targetArch") as? String
         
-        // Ищем AAR файл в директории outputs/aar/
+        // Look for the AAR file in outputs/aar/
         val aarDir = layout.buildDirectory.dir("outputs/aar").get().asFile
         val kotlinAarFile = aarDir.listFiles()?.find { it.name.endsWith("-release.aar") }
             ?: throw GradleException("Kotlin AAR file not found in ${aarDir.absolutePath}")
@@ -93,34 +93,34 @@ tasks.register("assembleFatAar") {
         
         val outputDir = layout.buildDirectory.dir("outputs/fat-aar").get().asFile
         
-        // Считываем версию библиотеки
+        // Read the library version
         val libVersion = project.findProperty("libraryVersion") as? String ?: "1.0.0"
         
-        // Имя выходного файла зависит от версии и архитектуры
+        // The output file name depends on the version and architecture
         val baseName = "teapod-tun2socks"
         val outputFileName = if (targetArch.isNullOrBlank()) "$baseName-$libVersion.aar" else "$baseName-$targetArch-$libVersion.aar"
         val fatAarFile = file("${outputDir}/$outputFileName")
         val tempDir = file("${outputDir}/temp-${targetArch ?: "universal"}")
         
-        // Очищаем временную директорию
+        // Clean the temporary directory
         tempDir.deleteRecursively()
         tempDir.mkdirs()
         
-        println("📦 Сборка AAR v$libVersion для ${targetArch ?: "all architectures"}...")
+        println("📦 Building AAR v$libVersion for ${targetArch ?: "all architectures"}...")
         println("   Kotlin AAR: ${kotlinAarFile.name}")
         println("   Go AAR: ${goAarFile.name}")
         
-        // 1. Распаковываем Kotlin AAR
+        // 1. Unpack the Kotlin AAR
         copy {
             from(zipTree(kotlinAarFile))
             into(tempDir)
         }
         
-        // 2. Объединяем Go классы
+        // 2. Merge the Go classes
         val goClassesJar = zipTree(goAarFile).matching { include("classes.jar") }.singleFile
         val kotlinClassesJar = zipTree(kotlinAarFile).matching { include("classes.jar") }.singleFile
         
-        // Распаковываем Go классы
+        // Unpack the Go classes
         val goClassesDir = file("${tempDir}/go-classes")
         goClassesDir.mkdirs()
         copy {
@@ -128,7 +128,7 @@ tasks.register("assembleFatAar") {
             into(goClassesDir)
         }
         
-        // Распаковываем Kotlin классы
+        // Unpack the Kotlin classes
         val kotlinClassesDir = file("${tempDir}/kotlin-classes")
         kotlinClassesDir.mkdirs()
         copy {
@@ -136,26 +136,26 @@ tasks.register("assembleFatAar") {
             into(kotlinClassesDir)
         }
         
-        // Удаляем старый classes.jar
+        // Delete the old classes.jar
         file("${tempDir}/classes.jar").delete()
         
-        // Создаём объединённый classes.jar
+        // Create the merged classes.jar
         val mergedClassesDir = file("${tempDir}/merged-classes")
         mergedClassesDir.mkdirs()
         
-        // Копируем все классы (Go + Kotlin)
+        // Copy all classes (Go + Kotlin)
         copy {
             from(goClassesDir, kotlinClassesDir)
             into(mergedClassesDir)
         }
         
-        // Создаём JAR с помощью команды jar (должна быть в PATH)
+        // Create the JAR with the jar command (must be on PATH)
         exec {
             workingDir(mergedClassesDir)
             commandLine("jar", "cf", "${tempDir}/classes.jar", ".")
         }
         
-        // Копируем JNI библиотеки из Go AAR (фильтруем по архитектуре если нужно)
+        // Copy JNI libraries from the Go AAR (filtering by architecture if needed)
         copy {
             from(zipTree(goAarFile)) {
                 if (!targetArch.isNullOrBlank()) {
@@ -167,21 +167,21 @@ tasks.register("assembleFatAar") {
             into(tempDir)
         }
         
-        // Удаляем временные папки с классами перед упаковкой AAR
+        // Delete the temporary class folders before packing the AAR
         goClassesDir.deleteRecursively()
         kotlinClassesDir.deleteRecursively()
         mergedClassesDir.deleteRecursively()
         
-        // 3. Упаковываем итоговый AAR
+        // 3. Pack the final AAR
         ant.withGroovyBuilder {
             "zip"("destfile" to fatAarFile, "basedir" to tempDir)
         }
         
-        // 4. Чистим временную директорию
+        // 4. Clean up the temporary directory
         tempDir.deleteRecursively()
         
-        println("AAR создан: ${fatAarFile.absolutePath}")
-        println("Размер: ${String.format("%.2f", fatAarFile.length() / (1024.0 * 1024.0))} MB")
+        println("AAR created: ${fatAarFile.absolutePath}")
+        println("Size: ${String.format("%.2f", fatAarFile.length() / (1024.0 * 1024.0))} MB")
     }
 }
 

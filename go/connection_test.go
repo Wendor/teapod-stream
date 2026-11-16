@@ -36,8 +36,8 @@ func TestNewConnectionKey_Fields(t *testing.T) {
 	}
 }
 
-// Проверяем что нормализация src/dst удалена: два соединения в разных
-// направлениях дают разные ключи.
+// Check that src/dst normalization was removed: two connections in opposite
+// directions give different keys.
 func TestNewConnectionKey_NoSymmetry(t *testing.T) {
 	a := net.ParseIP("10.0.0.2")
 	b := net.ParseIP("8.8.8.8")
@@ -70,7 +70,7 @@ func TestConnectionKey_String(t *testing.T) {
 	if s == "" {
 		t.Error("String() must not be empty")
 	}
-	// Проверяем что протокол присутствует в строке
+	// Check that the protocol is present in the string
 	if len(s) < 3 {
 		t.Errorf("String() too short: %q", s)
 	}
@@ -115,14 +115,14 @@ func TestLRUCache_TTLExpiry(t *testing.T) {
 
 	c.Add(key, ValidationResult{Allowed: true})
 
-	// Сразу должна быть запись
+	// The entry must be there right away
 	if _, ok := c.Get(key); !ok {
 		t.Fatal("expected hit immediately after Add")
 	}
 
 	time.Sleep(ttl + 10*time.Millisecond)
 
-	// После TTL — промах
+	// After the TTL — a miss
 	if _, ok := c.Get(key); ok {
 		t.Error("expected miss after TTL expiry")
 	}
@@ -140,7 +140,7 @@ func TestLRUCache_LRUEviction(t *testing.T) {
 		c.Add(k, ValidationResult{Allowed: true, UID: i})
 	}
 
-	// Добавляем 4-й элемент — первый должен быть вытеснен (LRU)
+	// Adding a 4th element evicts the first one (LRU)
 	newKey := makeKey("10.0.0.4", "4.4.4.4", ProtocolTCP)
 	c.Add(newKey, ValidationResult{Allowed: false})
 
@@ -167,10 +167,10 @@ func TestLRUCache_LRUUpdate(t *testing.T) {
 	c.Add(k1, ValidationResult{Allowed: true})
 	c.Add(k2, ValidationResult{Allowed: true})
 
-	// Обращение к k1 делает его «самым свежим»
+	// Accessing k1 makes it "the freshest"
 	c.Get(k1)
 
-	// Добавление k3 вытесняет k2 (наименее недавно используемый)
+	// Adding k3 evicts k2 (the least recently used)
 	c.Add(k3, ValidationResult{Allowed: false})
 
 	if _, ok := c.Get(k2); ok {
@@ -248,7 +248,7 @@ func TestLRUCache_Concurrent(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
-	// Проверяем что кэш не сломан (нет паник, Len в разумных пределах)
+	// Check that the cache isn't broken (no panics, Len within reasonable bounds)
 	if l := c.Len(); l > 100 {
 		t.Errorf("cache Len %d exceeds capacity 100", l)
 	}

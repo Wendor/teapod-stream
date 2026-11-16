@@ -80,8 +80,8 @@ func TestEncodeUDPDatagram_IPv4Header(t *testing.T) {
 	payload := []byte("test")
 	encoded := EncodeUDPDatagram(dstIP, 1234, payload)
 
-	// Формат: RSV(2) FRAG(1) ATYP(1) ADDR(4) PORT(2) DATA
-	// Итого заголовок = 10 байт для IPv4
+	// Format: RSV(2) FRAG(1) ATYP(1) ADDR(4) PORT(2) DATA
+	// Header total = 10 bytes for IPv4
 	const hdrLen = 2 + 1 + 1 + 4 + 2
 	if len(encoded) != hdrLen+len(payload) {
 		t.Errorf("encoded len = %d, want %d", len(encoded), hdrLen+len(payload))
@@ -99,7 +99,7 @@ func TestEncodeUDPDatagram_IPv6Header(t *testing.T) {
 	payload := []byte("test")
 	encoded := EncodeUDPDatagram(dstIP, 80, payload)
 
-	// Заголовок для IPv6: RSV(2) FRAG(1) ATYP(1) ADDR(16) PORT(2) = 22 байта
+	// IPv6 header: RSV(2) FRAG(1) ATYP(1) ADDR(16) PORT(2) = 22 bytes
 	const hdrLen = 2 + 1 + 1 + 16 + 2
 	if len(encoded) != hdrLen+len(payload) {
 		t.Errorf("encoded len = %d, want %d", len(encoded), hdrLen+len(payload))
@@ -117,7 +117,7 @@ func TestDecodeDatagram_TooShort(t *testing.T) {
 }
 
 func TestDecodeDatagram_Fragmented(t *testing.T) {
-	// FRAG != 0 должен вернуть ошибку
+	// FRAG != 0 must return an error
 	data := make([]byte, 20)
 	data[2] = 0x01 // FRAG = 1
 	data[3] = 0x01 // ATYP = IPv4
@@ -137,8 +137,8 @@ func TestDecodeDatagram_UnknownAtyp(t *testing.T) {
 }
 
 func TestDecodeDatagram_IPv4TooShort(t *testing.T) {
-	// RSV RSV FRAG ATYP=IPv4, но данных недостаточно для 4-байтового адреса+порта
-	data := []byte{0, 0, 0, 0x01, 1, 2} // только 2 байта вместо нужных 6
+	// RSV RSV FRAG ATYP=IPv4, but not enough data for a 4-byte address + port
+	data := []byte{0, 0, 0, 0x01, 1, 2} // only 2 bytes instead of the required 6
 	_, _, _, err := DecodeUDPDatagram(data)
 	if err == nil {
 		t.Error("expected error for truncated IPv4 datagram")

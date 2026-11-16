@@ -4,8 +4,8 @@ import android.util.Log
 import tun2socks.UIDValidatorFunc
 
 /**
- * Адаптер между Go-слоем (gomobile) и Kotlin-валидатором.
- * Реализует строгую проверку UID для предотвращения обхода VPN.
+ * Adapter between the Go layer (gomobile) and the Kotlin validator.
+ * Implements a strict UID check to prevent VPN bypass.
  */
 class TeapodTun2socksCallback(
     private val uidResolver: UidResolver,
@@ -33,19 +33,19 @@ class TeapodTun2socksCallback(
     ): Boolean {
         val startTime = System.nanoTime()
 
-        // 1. Определяем UID владельца соединения.
-        // Go теперь передает: srcIP = телефон (локальный), dstIP = интернет (удаленный).
+        // 1. Determine the UID of the connection owner.
+        // Go now passes: srcIP = the phone (local), dstIP = the internet (remote).
         val uid = uidResolver.resolveUid(srcIP, srcPort.toInt(), dstIP, dstPort.toInt(), protocol.toInt())
         
-        // 2. Проверяем UID. 
-        // Если UID < 0 (-1), значит владелец не найден. Дропаем пакет для безопасности.
+        // 2. Check the UID.
+        // If UID < 0 (-1), the owner wasn't found. Drop the packet for safety.
         val isAllowed = if (uid < 0) {
             false
         } else {
             checkUidWhitelist(uid)
         }
 
-        // 3. Дополнительный пользовательский валидатор (если задан)
+        // 3. An additional custom validator (if set)
         val finalAllowed = isAllowed && (validator?.validate(srcIP, srcPort.toInt(), dstIP, dstPort.toInt(), protocol.toInt()) != false)
 
         val elapsedMs = (System.nanoTime() - startTime) / 1_000_000.0

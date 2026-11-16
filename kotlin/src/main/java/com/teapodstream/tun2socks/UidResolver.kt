@@ -8,10 +8,10 @@ import androidx.annotation.RequiresApi
 import java.net.InetSocketAddress
 
 /**
- * Обёртка над [ConnectivityManager.getConnectionOwnerUid] для определения
- * Android UID процесса, которому принадлежит сетевое соединение.
+ * A wrapper over [ConnectivityManager.getConnectionOwnerUid] that determines
+ * the Android UID of the process owning a network connection.
  *
- * Требует Android API 29+.
+ * Requires Android API 29+.
  */
 @RequiresApi(Build.VERSION_CODES.Q)
 class UidResolver(private val context: Context) {
@@ -21,14 +21,14 @@ class UidResolver(private val context: Context) {
     }
 
     /**
-     * Определяет UID владельца соединения.
+     * Determines the connection owner's UID.
      *
-     * @param srcAddr  Локальный IP-адрес
-     * @param srcPort  Локальный порт
-     * @param dstAddr  Удалённый IP-адрес
-     * @param dstPort  Удалённый порт
-     * @param protocol Номер протокола (OsConstants.IPPROTO_TCP или OsConstants.IPPROTO_UDP)
-     * @return UID владельца, или -1 если не удалось определить
+     * @param srcAddr  Local IP address
+     * @param srcPort  Local port
+     * @param dstAddr  Remote IP address
+     * @param dstPort  Remote port
+     * @param protocol Protocol number (OsConstants.IPPROTO_TCP or OsConstants.IPPROTO_UDP)
+     * @return The owner's UID, or -1 if it couldn't be determined
      */
     fun resolveUid(
         srcAddr: String,
@@ -38,9 +38,9 @@ class UidResolver(private val context: Context) {
         protocol: Int
     ): Int {
         return try {
-            // getConnectionOwnerUid определяет UID приложения, которому принадлежит
-            // данная пара local/remote address.
-            // Для TCP используем IPPROTO_TCP, для UDP — IPPROTO_UDP.
+            // getConnectionOwnerUid determines the UID of the app owning
+            // this local/remote address pair.
+            // IPPROTO_TCP for TCP, IPPROTO_UDP for UDP.
             val uid = connectivityManager.getConnectionOwnerUid(
                 protocol,
                 InetSocketAddress(srcAddr, srcPort),
@@ -48,23 +48,23 @@ class UidResolver(private val context: Context) {
             )
             uid
         } catch (e: SecurityException) {
-            // Требуется разрешение ACCESS_NETWORK_STATE
+            // Requires the ACCESS_NETWORK_STATE permission
             android.util.Log.w(
                 TAG,
-                "SecurityException при getConnectionOwnerUid: ${e.message}"
+                "SecurityException in getConnectionOwnerUid: ${e.message}"
             )
             -1
         } catch (e: Exception) {
             android.util.Log.e(
                 TAG,
-                "Ошибка при определении UID для $srcAddr:$srcPort -> $dstAddr:$dstPort: ${e.message}"
+                "Error determining the UID for $srcAddr:$srcPort -> $dstAddr:$dstPort: ${e.message}"
             )
             -1
         }
     }
 
     /**
-     * Определяет UID для TCP-соединения.
+     * Determines the UID for a TCP connection.
      */
     fun resolveTcpUid(
         localAddr: String,
@@ -79,7 +79,7 @@ class UidResolver(private val context: Context) {
     }
 
     /**
-     * Определяет UID для UDP-соединения.
+     * Determines the UID for a UDP connection.
      */
     fun resolveUdpUid(
         localAddr: String,

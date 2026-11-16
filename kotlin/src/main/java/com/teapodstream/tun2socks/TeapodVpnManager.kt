@@ -8,13 +8,13 @@ import androidx.annotation.RequiresApi
 import tun2socks.TeapodTun2socks
 
 /**
- * Публичный менеджер teapod-tun2socks.
+ * Public teapod-tun2socks manager.
  *
- * Этот класс является основным API-интерфейсом библиотеки AAR.
- * Он принимает [ParcelFileDescriptor] от Android VpnService,
- * настраивает SOCKS5-прокси и управляет валидацией UID.
+ * This class is the main API of the AAR library.
+ * It takes a [ParcelFileDescriptor] from Android VpnService,
+ * configures the SOCKS5 proxy and manages UID validation.
  *
- * ## Пример использования:
+ * ## Usage example:
  *
  * ```kotlin
  * val manager = TeapodVpnManager(context)
@@ -29,13 +29,13 @@ import tun2socks.TeapodTun2socks
  *     whitelistMode = WhitelistMode.ALLOW_ONLY
  * )
  *
- * // ... позже ...
+ * // ... later ...
  * manager.stop()
  * ```
  *
- * ## Требования:
- *  - Минимальная версия Android API: 29 (Q)
- *  - Разрешение ACCESS_NETWORK_STATE (для getConnectionOwnerUid)
+ * ## Requirements:
+ *  - Minimum Android API: 29 (Q)
+ *  - ACCESS_NETWORK_STATE permission (for getConnectionOwnerUid)
  */
 @RequiresApi(Build.VERSION_CODES.Q)
 class TeapodVpnManager(private val context: Context) {
@@ -47,22 +47,22 @@ class TeapodVpnManager(private val context: Context) {
     private var isStarted = false
 
     /**
-     * Запускает teapod-tun2socks.
+     * Starts teapod-tun2socks.
      *
-     * @param tunFd          TUN-интерфейс (ParcelFileDescriptor от VpnService)
-     * @param mtu            MTU TUN-интерфейса; должен совпадать со значением VpnService.Builder.setMtu()
-     * @param socksHost      Адрес SOCKS5 прокси
-     * @param socksPort      Порт SOCKS5 прокси
-     * @param socksUsername  Имя пользователя SOCKS5 (пустая строка = без авторизации)
-     * @param socksPassword  Пароль SOCKS5 (пустая строка = без авторизации)
-     * @param allowedUids    Набор UID, которые разрешены (или заблокированы, в зависимости от режима)
-     * @param whitelistMode  Режим whitelist: [WhitelistMode.ALLOW_ONLY], [WhitelistMode.DENY_ONLY], [WhitelistMode.ALLOW_ALL]
-     * @param cacheCapacity  Размер LRU-кэша валидаций (по умолчанию 10000)
-     * @param cacheTtlSeconds TTL записей кэша в секундах (по умолчанию 300)
-     * @param customValidator Дополнительный пользовательский валидатор (может быть null)
+     * @param tunFd          TUN interface (ParcelFileDescriptor from VpnService)
+     * @param mtu            TUN interface MTU; must match VpnService.Builder.setMtu()
+     * @param socksHost      SOCKS5 proxy address
+     * @param socksPort      SOCKS5 proxy port
+     * @param socksUsername  SOCKS5 username (empty string = no auth)
+     * @param socksPassword  SOCKS5 password (empty string = no auth)
+     * @param allowedUids    Set of UIDs that are allowed (or blocked, depending on the mode)
+     * @param whitelistMode  Whitelist mode: [WhitelistMode.ALLOW_ONLY], [WhitelistMode.DENY_ONLY], [WhitelistMode.ALLOW_ALL]
+     * @param cacheCapacity  Size of the validation LRU cache (10000 by default)
+     * @param cacheTtlSeconds Cache entry TTL in seconds (300 by default)
+     * @param customValidator An additional custom validator (may be null)
      *
-     * @throws IllegalStateException если менеджер уже запущен
-     * @throws IllegalArgumentException если tunFd невалиден
+     * @throws IllegalStateException if the manager is already running
+     * @throws IllegalArgumentException if tunFd is invalid
      */
     @Synchronized
     fun start(
@@ -81,20 +81,20 @@ class TeapodVpnManager(private val context: Context) {
         customValidator: UidValidator? = null
     ) {
         if (isStarted) {
-            throw IllegalStateException("TeapodVpnManager уже запущен. Вызовите stop() перед start().")
+            throw IllegalStateException("TeapodVpnManager is already running. Call stop() before start().")
         }
 
         val fd = tunFd.fd
         if (fd < 0) {
-            throw IllegalArgumentException("ParcelFileDescriptor содержит невалидный fd: $fd")
+            throw IllegalArgumentException("ParcelFileDescriptor holds an invalid fd: $fd")
         }
 
         Log.i(TAG, "Starting teapod-tun2socks: fd=$fd mtu=$mtu socks=$socksHost:$socksPort mode=$whitelistMode uids=${allowedUids.size}")
 
-        // Создаём резолвер UID
+        // Create the UID resolver
         val uidResolver = UidResolver(context)
 
-        // Создаём callback-адаптер, который будет вызываться из Go
+        // Create the callback adapter that Go will call
         val callback = TeapodTun2socksCallback(
             uidResolver = uidResolver,
             allowedUids = allowedUids,
@@ -102,7 +102,7 @@ class TeapodVpnManager(private val context: Context) {
             validator = customValidator
         )
 
-        // Создаём Go teapod-tun2socks
+        // Create the Go teapod-tun2socks
         teapodTun2socks = TeapodTun2socks().apply {
             setLogEnabled(ENABLE_DEBUG_LOGS)
             val error = start(
@@ -119,24 +119,24 @@ class TeapodVpnManager(private val context: Context) {
                 callback
             )
             if (error.isNotEmpty()) {
-                Log.e(TAG, "Ошибка при запуске teapod-tun2socks: $error")
+                Log.e(TAG, "Error starting teapod-tun2socks: $error")
                 throw IllegalStateException("teapod-tun2socks start failed: $error")
             }
         }
 
         isStarted = true
-        Log.i(TAG, "teapod-tun2socks запущен успешно")
+        Log.i(TAG, "teapod-tun2socks started successfully")
     }
 
     /**
-     * Останавливает teapod-tun2socks и освобождает ресурсы.
+     * Stops teapod-tun2socks and releases resources.
      *
-     * Этот метод блокируется до завершения всех горутин Go-движка.
+     * This method blocks until all goroutines of the Go engine finish.
      */
     @Synchronized
     fun stop() {
         if (!isStarted) {
-            Log.w(TAG, "stop() вызван, но teapod-tun2socks не запущен")
+            Log.w(TAG, "stop() called, but teapod-tun2socks is not running")
             return
         }
 
@@ -145,44 +145,44 @@ class TeapodVpnManager(private val context: Context) {
         try {
             teapodTun2socks?.stop()
         } catch (e: Exception) {
-            Log.e(TAG, "Ошибка при остановке teapod-tun2socks: ${e.message}", e)
+            Log.e(TAG, "Error stopping teapod-tun2socks: ${e.message}", e)
         } finally {
             teapodTun2socks = null
             isStarted = false
-            Log.i(TAG, "teapod-tun2socks остановлен")
+            Log.i(TAG, "teapod-tun2socks stopped")
         }
     }
 
     /**
-     * Возвращает true, если менеджер в данный момент запущен.
+     * Returns true if the manager is currently running.
      */
     fun isRunning(): Boolean {
         return teapodTun2socks?.isRunning() == true
     }
 
     /**
-     * Возвращает текущий размер кэша UID-валидаций (для отладки).
+     * Returns the current size of the UID validation cache (for debugging).
      */
     fun getCacheSize(): Int {
         return teapodTun2socks?.cacheSize()?.toInt() ?: 0
     }
 
     /**
-     * Переключает внутреннее логирование Go-слоя.
+     * Toggles the Go layer's internal logging.
      */
     fun setDebugLogging(enabled: Boolean) {
         teapodTun2socks?.setLogEnabled(enabled)
     }
 
     /**
-     * Возвращает общее количество байт, отправленных через TUN (Upload в интернет).
+     * Returns the total bytes sent through TUN (upload to the internet).
      */
     fun getUploadBytes(): Long {
         return teapodTun2socks?.uploadBytes ?: 0L
     }
 
     /**
-     * Возвращает общее количество байт, полученных через TUN (Download из интернета).
+     * Returns the total bytes received through TUN (download from the internet).
      */
     fun getDownloadBytes(): Long {
         return teapodTun2socks?.downloadBytes ?: 0L
@@ -191,16 +191,16 @@ class TeapodVpnManager(private val context: Context) {
     companion object {
         private const val TAG = "TeapodVpnManager"
 
-        /** Размер LRU-кэша по умолчанию (записей). */
+        /** Default LRU cache size (entries). */
         const val DEFAULT_CACHE_CAPACITY = 10000
 
-        /** TTL записей кэша по умолчанию (секунды = 5 минут). */
+        /** Default cache entry TTL (seconds = 5 minutes). */
         const val DEFAULT_CACHE_TTL = 300
 
-        /** MTU TUN-интерфейса по умолчанию. */
+        /** Default TUN interface MTU. */
         const val DEFAULT_MTU = 1500
 
-        /** Включить DEBUG-логи Go-слоя (для разработки). */
+        /** Enable DEBUG logs of the Go layer (for development). */
         private const val ENABLE_DEBUG_LOGS = false
     }
 }

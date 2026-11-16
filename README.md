@@ -1,6 +1,12 @@
 # teapod-tun2socks — Strict AAR Library
 
+**Русский** | [English](README.en.md)
+
 Библиотека Android в формате AAR, которая работает как strict split-tunneling VPN-шлюз. Принимает FileDescriptor TUN-интерфейса, обрабатывает сырые IP-пакеты в TCP/UDP сессии через userspace TCP/IP стек (gvisor/netstack на Go), и строго проверяет UID процесса перед пересылкой трафика в SOCKS5 прокси.
+
+## Использование в TeapodStream
+
+[TeapodStream](https://github.com/Wendor/teapodstream) использует не этот AAR, а Go-пакет из `go/`: [teapod-core](https://github.com/Wendor/teapod-core) подключает его как модуль (`replace … => ../teapod-tun2socks/go` в `go.mod`) и собирает вместе с xray-core и sing-box в один fat AAR. Поэтому три репозитория клонируются рядом, а версия у них общая — `version` из `../teapodstream/pubspec.yaml` (меняется командой `./build.sh bump X.Y.Z` в teapodstream). Отдельный AAR из этого репозитория нужен только для использования библиотеки вне TeapodStream.
 
 ## Архитектура
 
@@ -82,10 +88,10 @@
 | Компонент | Версия |
 |-----------|--------|
 | Android API | 29+ (Android Q) |
-| Go | 1.21+ |
+| Go | 1.25.5+ (`go/go.mod`) |
 | gomobile | latest |
-| Android NDK | r21+ |
-| Java | 8+ |
+| Android NDK | r28 (как в teapod-core) |
+| JDK | 17+ (AGP 8.7; CI использует 21), байткод библиотеки — Java 8 |
 
 ## Сборка
 
@@ -133,8 +139,6 @@ export ANDROID_NDK_HOME=$HOME/Android/Sdk/ndk/<version>
 cd go/
 GOOS=linux GOARCH=amd64 go test -v ./...
 ```
-
-Подробнее — см. раздел [Тестирование](#тестирование).
 
 ### 5. Сборка Kotlin-обёртки (AAR)
 
@@ -275,7 +279,7 @@ Log.d("VPN", "Cache size: ${teapodVpnManager.getCacheSize()}")
 ## Структура проекта
 
 ```
-tun2socks-sec/
+teapod-tun2socks/
 ├── go/                          # Go-код (gomobile bind)
 │   ├── go.mod                   # Go module + зависимости
 │   ├── go.sum                   # Lock-файл зависимостей
@@ -284,6 +288,7 @@ tun2socks-sec/
 │   ├── engine_hook.go           # Хук UID-валидации + LRU-кэш
 │   ├── connection.go            # Модель соединения + LRU-кэш
 │   ├── socks5.go                # SOCKS5 клиент (CONNECT + UDP ASSOCIATE)
+│   └── icmp_reject.go           # ICMP «порт недоступен» для отклонённого UDP
 │
 ├── kotlin/src/main/java/com/teapodstream/tun2socks/
 │   ├── TeapodVpnManager.kt      # Публичный API менеджер
@@ -292,6 +297,7 @@ tun2socks-sec/
 │   └── TeapodTun2socksCallback.kt # JNI-мост Go ↔ Kotlin
 │
 ├── build.sh                     # Скрипт сборки
+├── README.en.md                 # README на английском
 └── README.md                    # Этот файл
 ```
 

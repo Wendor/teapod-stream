@@ -613,6 +613,10 @@ func handleTCPForwarder(ctx context.Context, req *tcp.ForwarderRequest, hook *En
 		gonetConn.Close()
 		return
 	}
+	// An allowed decision lives as long as its flow: the key has no app identity, and another
+	// app reusing the same 5-tuple within the TTL would get it without a validator call.
+	// Denials stay cached, so a blocked app's retries don't call the validator every time.
+	release := func() { hook.Invalidate(srcIP, srcPort, dstIP, dstPort, uint8(ProtocolTCP)) }
 
 	dialStart := time.Now()
 	proxyConn, dialErr := NewSOCKS5Client(socksHost, socksPort, socksUser, socksPass).
@@ -621,6 +625,7 @@ func handleTCPForwarder(ctx context.Context, req *tcp.ForwarderRequest, hook *En
 		e.socksDialFails.Add(1)
 		log.Printf("[teapod-tun2socks] SOCKS5 dial %s:%d failed after %dms: %v", dstIP, dstPort, time.Since(dialStart).Milliseconds(), dialErr)
 		gonetConn.Close()
+		release()
 		return
 	}
 
@@ -640,6 +645,7 @@ func handleTCPForwarder(ctx context.Context, req *tcp.ForwarderRequest, hook *En
 	go func() {
 		defer e.activeConns.Add(-1)
 		defer e.untrackConn(connID)
+		defer release()
 		pipeConnections(tc, e)
 	}()
 }
@@ -671,6 +677,8 @@ func handleUDPForwarder(ctx context.Context, req *udp.ForwarderRequest, hook *En
 		gonetConn.Close()
 		return
 	}
+	// The allowed decision ends with the flow (see handleTCPForwarder).
+	defer hook.Invalidate(srcIP, id.RemotePort, dstIP, dstPort, uint8(ProtocolUDP))
 
 	socks := NewSOCKS5Client(socksHost, socksPort, socksUser, socksPass)
 	assoc, err := socks.UDPAssociate(ctx)

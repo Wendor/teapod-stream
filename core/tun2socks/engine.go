@@ -42,11 +42,6 @@ const (
 	// and ACKs when Telegram received multiple media notifications simultaneously.
 	channelSize = 4096
 	nicID        tcpip.NICID = 1
-	// udpIdleTimeout is the maximum idle time for a UDP flow before its goroutines
-	// and sockets are released. The deadline is reset on every received packet, so
-	// active sessions (QUIC, gaming) stay alive indefinitely; only truly idle flows
-	// (finished DNS queries, stale connections) are cleaned up.
-	udpIdleTimeout = 60 * time.Second
 	// tcpIdleTimeout is the maximum idle time for a TCP flow, measured across BOTH
 	// directions (a one-directional transfer such as a long download keeps the flow
 	// alive). Stuck connections (e.g. after an LTE tower handover with no FIN/RST)
@@ -70,6 +65,13 @@ const (
 	// (the src-only validation cache makes each new flow essentially free to admit).
 	maxUDPConns = 512
 )
+
+// udpIdleTimeout is the maximum idle time for a UDP flow before its goroutines and
+// sockets are released, measured across BOTH directions: a flow that only sends (no
+// replies) or only receives (one subscribe, then a stream) stays alive while packets
+// move either way; only truly idle flows (finished DNS queries, stale connections) are
+// cleaned up. A variable for tests.
+var udpIdleTimeout = 60 * time.Second
 
 type Engine struct {
 	stack          *stack.Stack
@@ -689,7 +691,7 @@ func handleUDPForwarder(ctx context.Context, req *udp.ForwarderRequest, hook *En
 	pipeUDP(gonetConn, assoc, dstIP, int(dstPort), mtu)
 }
 
-func pipeUDP(gonetConn *gonet.UDPConn, assoc *UDPAssociation, dstIP net.IP, dstPort int, mtu int) {
+func pipeUDP(gonetConn net.Conn, assoc *UDPAssociation, dstIP net.IP, dstPort int, mtu int) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("[teapod-tun2socks] panic in pipeUDP: %v", r)
@@ -718,6 +720,19 @@ func pipeUDP(gonetConn *gonet.UDPConn, assoc *UDPAssociation, dstIP net.IP, dstP
 		io.Copy(io.Discard, assoc.ctrl)
 	}()
 
+	// Last forwarded datagram in either direction (Unix ms). Each reader's deadline runs
+	// from it, so a one-directional flow isn't closed by the silent direction; datagrams
+	// dropped below (foreign source, bad header) don't count, so spam can't keep a dead
+	// flow alive.
+	var lastActMs atomic.Int64
+	lastActMs.Store(time.Now().UnixMilli())
+	idleDeadline := func() time.Time { return time.UnixMilli(lastActMs.Load()).Add(udpIdleTimeout) }
+	// stillActive: the read timed out, but the other direction moved meanwhile.
+	stillActive := func(err error) bool {
+		var ne net.Error
+		return errors.As(err, &ne) && ne.Timeout() && time.Now().Before(idleDeadline())
+	}
+
 	var wg sync.WaitGroup
 	wg.Add(2)
 
@@ -727,17 +742,19 @@ func pipeUDP(gonetConn *gonet.UDPConn, assoc *UDPAssociation, dstIP net.IP, dstP
 		defer shutdown()
 		buf := make([]byte, mtu)
 		for {
-			// Idle-based deadline: reset before every read so the timeout only fires
-			// when no packet has arrived for udpIdleTimeout, not after an absolute time.
-			gonetConn.SetReadDeadline(time.Now().Add(udpIdleTimeout))
+			gonetConn.SetReadDeadline(idleDeadline())
 			n, err := gonetConn.Read(buf)
 			if err != nil {
+				if stillActive(err) {
+					continue
+				}
 				return
 			}
 			datagram := EncodeUDPDatagram(dstIP, dstPort, buf[:n])
 			if _, err := assoc.UDPConn.WriteToUDP(datagram, assoc.RelayAddr); err != nil {
 				return
 			}
+			lastActMs.Store(time.Now().UnixMilli())
 		}
 	}()
 
@@ -747,9 +764,12 @@ func pipeUDP(gonetConn *gonet.UDPConn, assoc *UDPAssociation, dstIP net.IP, dstP
 		defer shutdown()
 		buf := make([]byte, mtu+22)
 		for {
-			assoc.UDPConn.SetReadDeadline(time.Now().Add(udpIdleTimeout))
+			assoc.UDPConn.SetReadDeadline(idleDeadline())
 			n, from, err := assoc.UDPConn.ReadFromUDP(buf)
 			if err != nil {
+				if stillActive(err) {
+					continue
+				}
 				return
 			}
 			// Only accept datagrams from the SOCKS5 relay we associated with.
@@ -768,6 +788,7 @@ func pipeUDP(gonetConn *gonet.UDPConn, assoc *UDPAssociation, dstIP net.IP, dstP
 			if _, err := gonetConn.Write(payload); err != nil {
 				return
 			}
+			lastActMs.Store(time.Now().UnixMilli())
 		}
 	}()
 

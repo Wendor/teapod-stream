@@ -767,7 +767,18 @@ type udpActivity struct {
 
 func newUDPActivity() *udpActivity { return &udpActivity{base: time.Now()} }
 
-func (a *udpActivity) touch() { a.last.Store(int64(time.Since(a.base))) }
+func (a *udpActivity) touch() { a.advance(time.Since(a.base)) }
+
+// advance moves the activity forward only: both readers touch it, and a reader that took
+// its time earlier but stores it later must not move the deadline back.
+func (a *udpActivity) advance(d time.Duration) {
+	for {
+		last := a.last.Load()
+		if int64(d) <= last || a.last.CompareAndSwap(last, int64(d)) {
+			return
+		}
+	}
+}
 
 func (a *udpActivity) deadline() time.Time {
 	return a.base.Add(time.Duration(a.last.Load()) + udpIdleTimeout)

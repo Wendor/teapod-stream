@@ -39,6 +39,14 @@ func startUDPFlow(t *testing.T) *udpFlow {
 		pipeUDP(gvisorSide, assoc, net.IPv4(192, 0, 2, 1), 5004, 1500)
 		close(f.done)
 	}()
+	// Join pipeUDP before the earlier cleanups (the idle timeout restore among them) run:
+	// a reader still alive after a failed test would race with them.
+	t.Cleanup(func() {
+		gvisorSide.Close()
+		assocConn.Close()
+		ctrl.Close()
+		<-f.done
+	})
 	return f
 }
 
@@ -122,5 +130,16 @@ func TestUDPActivityDeadlineIsMonotonic(t *testing.T) {
 	}
 	if left := time.Until(d); left <= 0 || left > udpIdleTimeout {
 		t.Fatalf("deadline in %v; want within (0, %v]", left, udpIdleTimeout)
+	}
+}
+
+// Activity only moves forward: a reader storing an older time after a newer one must not
+// pull the deadline back.
+func TestUDPActivityNeverMovesBack(t *testing.T) {
+	act := newUDPActivity()
+	act.advance(11 * time.Second)
+	act.advance(10 * time.Second)
+	if got := time.Duration(act.last.Load()); got != 11*time.Second {
+		t.Fatalf("activity at %v after a late older touch; want 11s", got)
 	}
 }

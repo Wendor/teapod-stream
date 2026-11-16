@@ -152,3 +152,27 @@ func TestReleasingConnReleasesBeforeClose(t *testing.T) {
 		t.Fatalf("release called %d times; want 1", calls)
 	}
 }
+
+type halfCloseConn struct {
+	net.Conn
+	closedWrite, closed bool
+}
+
+func (c *halfCloseConn) CloseWrite() error { c.closedWrite = true; return nil }
+func (c *halfCloseConn) Close() error      { c.closed = true; return nil }
+
+// A half-close must reach the endpoint and keep the flow and its decision: pipeConnections
+// turns EOF from the proxy into CloseWrite and keeps the other direction working.
+func TestReleasingConnPassesHalfClose(t *testing.T) {
+	released := false
+	inner := &halfCloseConn{}
+	var c net.Conn = &releasingConn{Conn: inner, release: func() { released = true }}
+	cw, ok := c.(interface{ CloseWrite() error })
+	if !ok {
+		t.Fatal("releasingConn hides CloseWrite: a half-close would close the whole flow")
+	}
+	cw.CloseWrite()
+	if !inner.closedWrite || inner.closed || released {
+		t.Fatalf("closedWrite %v, closed %v, released %v; want true, false, false", inner.closedWrite, inner.closed, released)
+	}
+}

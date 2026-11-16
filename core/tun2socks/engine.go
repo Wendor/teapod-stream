@@ -116,6 +116,15 @@ func (c *releasingConn) Close() error {
 	return c.Conn.Close()
 }
 
+// CloseWrite passes a half-close on, so pipeConnections keeps the other direction open.
+// The flow is still alive, so the decision stays.
+func (c *releasingConn) CloseWrite() error {
+	if cw, ok := c.Conn.(interface{ CloseWrite() error }); ok {
+		return cw.CloseWrite()
+	}
+	return errors.ErrUnsupported
+}
+
 type trackedConn struct {
 	app      net.Conn // gVisor side
 	proxy    net.Conn // SOCKS side

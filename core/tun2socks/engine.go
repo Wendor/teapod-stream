@@ -102,6 +102,20 @@ type Engine struct {
 
 // trackedConn is a proxied TCP connection with per-direction activity timestamps
 // (Unix ms) used for connection-level idle accounting and zombie detection.
+// releasingConn calls release before it closes the connection. Closing a gVisor endpoint
+// lets a new flow with the same 5-tuple in at once; dropping the flow's allowed decision
+// first makes that flow call the validator again.
+type releasingConn struct {
+	net.Conn
+	once    sync.Once
+	release func()
+}
+
+func (c *releasingConn) Close() error {
+	c.once.Do(c.release)
+	return c.Conn.Close()
+}
+
 type trackedConn struct {
 	app      net.Conn // gVisor side
 	proxy    net.Conn // SOCKS side
@@ -616,7 +630,9 @@ func handleTCPForwarder(ctx context.Context, req *tcp.ForwarderRequest, hook *En
 	// An allowed decision lives as long as its flow: the key has no app identity, and another
 	// app reusing the same 5-tuple within the TTL would get it without a validator call.
 	// Denials stay cached, so a blocked app's retries don't call the validator every time.
-	release := func() { hook.Invalidate(srcIP, srcPort, dstIP, dstPort, uint8(ProtocolTCP)) }
+	app := &releasingConn{Conn: gonetConn, release: func() {
+		hook.Invalidate(srcIP, srcPort, dstIP, dstPort, uint8(ProtocolTCP))
+	}}
 
 	dialStart := time.Now()
 	proxyConn, dialErr := NewSOCKS5Client(socksHost, socksPort, socksUser, socksPass).
@@ -624,14 +640,13 @@ func handleTCPForwarder(ctx context.Context, req *tcp.ForwarderRequest, hook *En
 	if dialErr != nil {
 		e.socksDialFails.Add(1)
 		log.Printf("[teapod-tun2socks] SOCKS5 dial %s:%d failed after %dms: %v", dstIP, dstPort, time.Since(dialStart).Milliseconds(), dialErr)
-		gonetConn.Close()
-		release()
+		app.Close()
 		return
 	}
 
 	nowMs := time.Now().UnixMilli()
 	tc := &trackedConn{
-		app:       gonetConn,
+		app:       app,
 		proxy:     proxyConn,
 		dst:       fmt.Sprintf("%s:%d", dstIP, dstPort),
 		createdMs: nowMs,
@@ -645,7 +660,6 @@ func handleTCPForwarder(ctx context.Context, req *tcp.ForwarderRequest, hook *En
 	go func() {
 		defer e.activeConns.Add(-1)
 		defer e.untrackConn(connID)
-		defer release()
 		pipeConnections(tc, e)
 	}()
 }
@@ -678,26 +692,28 @@ func handleUDPForwarder(ctx context.Context, req *udp.ForwarderRequest, hook *En
 		return
 	}
 	// The allowed decision ends with the flow (see handleTCPForwarder).
-	defer hook.Invalidate(srcIP, id.RemotePort, dstIP, dstPort, uint8(ProtocolUDP))
+	conn := &releasingConn{Conn: gonetConn, release: func() {
+		hook.Invalidate(srcIP, id.RemotePort, dstIP, dstPort, uint8(ProtocolUDP))
+	}}
 
 	socks := NewSOCKS5Client(socksHost, socksPort, socksUser, socksPass)
 	assoc, err := socks.UDPAssociate(ctx)
 	if err != nil {
 		e.socksDialFails.Add(1)
 		log.Printf("[teapod-tun2socks] UDP ASSOCIATE failed for %s:%d: %v", dstIP, dstPort, err)
-		gonetConn.Close()
+		conn.Close()
 		return
 	}
 
 	connID := e.connsSeq.Add(1)
-	e.trackUDPConn(connID, gonetConn)
+	e.trackUDPConn(connID, conn)
 	defer e.untrackUDPConn(connID)
 	// Run the relay inline: handleUDPForwarder is already its own goroutine, and
 	// keeping it on the stack ties the reserved slot's lifetime to the live flow.
-	pipeUDP(gonetConn, assoc, dstIP, int(dstPort), mtu)
+	pipeUDP(conn, assoc, dstIP, int(dstPort), mtu)
 }
 
-func pipeUDP(gonetConn *gonet.UDPConn, assoc *UDPAssociation, dstIP net.IP, dstPort int, mtu int) {
+func pipeUDP(gonetConn net.Conn, assoc *UDPAssociation, dstIP net.IP, dstPort int, mtu int) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("[teapod-tun2socks] panic in pipeUDP: %v", r)

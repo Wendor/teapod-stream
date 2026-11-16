@@ -124,3 +124,31 @@ func TestUDPFlowEndInvalidatesValidation(t *testing.T) {
 		t.Fatalf("cache holds %d decision(s) after the flow ended; want 0", n)
 	}
 }
+
+type orderConn struct {
+	net.Conn
+	released           *bool
+	closedAfterRelease bool
+}
+
+func (c *orderConn) Close() error {
+	c.closedAfterRelease = *c.released
+	return nil
+}
+
+// The allowed decision must be gone before the endpoint closes: the stack accepts a new
+// flow on the same 5-tuple as soon as it is closed, and that flow must be validated again.
+func TestReleasingConnReleasesBeforeClose(t *testing.T) {
+	var released bool
+	calls := 0
+	inner := &orderConn{released: &released}
+	c := &releasingConn{Conn: inner, release: func() { released = true; calls++ }}
+	c.Close()
+	c.Close()
+	if !inner.closedAfterRelease {
+		t.Fatal("the connection closed before the decision was released")
+	}
+	if calls != 1 {
+		t.Fatalf("release called %d times; want 1", calls)
+	}
+}

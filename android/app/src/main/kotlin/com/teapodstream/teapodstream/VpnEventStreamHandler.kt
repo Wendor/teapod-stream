@@ -13,7 +13,8 @@ object VpnEventStreamHandler : EventChannel.StreamHandler {
     private var eventSink: EventChannel.EventSink? = null
     private val handler = Handler(Looper.getMainLooper())
     private val eventBuffer = mutableListOf<Map<String, Any?>>()
-    // Контекст приложения для обновления Quick Settings плитки — WeakReference чтобы не удерживать Activity
+    // Application-контекст для плитки и уведомлений; не обнуляется при закрытии UI —
+    // сервис обновляет их и без Activity (WeakReference: держать Activity нельзя)
     private var _appContextRef: WeakReference<android.content.Context>? = null
     var appContext: android.content.Context?
         get() = _appContextRef?.get()
@@ -49,7 +50,7 @@ object VpnEventStreamHandler : EventChannel.StreamHandler {
                 // Весь буфер истории для графика (full) — клиент синхронизирует эпоху
                 sendEvent(XrayVpnService.getStatsHistory(-1, 0) + ("type" to "statsHistory"))
             }
-            "connecting", "disconnecting", "reconnecting", "blocked" -> sendStateEvent(state)
+            "connecting", "disconnecting", "reconnecting", "blocked", "error" -> sendStateEvent(state)
             else -> sendStateEvent("disconnected")
         }
     }
@@ -81,7 +82,8 @@ object VpnEventStreamHandler : EventChannel.StreamHandler {
     }
 
     fun sendStateEvent(state: String) {
-        sendEvent(mapOf("type" to "state", "value" to state))
+        val error = XrayVpnService.lastError?.takeIf { state == "error" || state == "blocked" }
+        sendEvent(mapOf("type" to "state", "value" to state, "error" to error))
         ItestBridge.state(state)
         // Обновляем плитку и уведомление при изменении состояния
         appContext?.let { ctx ->

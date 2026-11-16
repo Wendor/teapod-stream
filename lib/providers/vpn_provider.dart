@@ -47,6 +47,7 @@ class VpnState2 {
   bool get isConnecting => connectionState == VpnState.connecting;
   bool get isDisconnecting => connectionState == VpnState.disconnecting;
   bool get isBlocked => connectionState == VpnState.blocked;
+  bool get isError => connectionState == VpnState.error;
   bool get isBusy => isConnecting || isDisconnecting;
 
   /// SOCKS туннеля для собственных загрузок приложения; null — VPN не подключён.
@@ -102,6 +103,16 @@ class VpnNotifier extends Notifier<VpnState2> {
   /// Последний выставленный список: если в state другой, его сбросили (отключение,
   /// таймаут) — дописывать не к чему, нужен весь буфер.
   List<SpeedPoint> _history = const [];
+
+  /// Конфиг, с которым запущен туннель из приложения; null — неизвестно (VPN поднят
+  /// плиткой/автостартом или отключён). Эффективный конфиг подписки может смениться
+  /// после пинга, пока туннель работает на прежнем.
+  VpnConfig? _connectedConfig;
+
+  /// Туннель уже работает на [c]: тот же id и URI (правка URI сохраняет id), не в
+  /// процессе переключения — выбор не требует переподключения.
+  bool runsConfig(VpnConfig c) =>
+      state.isConnected && _connectedConfig?.id == c.id && _connectedConfig?.rawUri == c.rawUri;
 
 
   @override
@@ -251,7 +262,8 @@ class VpnNotifier extends Notifier<VpnState2> {
             );
           }
         }
-        _onNativeState(newState, isReconnect: isReconnect);
+        _onNativeState(newState,
+            isReconnect: isReconnect, error: event['error'] as String?);
       case 'log':
         final level = event['level'] as String? ?? 'info';
         final msg = event['message'] as String? ?? '';
@@ -367,7 +379,8 @@ class VpnNotifier extends Notifier<VpnState2> {
         _ => VpnState.disconnected,
       };
 
-  void _onNativeState(VpnState nativeState, {bool isReconnect = false}) {
+  /// [error] — причина неудачного старта от натива (для error/blocked).
+  void _onNativeState(VpnState nativeState, {bool isReconnect = false, String? error}) {
     if (nativeState == VpnState.connected) {
       _connectedAt ??= DateTime.now();
       _connectTimeout?.cancel();
@@ -378,6 +391,7 @@ class VpnNotifier extends Notifier<VpnState2> {
         nativeState == VpnState.error ||
         nativeState == VpnState.blocked) {
       _connectedAt = null;
+      _connectedConfig = null;
       _connectTimeout?.cancel();
       _connectTimeout = null;
       _disconnectTimeout?.cancel();
@@ -392,7 +406,7 @@ class VpnNotifier extends Notifier<VpnState2> {
         _connectTimeout ??= Timer(const Duration(seconds: 45), () {
           if (state.connectionState == VpnState.connecting) {
             state = state.copyWith(
-                connectionState: VpnState.error, error: 'Connection timeout');
+                connectionState: VpnState.error, error: 'Таймаут подключения');
             _connectTimeout = null;
             _engine.disconnect().ignore();
           }
@@ -407,7 +421,13 @@ class VpnNotifier extends Notifier<VpnState2> {
       });
     }
 
-    if (state.connectionState == nativeState) return;
+    if (state.connectionState == nativeState) {
+      // Таймаут Flutter мог выставить error раньше, чем натив прислал причину.
+      if (error != null && (nativeState == VpnState.error || nativeState == VpnState.blocked)) {
+        state = state.copyWith(error: error);
+      }
+      return;
+    }
 
     if (nativeState == VpnState.disconnected ||
         nativeState == VpnState.error ||
@@ -418,9 +438,11 @@ class VpnNotifier extends Notifier<VpnState2> {
         connectionState: nativeState,
         // Reset stats including speedHistory
         stats: const VpnStats(),
-        error: nativeState == VpnState.error
-            ? (state.error ?? 'Connection error')
-            : null,
+        error: switch (nativeState) {
+          VpnState.error => error ?? state.error ?? 'Ошибка подключения',
+          VpnState.blocked => error,
+          _ => null,
+        },
       );
     } else {
       state = state.copyWith(connectionState: nativeState);
@@ -428,6 +450,8 @@ class VpnNotifier extends Notifier<VpnState2> {
   }
 
   void _handleStats(Map<String, dynamic> event) {
+    // Опоздавший ответ после обрыва: copyWith сбросил бы причину error/blocked.
+    if (!state.isConnected) return;
     // Handle both int and Long (from Kotlin)
     final upload = (event['upload'] as num?)?.toInt() ?? 0;
     final download = (event['download'] as num?)?.toInt() ?? 0;
@@ -463,6 +487,7 @@ class VpnNotifier extends Notifier<VpnState2> {
   /// продолжают текущую (`from == _historySeq`), чтобы опоздавший ответ не задвоил их.
   /// Любое несовпадение — следующий запрос за всем буфером.
   void _applyHistory(Map<Object?, Object?> r) {
+    if (!state.isConnected) return;
     final full = r['full'] == true;
     final epoch = (r['epoch'] as num?)?.toInt() ?? -1;
     final from = (r['from'] as num?)?.toInt() ?? 0;
@@ -498,7 +523,7 @@ class VpnNotifier extends Notifier<VpnState2> {
     _connectTimeout = Timer(const Duration(seconds: 45), () {
       if (state.connectionState == VpnState.connecting) {
         state = state.copyWith(
-            connectionState: VpnState.error, error: 'Connection timeout');
+            connectionState: VpnState.error, error: 'Таймаут подключения');
         _connectTimeout = null;
         _engine.disconnect().ignore();
       }
@@ -511,7 +536,7 @@ class VpnNotifier extends Notifier<VpnState2> {
         ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
     final config = _resolveEffectiveConfig(configState);
     if (config == null) {
-      return _failConnect('No configuration selected', switching: switching);
+      return _failConnect('Конфигурация не выбрана', switching: switching);
     }
 
     final validationError = config.validate();
@@ -539,6 +564,7 @@ class VpnNotifier extends Notifier<VpnState2> {
 
     try {
       await _engine.connect(config, options);
+      _connectedConfig = config;
       if (switching) _connectedAt = null;
       // Polling is started in _onNativeState when connected
       state = state.copyWith(

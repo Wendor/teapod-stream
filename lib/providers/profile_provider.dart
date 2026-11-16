@@ -142,7 +142,13 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
 
   ProfileBundle exportBundle(String profileId, {bool includeConnections = false}) {
     final current = _current!;
-    final profile = current.profiles.firstWhere((p) => p.id == profileId);
+    final stored = current.profiles.firstWhere((p) => p.id == profileId);
+    // Локальные секреты в файл не уходят (импорт их всё равно не берёт — _keepLocalSecurity).
+    final profile = stored.copyWith(settings: stored.settings.copyWith(
+      socksUser: '',
+      socksPassword: '',
+      heartbeat: stored.settings.heartbeat.copyWith(customUrl: ''),
+    ));
     if (!includeConnections) {
       return ProfileBundle(exportedAt: DateTime.now(), profile: profile);
     }

@@ -23,6 +23,10 @@ import java.net.InetSocketAddress
 class MainActivity : FlutterActivity() {
 
     companion object {
+        // Пинг всех конфигов и urltest по кандидатам шлют пачки вызовов: без лимита —
+        // по процессу `ping` / временному инстансу ядра на каждый конфиг одновременно.
+        private val pingPool = java.util.concurrent.Executors.newFixedThreadPool(8)
+        private val measurePool = java.util.concurrent.Executors.newFixedThreadPool(4)
         private const val METHOD_CHANNEL = "com.teapodstream/vpn"
         private const val EVENT_CHANNEL = "com.teapodstream/vpn/events"
         private const val VPN_PERMISSION_REQUEST = 1001
@@ -206,10 +210,10 @@ class MainActivity : FlutterActivity() {
                         val address = call.argument<String>("address") ?: ""
                         val port = call.argument<Int>("port") ?: 443
                         // Run ping in background thread
-                        Thread {
+                        pingPool.execute {
                             val latency = pingHost(address, port)
                             runOnUiThread { result.success(latency) }
-                        }.start()
+                        }
                     }
 
                     // Реальный замер задержки через кандидата: поднимает временный
@@ -218,14 +222,14 @@ class MainActivity : FlutterActivity() {
                     "measureOutbound" -> {
                         val config = call.argument<String>("config") ?: ""
                         val url = call.argument<String>("url") ?: ""
-                        Thread {
+                        measurePool.execute {
                             val latency = try {
                                 VpnCores.get(CoreKind.fromId(call.argument<String>("engine"))).measureOutbound(applicationContext, config, url)
                             } catch (e: Exception) {
                                 -1L
                             }
                             runOnUiThread { result.success(if (latency >= 0) latency.toInt() else null) }
-                        }.start()
+                        }
                     }
 
                     "getInstalledApps" -> {
@@ -374,11 +378,6 @@ class MainActivity : FlutterActivity() {
     }
 
     private var pendingVpnAction: (() -> Unit)? = null
-
-    override fun onDestroy() {
-        super.onDestroy()
-        VpnEventStreamHandler.appContext = null
-    }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)

@@ -204,7 +204,7 @@ void main() {
       await boot();
       await n().connect();
       expect(st().connectionState, VpnState.error);
-      expect(st().error, 'No configuration selected');
+      expect(st().error, 'Конфигурация не выбрана');
       expect(logs().last.level, LogLevel.error);
       expect(native.named('connect'), isEmpty);
     });
@@ -415,7 +415,39 @@ void main() {
       emit({'type': 'state', 'value': 'error'});
       await _settle();
       expect(st().connectionState, VpnState.error);
-      expect(st().error, 'Connection error');
+      expect(st().error, 'Ошибка подключения');
+    });
+
+    test('native failure reason reaches error and blocked states', () async {
+      await connected();
+      emit({'type': 'state', 'value': 'blocked', 'error': 'port busy'});
+      await _settle();
+      expect((st().isBlocked, st().error), (true, 'port busy'));
+      emit({'type': 'state', 'value': 'error', 'error': 'bad config'});
+      await _settle();
+      expect((st().isError, st().error), (true, 'bad config'));
+    });
+
+    test('late history after a failure keeps the reason; tunnel config is tracked', () async {
+      final a = _cfg('a');
+      await connected(configs: [a]);
+      expect(n().runsConfig(a), isTrue);
+      expect(n().runsConfig(a.copyWith(rawUri: 'trojan://edited')), isFalse);
+      emit({'type': 'state', 'value': 'error', 'error': 'bad config'});
+      emit({'type': 'statsHistory', 'full': true, 'epoch': 1, 'seq': 1,
+          'history': [{'uploadSpeed': 1, 'downloadSpeed': 1}]});
+      await _settle();
+      expect(st().error, 'bad config');
+      expect(st().stats.speedHistory, isEmpty);
+      expect(n().runsConfig(a), isFalse);
+    });
+
+    test('repeated error state updates the reason', () async {
+      await connected();
+      emit({'type': 'state', 'value': 'error'});
+      emit({'type': 'state', 'value': 'error', 'error': 'port busy'});
+      await _settle();
+      expect(st().error, 'port busy');
     });
 
     test('log events go to the log with level', () async {
@@ -643,7 +675,7 @@ void main() {
         expect(st().connectionState, VpnState.connecting);
         async.elapse(const Duration(seconds: 2));
         expect(st().connectionState, VpnState.error);
-        expect(st().error, 'Connection timeout');
+        expect(st().error, 'Таймаут подключения');
         expect(native.named('disconnect'), hasLength(1));
         c.dispose();
       });

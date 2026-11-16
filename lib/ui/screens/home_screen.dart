@@ -42,7 +42,7 @@ class HomeScreen extends ConsumerWidget {
     final stateCode = isConn ? '01' : (isBusy ? '02' : '00');
 
     final protoLabel = effectiveConfig != null
-        ? _protoLabel(effectiveConfig.protocol)
+        ? effectiveConfig.protoTag
         : '—';
     final serverHint = effectiveConfig != null
         ? '${effectiveConfig.address}:${effectiveConfig.port}'
@@ -71,6 +71,7 @@ class HomeScreen extends ConsumerWidget {
                 protoLabel: protoLabel,
                 pingMs: pingMs,
                 canToggle: canToggle,
+                disabledLabel: effectiveConfig == null ? 'нет конфига' : 'не поддерживается',
                 onToggle: () => ref.read(vpnProvider.notifier).toggle(),
                 // Без конфигов (или при ошибке загрузки) кнопка ведёт на вкладку «Конфиги»;
                 // пока они грузятся (сразу после запуска) — ничего, иначе тап «Подключить»
@@ -164,6 +165,7 @@ class _HeroPanel extends StatelessWidget {
   final String protoLabel;
   final int? pingMs;
   final bool canToggle;
+  final String disabledLabel;
   final VoidCallback onToggle;
   final VoidCallback onDisabledTap;
   final Widget? coreLine;
@@ -174,6 +176,7 @@ class _HeroPanel extends StatelessWidget {
     required this.protoLabel,
     required this.pingMs,
     required this.canToggle,
+    required this.disabledLabel,
     required this.onToggle,
     required this.onDisabledTap,
     this.coreLine,
@@ -208,6 +211,7 @@ class _HeroPanel extends StatelessWidget {
                   isBusy: isBusy,
                   isBlocked: vpnState.isBlocked,
                   enabled: canToggle,
+                  disabledLabel: disabledLabel,
                   onTap: canToggle ? onToggle : onDisabledTap,
                 ),
                 const SizedBox(height: 16),
@@ -245,6 +249,8 @@ class _StateInfo extends ConsumerWidget {
     final isConnecting    = vpnState.isConnecting;
     final isDisconnecting = vpnState.isDisconnecting;
     final isBlocked       = vpnState.isBlocked;
+    final isError         = vpnState.isError;
+    final error           = vpnState.error;
     final ipAsync         = ref.watch(ipInfoProvider);
     final hasConfig       = ref.watch(effectiveConfigProvider) != null;
 
@@ -252,12 +258,16 @@ class _StateInfo extends ConsumerWidget {
         ? 'BLOCKED'
         : isConn
             ? 'ONLINE'
-            : (isConnecting ? 'HANDSHAKE' : (isDisconnecting ? 'SHUTDOWN' : 'OFFLINE'));
-    final stateColor = isBlocked ? t.danger : (isConn ? t.accent : t.textDim);
+            : isError
+                ? 'FAILED'
+                : (isConnecting ? 'HANDSHAKE' : (isDisconnecting ? 'SHUTDOWN' : 'OFFLINE'));
+    final stateColor = isBlocked || isError ? t.danger : (isConn ? t.accent : t.textDim);
 
     String subtitle;
     if (isBlocked) {
-      subtitle = 'kill switch · трафик заблокирован';
+      subtitle = 'kill switch · трафик заблокирован${error != null ? '\n$error' : ''}';
+    } else if (isError) {
+      subtitle = '${error ?? 'ошибка подключения'}\nнажмите для повтора';
     } else if (isConn) {
       final ipStr = ipAsync.maybeWhen(data: (d) => d?.ip, orElse: () => null) ?? '—';
       final cc    = ipAsync.maybeWhen(data: (d) => d?.countryCode.toLowerCase(), orElse: () => null) ?? '—';
@@ -283,6 +293,9 @@ class _StateInfo extends ConsumerWidget {
         ),
         const SizedBox(height: 6),
         Text(subtitle,
+            textAlign: TextAlign.center,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
             style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5)),
         if (isBlocked) ...[
           const SizedBox(height: 10),
@@ -309,6 +322,7 @@ class _PowerCore extends StatefulWidget {
   final bool isBusy;
   final bool isBlocked;
   final bool enabled;
+  final String disabledLabel;
   final VoidCallback onTap;
 
   const _PowerCore({
@@ -317,6 +331,7 @@ class _PowerCore extends StatefulWidget {
     required this.isBusy,
     required this.isBlocked,
     required this.enabled,
+    required this.disabledLabel,
     required this.onTap,
   });
 
@@ -349,7 +364,7 @@ class _PowerCoreState extends State<_PowerCore> with SingleTickerProviderStateMi
     final busy    = widget.isBusy;
     final blocked = widget.isBlocked;
     final actionLabel = !widget.enabled
-        ? 'нет конфига'
+        ? widget.disabledLabel
         : blocked
             ? 'переподключить'
             : conn
@@ -974,15 +989,3 @@ class _ClockPainter extends CustomPainter {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────
-
-String _protoLabel(dynamic proto) {
-  final s = proto.toString().split('.').last.toLowerCase();
-  switch (s) {
-    case 'vless':       return 'VLESS';
-    case 'vmess':       return 'VMESS';
-    case 'trojan':      return 'TROJAN';
-    case 'shadowsocks': return 'SS';
-    case 'hysteria2':   return 'HY2';
-    default:            return s.toUpperCase();
-  }
-}

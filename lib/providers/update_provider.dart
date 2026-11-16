@@ -113,9 +113,14 @@ class UpdateNotifier extends Notifier<UpdateState> {
         downloaded: File(path).existsSync() ? File(path).lengthSync() : 0,
         total: info.totalBytes ?? -1);
 
+    // Как и проверка релиза — через туннель, если он поднят (#150).
+    final socks = ref.read(vpnProvider).tunnelSocks;
     _dlSub = _service.downloadApk(
       info.downloadUrl,
       path,
+      socksPort: socks?.port,
+      socksUser: socks?.user,
+      socksPassword: socks?.password,
     ).listen(
       (progress) {
         if (progress.done) {

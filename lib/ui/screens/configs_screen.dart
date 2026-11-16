@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/models/connections_bundle.dart';
 import '../../core/models/vpn_config.dart';
 import '../../core/models/pinned_ref.dart';
@@ -30,7 +31,7 @@ class ConfigsScreen extends ConsumerStatefulWidget {
 }
 
 class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
-  final Set<String> _expandedSubs = {};
+  final Set<String> _expandedSubs = {'__local__'};
   bool _isPinging = false;
   bool _isRefreshingAll = false;
   bool _hideGroups = false;
@@ -85,14 +86,10 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
         if (id == null) return;
         final prevId = prev?.maybeWhen(data: (d) => d.activeConfigId, orElse: () => null);
         if (id == prevId && prev != null) return;
-        for (final entry in cs.configsBySubscription.entries) {
-          if (entry.value.any((c) => c.id == id)) {
-            if (!_expandedSubs.contains(entry.key)) {
-              setState(() => _expandedSubs.add(entry.key));
-            }
-            break;
-          }
-        }
+        final active = cs.configs.where((c) => c.id == id).firstOrNull;
+        if (active == null) return;
+        final group = active.subscriptionId ?? '__local__';
+        if (!_expandedSubs.contains(group)) setState(() => _expandedSubs.add(group));
       });
     });
 
@@ -391,9 +388,11 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(reason)));
       return;
     }
+    // Тот же конфиг, что уже подключён, — без пересоздания туннеля.
+    final unchanged = ref.read(vpnProvider.notifier).runsConfig(config);
     ref.read(configProvider.notifier).setActiveConfig(config.id);
     final vpnState = ref.read(vpnProvider);
-    if (vpnState.isConnected || vpnState.isBusy) {
+    if (!unchanged && (vpnState.isConnected || vpnState.isBusy)) {
       ref.read(vpnProvider.notifier).reconnectWithNewConfig();
     }
   }
@@ -745,12 +744,23 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
       final configState =
           ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
       if (configState == null) return;
+      final failed = <String>[];
       for (final sub in configState.subscriptions) {
         try {
           await ref
               .read(configProvider.notifier)
               .addSubscriptionFromUrl(sub.url, name: sub.name);
-        } catch (_) {}
+        } catch (e) {
+          failed.add('${sub.name}: ${e.toString().replaceFirst('Exception: ', '')}');
+        }
+      }
+      if (mounted) {
+        final total = configState.subscriptions.length;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(failed.isEmpty
+              ? 'Подписки обновлены: $total'
+              : 'Обновлено ${total - failed.length} из $total\n${failed.join('\n')}'),
+        ));
       }
     } finally {
       if (mounted) setState(() => _isRefreshingAll = false);
@@ -1211,6 +1221,25 @@ class _SubGroup extends StatelessWidget {
               children: [
                 if (sub.totalBytes != null && sub.totalBytes! > 0)
                   _DataUsageBanner(t: t, sub: sub),
+                // Сообщение провайдера (заголовок announce), ссылка — announce-url
+                if (sub.announce?.isNotEmpty == true)
+                  GestureDetector(
+                    onTap: sub.announceUrl == null
+                        ? null
+                        : () => launchUrl(Uri.parse(sub.announceUrl!),
+                                mode: LaunchMode.externalApplication)
+                            .ignore(),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(52, 10, 20, 12),
+                      decoration:
+                          BoxDecoration(border: Border(top: BorderSide(color: t.lineSoft))),
+                      child: Text(sub.announce!,
+                          style: AppTheme.sans(
+                              size: 12,
+                              color: sub.announceUrl == null ? t.textDim : t.accent)),
+                    ),
+                  ),
                 // Expired renewal banner
                 if (sub.expireAt != null &&
                     sub.expireAt!.difference(DateTime.now()).inDays <= 0)

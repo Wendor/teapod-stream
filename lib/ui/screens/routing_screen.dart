@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/routing_settings.dart';
 import '../../providers/settings_provider.dart';
-import '../../providers/vpn_provider.dart';
 import '../../providers/geo_provider.dart';
 import '../../core/services/settings_service.dart' show AppSettings, GeoPresets, VpnMode;
 import '../theme/app_colors.dart';
@@ -10,7 +9,7 @@ import '../theme/app_theme.dart';
 import '../widgets/hero_panel.dart';
 import '../widgets/reconnect_banner.dart';
 import '../widgets/pressable.dart';
-import '../widgets/settings_shared.dart' show SetRowChev, SetSquareSwitch;
+import '../widgets/settings_shared.dart' show SetRowChev, SetSquareSwitch, saveSettings;
 import 'split_tunnel_screen.dart';
 
 String _formatDomainLabel(String zone) {
@@ -31,7 +30,6 @@ class RoutingScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settingsAsync = ref.watch(settingsProvider);
-    final isConnected   = ref.watch(vpnProvider).isConnected;
     final geoMissing    = ref.watch(geoProvider) is GeoMissing;
 
     return Scaffold(
@@ -48,7 +46,6 @@ class RoutingScreen extends ConsumerWidget {
           },
           data: (settings) => _RoutingBody(
             routing: settings.routing,
-            isConnected: isConnected,
             geoMissing: geoMissing,
             geoipUrl: settings.geoipUrl,
             geositeUrl: settings.geositeUrl,
@@ -56,17 +53,15 @@ class RoutingScreen extends ConsumerWidget {
             splitTunnelHint: _splitHint(settings),
             killSwitchEnabled: settings.killSwitchEnabled,
             onUpdate: (r) {
-              ref.read(settingsProvider.notifier).save(settings.copyWith(routing: r));
+              saveSettings(context, ref, settings.copyWith(routing: r));
             },
             onUpdateSniffing: (v) {
-              ref.read(settingsProvider.notifier).save(settings.copyWith(sniffingEnabled: v));
+              saveSettings(context, ref, settings.copyWith(sniffingEnabled: v));
             },
             onUpdateKillSwitch: (v) {
-              ref.read(settingsProvider.notifier).save(settings.copyWith(killSwitchEnabled: v));
+              saveSettings(context, ref, settings.copyWith(killSwitchEnabled: v));
             },
-            onUpdateGeo: (ip, site) => ref
-                .read(settingsProvider.notifier)
-                .save(settings.copyWith(geoipUrl: ip, geositeUrl: site)),
+            onUpdateGeo: (ip, site) => saveSettings(context, ref, settings.copyWith(geoipUrl: ip, geositeUrl: site)),
           ),
         ),
       ),
@@ -78,7 +73,6 @@ class RoutingScreen extends ConsumerWidget {
 
 class _RoutingBody extends StatelessWidget {
   final RoutingSettings routing;
-  final bool isConnected;
   final bool geoMissing;
   final String geoipUrl;
   final String geositeUrl;
@@ -92,7 +86,6 @@ class _RoutingBody extends StatelessWidget {
 
   const _RoutingBody({
     required this.routing,
-    required this.isConnected,
     required this.geoMissing,
     required this.geoipUrl,
     required this.geositeUrl,
@@ -130,8 +123,8 @@ class _RoutingBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context).extension<TeapodTokens>()!;
     final ruleStr = _ruleCount.toString().padLeft(2, '0');
-    final geoHint = geoMissing ? 'Загрузите geo-базы (Настройки → geo.data)' : null;
-    const sniffHint = 'Требует снифинг (Настройки → xray)';
+    final geoHint = geoMissing ? 'Загрузите geo-базы (раздел geo.data ниже)' : null;
+    const sniffHint = 'Требует снифинг (переключатель «Снифинг» выше)';
     final domainLocked  = !sniffingEnabled;
     final geositeLocked = geoMissing || !sniffingEnabled;
 
@@ -194,9 +187,7 @@ class _RoutingBody extends StatelessWidget {
         const ReconnectBanner(),
         // ── Scrollable sections ─────────────────────────────────
         Expanded(
-          child: Opacity(
-            opacity: 1.0,
-            child: ListView(
+          child: ListView(
               padding: EdgeInsets.zero,
               children: [
                 // 0x10 APPS
@@ -374,7 +365,6 @@ class _RoutingBody extends StatelessWidget {
 
                 const SizedBox(height: 32),
               ],
-            ),
           ),
         ),
       ],

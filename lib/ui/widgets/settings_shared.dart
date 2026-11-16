@@ -1,8 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/services/settings_service.dart' show AppSettings;
+import '../../providers/profile_provider.dart';
+import '../../providers/settings_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import 'pressable.dart';
+
+/// Сохранение настроек с экрана: в readonly-профиле — снэкбар вместо молчаливого no-op.
+void saveSettings(BuildContext context, WidgetRef ref, AppSettings settings) {
+  if (ref.read(profileProvider).value?.isReadonly == true) return showReadonlySnack(context);
+  ref.read(settingsProvider.notifier).save(settings);
+}
 
 /// Снэкбар «профиль только для чтения» — единый для всех заблокированных рядов.
 void showReadonlySnack(BuildContext context) {

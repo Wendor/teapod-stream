@@ -14,7 +14,7 @@ xray-rust, sing-box) shipped in the `teapod-core` AAR. The knowledge base is [`w
 - **No secrets anywhere you write.** Server URIs, subscription URLs, UUIDs, keys, `tool/itest/secrets.json`, logs
   from `runs/`: never commit them, never paste them unmasked into a PR, issue or commit message.
 - **One task, one topic.** Don't fix unrelated things on the way: mention them in the PR instead.
-- **Hands off unless the task is exactly that:** `version:` in `pubspec.yaml`, `build.sh`, `.github/`, signing in
+- **Hands off unless the task is exactly that:** `version:` in `pubspec.yaml`, `build.sh`, `core/build.sh`, `.github/`, signing in
   `android/app/build.gradle.kts`, `android/app/libs/`, generated `lib/l10n/app_localizations*.dart` (edit the ARB
   and regenerate). Releases are the maintainer's job.
 - **No new dependencies** (pubspec, Gradle) unless a maintainer agreed in the issue.
@@ -39,7 +39,7 @@ xray-rust, sing-box) shipped in the `teapod-core` AAR. The knowledge base is [`w
 ## Commands
 
 ```bash
-./build.sh binaries        # once: teapod-core AAR (strictly the pubspec version) + geodata
+./build.sh binaries        # teapod-core AAR for core/ (cache → release asset → build) + geodata
 ./build.sh run             # debug build on a connected device
 
 # Checks — the same as CI (.github/workflows/ci.yml); all must pass before a PR
@@ -69,7 +69,9 @@ flutter gen-l10n           # after editing lib/l10n/*.arb; commit the regenerate
 - **Native code can't be unit-tested.** `XrayVpnService`, the cores, TUN, kill switch and network-change reconnect are
   verified only on a device. If you changed them and couldn't run a device, say so under *Not tested* in the PR.
   Read [android_native](wiki/components/android_native.md) before touching `XrayVpnService`.
-- **The AAR is not in git.** Dart tests don't need it; Gradle and the Kotlin tests do (`./build.sh binaries`).
+- **The AAR is not in git.** Dart tests don't need it; Gradle and the Kotlin tests do (`./build.sh binaries`). It is
+  identified by the `core/` tree hash: a change in `core/` means a local build (Go, gomobile, NDK — `core/README.md`);
+  run `cd core && ./build.sh prepare && go test ./...` for Go changes.
 - **Tests expect English strings** (`test/helpers/ui_harness.dart` pumps with locale `en`); `test/l10n/arb_test.dart`
   fails when a key or placeholder is missing in one language.
 - **Stored data is migrated, not reset.** Changing a persisted model (`VpnConfig`, `AppSettings`, profiles) needs

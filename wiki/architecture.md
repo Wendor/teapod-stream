@@ -124,6 +124,7 @@ tool/itest/                   on-device integration test runner
 ## Constraints
 
 - Min SDK 29 (Android 10). ABIs: arm64-v8a, x86_64.
-- `teapod-core.aar` is not in git: `./build.sh binaries` takes exactly the `pubspec.yaml` version.
-- One version for this repo, teapod-core and teapod-tun2socks (`./build.sh bump X.Y.Z`).
+- `teapod-core.aar` is not in git: it is built from `core/` and identified by the `core/` tree hash
+  ([teapod_core](components/teapod_core.md)). The app version (`./build.sh bump X.Y.Z`) is independent of it.
+- teapod-tun2socks is a separate library with its own `go/vX.Y.Z` tags.
 - Loyalsoldier geodata has no `geosite:ru` — Russian domains use `domain:ru`.

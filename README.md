@@ -53,7 +53,7 @@ VPN-клиент для Android на ядрах Xray-core, sing-box и xray-rust
 [Приложение] → [SOCKS5 127.0.0.1:port] → [xray-core | sing-box] → [Сервер]
 ```
 
-- **[teapod-core](https://github.com/Wendor/teapod-core)** — AAR с ядрами: xray-core, sing-box, xray-rust и teapod-tun2socks
+- **[core/](core/)** — AAR teapod-core с ядрами: xray-core, sing-box, xray-rust и teapod-tun2socks
 - **[teapod-tun2socks](https://github.com/Wendor/teapod-tun2socks)** — мост между TUN-интерфейсом и SOCKS5 ядра (gVisor netstack)
 - **Android VpnService** — управление TUN-интерфейсом на уровне ОС
 - **Flutter** — UI и настройки (Riverpod), локализация через `gen_l10n` (`lib/l10n/*.arb`)
@@ -124,7 +124,7 @@ VPN-клиент для Android на ядрах Xray-core, sing-box и xray-rust
 ### Зависимости
 
 Бинарные файлы загружаются командой `./build.sh binaries`:
-- [teapod-core](https://github.com/Wendor/teapod-core) — строго версии из `pubspec.yaml`
+- teapod-core — AAR для текущего `core/` (скачивается из релиза с теми же исходниками, иначе собирается: `./build.sh core`)
 - [geoip.dat / geosite.dat](https://github.com/Loyalsoldier/v2ray-rules-dat)
 
 ### Переводы

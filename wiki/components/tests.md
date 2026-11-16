@@ -8,6 +8,7 @@ doesn't need Android (`ConnectionParams`, `PrefixTcpProxy`, `TunOwnerPolicy`, `S
 flutter test                                       # all Dart tests (~20 s)
 flutter test --coverage                            # + coverage/lcov.info (not committed)
 cd android && ./gradlew :app:testDebugUnitTest     # JVM tests (needs the AAR: ./build.sh binaries)
+cd core && ./build.sh prepare && go test ./...    # Go tests of the engines (host)
 ```
 
 A fix comes with a test that fails without it; a logic change comes with tests of the new behaviour.

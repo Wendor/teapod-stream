@@ -2,6 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# gomobile runs go in the current directory: it has to be inside the module
+cd "$SCRIPT_DIR"
 
 # ── Tools (homebrew by default; on CI ANDROID_HOME and go come from the environment) ──
 export ANDROID_HOME="${ANDROID_HOME:-/opt/homebrew/share/android-commandlinetools}"
@@ -10,12 +12,6 @@ export PATH="/opt/homebrew/bin:$HOME/go/bin:$ANDROID_HOME/platform-tools:$PATH"
 
 GO_BIN="go"
 GOMOBILE_BIN="$HOME/go/bin/gomobile"
-
-# ── Shared project version — the single source: teapodstream/pubspec.yaml ──
-PUBSPEC="$SCRIPT_DIR/../teapodstream/pubspec.yaml"
-[[ -f "$PUBSPEC" ]] || { echo "$PUBSPEC not found (the version is taken from teapodstream)" >&2; exit 1; }
-VERSION=$(awk '/^version:/{split($2,v,"+"); print v[1]; exit}' "$PUBSPEC")
-[[ -n "$VERSION" ]] || { echo "Couldn't read version from $PUBSPEC" >&2; exit 1; }
 
 # ── Architectures ──────────────────────────────────────────────────────────────
 ARCHS=("android/arm64:arm64-v8a" "android/amd64:x86_64")
@@ -93,9 +89,9 @@ prepare_xray_core() {
 build() {
     fetch_xray_rust
     prepare_xray_core
-    log "Building teapod-core v$VERSION..."
-    # outputs holds only the current version: teapodstream takes the AAR strictly by version
-    rm -f "$OUTPUT_DIR"/teapod-core-*.aar "$OUTPUT_DIR"/teapod-core-*-sources.jar
+    log "Building teapod-core..."
+    # The app's ../build.sh keeps copies named by the core/ tree hash next to these
+    rm -f "$OUTPUT_DIR/teapod-core.aar" "$OUTPUT_DIR"/teapod-core-*-sources.jar
 
     # The sing-box version is set only via -X (otherwise "unknown") — taken from go.mod.
     local box_version
@@ -104,7 +100,7 @@ build() {
     for entry in "${ARCHS[@]}"; do
         local target="${entry%%:*}"
         local abi="${entry#*:}"
-        local output="$OUTPUT_DIR/teapod-core-${abi}-${VERSION}.aar"
+        local output="$OUTPUT_DIR/teapod-core-${abi}.aar"
 
         echo "--------------------------------------------------"
         log "Building $abi ($target)..."
@@ -124,14 +120,14 @@ build() {
     echo "--------------------------------------------------"
     log "Building fat AAR (Go + Rust, all ABIs)..."
 
-    local fat_aar="$OUTPUT_DIR/teapod-core-${VERSION}.aar"
+    local fat_aar="$OUTPUT_DIR/teapod-core.aar"
     local tmp_dir
     tmp_dir=$(mktemp -d)
     local base_set=0
 
     for entry in "${ARCHS[@]}"; do
         local abi="${entry#*:}"
-        local src="$OUTPUT_DIR/teapod-core-${abi}-${VERSION}.aar"
+        local src="$OUTPUT_DIR/teapod-core-${abi}.aar"
         if [[ $base_set -eq 0 ]]; then
             unzip -q "$src" -d "$tmp_dir"
             base_set=1
@@ -148,51 +144,9 @@ build() {
     rm -rf "$tmp_dir"
 
     echo "--------------------------------------------------"
-    ok "Build complete! v$VERSION"
-    ls -lh "$OUTPUT_DIR"/teapod-core-*-${VERSION}.aar
+    ok "Build complete!"
     echo ""
     ok "Fat AAR: $fat_aar ($(du -sh "$fat_aar" | cut -f1))"
-}
-
-push() {
-    local is_pre="${1:-false}"
-    local tag="v$VERSION"
-    local fat_aar="$OUTPUT_DIR/teapod-core-${VERSION}.aar"
-
-    # Check that the artifacts exist
-    if [[ ! -f "$fat_aar" ]]; then
-        err "Fat AAR not found: $fat_aar. Run first: ./build.sh build"
-    fi
-
-    local per_abi_aars=()
-    for entry in "${ARCHS[@]}"; do
-        local abi="${entry#*:}"
-        local f="$OUTPUT_DIR/teapod-core-${abi}-${VERSION}.aar"
-        [[ -f "$f" ]] && per_abi_aars+=("$f")
-    done
-
-    # Check gh
-    command -v gh &>/dev/null || err "gh CLI not found. Install it: brew install gh && gh auth login"
-    gh auth status &>/dev/null || err "Not logged in. Run: gh auth login"
-
-    log "Publishing release $tag..."
-
-    local assets=("$fat_aar" "${per_abi_aars[@]}")
-
-    if gh release view "$tag" &>/dev/null; then
-        log "Release $tag already exists, updating assets..."
-        gh release upload "$tag" "${assets[@]}" --clobber
-    else
-        # The tag points to the current commit, not the default branch (master)
-        local head
-        head=$(git -C "$SCRIPT_DIR" rev-parse HEAD)
-        [[ -n "$(git -C "$SCRIPT_DIR" branch -r --contains "$head")" ]] || err "Commit $head is not pushed — git push first"
-        local flags=("--title" "teapod-core $VERSION" "--generate-notes" "--target" "$head")
-        [[ "$is_pre" == "true" ]] && flags+=("--prerelease")
-        gh release create "$tag" "${flags[@]}" "${assets[@]}"
-    fi
-
-    ok "Release $tag published!"
 }
 
 # ── Entry point ──────────────────────────────────────────────────────────────
@@ -200,20 +154,18 @@ case "${1:-build}" in
     build)
         build
         ;;
-    push)
-        push false
-        ;;
-    pushpre)
-        push true
+    prepare)
+        prepare_xray_core
         ;;
     help|--help|-h|*)
         echo ""
-        echo "  teapod-core build script  (v$VERSION)"
+        echo "  teapod-core build script"
         echo ""
         echo "  Commands:"
-        echo "    ./build.sh build    Build all ABIs + the fat AAR"
-        echo "    ./build.sh push     Publish a release on GitHub"
-        echo "    ./build.sh pushpre  Publish a pre-release on GitHub"
+        echo "    ./build.sh build    Build all ABIs + the fat AAR (outputs/teapod-core.aar)"
+        echo "    ./build.sh prepare  Only the patched xray-core (.xray-core/) — enough for go vet / go test"
+        echo ""
+        echo "  The app's ../build.sh core / binaries call this and cache the AAR by the core/ tree hash."
         echo ""
         ;;
 esac

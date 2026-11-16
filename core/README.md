@@ -114,38 +114,31 @@ Teapodcore.startTun2Socks(fd, port, "", "", object : TunValidator {
 
 ## Building
 
-Requirements: Go 1.21+, gomobile, Android NDK 28.
+This directory is part of the TeapodStream repository; the AAR is built from the repository root.
+
+Requirements: Go (the version in `go.mod`), gomobile and gobind of the `golang.org/x/mobile` version in `go.mod`,
+JDK, Android NDK 28.2.13676358 in `$ANDROID_HOME/ndk`.
 
 ```bash
-# Install gomobile (once)
-go install golang.org/x/mobile/cmd/gomobile@latest
-gomobile init
+m=$(awk '$1=="golang.org/x/mobile"{print $2}' go.mod)
+go install "golang.org/x/mobile/cmd/gomobile@$m" "golang.org/x/mobile/cmd/gobind@$m"
 
-# Build all ABIs + fat AAR
-./build.sh build
-
-# Outputs:
-#   outputs/teapod-core-1.0.2.aar              ← fat AAR (all ABIs, use this)
-#   outputs/teapod-core-arm64-v8a-1.0.2.aar
-#   outputs/teapod-core-x86_64-1.0.2.aar
-
-# Publish to GitHub
-./build.sh push
+../build.sh core        # build the fat AAR → ../android/app/libs/teapod-core.aar
+./build.sh build        # the same, only into outputs/ (teapod-core.aar + per-ABI AARs)
+./build.sh prepare      # only the patched xray-core in .xray-core/ — enough for go vet / go test
+go test ./...
 ```
 
-Version is read from `../teapodstream/pubspec.yaml` (single version for teapodstream, teapod-core and teapod-tun2socks; bump it with `./build.sh bump X.Y.Z` in teapodstream).
+The AAR's identity is the git tree hash of `core/` (`git rev-parse --short=12 HEAD:core`): CI caches it by that hash,
+and every app release carries it as `teapod-core-<hash>.aar`, which `../build.sh binaries` downloads instead of
+building when the sources match.
 
-## Adding to your project
+teapod-tun2socks is a separate module, required by tag (`github.com/Wendor/teapod-tun2socks/go`). To change both
+together, clone it next to this repository and add an untracked workspace:
 
-Copy `teapod-core-{VERSION}.aar` to `android/app/libs/` and add to `build.gradle`:
-
-```kotlin
-dependencies {
-    implementation(files("libs/teapod-core-1.0.2.aar"))
-}
+```bash
+go work init . && go work edit -replace=github.com/Wendor/teapod-tun2socks/go=../../teapod-tun2socks/go
 ```
-
-Minimum SDK: **29** (Android 10) — required for `ConnectivityManager.getConnectionOwnerUid`.
 
 ## License
 

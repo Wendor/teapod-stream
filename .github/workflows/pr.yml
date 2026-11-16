@@ -55,7 +55,7 @@ jobs:
           while IFS=$'\t' read -r f n ver; do
             [ -n "$f" ] || continue
             case "$f" in
-              .github/*|build.sh|android/app/libs/*) problem "Release machinery changed: $f (needs the maintainer's agreement)" ;;
+              .github/*|build.sh|core/build.sh|android/app/libs/*) problem "Release machinery changed: $f (needs the maintainer's agreement)" ;;
               pubspec.yaml) [ "$ver" = true ] && problem "pubspec.yaml version changed — releases are the maintainer's job" ;;
             esac
           done <<< "$files"

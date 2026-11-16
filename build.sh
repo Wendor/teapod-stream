@@ -9,8 +9,9 @@ set -euo pipefail
 #    ./build.sh aab          — release AAB (Google Play)
 #    ./build.sh run          — run on the connected device
 #    ./build.sh itest        — build and install the …itest package for integration tests
-#    ./build.sh bump X.Y.Z   — shared version of all three repositories
-#    ./build.sh binaries     — copy teapod-core + download geodata
+#    ./build.sh bump X.Y.Z   — app version
+#    ./build.sh core         — build the teapod-core AAR from core/ (Go, gomobile, NDK)
+#    ./build.sh binaries     — teapod-core AAR for core/ (cache → release asset → build) + geodata
 #    ./build.sh clean        — clean build artifacts
 # ─────────────────────────────────────────
 
@@ -21,7 +22,8 @@ JNILIBS_DIR="android/app/src/main/jniLibs"
 LIBS_DIR="android/app/libs"
 ALL_ABIS=("arm64-v8a" "x86_64")
 DEFAULT_ABI="arm64-v8a"
-LOCAL_TEAPOD_CORE_DIR="../teapod-core/outputs"
+CORE_OUTPUTS="core/outputs"
+GITHUB_REPO="Wendor/teapod-stream"
 NDK_VERSION="28.2.13676358"
 
 # ─── Version from pubspec.yaml (format: "1.0.0+5002") ───
@@ -116,37 +118,62 @@ strip_binary() {
   fi
 }
 
-copy_teapod_core_binaries() {
-  mkdir -p "$LIBS_DIR"
-  # The version is shared by teapodstream / teapod-core / teapod-tun2socks (pubspec.yaml) —
-  # the AAR is taken strictly of this version, never "the latest".
-  local name="teapod-core-${VERSION}.aar"
+# The AAR is identified by the git tree hash of core/: the same sources give the same AAR,
+# whatever the app version. Empty when core/ has uncommitted changes.
+core_key() {
+  [[ -z "$(git status --porcelain -- core)" ]] || return 0
+  git rev-parse --short=12 HEAD:core
+}
 
-  # 1. Local build in ../teapod-core/outputs
-  if [[ -f "$LOCAL_TEAPOD_CORE_DIR/$name" ]]; then
-    cp "$LOCAL_TEAPOD_CORE_DIR/$name" "$LIBS_DIR/teapod-core.aar"
-    ok "Local fat AAR copied: $name"
+build_core() {
+  log "Building teapod-core from core/..."
+  core/build.sh build
+  mkdir -p "$LIBS_DIR"
+  cp "$CORE_OUTPUTS/teapod-core.aar" "$LIBS_DIR/teapod-core.aar"
+  local key
+  key=$(core_key)
+  [[ -z "$key" ]] || cp "$CORE_OUTPUTS/teapod-core.aar" "$CORE_OUTPUTS/teapod-core-$key.aar"
+  ok "teapod-core ${key:-(uncommitted core/)} → $LIBS_DIR/teapod-core.aar"
+}
+
+copy_teapod_core_binaries() {
+  mkdir -p "$LIBS_DIR" "$CORE_OUTPUTS"
+  local key
+  key=$(core_key)
+  if [[ -z "$key" ]]; then
+    warn "core/ has uncommitted changes — building the AAR locally"
+    build_core
     return 0
   fi
 
-  # 2. Release v$VERSION in Wendor/teapod-core
-  log "No local $name, downloading release v$VERSION from GitHub..."
-  local url="https://github.com/Wendor/teapod-core/releases/download/v${VERSION}/${name}"
-  curl -fL --progress-bar "$url" -o "$LIBS_DIR/teapod-core.aar" || {
-    rm -f "$LIBS_DIR/teapod-core.aar"
-    err "$name is neither in $LOCAL_TEAPOD_CORE_DIR nor in release v$VERSION. Build it: (cd ../teapod-core && ./build.sh build)"
-  }
-  ok "Downloaded teapod-core v$VERSION"
+  local cached="$CORE_OUTPUTS/teapod-core-$key.aar"
+  if [[ ! -f "$cached" ]]; then
+    # Every app release carries the AAR it was built with, named by the core/ tree hash
+    local url
+    url=$(curl -fsSL "https://api.github.com/repos/$GITHUB_REPO/releases?per_page=100" 2>/dev/null \
+      | grep -o "https://[^\"]*/teapod-core-$key\.aar" | head -1 || true)
+    if [[ -n "$url" ]]; then
+      log "Downloading teapod-core $key from the releases..."
+      curl -fL --progress-bar "$url" -o "$cached.download" && mv "$cached.download" "$cached"
+    fi
+  fi
+
+  if [[ -f "$cached" ]]; then
+    cp "$cached" "$LIBS_DIR/teapod-core.aar"
+    ok "teapod-core $key"
+  else
+    warn "No released AAR for core/ $key — building it (needs Go, gomobile and the NDK, see core/README.md)"
+    build_core
+  fi
 }
 
-# Shared version of the three repositories: teapod-tun2socks and teapod-core read it
-# from ../teapodstream/pubspec.yaml. versionCode = MAJOR*10000 + MINOR*100 + PATCH.
+# App version. versionCode = MAJOR*10000 + MINOR*100 + PATCH.
 bump_version() {
   local v="${1:-}"
   [[ "$v" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || err "Usage: ./build.sh bump X.Y.Z"
   local code=$(( BASH_REMATCH[1] * 10000 + BASH_REMATCH[2] * 100 + BASH_REMATCH[3] ))
   sed -i '' -E "s/^version: .*/version: ${v}+${code}/" pubspec.yaml
-  ok "Version $VERSION → $v (+$code) for teapodstream, teapod-core, teapod-tun2socks"
+  ok "Version $VERSION → $v (+$code)"
 }
 
 download_binaries() {
@@ -209,6 +236,11 @@ push_release() {
   if [[ ! -f "${apks[0]}" ]]; then
     err "No APKs found! Run first: ./build.sh release"
   fi
+  # The AAR the APKs were built with, so ./build.sh binaries can download it by the core/ hash
+  local key
+  key=$(core_key)
+  [[ -n "$key" && -f "$CORE_OUTPUTS/teapod-core-$key.aar" ]] || err "No teapod-core AAR for core/ ${key:-(uncommitted)} — run ./build.sh binaries"
+  apks+=("$CORE_OUTPUTS/teapod-core-$key.aar")
 
   # Check if gh is installed
   if ! command -v gh &>/dev/null; then
@@ -313,6 +345,10 @@ case "${1:-help}" in
     download_binaries
     ;;
 
+  core)
+    build_core
+    ;;
+
   bump)
     bump_version "${2:-}"
     ;;
@@ -336,8 +372,9 @@ case "${1:-help}" in
     echo "  TeapodStream build script"
     echo ""
     echo "  Commands:"
-    echo "    ./build.sh bump X.Y.Z   Shared version of teapodstream / teapod-core / teapod-tun2socks"
-    echo "    ./build.sh binaries     Copy the teapod-core AAR (strictly the pubspec version) + download geodata"
+    echo "    ./build.sh bump X.Y.Z   App version"
+    echo "    ./build.sh binaries     teapod-core AAR for core/ (cache, release asset or build) + geodata"
+    echo "    ./build.sh core         Build the teapod-core AAR from core/"
     echo "    ./build.sh debug        Build a debug APK"
     echo "    ./build.sh release      Build a release APK (split per ABI)"
     echo "    ./build.sh aab          Build an AAB"

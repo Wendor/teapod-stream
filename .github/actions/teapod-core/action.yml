@@ -1,0 +1,52 @@
+name: teapod-core AAR
+description: >-
+  Puts the teapod-core AAR for the checked-out core/ into android/app/libs/teapod-core.aar:
+  from the Actions cache by the core/ tree hash, or built with Go, gomobile and the NDK on a miss.
+  Needs a JDK on the runner (gomobile bind).
+
+inputs:
+  ndk-version:
+    description: Android NDK version (the one core/build.sh uses)
+    default: 28.2.13676358
+
+outputs:
+  key:
+    description: Short git tree hash of core/ — the AAR's identity
+    value: ${{ steps.key.outputs.key }}
+
+runs:
+  using: composite
+  steps:
+    - id: key
+      shell: bash
+      run: echo "key=$(git rev-parse --short=12 HEAD:core)" >> "$GITHUB_OUTPUT"
+
+    - id: cache
+      uses: actions/cache@v6
+      with:
+        path: core/outputs/teapod-core-${{ steps.key.outputs.key }}.aar
+        key: teapod-core-${{ steps.key.outputs.key }}
+
+    - if: steps.cache.outputs.cache-hit != 'true'
+      uses: actions/setup-go@v7
+      with:
+        go-version-file: core/go.mod
+        cache-dependency-path: core/go.sum
+
+    - if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        NDK_VERSION: ${{ inputs.ndk-version }}
+      run: |
+        [ -d "$ANDROID_HOME/ndk/$NDK_VERSION" ] \
+          || "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" > /dev/null
+        m=$(awk '$1=="golang.org/x/mobile"{print $2; exit}' core/go.mod)
+        (cd core && go install "golang.org/x/mobile/cmd/gomobile@$m" "golang.org/x/mobile/cmd/gobind@$m")
+        ./build.sh core
+
+    - shell: bash
+      env:
+        KEY: ${{ steps.key.outputs.key }}
+      run: |
+        mkdir -p android/app/libs
+        cp "core/outputs/teapod-core-$KEY.aar" android/app/libs/teapod-core.aar

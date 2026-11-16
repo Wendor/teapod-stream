@@ -14,10 +14,11 @@ agent. Agents also read [AGENTS.md](AGENTS.md).
 ## Setup
 
 Flutter (the version in `.github/workflows/ci.yml`), JDK 21, Android SDK with NDK `28.2.13676358`, a device or
-emulator on Android 10+ (arm64-v8a or x86_64).
+emulator on Android 10+ (arm64-v8a or x86_64). Changing `core/` (the Go engines) also needs Go and gomobile —
+`core/README.md`.
 
 ```bash
-./build.sh binaries   # teapod-core AAR for the pubspec version + geodata (not stored in git)
+./build.sh binaries   # teapod-core AAR for core/ + geodata (not stored in git; downloaded when core/ matches a release)
 ./build.sh run        # debug build on the device
 ```
 
@@ -28,7 +29,7 @@ How the app is built inside: [`wiki/index.md`](wiki/index.md).
 1. **One topic.** One fix or one feature per PR. Refactoring, formatting and drive-by fixes go into their own PRs.
 2. **Keep it small.** Aim for under ~500 changed lines, excluding generated files and translations. Bigger needs
    the maintainer's agreement in the issue first; CI flags large PRs.
-3. **Don't touch release machinery:** the `version:` in `pubspec.yaml`, `build.sh`, `.github/`, signing config,
+3. **Don't touch release machinery:** the `version:` in `pubspec.yaml`, `build.sh`, `core/build.sh`, `.github/`, signing config,
    `android/app/libs/`. CI fails a PR from a fork that changes them.
 4. **No new dependencies** without agreement in the issue.
 5. **Tests.** A fix or a logic change comes with a test that fails without it. Native code (VpnService, cores, TUN,

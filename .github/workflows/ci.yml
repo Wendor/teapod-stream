@@ -48,25 +48,11 @@ jobs:
 
   kotlin:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
 
-      # Strictly the pubspec version, as build.sh binaries; a branch bumped before its core release has none yet
-      - name: teapod-core AAR
-        id: aar
-        run: |
-          v=$(awk '/^version:/{split($2,a,"+"); print a[1]; exit}' pubspec.yaml)
-          mkdir -p android/app/libs assets/binaries
-          if curl -fsSL "https://github.com/Wendor/teapod-core/releases/download/v$v/teapod-core-$v.aar" \
-              -o android/app/libs/teapod-core.aar; then
-            echo "ok=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::warning::teapod-core v$v is not released yet — Kotlin tests skipped"
-          fi
-
       - uses: actions/setup-java@v6
-        if: steps.aar.outputs.ok
         with:
           distribution: temurin
           java-version: 21
@@ -76,22 +62,39 @@ jobs:
             android/app/build.gradle.kts
             android/gradle/wrapper/gradle-wrapper.properties
 
-      - name: Android NDK
-        if: steps.aar.outputs.ok
-        run: |
-          [ -d "$ANDROID_HOME/ndk/$NDK_VERSION" ] \
-            || "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" > /dev/null
+      # From the cache by the core/ tree hash; built only when core/ changed
+      - uses: ./.github/actions/teapod-core
+        with:
+          ndk-version: ${{ env.NDK_VERSION }}
 
       - uses: subosito/flutter-action@v2
-        if: steps.aar.outputs.ok
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
       - name: Kotlin JVM tests
-        if: steps.aar.outputs.ok
         run: |
+          mkdir -p assets/binaries
           flutter pub get
           flutter build apk --debug --config-only
           cd android && ./gradlew :app:testDebugUnitTest
+
+  core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: core
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: core/go.mod
+          cache-dependency-path: core/go.sum
+      - run: ./build.sh prepare
+      - run: go vet ./...
+      - run: go test ./...
+      # Tests the xray-core patches add, in the patched tree
+      - run: go test ./transport/internet/splithttp/ ./transport/internet/tls/ ./transport/internet/hysteria/
+        working-directory: core/.xray-core

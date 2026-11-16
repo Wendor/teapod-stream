@@ -1,0 +1,100 @@
+diff --color -ruN a/transport/internet/hysteria/dialer.go b/transport/internet/hysteria/dialer.go
+--- a/transport/internet/hysteria/dialer.go	2026-11-08 05:01:58.754846898 +0700
++++ b/transport/internet/hysteria/dialer.go	2026-11-08 05:01:58.802875240 +0700
+@@ -57,8 +57,10 @@
+ 
+ func (c *client) close() {
+ 	c.conn.CloseWithError(closeErrCodeOK, "")
+-	c.tr.Close()
++	// pktConn first: over dialerProxy it is a pipe whose SetReadDeadline is a
++	// no-op, so Transport.Close would wait forever for its blocked reader.
+ 	c.pktConn.Close()
++	c.tr.Close()
+ 	c.conn = nil
+ 	c.tr = nil
+ 	c.pktConn = nil
+@@ -182,8 +184,8 @@
+ 		if conn != nil {
+ 			_ = conn.CloseWithError(closeErrCodeProtocolError, "")
+ 		}
+-		_ = tr.Close()
+ 		_ = pktConn.Close()
++		_ = tr.Close()
+ 		return err
+ 	}
+ 	_ = resp.Body.Close()
+@@ -191,8 +193,8 @@
+ 	if resp.StatusCode != StatusAuthOK {
+ 		_ = rt.Close()
+ 		_ = conn.CloseWithError(closeErrCodeProtocolError, "")
+-		_ = tr.Close()
+ 		_ = pktConn.Close()
++		_ = tr.Close()
+ 		return errors.New("auth failed code ", resp.StatusCode)
+ 	}
+ 
+diff --color -ruN a/transport/internet/hysteria/pipe_close_test.go b/transport/internet/hysteria/pipe_close_test.go
+--- a/transport/internet/hysteria/pipe_close_test.go	1970-01-01 07:00:00.000000000 +0700
++++ b/transport/internet/hysteria/pipe_close_test.go	2026-11-08 05:02:35.757411014 +0700
+@@ -0,0 +1,43 @@
++package hysteria
++
++import (
++	"context"
++	"crypto/tls"
++	"net"
++	"testing"
++	"time"
++
++	"github.com/apernet/quic-go"
++	"github.com/xtls/xray-core/common/net/cnc"
++	"github.com/xtls/xray-core/transport/internet"
++	"github.com/xtls/xray-core/transport/pipe"
++)
++
++// Over dialerProxy the QUIC packet conn is a pipe (cnc.Connection) whose
++// SetReadDeadline is a no-op: Transport.Close alone waits forever for the
++// blocked reader. Closing the pipe first must let Transport.Close return.
++func TestTransportOverPipeClosesAfterFailedDial(t *testing.T) {
++	upR, upW := pipe.New()
++	downR, _ := pipe.New() // the peer never answers
++	defer upR.Interrupt()
++	pktConn := &internet.FakePacketConn{Conn: cnc.NewConnection(cnc.ConnectionInputMulti(upW), cnc.ConnectionOutputMulti(downR))}
++	tr := &quic.Transport{Conn: pktConn}
++
++	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
++	defer cancel()
++	if _, err := tr.DialEarly(ctx, &net.UDPAddr{IP: net.IPv4zero}, &tls.Config{ServerName: "x", NextProtos: []string{"h3"}}, &quic.Config{}); err == nil {
++		t.Fatal("dial to a silent peer must fail")
++	}
++
++	done := make(chan struct{})
++	go func() {
++		_ = pktConn.Close()
++		_ = tr.Close()
++		close(done)
++	}()
++	select {
++	case <-done:
++	case <-time.After(3 * time.Second):
++		t.Fatal("Transport.Close hung on the pipe reader")
++	}
++}
+diff --color -ruN a/transport/internet/splithttp/dialer.go b/transport/internet/splithttp/dialer.go
+--- a/transport/internet/splithttp/dialer.go	2026-11-08 05:01:58.763241655 +0700
++++ b/transport/internet/splithttp/dialer.go	2026-11-08 05:01:58.805468937 +0700
+@@ -234,9 +234,13 @@
+ 
+ 				conn, err := tr.DialEarly(ctx, udpAddr, tlsCfg, cfg)
+ 				if err != nil {
++					_ = pktConn.Close()
++					_ = tr.Close()
+ 					return nil, err
+ 				}
+-				context.AfterFunc(conn.Context(), func() { tr.Close(); pktConn.Close() })
++				// pktConn first: a dialerProxy pipe ignores SetReadDeadline, and
++				// Transport.Close would wait forever for its blocked reader.
++				context.AfterFunc(conn.Context(), func() { pktConn.Close(); tr.Close() })
+ 
+ 				switch quicParams.Congestion {
+ 				case "reno":

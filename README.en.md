@@ -53,8 +53,8 @@ Proxy-only mode:
 [App] → [SOCKS5 127.0.0.1:port] → [xray-core | sing-box] → [Server]
 ```
 
-- **[teapod-core](https://github.com/Wendor/teapod-core)** — AAR with the cores: xray-core, sing-box, xray-rust and teapod-tun2socks
-- **[teapod-tun2socks](https://github.com/Wendor/teapod-tun2socks)** — bridge between the TUN interface and the core's SOCKS5 (gVisor netstack)
+- **[core/](core/)** — the teapod-core AAR with the cores: xray-core, sing-box, xray-rust and teapod-tun2socks
+- **[core/tun2socks/](core/tun2socks/)** — bridge between the TUN interface and the core's SOCKS5 (gVisor netstack)
 - **Android VpnService** — manages the TUN interface at the OS level
 - **Flutter** — UI and settings (Riverpod), localization via `gen_l10n` (`lib/l10n/*.arb`)
 
@@ -124,7 +124,7 @@ Proxy-only mode:
 ### Dependencies
 
 Binaries are downloaded by `./build.sh binaries`:
-- [teapod-core](https://github.com/Wendor/teapod-core) — strictly the version from `pubspec.yaml`
+- teapod-core — the AAR for the current `core/` (downloaded from a release with the same sources, otherwise built: `./build.sh core`)
 - [geoip.dat / geosite.dat](https://github.com/Loyalsoldier/v2ray-rules-dat)
 
 ### Translations
@@ -155,4 +155,4 @@ Pull requests are welcome — read [CONTRIBUTING.md](CONTRIBUTING.md) first (AI-
 - [Xray-core](https://github.com/XTLS/Xray-core) — MPL-2.0
 - [sing-box](https://github.com/SagerNet/sing-box) — GPL-3.0-or-later
 - [amneziawg-go](https://github.com/amnezia-vpn/amneziawg-go) — MIT
-- [teapod-tun2socks](https://github.com/Wendor/teapod-tun2socks) — MIT
+- [teapod-tun2socks](core/tun2socks/LICENSE) — MIT

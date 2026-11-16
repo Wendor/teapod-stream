@@ -1,0 +1,24 @@
+diff --color -ruN a/transport/internet/splithttp/dialer.go b/transport/internet/splithttp/dialer.go
+--- a/transport/internet/splithttp/dialer.go	2026-11-08 03:26:39.840871398 +0700
++++ b/transport/internet/splithttp/dialer.go	2026-11-08 03:26:39.874743826 +0700
+@@ -10,6 +10,7 @@
+ 	"net/url"
+ 	"reflect"
+ 	"runtime"
++	"slices"
+ 	"strconv"
+ 	"sync"
+ 	"sync/atomic"
+@@ -111,6 +112,12 @@
+ 
+ 	if tlsConfig != nil {
+ 		gotlsConfig = tlsConfig.GetTLSConfig(tls.WithDestination(dest))
++		// alpn "h3,h2,http/1.1" picks HTTP/2 over TCP, so h3 must not be offered
++		// there: with ECH the inner hello carries config ALPN as is, the server
++		// may select h3 on TCP and the HTTP/2 client then gets EOF.
++		if httpVersion != "3" {
++			gotlsConfig.NextProtos = slices.DeleteFunc(slices.Clone(gotlsConfig.NextProtos), func(p string) bool { return p == "h3" })
++		}
+ 	}
+ 
+ 	transportConfig := streamSettings.ProtocolSettings.(*Config)

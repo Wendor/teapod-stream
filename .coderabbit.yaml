@@ -5,6 +5,9 @@ reviews:
   auto_review:
     enabled: true
     drafts: false
+    # Also PRs into feature branches, not only into master
+    base_branches:
+      - ".*"
   path_filters:
     - "!lib/l10n/app_localizations*.dart"
     - "!pubspec.lock"

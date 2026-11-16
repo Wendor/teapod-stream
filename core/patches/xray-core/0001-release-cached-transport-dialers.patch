@@ -1,0 +1,175 @@
+diff --color -ruN a/app/proxyman/outbound/handler.go b/app/proxyman/outbound/handler.go
+--- a/app/proxyman/outbound/handler.go	2026-11-05 04:52:07.014922598 +0700
++++ b/app/proxyman/outbound/handler.go	2026-11-05 21:07:42.789909999 +0700
+@@ -378,6 +378,7 @@
+ func (h *Handler) Close() error {
+ 	common.Close(h.mux)
+ 	common.Close(h.proxy)
++	internet.ReleaseStreamSettings(h.streamSettings)
+ 	return nil
+ }
+ 
+diff --color -ruN a/transport/internet/grpc/dial.go b/transport/internet/grpc/dial.go
+--- a/transport/internet/grpc/dial.go	2026-11-05 04:52:07.133584999 +0700
++++ b/transport/internet/grpc/dial.go	2026-11-05 21:07:42.790736415 +0700
+@@ -36,6 +36,19 @@
+ 
+ func init() {
+ 	common.Must(internet.RegisterTransportDialer(protocolName, Dial))
++	internet.RegisterStreamReleaser(releaseDialers)
++}
++
++// releaseDialers closes cached gRPC connections of a closed outbound.
++func releaseDialers(streamSettings *internet.MemoryStreamConfig) {
++	globalDialerAccess.Lock()
++	defer globalDialerAccess.Unlock()
++	for key, conn := range globalDialerMap {
++		if key.MemoryStreamConfig == streamSettings {
++			conn.Close()
++			delete(globalDialerMap, key)
++		}
++	}
+ }
+ 
+ type dialerConf struct {
+diff --color -ruN a/transport/internet/release.go b/transport/internet/release.go
+--- a/transport/internet/release.go	1970-01-01 07:00:00.000000000 +0700
++++ b/transport/internet/release.go	2026-11-05 21:07:42.571442693 +0700
+@@ -0,0 +1,29 @@
++package internet
++
++import "sync"
++
++var (
++	streamReleasersAccess sync.RWMutex
++	streamReleasers       []func(*MemoryStreamConfig)
++)
++
++// RegisterStreamReleaser registers a transport hook that drops connections the
++// transport caches globally per stream settings (e.g. XHTTP, gRPC).
++func RegisterStreamReleaser(release func(*MemoryStreamConfig)) {
++	streamReleasersAccess.Lock()
++	defer streamReleasersAccess.Unlock()
++	streamReleasers = append(streamReleasers, release)
++}
++
++// ReleaseStreamSettings closes cached connections bound to streamSettings of a
++// closed outbound. Without it they outlive the instance and keep alive forever.
++func ReleaseStreamSettings(streamSettings *MemoryStreamConfig) {
++	if streamSettings == nil {
++		return
++	}
++	streamReleasersAccess.RLock()
++	defer streamReleasersAccess.RUnlock()
++	for _, release := range streamReleasers {
++		release(streamSettings)
++	}
++}
+diff --color -ruN a/transport/internet/splithttp/client.go b/transport/internet/splithttp/client.go
+--- a/transport/internet/splithttp/client.go	2026-11-05 04:52:07.146565185 +0700
++++ b/transport/internet/splithttp/client.go	2026-11-05 21:07:42.790491665 +0700
+@@ -181,8 +181,10 @@
+ func (c *DefaultDialerClient) Close() error {
+ 	transport := c.client.Transport
+ 	if h3Transport, ok := transport.(*http3.Transport); ok {
+-		h3Transport.Close()
++		return h3Transport.Close()
+ 	}
++	// h1/h2: without this the idle connection stays open with keepalive pings.
++	c.client.CloseIdleConnections()
+ 	return nil
+ }
+ 
+diff --color -ruN a/transport/internet/splithttp/dialer.go b/transport/internet/splithttp/dialer.go
+--- a/transport/internet/splithttp/dialer.go	2026-11-05 04:52:07.147545860 +0700
++++ b/transport/internet/splithttp/dialer.go	2026-11-05 21:07:42.790251999 +0700
+@@ -318,6 +318,24 @@
+ 
+ func init() {
+ 	common.Must(internet.RegisterTransportDialer(protocolName, Dial))
++	internet.RegisterStreamReleaser(releaseDialers)
++}
++
++// releaseDialers drops XMUX managers of a closed outbound (including its
++// downloadSettings); connections close once their running requests finish.
++func releaseDialers(streamSettings *internet.MemoryStreamConfig) {
++	globalDialerAccess.Lock()
++	defer globalDialerAccess.Unlock()
++	for key, manager := range globalDialerMap {
++		if key.MemoryStreamConfig != streamSettings && key.MemoryStreamConfig != streamSettings.DownloadSettings {
++			continue
++		}
++		for _, xmuxClient := range manager.xmuxClients {
++			xmuxClient.NotUsed.Store(true)
++			xmuxClient.maybeClose()
++		}
++		delete(globalDialerMap, key)
++	}
+ }
+ 
+ func Dial(ctx context.Context, dest net.Destination, streamSettings *internet.MemoryStreamConfig) (stat.Connection, error) {
+diff --color -ruN a/transport/internet/splithttp/release_test.go b/transport/internet/splithttp/release_test.go
+--- a/transport/internet/splithttp/release_test.go	1970-01-01 07:00:00.000000000 +0700
++++ b/transport/internet/splithttp/release_test.go	2026-11-05 21:08:20.940129653 +0700
+@@ -0,0 +1,61 @@
++package splithttp
++
++import (
++	"context"
++	"testing"
++
++	"github.com/xtls/xray-core/common/net"
++	"github.com/xtls/xray-core/transport/internet"
++)
++
++type closeTracker struct{ closed bool }
++
++func (c *closeTracker) IsClosed() bool { return c.closed }
++func (c *closeTracker) Close() error   { c.closed = true; return nil }
++
++func TestReleaseStreamSettingsClosesOnlyOwnDialers(t *testing.T) {
++	own := &internet.MemoryStreamConfig{}
++	own.DownloadSettings = &internet.MemoryStreamConfig{}
++	other := &internet.MemoryStreamConfig{}
++	dest := net.TCPDestination(net.LocalHostIP, 443)
++
++	newClient := func(conn *closeTracker) (*XmuxManager, *XmuxClient) {
++		m := NewXmuxManager(XmuxConfig{}, func() XmuxConn { return conn })
++		return m, m.GetXmuxClient(context.Background())
++	}
++	idle, busy, download, foreign := &closeTracker{}, &closeTracker{}, &closeTracker{}, &closeTracker{}
++	idleManager, _ := newClient(idle)
++	busyManager, busyClient := newClient(busy)
++	downloadManager, _ := newClient(download)
++	foreignManager, _ := newClient(foreign)
++	busyClient.AddRunning()
++
++	ownBusy := &internet.MemoryStreamConfig{DownloadSettings: own.DownloadSettings}
++	globalDialerAccess.Lock()
++	globalDialerMap = map[dialerConf]*XmuxManager{
++		{dest, own}:                  idleManager,
++		{dest, own.DownloadSettings}: downloadManager,
++		{dest, other}:                foreignManager,
++	}
++	globalDialerAccess.Unlock()
++	internet.ReleaseStreamSettings(own)
++
++	if !idle.closed || !download.closed {
++		t.Fatal("dialers of the released outbound must be closed")
++	}
++	if foreign.closed || len(globalDialerMap) != 1 {
++		t.Fatal("dialers of other outbounds must stay")
++	}
++
++	globalDialerAccess.Lock()
++	globalDialerMap[dialerConf{dest, ownBusy}] = busyManager
++	globalDialerAccess.Unlock()
++	internet.ReleaseStreamSettings(ownBusy)
++	if busy.closed {
++		t.Fatal("connection with a running request must not be closed")
++	}
++	busyClient.DoneRunning()
++	if !busy.closed {
++		t.Fatal("connection must close after its last request")
++	}
++}

@@ -15,7 +15,8 @@ import (
 
 // startOnBusyPort starts an instance whose tagged inbound takes a free port and whose
 // untagged one hits a busy port. It returns the free port after the failed start, and
-// whether the start failed on the busy port (false: another process took the probed one).
+// whether the start failed on the busy port (false: another process took the probed one;
+// any other start error fails the test).
 // Tagged inbounds start before untagged ones, so the free port is bound first.
 func startOnBusyPort(t *testing.T, busyPort int) (int, bool) {
 	t.Helper()
@@ -46,7 +47,16 @@ func startOnBusyPort(t *testing.T, busyPort int) (int, bool) {
 		inst.Close()
 		t.Fatal("start succeeded on a busy port")
 	}
-	return free, strings.Contains(err.Error(), fmt.Sprintf("127.0.0.1:%d", busyPort))
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, fmt.Sprintf("127.0.0.1:%d", busyPort)):
+		return free, true
+	case strings.Contains(msg, fmt.Sprintf("127.0.0.1:%d", free)) && strings.Contains(msg, "address already in use"):
+		return free, false
+	default:
+		t.Fatalf("unexpected start error: %v", err)
+		return 0, false
+	}
 }
 
 // A failed start must close the instance: the features that started before the

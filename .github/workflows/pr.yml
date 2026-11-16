@@ -37,9 +37,17 @@ jobs:
           problem() { echo "::$level::$1"; echo "- $1" >> "$GITHUB_STEP_SUMMARY"; errors=$((errors + 1)); }
           echo "### PR rules (CONTRIBUTING.md)" >> "$GITHUB_STEP_SUMMARY"
 
-          # Title: `area: what changed`
-          [[ "$TITLE" =~ ^[a-z0-9][a-z0-9/_-]*:\ .+ ]] \
-            || problem "Title must be 'area: what changed' (e.g. 'vpn: keep the kill switch sink during reconnect')"
+          # Title: `area: what changed`, with `[ai] ` in front when an agent opened the PR
+          title_re='^(\[ai\] )?[a-z0-9][a-z0-9/_-]*: .+'
+          [[ "$TITLE" =~ $title_re ]] \
+            || problem "Title must be 'area: what changed' (e.g. 'vpn: keep the kill switch sink during reconnect'), '[ai] area: what changed' for an agent's PR"
+          agent=false
+          grep -qiE '^Co-Authored-By: ' <<< "$BODY" && agent=true
+          if [[ "$TITLE" == "[ai] "* ]]; then
+            grep -qiF -- '- [x] AI was used' <<< "$BODY" || problem "An '[ai]' PR must tick the 'AI was used' box"
+          elif [ "$agent" = true ]; then
+            problem "The description is signed by an agent (Co-Authored-By): start the title with '[ai] '"
+          fi
 
           # Description: template sections present and filled
           for h in '## Why' '## What changed' '## Testing' '## Risks'; do

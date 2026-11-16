@@ -12,10 +12,10 @@ import 'storage_secure_service.dart';
 import 'storage_migration_service.dart';
 import 'update_service.dart' show UpdateChannel;
 
-/// Режим работы VPN
+/// VPN operating mode
 enum VpnMode {
-  allExcept,    // Все через VPN, кроме выбранных
-  onlySelected, // Только выбранные через VPN, остальные мимо
+  allExcept,    // Everything through VPN except the selected ones
+  onlySelected, // Only the selected through VPN, the rest bypass it
 }
 
 enum FontScale { normal, large }
@@ -23,11 +23,11 @@ enum FontScale { normal, large }
 enum DnsQueryStrategy { ipv4Only, ipv6Only, auto }
 
 /// uTLS fingerprint override for TLS/REALITY outbounds.
-/// `defaultFp` — не переопределять (используется значение из конфига/URI).
+/// `defaultFp` — don't override (the value from the config/URI is used).
 enum TlsFingerprint {
   defaultFp, chrome, firefox, safari, ios, android, edge, random, randomized;
 
-  /// Значение для поля `fingerprint` в xray streamSettings; null = не переопределять.
+  /// Value for the `fingerprint` field in xray streamSettings; null = don't override.
   String? get xrayValue => this == defaultFp ? null : name;
 }
 
@@ -91,13 +91,13 @@ class AppSettings {
   final DnsQueryStrategy dnsQueryStrategy;
   final bool blockQuic;
   final bool ipv6Enabled;
-  /// allExcept: пропускать в туннель потоки без владельца (раздача точки доступа).
-  /// Ослабляет защиту: исключённые приложения смогут выйти через tun0.
+  /// allExcept: let ownerless flows into the tunnel (hotspot tethering).
+  /// Weakens protection: excluded apps can go out through tun0.
   final bool allowTethering;
   final bool autoStartOnBoot;
 
-  /// Tasker/Anubis: broadcast-команды CONNECT/DISCONNECT и STATE_CHANGED.
-  /// Видны любому приложению, поэтому по умолчанию выключено. Читает натив
+  /// Tasker/Anubis: CONNECT/DISCONNECT broadcast commands and STATE_CHANGED.
+  /// Visible to any app, so off by default. Read by native
   /// (`flutter.automation_enabled`).
   final bool automationEnabled;
   final TlsFingerprint tlsFingerprint;
@@ -106,14 +106,14 @@ class AppSettings {
   final MuxSettings mux;
   final HeartbeatSettings heartbeat;
 
-  /// Ведение журнала (файл + UI). При выключении нативный слой
-  /// пишет только warning/error.
+  /// Logging (file + UI). When off, the native layer
+  /// writes only warning/error.
   final bool logsEnabled;
 
-  /// Ядра в порядке приоритета: профиль запускает первое, которое его может.
+  /// Cores in priority order: a profile runs on the first one that can run it.
   final List<CoreKind> coreOrder;
 
-  /// Ядра, исключённые из выбора.
+  /// Cores excluded from selection.
   final Set<CoreKind> disabledCores;
 
   const AppSettings({
@@ -441,7 +441,7 @@ class SettingsService {
   static const _muxKey = 'xray_mux';
   static const _heartbeatKey = 'heartbeat_settings';
   static const _logsEnabledKey = 'logs_enabled';
-  /// До приоритетов — одно выбранное ядро; читается только для миграции.
+  /// Before priorities — a single selected core; read only for migration.
   static const _legacyCoreKey = 'core_kind';
   static const _coreOrderKey = 'core_order';
   static const _disabledCoresKey = 'cores_disabled';
@@ -528,7 +528,7 @@ class SettingsService {
     );
   }
 
-  /// Разбор вложенной настройки из JSON-строки в prefs; при любой ошибке — дефолт.
+  /// Parses a nested setting from a JSON string in prefs; on any error — the default.
   static T _decodeOr<T>(String? raw, T Function(Map<String, dynamic>) parse, T fallback) {
     if (raw == null || raw.isEmpty) return fallback;
     try {

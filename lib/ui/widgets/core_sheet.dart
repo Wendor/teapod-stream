@@ -9,8 +9,9 @@ import '../../providers/core_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import 'settings_shared.dart';
+import '../../l10n/l10n.dart';
 
-/// Каким ядром запускается профиль, почему не другими; закрепление ядра.
+/// Which core runs the profile, why not the others; core pinning.
 Future<void> showCoreSheet(BuildContext context, VpnConfig config) {
   final t = Theme.of(context).extension<TeapodTokens>()!;
   return showModalBottomSheet(
@@ -72,13 +73,13 @@ class _CoreSheet extends ConsumerWidget {
               t: t,
               mark: v.kind == config.core ? '★' : '${resolver.settings.coreOrder.indexOf(v.kind) + 1}',
               name: v.kind.displayName,
-              status: v.kind == chosen?.kind ? 'используется' : (v.reason ?? 'совместимо'),
+              status: v.kind == chosen?.kind ? context.l10n.coreInUse : (v.reason ?? context.l10n.coreCompatible),
               active: v.kind == chosen?.kind,
               warnings: v.kind == chosen?.kind ? warnings : const [],
             ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
-            child: Text('ЯДРО ПРОФИЛЯ',
+            child: Text(context.l10n.coreProfileCore,
                 style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
           ),
           Padding(
@@ -90,7 +91,7 @@ class _CoreSheet extends ConsumerWidget {
                 child: SetSegSquare(
                   t: t,
                   value: config.core?.name ?? '',
-                  opts: [('', 'АВТО'), for (final k in pinOptions) (k.name, k.shortLabel)],
+                  opts: [('', context.l10n.coreAuto), for (final k in pinOptions) (k.name, k.shortLabel)],
                   onChanged: pin,
                 ),
               ),
@@ -99,8 +100,7 @@ class _CoreSheet extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
             child: Text(
-                'АВТО — первое подходящее ядро по приоритету из настроек. '
-                'Закреплённое ядро пробуется первым.',
+                context.l10n.coreAutoHint,
                 style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.3)),
           ),
         ],

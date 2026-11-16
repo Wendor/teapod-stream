@@ -29,23 +29,23 @@ import org.xrayrust.mobile.XrayTunRuntimeProfile
 import org.xrayrust.mobile.XrayTunStats
 
 /**
- * xray-rust: читает TUN fd сам (свой сетевой стек), UID-фильтр — TUN admission.
- * Основано на RustCore из PR #152 (vivatfreedom).
+ * xray-rust: reads the TUN fd itself (own network stack), UID filter — TUN admission.
+ * Based on RustCore from PR #152 (vivatfreedom).
  */
 object RustCore : VpnCore {
     override val kind = CoreKind.RUST
     override val tunDnsServer: String = XrayTunInterface.DNS_ANCHOR
     override val borrowsTunFd = true
 
-    /** Ядро отбрасывает пакеты длиннее своего MTU. */
+    /** The core drops packets longer than its MTU. */
     override fun tunMtu(requested: Int): Int = XrayTunInterface.MTU
 
-    /** Версия xray-rust-mobile в teapod-core (XRAY_RUST_VERSION в build.sh). */
+    /** xray-rust-mobile version in teapod-core (XRAY_RUST_VERSION in build.sh). */
     private const val XRAY_RUST_VERSION = "0.9.0"
     private const val RESOLVE_TIMEOUT_SECONDS = 5L
     private const val PROXY_TAG = "proxy"
     private val PROXY_PROTOCOLS = setOf("vless", "vmess", "trojan", "shadowsocks", "hysteria")
-    /** Лимиты Hysteria на outbound: 256 TCP — потолок Mobile-профиля TUN, 128 UDP — максимум API. */
+    /** Hysteria outbound limits: 256 TCP — the TUN Mobile profile ceiling, 128 UDP — the API maximum. */
     private val HYSTERIA_STREAM_LIMITS = XrayHysteriaStreamLimits(maxTcpStreams = 256, maxUdpSessions = 128)
     private const val HEARTBEAT_PROBE_TIMEOUT_MS = 10_000L
     private const val CANDIDATE_PROBE_TIMEOUT_MS = 5_000L
@@ -65,7 +65,7 @@ object RustCore : VpnCore {
     private var lastTcpTxBytes = 0L
     private var lastTcpTxAt = 0L
 
-    /** Временные ядра кандидатов живут рядом с VPN-ядром — не больше двух. */
+    /** Temporary candidate cores live next to the VPN core — at most two. */
     private val candidateSlots = Semaphore(2, true)
     private val resolver = ThreadPoolExecutor(0, 2, 30, TimeUnit.SECONDS,
         SynchronousQueue(), { work -> Thread(work, "rust-dns-bootstrap").apply { isDaemon = true } })
@@ -82,7 +82,7 @@ object RustCore : VpnCore {
     override fun start(config: String, params: CoreStartParams) {
         check(core == null) { "Rust runtime is already running" }
         val svc = checkNotNull(service) { "RustCore.init was not called" }
-        val tunFd = params.tunFd ?: throw IllegalStateException("proxy-only не поддерживается ядром Rust")
+        val tunFd = params.tunFd ?: throw IllegalStateException("proxy-only is not supported by the Rust core")
         val prepared = prepareConfig(config, svc, resolver)
         val outbounds = JSONObject(prepared).optJSONArray("outbounds") ?: JSONArray()
         val policy = TunOwnerPolicy(
@@ -116,8 +116,8 @@ object RustCore : VpnCore {
     }
 
     /**
-     * Решение по владельцу — как у GoCore. Таймаут или переполненная очередь отказывают
-     * потоку (failOpen=false): иначе исключённое приложение могло бы забить очередь.
+     * Owner decision — as in GoCore. A timeout or a full queue rejects
+     * the flow (failOpen=false): otherwise an excluded app could flood the queue.
      */
     private fun tunAdmission(service: VpnService, policy: TunOwnerPolicy): XrayTunAdmissionOptions {
         val cm = service.getSystemService(ConnectivityManager::class.java)
@@ -131,9 +131,9 @@ object RustCore : VpnCore {
     }
 
     /**
-     * Должен завершиться до того, как сервис закроет или переиспользует fd.
-     * Нативный stop — вне монитора и с дедлайном, чтобы зависание не блокировало
-     * следующий start и диагностику.
+     * Must finish before the service closes or reuses the fd.
+     * The native stop is outside the monitor and has a deadline so a hang doesn't block
+     * the next start and diagnostics.
      */
     override fun stop() {
         val runtime = synchronized(this) {
@@ -157,9 +157,9 @@ object RustCore : VpnCore {
     }
 
     /**
-     * StaticOnly bootstrap: ядро резолвит адреса серверов только из `dns.hosts`.
-     * Имена proxy-серверов (и DNS-серверов при DNS напрямую) резолвятся здесь через
-     * физическую сеть, с общим бюджетом [RESOLVE_TIMEOUT_SECONDS].
+     * StaticOnly bootstrap: the core resolves server addresses only from `dns.hosts`.
+     * Names of proxy servers (and DNS servers with direct DNS) are resolved here via
+     * the physical network, with a shared budget of [RESOLVE_TIMEOUT_SECONDS].
      */
     private fun prepareConfig(config: String, context: Context, pool: ExecutorService): String {
         val json = JSONObject(config)
@@ -171,26 +171,26 @@ object RustCore : VpnCore {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(RESOLVE_TIMEOUT_SECONDS)
         for (name in names) {
             val remaining = deadline - System.nanoTime()
-            if (remaining <= 0) throw TimeoutException("Не удалось вовремя разрешить адрес $name")
+            if (remaining <= 0) throw TimeoutException("Couldn't resolve address $name in time")
             val lookup = try {
                 pool.submit<List<String>> { network.getAllByName(name).mapNotNull { it.hostAddress } }
             } catch (_: RejectedExecutionException) {
-                throw TimeoutException("Не удалось вовремя разрешить адрес $name")
+                throw TimeoutException("Couldn't resolve address $name in time")
             }
             val addresses = try {
                 lookup.get(remaining, TimeUnit.NANOSECONDS)
             } catch (_: TimeoutException) {
-                throw TimeoutException("Не удалось вовремя разрешить адрес $name")
+                throw TimeoutException("Couldn't resolve address $name in time")
             } finally {
                 lookup.cancel(true)
             }
-            check(addresses.isNotEmpty()) { "Не удалось разрешить адрес $name" }
+            check(addresses.isNotEmpty()) { "Couldn't resolve address $name" }
             hosts.put("full:$name", JSONArray(addresses))
         }
         return json.toString()
     }
 
-    /** Имена DNS-серверов, когда DNS-модуль (`dns.tag`) маршрутизируется в direct. */
+    /** DNS server names when the DNS module (`dns.tag`) is routed to direct. */
     private fun directDnsServerNames(json: JSONObject): Set<String> {
         val dns = json.optJSONObject("dns") ?: return emptySet()
         val tag = dns.optString("tag").takeIf { it.isNotEmpty() } ?: return emptySet()
@@ -215,7 +215,7 @@ object RustCore : VpnCore {
         return names
     }
 
-    /** Хосты proxy-outbound'ов (vnext / servers / address) и XHTTP downloadSettings. */
+    /** Hosts of proxy outbounds (vnext / servers / address) and XHTTP downloadSettings. */
     private fun serverNames(outbounds: JSONArray): Set<String> {
         val names = linkedSetOf<String>()
         for (i in 0 until outbounds.length()) {
@@ -252,7 +252,7 @@ object RustCore : VpnCore {
         }
         return candidates.firstOrNull {
             cm.getNetworkCapabilities(it)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
-        } ?: candidates.firstOrNull() ?: error("Нет доступной сети для подключения VPN")
+        } ?: candidates.firstOrNull() ?: error("No network available for the VPN connection")
     }
 
     private fun protocols(outbounds: JSONArray): Set<String> =
@@ -265,7 +265,7 @@ object RustCore : VpnCore {
         return proxy?.optString("tag")?.takeIf { it.isNotEmpty() }
     }
 
-    /** Один GET через proxy-выход работающего ядра, мимо маршрутизации. */
+    /** A single GET through the running core's proxy exit, bypassing routing. */
     override fun measureDelay(url: String): Long {
         val (runtime, tag) = synchronized(this) { (core ?: return -1L) to proxyTag }
         val result = try {
@@ -280,8 +280,8 @@ object RustCore : VpnCore {
     }
 
     /**
-     * Задержка кандидата: временное ядро без TUN (probe-конфиг несёт loopback SOCKS
-     * на эфемерном порту), сокеты защищены VpnService работающего VPN.
+     * Candidate latency: a temporary core without TUN (the probe config carries a loopback SOCKS
+     * on an ephemeral port), sockets protected by the running VPN's VpnService.
      */
     override fun measureOutbound(context: Context, config: String, url: String): Long {
         if (!candidateSlots.tryAcquire(CANDIDATE_SLOT_WAIT_MS, TimeUnit.MILLISECONDS)) return -1L
@@ -318,7 +318,7 @@ object RustCore : VpnCore {
     private fun tunStats(runtime: XrayCore): XrayTunStats? =
         try { runtime.stats() } catch (_: RuntimeException) { null }
 
-    /** lastRx — последний рост принятых из сети байт TUN-потоков; tx — принятые outbound'ом TCP-байты. */
+    /** lastRx — the last growth of bytes received from the network by TUN flows; tx — TCP bytes accepted by the outbound. */
     private fun sampleRx(stats: XrayTunStats) {
         val now = System.currentTimeMillis()
         val bytes = stats.tcpRemoteReadBytes + stats.udpRemoteReadBytes
@@ -335,7 +335,7 @@ object RustCore : VpnCore {
         block(runtime, stats)
     }
 
-    /** ABI 0.9.0 не отдаёт состояние fd-цикла: «жив» = runtime запущен и отдаёт статистику. */
+    /** ABI 0.9.0 doesn't expose the fd loop state: "alive" = the runtime is started and reports stats. */
     override fun isTunRunning(): Boolean = withStats(false) { _, _ -> true }
 
     override fun activeConnections(): Long = synchronized(this) {
@@ -345,8 +345,8 @@ object RustCore : VpnCore {
     override fun downloadBytes(): Long = withStats(0L) { _, s -> s.downlinkBytes }
 
     /**
-     * Для stall-детектора: последний входящий payload или принятый TCP-аплоад
-     * (xray-rust ACK'ает локально, долгий аплоад без ответа иначе выглядел бы зависшим).
+     * For the stall detector: the last incoming payload or accepted TCP upload
+     * (xray-rust ACKs locally, a long upload without a reply would otherwise look stuck).
      */
     override fun lastRxActivityMs(): Long = withStats(lastRxAt) { _, _ ->
         if (lastRxAt > 0) maxOf(lastRxAt, lastTcpTxAt) else 0L

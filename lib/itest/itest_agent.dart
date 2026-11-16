@@ -17,8 +17,8 @@ import '../providers/settings_provider.dart';
 import '../providers/vpn_provider.dart';
 import 'itest_protocol.dart';
 
-/// Агент интеграционных тестов: исполняет команды раннера `tool/itest` через
-/// те же провайдеры, что и UI. Есть только в itest-сборке ([kItest]).
+/// Integration test agent: executes `tool/itest` runner commands through
+/// the same providers as the UI. Present only in the itest build ([kItest]).
 class ItestAgent {
   final ProviderContainer container;
 
@@ -28,13 +28,13 @@ class ItestAgent {
 
   static const _channel = MethodChannel('com.teapodstream/itest');
 
-  /// Flutter на Android режет строку logcat на ~1024 символах — длинный ответ уходит в файл.
+  /// Flutter on Android cuts a logcat line at ~1024 characters — a long response goes to a file.
   static const _maxInline = 900;
 
   static void start(ProviderContainer container) {
     final agent = ItestAgent(container);
-    // Раннер повторяет `am start` с тем же id, если adb завис: повтор не должен
-    // выполнить команду (например, import) второй раз — отдаём тот же ответ.
+    // The runner repeats `am start` with the same id if adb hung: the repeat must not
+    // run the command (e.g. import) a second time — return the same response.
     final seen = <String, Future<Map<String, Object?>>>{};
     _channel.setMethodCallHandler((call) async {
       if (call.method != 'command') return;

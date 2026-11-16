@@ -8,6 +8,7 @@ import '../core/services/device_service.dart';
 import '../core/services/log_service.dart';
 import 'settings_provider.dart';
 import 'vpn_provider.dart';
+import '../l10n/l10n.dart';
 
 class ConfigState {
   final List<VpnConfig> configs;
@@ -39,8 +40,8 @@ class ConfigState {
     return result;
   }();
 
-  /// Пины в порядке закрепления; null — конфиг с таким именем
-  /// в подписке отсутствует (пин «потерян», но не удаляется).
+  /// Pins in pinning order; null — a config with that name
+  /// is missing from the subscription (the pin is "lost" but not removed).
   late final List<(PinnedRef, VpnConfig?)> resolvedPins =
       pins.map((p) => (p, p.resolve(configs))).toList();
 
@@ -71,10 +72,10 @@ class ConfigState {
 class ConfigNotifier extends AsyncNotifier<ConfigState> {
   static final storage = ConfigStorageService();
 
-  /// Мутации выполняются строго по очереди: каждая читает state, ждёт
-  /// load-modify-save хранилища и пишет state. Параллельно (пинг посреди
-  /// обновления подписки) они перетирали друг друга — на диске оставались
-  /// старые конфиги, в памяти новые.
+  /// Mutations run strictly in order: each reads state, waits for
+  /// the storage load-modify-save and writes state. Run in parallel (a ping in the middle
+  /// of a subscription refresh) they overwrote each other — disk kept
+  /// the old configs, memory the new ones.
   Future<void> _queue = Future.value();
 
   Future<T> _serial<T>(Future<T> Function() op) {
@@ -98,7 +99,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
   Future<void> togglePin(VpnConfig c) => _serial(() async {
     final current = state.maybeWhen(data: (d) => d, orElse: () => null);
     if (current == null) return;
-    // Снимаем пин, который резолвится в этот конфиг (в т.ч. старого формата).
+    // Remove the pin that resolves to this config (including the old format).
     final pins = current.isPinned(c)
         ? [for (final (p, r) in current.resolvedPins) if (r?.id != c.id) p]
         : [...current.pins, PinnedRef.of(c)];
@@ -172,8 +173,8 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
 
   // ─── Subscription methods ───
 
-  /// [replaceId] — обновить подписку с этим id новым [url] (смена URL):
-  /// при ошибке загрузки старая подписка остаётся нетронутой.
+  /// [replaceId] — update the subscription with this id to the new [url] (URL change):
+  /// on a load error the old subscription stays untouched.
   Future<void> addSubscriptionFromUrl(String url,
       {String? name, bool allowSelfSigned = false, String? replaceId}) async {
     bool isTarget(Subscription s) => replaceId != null ? s.id == replaceId : s.url == url;
@@ -183,25 +184,25 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
 
     final settings = ref.read(settingsProvider).value;
     final hwid = (settings?.hwidEnabled ?? false) ? await DeviceService.getHwidInfo() : null;
-    // Сеть — вне очереди мутаций, чтобы выбор конфига не ждал загрузку.
+    // Network — outside the mutation queue so config selection doesn't wait for the download.
     final (tagged, fetchResult) = await _fetchAndTagConfigs(url, subId,
         allowSelfSigned: allowSelfSigned, pinnedCertDer: target?.pinnedCertDer,
         hwid: hwid, userAgent: settings?.subUserAgent ?? '');
     if (tagged.isEmpty) {
-      // Провайдер обычно объясняет пустой ответ: лимит устройств HWID или announce.
+      // The provider usually explains an empty response: HWID device limit or announce.
       throw Exception(fetchResult.hwidStatus?.maxDevicesReached == true
-          ? 'Достигнут лимит устройств подписки (HWID)'
-          : fetchResult.announce ?? 'Подписка не вернула ни одной конфигурации');
+          ? L10n.current.subHwidLimit
+          : fetchResult.announce ?? L10n.current.subEmpty);
     }
 
     await _serial(() async {
-      // Состояние перечитывается под очередью: за время загрузки его могли изменить.
+      // State is re-read under the queue: it could have changed during the download.
       final current = state.value ?? ConfigState();
       final existing = current.subscriptions.where((s) => s.id == subId).firstOrNull;
       final oldConfigs = current.configs.where((c) => c.subscriptionId == subId).toList();
 
-      // Пинг (TCP до address:port) переносим по endpoint. Закреплённое ядро —
-      // по имени+endpoint или по endpoint, если он в подписке один.
+      // Ping (TCP to address:port) is carried over by endpoint. The pinned core —
+      // by name+endpoint, or by endpoint if it is unique in the subscription.
       final oldByEndpoint = <String, List<VpnConfig>>{};
       for (final c in oldConfigs) {
         (oldByEndpoint['${c.address}:${c.port}'] ??= []).add(c);
@@ -214,8 +215,8 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
         return c.copyWith(latencyMs: ping.latencyMs, lastPingedAt: ping.lastPingedAt, core: same?.core);
       }).toList();
 
-      // Парсер выдаёт новые id — переносим выбор: имя+endpoint, затем endpoint,
-      // затем имя (имена в подписке не уникальны, напр. «VLESS Server»).
+      // The parser issues new ids — carry the selection over: name+endpoint, then endpoint,
+      // then name (names in a subscription aren't unique, e.g. "VLESS Server").
       String? activeId = current.activeConfigId;
       final oldActive = current.activeConfig;
       if (oldActive != null && oldActive.subscriptionId == subId) {
@@ -226,13 +227,13 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
                 newConfigs.where((c) => c.name == oldActive.name).firstOrNull)
             ?.id;
       }
-      // Активного нет (или он пропал из подписки) — первый новый. Режим авто-выбора
-      // подписки (activeSubscriptionId) при этом не сбрасывается.
+      // No active one (or it vanished from the subscription) — the first new one. The subscription
+      // auto-select mode (activeSubscriptionId) is not reset by this.
       activeId ??= newConfigs.first.id;
 
       final sub = Subscription(
         id: subId,
-        // Пользовательское имя не затирается profile-title при обновлении
+        // A user-given name isn't overwritten by profile-title on refresh
         name: name ?? existing?.name ?? fetchResult.profileTitle ?? Uri.parse(url).host,
         url: url,
         createdAt: existing?.createdAt ?? DateTime.now(),
@@ -314,7 +315,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     _refreshingSubs = true;
     try {
       for (final sub in stale) {
-        // Битая подписка не блокирует остальные и не дёргается на каждом resume.
+        // A broken subscription doesn't block the others and isn't retried on every resume.
         final failedAt = _subFailedAt[sub.id];
         if (failedAt != null &&
             DateTime.now().difference(failedAt) < const Duration(hours: 1)) {
@@ -325,7 +326,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
           _subFailedAt.remove(sub.id);
         } catch (e) {
           _subFailedAt[sub.id] = DateTime.now();
-          ref.read(logServiceProvider.notifier).addError('Автообновление подписки «${sub.name}»: $e');
+          ref.read(logServiceProvider.notifier).addError('Subscription auto-refresh "${sub.name}": $e');
         }
       }
     } finally {
@@ -436,8 +437,8 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
       final key = '${c.address}:${c.port}';
       if (!latencyByEndpoint.containsKey(key)) return c;
       anyChanged = true;
-      // null — сервер не ответил: старое значение стираем, иначе мёртвый
-      // сервер со «свежим» пингом выигрывает автовыбор в режиме подписки.
+      // null — the server didn't answer: clear the old value, otherwise a dead
+      // server with a "fresh" ping wins auto-select in subscription mode.
       final ms = latencyByEndpoint[key];
       return c.copyWith(latencyMs: ms, clearLatency: ms == null, lastPingedAt: pingedAt);
     }).toList();

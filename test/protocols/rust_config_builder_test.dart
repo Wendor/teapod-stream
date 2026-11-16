@@ -387,7 +387,7 @@ void main() {
           isA<FormatException>().having(
             (e) => e.message,
             'message',
-            contains('250 тыс.'),
+            contains('250k'),
           ),
         ),
       );

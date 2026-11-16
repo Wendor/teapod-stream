@@ -51,7 +51,7 @@ class XrayVpnService : VpnService() {
         const val ACTION_CONNECT = "com.teapodstream.CONNECT"
         const val ACTION_DISCONNECT = "com.teapodstream.DISCONNECT"
         const val ACTION_CONNECT_QUICK = "com.teapodstream.CONNECT_QUICK" // reconnect from notification
-        const val ACTION_ITEST_DROP = "com.teapodstream.ITEST_DROP" // itest: неожиданный обрыв
+        const val ACTION_ITEST_DROP = "com.teapodstream.ITEST_DROP" // itest: unexpected drop
         const val EXTRA_XRAY_CONFIG = "xray_config"
         const val EXTRA_SOCKS_PORT = "socks_port"
         const val EXTRA_SOCKS_USER = "socks_user"
@@ -70,14 +70,14 @@ class XrayVpnService : VpnService() {
         const val EXTRA_MTU = "mtu" // TUN MTU size
         const val EXTRA_HEARTBEAT_PROBE = "heartbeat_probe"      // "socks" | "xrayDelay" | "passive"
         const val EXTRA_HEARTBEAT_ACTION = "heartbeat_action"    // "reconnect" | "switchConfig"
-        const val EXTRA_HEARTBEAT_THRESHOLD = "heartbeat_threshold" // провалов подряд до действия
-        const val EXTRA_HEARTBEAT_URL = "heartbeat_url"          // куда стучится проба
+        const val EXTRA_HEARTBEAT_THRESHOLD = "heartbeat_threshold" // consecutive failures before action
+        const val EXTRA_HEARTBEAT_URL = "heartbeat_url"          // where the probe goes
         const val EXTRA_ENGINE = "engine"                        // "go" | "rust"
-        const val EXTRA_CONFIG_NAME = "config_name"              // имя конфига для плитки
+        const val EXTRA_CONFIG_NAME = "config_name"              // config name for the tile
 
         // Static state tracker for querying from Dart
         @Volatile private var currentNativeState: String = "disconnected"
-        /** Причина последнего неудачного старта; уходит во Flutter с состоянием error/blocked. */
+        /** Reason of the last failed start; goes to Flutter with the error/blocked state. */
         @Volatile var lastError: String? = null
             private set
         // Tracks whether we are in TUN mode (not proxy-only). Used by getNativeState() to detect
@@ -113,9 +113,9 @@ class XrayVpnService : VpnService() {
             private set
 
         /**
-         * Интеграция с Tasker/Anubis: команды [VpnCommandReceiver] и broadcast
-         * STATE_CHANGED. Оба видны любому приложению (выключить VPN, следить за ним),
-         * поэтому работают только при явно включённой опции (по умолчанию выкл.).
+         * Tasker/Anubis integration: [VpnCommandReceiver] commands and the STATE_CHANGED
+         * broadcast. Both are visible to any app (turn the VPN off, watch it),
+         * so they work only when the option is explicitly enabled (off by default).
          */
         fun automationEnabled(context: android.content.Context): Boolean =
             context.getSharedPreferences("FlutterSharedPreferences", MODE_PRIVATE)
@@ -182,7 +182,7 @@ class XrayVpnService : VpnService() {
         // self-adjusts to actual network speed instead of relying on a fixed timer. Hard ceiling:
         // if no probe succeeds within HEARTBEAT_WARMUP_TIMEOUT_MS → something is genuinely broken.
         private const val HEARTBEAT_WARMUP_TIMEOUT_MS = 30_000L
-        // Сколько ждать реакции Flutter на tunnel_dead, прежде чем реконнектить самим.
+        // How long to wait for Flutter's reaction to tunnel_dead before reconnecting ourselves.
         private const val TUNNEL_DEAD_NOTIFY_COOLDOWN_MS = 45_000L
         private const val STATS_INTERVAL_MS = 1_000L
         private const val STATS_INTERVAL_SCREEN_OFF_MS = 10_000L
@@ -208,24 +208,24 @@ class XrayVpnService : VpnService() {
             "downloadSpeed" to lastDownloadSpeed,
         )
 
-        /** История графика после точки [since] эпохи [epoch] (см. [SpeedHistory.since]). */
+        /** Chart history after point [since] of epoch [epoch] (see [SpeedHistory.since]). */
         fun getStatsHistory(epoch: Int, since: Long): Map<String, Any> = speedHistory.since(epoch, since)
 
-        // showNotification последнего подключения. null — сервис в этом процессе ещё не
-        // грузил параметры (тайл/события раньше сервиса): берём с диска (issue #76).
+        // showNotification of the last connection. null — the service in this process hasn't
+        // loaded parameters yet (tile/events before the service): read from disk (issue #76).
         @Volatile private var showNotificationFlag: Boolean? = null
-        // Последнее выложенное промежуточное состояние: повторный notify() того же текста
-        // съедает лимит частоты обновлений (система молча отбрасывает лишние), и финальное
-        // «подключено» терялось — уведомление «зависало» на «Подключение…» (issue #76).
+        // The last posted intermediate state: re-notify() with the same text
+        // eats the update rate limit (the system silently drops extra ones), and the final
+        // "connected" got lost — the notification "hung" on "Connecting…" (issue #76).
         @Volatile private var lastIntermediate: Boolean? = null
-        // Постоянный `when`: иначе каждое обновление поднимает уведомление наверх шторки.
+        // A constant `when`: otherwise every update lifts the notification to the top of the shade.
         private val notificationWhen = System.currentTimeMillis()
 
         private fun notificationsEnabled(context: Context): Boolean =
             showNotificationFlag
                 ?: (ConnectionParams.load(context.filesDir)?.showNotification ?: true).also { showNotificationFlag = it }
 
-        /** Уведомление по смене состояния: промежуточное для connecting/disconnecting/reconnecting. */
+        /** Notification on state change: intermediate for connecting/disconnecting/reconnecting. */
         @JvmStatic fun onStateNotification(context: Context, state: String) {
             val connecting = when (state) {
                 "connecting", "reconnecting" -> true
@@ -235,7 +235,7 @@ class XrayVpnService : VpnService() {
             if (!notificationsEnabled(context) || lastIntermediate == connecting) return
             try {
                 val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                ensureNotificationChannels(manager)
+                ensureNotificationChannels(context, manager)
                 manager.notify(NOTIFICATION_ID, buildIntermediateNotification(context, connecting))
                 lastIntermediate = connecting
             } catch (_: Exception) { }
@@ -243,7 +243,7 @@ class XrayVpnService : VpnService() {
 
         private fun buildIntermediateNotification(context: Context, connecting: Boolean): Notification =
             baseNotification(context, NOTIFICATION_CHANNEL_ID)
-                .setContentText(if (connecting) "Подключение…" else "Отключение…")
+                .setContentText(context.appString(if (connecting) R.string.state_connecting else R.string.state_disconnecting))
                 .setProgress(0, 0, true)
                 .build()
 
@@ -257,18 +257,18 @@ class XrayVpnService : VpnService() {
                 .setWhen(notificationWhen)
                 .setShowWhen(false)
                 .setCategory(NotificationCompat.CATEGORY_SERVICE)
-                // Android 12+ иначе откладывает показ FGS-уведомления на 10 с.
+                // Android 12+ otherwise delays showing the FGS notification by 10 s.
                 .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
 
-        private fun ensureNotificationChannels(manager: NotificationManager) {
+        private fun ensureNotificationChannels(context: Context, manager: NotificationManager) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
             manager.createNotificationChannel(
-                NotificationChannel(NOTIFICATION_CHANNEL_ID, "VPN статус", NotificationManager.IMPORTANCE_LOW)
-                    .apply { description = "Скорость и управление VPN" }
+                NotificationChannel(NOTIFICATION_CHANNEL_ID, context.appString(R.string.channel_status_name), NotificationManager.IMPORTANCE_LOW)
+                    .apply { description = context.appString(R.string.channel_status_description) }
             )
             manager.createNotificationChannel(
-                NotificationChannel(NOTIFICATION_CHANNEL_MINIMAL_ID, "VPN (фоновый режим)", NotificationManager.IMPORTANCE_MIN)
-                    .apply { description = "Фоновый VPN-сервис" }
+                NotificationChannel(NOTIFICATION_CHANNEL_MINIMAL_ID, context.appString(R.string.channel_minimal_name), NotificationManager.IMPORTANCE_MIN)
+                    .apply { description = context.appString(R.string.channel_minimal_description) }
             )
         }
 
@@ -294,11 +294,11 @@ class XrayVpnService : VpnService() {
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     @Volatile private var lastUnderlyingNetwork: Network? = null
     @Volatile private var lastConnectedMs: Long = 0L
-    // Физическая сеть на момент connected — с ней сверяется отложенная проверка смены сети.
+    // The physical network at the moment of connected — the deferred network-change check compares against it.
     @Volatile private var connectedNetwork: Network? = null
     private var prefixProxy: PrefixTcpProxy? = null
     private var showNotification: Boolean
-        // До загрузки параметров (ACTION_DISCONNECT в свежем процессе) — с диска.
+        // Before parameters are loaded (ACTION_DISCONNECT in a fresh process) — from disk.
         get() = notificationsEnabled(this)
         set(value) { showNotificationFlag = value }
     @Volatile private var screenOn = true
@@ -311,19 +311,19 @@ class XrayVpnService : VpnService() {
     @Volatile private var blockQuicEnabled = false
     private var proxyOnlyMode = false
     private val networkChangeHandler = Handler(Looper.getMainLooper())
-    // Смена сессии (ACTION_CONNECT) и остановка по отложенному реконнекту — под одним
-    // замком: устаревший реконнект не остановит уже новую сессию.
+    // Session change (ACTION_CONNECT) and stopping by a deferred reconnect are under one
+    // lock: a stale reconnect won't stop an already new session.
     private val sessionLock = Any()
-    // Среди отложенных событий была потеря VALIDATED — реконнект без сверки сети.
+    // Among the deferred events there was a loss of VALIDATED — reconnect without checking the network.
     @Volatile private var pendingForce = false
     private var pendingNetworkRunnable: Runnable? = null
     private var heartbeatThread: Thread? = null
     private val heartbeatFailures = AtomicInteger(0)
-    // Чем щупаем туннель: "socks" (HTTP через SOCKS5), "xrayDelay" (замер внутри
-    // ядра) или "passive" (только метрики tun2socks, без активных проб).
+    // How we probe the tunnel: "socks" (HTTP via SOCKS5), "xrayDelay" (measured inside
+    // the core) or "passive" (only tun2socks metrics, no active probes).
     private var heartbeatProbe: String = "socks"
-    // Поведение при мёртвом туннеле: "reconnect" — переподключить тот же сервер,
-    // "switchConfig" — отдать решение Flutter (он подберёт живой конфиг).
+    // Behavior on a dead tunnel: "reconnect" — reconnect to the same server,
+    // "switchConfig" — leave the decision to Flutter (it picks a live config).
     private var heartbeatAction: String = "reconnect"
     private var heartbeatThreshold: Int = 3
     private var heartbeatUrl: String = DEFAULT_HEARTBEAT_URL
@@ -335,8 +335,8 @@ class XrayVpnService : VpnService() {
     private val tunAddress = "10.120.230.1"
     private val tunNetmask = "255.255.255.0"
     @Volatile private var tunMtu = 1500
-    // Ядро текущей сессии: фиксируется в startVpn после CAS, чтобы смена ядра
-    // новым connect не перенаправила stop/heartbeat/stats в чужое ядро.
+    // Core of the current session: fixed in startVpn after the CAS so that a core change
+    // by a new connect doesn't redirect stop/heartbeat/stats to another core.
     @Volatile private var sessionCore: VpnCore = VpnCores.active
     private val core: VpnCore get() = sessionCore
 
@@ -374,8 +374,8 @@ class XrayVpnService : VpnService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_ITEST_DROP) {
-            // Только itest-сборка: обрыв по пути сбоя (explicit=false), как при
-            // неожиданной смерти туннеля — kill switch оставляет TUN-sink.
+            // itest build only: a drop along the failure path (explicit=false), as on
+            // an unexpected tunnel death — the kill switch keeps the TUN sink.
             if (!BuildConfig.ITEST || !isRunning.get()) {
                 if (!isRunning.get()) stopSelf(startId)
                 return START_NOT_STICKY
@@ -386,8 +386,8 @@ class XrayVpnService : VpnService() {
         }
         when (intent?.action) {
             ACTION_DISCONNECT -> {
-                // Пришли через startForegroundService (Tasker, MainActivity) в свежий
-                // процесс — без startForeground() система уронит сервис через 5 с.
+                // Arrived via startForegroundService (Tasker, MainActivity) into a fresh
+                // process — without startForeground() the system kills the service after 5 s.
                 if (!isRunning.get()) ensureForeground(connecting = false)
                 userRequestedDisconnect.set(true)
                 try { File(filesDir, "user_disconnected.flag").createNewFile() } catch (_: Exception) {}
@@ -409,8 +409,8 @@ class XrayVpnService : VpnService() {
                         Thread.currentThread().interrupt()
                     }
 
-                    // Из состояния blocked stopVpn выходит по CAS (isRunning уже false),
-                    // TUN-sink kill switch'а нужно закрыть явно.
+                    // From the blocked state stopVpn exits on the CAS (isRunning is already false),
+                    // the kill switch's TUN sink must be closed explicitly.
                     closeTunSink()
 
                     // Guarantee "disconnected" is always sent
@@ -449,17 +449,17 @@ class XrayVpnService : VpnService() {
                     vpnMode, ssPrefix, proxyOnly, showNotification, killSwitch, allowIcmp, blockQuic, ipv6Enabled, mtu,
                     heartbeatProbe, heartbeatAction, heartbeatThreshold, heartbeatUrl, allowTethering, engine)
                     .save(filesDir, ::log)
-                // Вместе с параметрами quick-reconnect — плитка показывает то, что подключит.
+                // Together with the quick-reconnect parameters — the tile shows what it will connect.
                 VpnTileService.saveConfigName(this, intent.getStringExtra(EXTRA_CONFIG_NAME))
                 userRequestedDisconnect.set(false)
                 reconnectAttempts.set(0)
                 try { File(filesDir, "user_disconnected.flag").delete() } catch (_: Exception) {}
                 ensureForeground()
                 Thread {
-                    // Смена сервера/настроек на живом туннеле: старый TUN остаётся sink'ом
-                    // до establish() нового — без явного disconnect и окна утечки.
+                    // Changing server/settings on a live tunnel: the old TUN stays a sink
+                    // until the new one's establish() — no explicit disconnect and no leak window.
                     synchronized(sessionLock) {
-                        // Пользователь успел отключиться, пока ждали замок.
+                        // The user managed to disconnect while we waited for the lock.
                         if (userRequestedDisconnect.get()) {
                             log("info", "CONNECT cancelled: user disconnected meanwhile")
                             return@Thread
@@ -487,10 +487,10 @@ class XrayVpnService : VpnService() {
                 if (isRunning.get()) {
                     // startVpn would bail on its CAS anyway — bail here instead so the
                     // state isn't left stuck at "reconnecting" over a live tunnel.
-                    // startForegroundService требует startForeground — повторяем его с
-                    // уведомлением живой сессии: «Подключение…» повисло бы до смены скорости.
+                    // startForegroundService requires startForeground — repeat it with
+                    // the live session's notification: "Connecting…" would hang until the speed changes.
                     val live = currentNativeState == "connected" && showNotification
-                    if (live) lastNotificationText = null  // следующий тик статистики обновит скорость
+                    if (live) lastNotificationText = null  // the next stats tick updates the speed
                     ensureForeground(override = if (live) buildConnectedNotification(0, 0) else null)
                     log("info", "CONNECT_QUICK ignored: VPN already running")
                     return START_STICKY
@@ -500,7 +500,7 @@ class XrayVpnService : VpnService() {
                 if (params != null && configFile.exists()) {
                     val needsPermission = !params.proxyOnly && VpnService.prepare(this) != null
                     if (needsPermission) {
-                        // Разрешение отозвано — наш TUN система уже отключила, блокировать нечем.
+                        // Permission revoked — the system already disconnected our TUN, nothing to block with.
                         abortQuickConnect(killSwitch = false)
                     } else {
                         userRequestedDisconnect.set(false)
@@ -597,7 +597,7 @@ class XrayVpnService : VpnService() {
         return START_STICKY
     }
 
-    /** Логин/пароль SOCKS из сохранённого конфига в формате ядра [engine]. */
+    /** SOCKS login/password from the saved config in the format of core [engine]. */
     private fun extractSocksFromConfig(configJson: String, engine: String): Pair<String, String> =
         VpnCores.get(CoreKind.fromId(engine)).socksCredentials(configJson)
 
@@ -632,8 +632,8 @@ class XrayVpnService : VpnService() {
         // new one is established: establish() atomically replaces the interface, so
         // app traffic is blackholed by the old TUN instead of leaking while xray starts.
         var previousTun = tunInterface
-        // Ручной connect с kill switch держит sink после неудачи, только если трафик
-        // уже был заблокирован (BLOCKED) — иначе битый конфиг запирал бы сеть.
+        // A manual connect with the kill switch keeps the sink after a failure only if traffic
+        // was already blocked (BLOCKED) — otherwise a broken config would lock the network.
         val keepSinkOnFailure = killSwitch && (isReconnect || previousTun != null)
         tunInterface = null
         killSwitchEnabled = killSwitch
@@ -751,7 +751,7 @@ class XrayVpnService : VpnService() {
                     log("info", "TUN established with IP $dynamicTunIp")
                 }
 
-                // Split tunneling: UID-фильтр на уровне ядра (tun2socks validator / TUN admission)
+                // Split tunneling: UID filter at the core level (tun2socks validator / TUN admission)
                 val allowedUids = resolveUids(vpnMode, includedPackages, excludedPackages)
                 val blockUnowned = excludedPackages.isNotEmpty() && !allowTethering
                 core.start(finalConfig, coreParams(tunInterface!!.fd, allowedUids, blockUnowned))
@@ -766,8 +766,8 @@ class XrayVpnService : VpnService() {
                 log("info", "VPN connected successfully")
             }
         } catch (e: Throwable) {
-            // Throwable: UnsatisfiedLinkError/ExceptionInInitializerError ядра тоже
-            // должны вернуть сервис в остановленное состояние.
+            // Throwable: the core's UnsatisfiedLinkError/ExceptionInInitializerError must also
+            // return the service to the stopped state.
             log("error", "Start failed: ${e.message}")
             // If no new TUN was established, restore the old fd: as kill-switch sink
             // (keeps blocking traffic) and/or for reuse by the next reconnect attempt.
@@ -857,7 +857,7 @@ class XrayVpnService : VpnService() {
                         )
                         uid == ownUid
                     } catch (_: SecurityException) {
-                        true // proxy-only: мы не активный VPN, lookup недоступен; слушаем только loopback
+                        true // proxy-only: we're not the active VPN, lookup is unavailable; listen on loopback only
                     } catch (_: Exception) {
                         false
                     }
@@ -874,7 +874,7 @@ class XrayVpnService : VpnService() {
     }
 
     override fun onRevoke() {
-        // Вызывается Android, когда VPN отключен извне (системные настройки, другой VPN)
+        // Called by Android when the VPN is turned off externally (system settings, another VPN)
         log("info", "VPN revoked by system")
         // Prevent START_STICKY auto-reconnect while the user is e.g. on a phone call.
         // The user did not request disconnect, but we must not reconnect until they explicitly
@@ -887,7 +887,7 @@ class XrayVpnService : VpnService() {
         stopSelf()
     }
 
-    /** Закрывает TUN-sink kill switch'а, если сервис уже остановлен. */
+    /** Closes the kill switch's TUN sink if the service is already stopped. */
     private fun closeTunSink() {
         if (isRunning.get()) return
         try { tunInterface?.close() } catch (_: Exception) {}
@@ -938,8 +938,8 @@ class XrayVpnService : VpnService() {
                     && tunInterface != null
                     && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
             keptTunAsSink = keepTunAsSink
-            // Ядро, которое читает TUN fd само (Rust), останавливается до закрытия fd:
-            // иначе освобождённый номер fd может достаться чужому дескриптору.
+            // A core that reads the TUN fd itself (Rust) is stopped before the fd is closed:
+            // otherwise the freed fd number could go to someone else's descriptor.
             if (core.borrowsTunFd) core.stop()
             if (!keepTunAsSink) {
                 try {
@@ -975,15 +975,15 @@ class XrayVpnService : VpnService() {
             // Don't overwrite "connecting" state when doing internal reconnect
             if (!reconnecting) {
                 connectedAtMs = 0
-                // TUN-sink остался открытым (kill switch) — трафик заблокирован,
-                // сообщаем отличимое от disconnected состояние.
+                // The TUN sink stayed open (kill switch) — traffic is blocked,
+                // report a state distinct from disconnected.
                 setState(if (keptTunAsSink) "blocked" else resultState)
-                // Иначе после ошибки подключения висело «Подключение…» (issue #76).
-                showDisconnectedNotification(if (keptTunAsSink) "Kill switch: трафик заблокирован" else "Отключено")
+                // Otherwise after a connection error "Connecting…" hung (issue #76).
+                showDisconnectedNotification(keptTunAsSink)
             } else {
                 // Clear credentials so startVpn picks up fresh ones from configFile
                 _socksCredentials.set(SocksCredentials(0, "", ""))
-                // TUN уже sink: трафик не идёт, пока ждём сеть (до 30 с) — не «connected».
+                // TUN is already a sink: no traffic while we wait for the network (up to 30 s) — not "connected".
                 setState("reconnecting")
             }
             log("info", "stopVpn: done (state=${if (reconnecting) "reconnecting" else if (keptTunAsSink) "blocked" else resultState})")
@@ -995,7 +995,7 @@ class XrayVpnService : VpnService() {
         try { unregisterReceiver(screenReceiver) } catch (_: Exception) {}
         screenReceiver = null
         stopVpn()
-        // stopVpn выложил «Отключено» — после смерти сервиса оно осталось бы сиротой.
+        // stopVpn posted "Disconnected" — after the service dies it would remain an orphan.
         try { (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).cancel(NOTIFICATION_ID) } catch (_: Exception) {}
         flushLogBuffer(filesDir)
         super.onDestroy()
@@ -1025,8 +1025,8 @@ class XrayVpnService : VpnService() {
                         val idle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) pm.isDeviceIdleMode else false
                         deviceIdle = idle
                         log("info", "Doze mode: ${if (idle) "entered" else "exited"}")
-                        // Выход из Doze = maintenance window или пробуждение: если TUN
-                        // долго молчал, туннель мог протухнуть — probe как при SCREEN_ON.
+                        // Leaving Doze = a maintenance window or wake-up: if TUN
+                        // was silent for long, the tunnel might have gone stale — probe as on SCREEN_ON.
                         if (!idle) checkTunStallOnWake()
                     }
                 }
@@ -1173,8 +1173,8 @@ class XrayVpnService : VpnService() {
                             // without triggering onLost/onAvailable — detect and reconnect.
                             val validated = networkCapabilities.hasCapability(
                                 NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-                            // Сеть стала основной уже после onAvailable (LTE → Wi-Fi после
-                            // режима полёта): сокеты ядра остались на прежней сети.
+                            // The network became the default only after onAvailable (LTE → Wi-Fi after
+                            // airplane mode): the core's sockets stayed on the previous network.
                             val switched = prev != null && lastUnderlyingNetwork != null &&
                                 prev != lastUnderlyingNetwork
                             if (!validated) scheduleNetworkChanged()
@@ -1243,20 +1243,20 @@ class XrayVpnService : VpnService() {
         }
     }
 
-    /// [switched] — сменилась физическая сеть: перед реконнектом сверяемся с сетью,
-    /// на которой подключились (вернулись на неё — сокеты ядра живы, реконнект не нужен).
+    /// [switched] — the physical network changed: before reconnecting compare with the network
+    /// we connected on (back on it — the core's sockets are alive, no reconnect needed).
     private fun scheduleNetworkChanged(switched: Boolean = false) {
         // Only reconnect when fully connected — prevents spurious reconnects during the
         // initial startVpn() phase when onAvailable fires right after registration.
         if (currentNativeState != "connected") return
         // On mobile data Android fires onAvailable/onCapabilitiesChanged right after VPN
-        // connects. В первые 5 с не реконнектимся сразу: по окончании окна сверяем
-        // физическую сеть с сетью подключения — настоящая смена не теряется.
+        // connects. In the first 5 s we don't reconnect right away: when the window ends we compare
+        // the physical network with the connection network — a real change isn't lost.
         val session = lastConnectedMs
         val msSinceConnect = System.currentTimeMillis() - session
         val settling = session > 0 && msSinceConnect < 5_000L
-        // Потеря VALIDATED вне окна — реконнект обязателен, даже если следом придёт
-        // событие смены сети и сеть окажется прежней.
+        // A loss of VALIDATED outside the window — a reconnect is mandatory, even if a network
+        // change event follows and the network turns out to be the same.
         if (!switched && !settling) pendingForce = true
         val checkNetwork = (switched || settling) && !pendingForce
         val delay = if (settling) 5_000L - msSinceConnect + RECONNECT_DEBOUNCE_MS else RECONNECT_DEBOUNCE_MS
@@ -1281,9 +1281,9 @@ class XrayVpnService : VpnService() {
         networkChangeHandler.postDelayed(r, delay)
     }
 
-    /// Перезапуск по сохранённым параметрам (CONNECT_QUICK, рестарт системой) — под
-    /// [sessionLock], как ACTION_CONNECT и остановки: не начнётся, пока идёт остановка
-    /// старой сессии, и не стартует поверх живой или после отключения пользователем.
+    /// Restart from saved parameters (CONNECT_QUICK, system restart) — under
+    /// [sessionLock], like ACTION_CONNECT and stops: won't begin while the old session
+    /// is stopping, and won't start on top of a live one or after the user disconnected.
     private fun startQuickLocked(start: () -> Unit) = synchronized(sessionLock) {
         if (userRequestedDisconnect.get() || isRunning.get()) {
             log("info", "quick start skipped (disconnected by user or already running)")
@@ -1292,8 +1292,8 @@ class XrayVpnService : VpnService() {
         start()
     }
 
-    /// [session] — `lastConnectedMs` сессии, для которой запланирован реконнект;
-    /// новая сессия (ACTION_CONNECT) отменяет его. 0 — без привязки.
+    /// [session] — `lastConnectedMs` of the session the reconnect is scheduled for;
+    /// a new session (ACTION_CONNECT) cancels it. 0 — not bound.
     private fun reconnectInternal(session: Long = 0L) {
         if (userRequestedDisconnect.get()) return
         if (!isRunning.get()) return
@@ -1357,9 +1357,9 @@ class XrayVpnService : VpnService() {
         }
     } catch (_: Exception) { false }
 
-    /// Лимит провалов исчерпан. Возвращает true, если heartbeat-цикл продолжается
-    /// (ложная тревога или ждём, пока Flutter подберёт другой конфиг), false — запущен
-    /// реконнект и поток должен завершиться.
+    /// Failure limit reached. Returns true if the heartbeat loop continues
+    /// (false alarm or we wait for Flutter to pick another config), false — a reconnect
+    /// was started and the thread must finish.
     private fun handleHeartbeatExhausted(failures: Int, reason: String): Boolean {
         // Probe rides through the routing balancer and can land on a dead detour while
         // real traffic flows fine — a false positive. If the TUN saw downstream data
@@ -1373,16 +1373,16 @@ class XrayVpnService : VpnService() {
             val now = System.currentTimeMillis()
             if (now - lastTunnelDeadNotifyAt >= TUNNEL_DEAD_NOTIFY_COOLDOWN_MS) {
                 lastTunnelDeadNotifyAt = now
-                log("warning", "$reason (провалов: $failures) → подбор другого конфига")
+                log("warning", "$reason (failures: $failures) → picking another config")
                 VpnEventStreamHandler.sendTunnelDeadEvent(failures)
                 heartbeatFailures.set(0)
                 return true
             }
-            // Flutter не отреагировал за cooldown (приложение убито / нет живых
-            // кандидатов) — деградируем в обычный реконнект текущего сервера.
+            // Flutter didn't react within the cooldown (app killed / no live
+            // candidates) — degrade to a plain reconnect of the current server.
             log("warning", "switchConfig: no switch within cooldown, falling back to reconnect")
         }
-        log("warning", "$reason (провалов: $failures) → reconnect")
+        log("warning", "$reason (failures: $failures) → reconnect")
         reconnectInternal()
         return false
     }
@@ -1415,8 +1415,8 @@ class XrayVpnService : VpnService() {
                         else HEARTBEAT_INTERVAL_SCREEN_OFF_MS
                     )
                     if (!isRunning.get()) break
-                    // Deep Doze: не будить радио пробами — счётчики не трогаем,
-                    // на выходе из idle (maintenance window) probe в receiver'е.
+                    // Deep Doze: don't wake the radio with probes — counters are untouched,
+                    // on leaving idle (maintenance window) the receiver probes.
                     if (deviceIdle) continue
                     // Start deadline from first actual probe — not from thread creation,
                     // which may be long before xray is ready after a slow reconnect.
@@ -1450,9 +1450,9 @@ class XrayVpnService : VpnService() {
 
                     // Data reached the TUN within the last interval — the tunnel is
                     // demonstrably alive, no need to burn a radio round-trip on an
-                    // active probe. Idle tunnels still get the full probe, кроме
-                    // пассивного режима: там активных проб нет вовсе, обрыв ловят
-                    // TUN stall watchdog и проверки tun2socks выше.
+                    // active probe. Idle tunnels still get the full probe, except in
+                    // passive mode: there are no active probes at all, drops are caught by
+                    // the TUN stall watchdog and the tun2socks checks above.
                     if (heartbeatProbe != "passive" && !isTunRxFresh()) {
                         runProbe(port)
                     }
@@ -1573,9 +1573,9 @@ class XrayVpnService : VpnService() {
         heartbeatFailures.set(0)
     }
 
-    /// Разбор URL пробы: хост, порт и путь. Пресеты плоские (http), но кастомный
-    /// URL пользователь может задать любой — https через SOCKS-пробу не пойдёт,
-    /// поэтому такой URL обслуживается только замером внутри ядра.
+    /// Parsing the probe URL: host, port and path. Presets are plain (http), but the user
+    /// can set any custom URL — https won't go through the SOCKS probe,
+    /// so such a URL is served only by the in-core measurement.
     private data class ProbeUrl(val host: String, val port: Int, val path: String, val https: Boolean)
 
     private fun parseProbeUrl(raw: String): ProbeUrl {
@@ -1593,11 +1593,11 @@ class XrayVpnService : VpnService() {
         }
     }
 
-    /// Активная проба выбранного типа. Бросает исключение при неудаче —
-    /// heartbeat-цикл считает это провалом.
+    /// Active probe of the selected type. Throws on failure —
+    /// the heartbeat loop counts it as a failure.
     private fun runProbe(port: Int) {
         when (heartbeatProbe) {
-            "passive" -> return   // сюда не доходим: цикл не вызывает пробу вовсе
+            "passive" -> return   // never reached: the loop doesn't call the probe at all
             "xrayDelay" -> {
                 val ms = core.measureDelay(heartbeatUrl)
                 if (ms < 0) throw Exception("xray delay probe returned $ms")
@@ -1610,8 +1610,8 @@ class XrayVpnService : VpnService() {
     private fun checkTunnelConnectivity(port: Int) {
         val probeUrl = parseProbeUrl(heartbeatUrl)
         if (probeUrl.https) {
-            // Проба сама говорит plain HTTP поверх SOCKS5 — TLS она не умеет.
-            // Для https-URL честнее замерить через ядро, чем врать об успехе.
+            // The probe itself speaks plain HTTP over SOCKS5 — it can't do TLS.
+            // For an https URL it's more honest to measure via the core than to fake success.
             val ms = core.measureDelay(heartbeatUrl)
             if (ms < 0) throw Exception("xray delay probe returned $ms")
             log("debug", "Heartbeat OK (https url, measured in core: ${ms}ms)")
@@ -1662,7 +1662,7 @@ class XrayVpnService : VpnService() {
             readFully(inp, reply)
             val replyRep = reply[1].toInt() and 0xFF
             if (reply[0].toInt() != 5 || replyRep != 0) throw Exception("SOCKS connect failed: $replyRep")
-            // BND.ADDR + BND.PORT; readFully бросает на EOF (раньше -1 зацикливал чтение)
+            // BND.ADDR + BND.PORT; readFully throws on EOF (previously -1 looped the read)
             val bndLen = when (reply[3].toInt()) {
                 1 -> 6
                 4 -> 18
@@ -1734,7 +1734,7 @@ class XrayVpnService : VpnService() {
         return baseNotification(this, NOTIFICATION_CHANNEL_ID)
             .setContentText(speedText)
             .setContentIntent(openIntent)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Отключить", stopIntent)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, appString(R.string.action_disconnect), stopIntent)
             .build()
     }
 
@@ -1748,7 +1748,7 @@ class XrayVpnService : VpnService() {
         return baseNotification(this, NOTIFICATION_CHANNEL_ID)
             .setContentText(text)
             .setContentIntent(openIntent)
-            .addAction(android.R.drawable.ic_media_play, "Подключить", connectIntent)
+            .addAction(android.R.drawable.ic_media_play, appString(R.string.action_connect), connectIntent)
             .build()
     }
 
@@ -1759,8 +1759,8 @@ class XrayVpnService : VpnService() {
 
     /** Ensure the service is in foreground. Safe to call multiple times. */
     private fun ensureForeground(connecting: Boolean = true, override: Notification? = null) {
-        ensureNotificationChannels(getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
-        // Сразу промежуточное состояние: «Отключено» на время подключения сбивало с толку.
+        ensureNotificationChannels(this, getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
+        // Intermediate state right away: "Disconnected" during connecting was confusing.
         val notification = override
             ?: if (showNotification) buildIntermediateNotification(this, connecting) else buildMinimalNotification()
         lastIntermediate = if (showNotification && override == null) connecting else null
@@ -1775,23 +1775,24 @@ class XrayVpnService : VpnService() {
         }
     }
 
-    /** CONNECT_QUICK не запустился (нет конфига или разрешения VPN): плитка и
-     *  уведомление не должны остаться на «Подключение…»; дальше — в приложении.
-     *  После `reconnectInternal` state ещё `connected`, а TUN удержан как sink: с kill
-     *  switch оставляем его блокировкой, без — закрываем. */
+    /** CONNECT_QUICK didn't start (no config or VPN permission): the tile and
+     * the notification must not stay on "Connecting…"; the rest is up to the app.
+     * After `reconnectInternal` the state is still `connected` and TUN is held as a sink: with the kill
+     * switch we keep it as a block, without it we close it. */
     private fun abortQuickConnect(killSwitch: Boolean) {
         val blocked = killSwitch && tunInterface != null
         if (!blocked) closeTunSink()
         setState(if (blocked) "blocked" else "disconnected")
-        showDisconnectedNotification(if (blocked) "Kill switch: трафик заблокирован" else "Отключено")
+        showDisconnectedNotification(blocked)
         openApp()
     }
 
-    private fun showDisconnectedNotification(text: String = "Отключено") {
+    private fun showDisconnectedNotification(blocked: Boolean = false) {
         lastIntermediate = null
         if (!showNotification) return
         try {
             val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            val text = appString(if (blocked) R.string.state_kill_switch else R.string.state_disconnected)
             manager.notify(NOTIFICATION_ID, buildDisconnectedNotification(text))
         } catch (_: Exception) {}
     }
@@ -1803,7 +1804,7 @@ class XrayVpnService : VpnService() {
         broadcastState(state)
     }
 
-    /** Неявный broadcast читает любое приложение — только по опции и без SOCKS-порта. */
+    /** An implicit broadcast is readable by any app — only with the option and without the SOCKS port. */
     private fun broadcastState(state: String) {
         if (automationEnabled(this)) {
             sendBroadcast(Intent("com.teapodstream.STATE_CHANGED").putExtra("state", state))
@@ -1830,13 +1831,13 @@ class XrayVpnService : VpnService() {
             log("warning", "Failed to save socks_creds: ${e.message}")
         }
         VpnEventStreamHandler.sendConnectedEvent(socksPort, socksUser, socksPassword)
-        // The "Отключено"/intermediate notification bypasses the dedupe cache —
+        // The "Disconnected"/intermediate notification bypasses the dedupe cache —
         // reset it so the connected layout is always posted.
         lastNotificationText = null
         lastIntermediate = null
         updateNotification(0, 0)
-        // Если notify() отброшен лимитом частоты (тайл → промежуточное → connected за
-        // доли секунды), повтор через 2 с гарантирует финальный вид (issue #76).
+        // If notify() is dropped by the rate limit (tile → intermediate → connected within
+        // a fraction of a second), a retry after 2 s guarantees the final look (issue #76).
         networkChangeHandler.postDelayed({
             if (currentNativeState == "connected") {
                 lastNotificationText = null
@@ -1853,8 +1854,8 @@ class XrayVpnService : VpnService() {
         if (!screenOn) return
         val speedText = "↑ ${formatSpeed(uploadSpeed)}  ↓ ${formatSpeed(downloadSpeed)}"
         if (speedText == lastNotificationText) return
-        // Каждый notify() будит сторонние NotificationListener (часы, синхронизация) —
-        // не чаще раза в 5 с; сброс кэша (null) обновляет сразу.
+        // Every notify() wakes third-party NotificationListeners (watches, sync) —
+        // at most once per 5 s; resetting the cache (null) updates right away.
         val now = android.os.SystemClock.elapsedRealtime()
         if (lastNotificationText != null && now - lastNotificationMs < NOTIFICATION_MIN_INTERVAL_MS) return
         lastNotificationText = speedText

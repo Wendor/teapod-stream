@@ -1,15 +1,15 @@
 import 'vpn_config.dart';
 
-/// Закреплённое подключение. Идентифицируется (подписка, имя, endpoint),
-/// а не id конфига: при обновлении подписки конфиги пересоздаются.
-/// Имена в подписках не уникальны («VLESS Server» ×N), поэтому endpoint
-/// уточняет выбор; если он сменился — пин держится за одноимённый конфиг.
+/// A pinned connection. Identified by (subscription, name, endpoint),
+/// not the config id: configs are recreated on subscription refresh.
+/// Names in subscriptions aren't unique ("VLESS Server" ×N), so the endpoint
+/// refines the choice; if it changed, the pin sticks to the config with the same name.
 class PinnedRef {
-  /// null — standalone-конфиг (группа [local]).
+  /// null — a standalone config (group [local]).
   final String? subscriptionId;
   final String name;
 
-  /// `address:port`; null — пин старого формата (только имя).
+  /// `address:port`; null — an old-format pin (name only).
   final String? endpoint;
 
   const PinnedRef({required this.subscriptionId, required this.name, this.endpoint});
@@ -22,7 +22,7 @@ class PinnedRef {
   bool _sameGroupAndName(VpnConfig c) =>
       c.subscriptionId == subscriptionId && c.name == name;
 
-  /// Точное совпадение, иначе первый одноимённый.
+  /// Exact match, otherwise the first one with the same name.
   VpnConfig? resolve(Iterable<VpnConfig> configs) {
     final named = configs.where(_sameGroupAndName);
     return named.where((c) => '${c.address}:${c.port}' == endpoint).firstOrNull ??

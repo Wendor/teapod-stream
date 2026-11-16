@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'core_kind.dart';
 import 'protocol_settings.dart';
+import '../../l10n/l10n.dart';
 
 enum VpnProtocol {
   vless('VLESS', 'VLESS'),
@@ -17,13 +18,13 @@ enum VpnProtocol {
 
   final String label;
 
-  /// Короткая метка в списках серверов.
+  /// Short label in server lists.
   final String shortTag;
 
-  /// Причина отказа Xray-ядер для протоколов, которые есть только в sing-box.
-  String get singBoxOnlyReason => 'Протокол $label поддерживается только ядром sing-box.';
+  /// Why Xray cores refuse protocols that only sing-box has.
+  String get singBoxOnlyReason => L10n.current.coreSingBoxOnly(label);
 
-  /// Протоколы, параметры которых лежат в [VpnConfig.protocolSettings].
+  /// Protocols whose parameters live in [VpnConfig.protocolSettings].
   bool get hasProtocolSettings => this == wireguard || this == ssh || this == naive;
 }
 
@@ -72,10 +73,10 @@ class VpnConfig {
   final String? alpn; // comma-separated ALPN list, e.g. "h3" or "h2,http/1.1"
   final String? ech; // base64 ECH ConfigList for TLS Encrypted Client Hello
   final String? rawXrayConfig; // pre-built xray JSON config (from managed subscriptions)
-  /// Параметры WireGuard/SSH/Naive; у остальных протоколов null.
+  /// WireGuard/SSH/Naive parameters; null for other protocols.
   final ProtocolSettings? protocolSettings;
 
-  /// Ядро, закреплённое за профилем; null — по приоритету из настроек.
+  /// Core pinned to the profile; null — by the priority in settings.
   final CoreKind? core;
 
   const VpnConfig({
@@ -121,7 +122,7 @@ class VpnConfig {
     this.core,
   });
 
-  /// Метка протокола в списках: AmneziaWG отличается от WireGuard.
+  /// Protocol label in lists: AmneziaWG differs from WireGuard.
   String get protoTag => switch (protocolSettings) {
         WireGuardSettings(amnezia: != null) => 'AWG',
         _ => protocol.shortTag,
@@ -130,16 +131,16 @@ class VpnConfig {
   String? validate() {
     if (rawXrayConfig != null) return null;
     if (protocol.hasProtocolSettings && protocolSettings?.type != protocol.name) {
-      return 'Нет параметров протокола ${protocol.label}';
+      return L10n.current.validateNoProtocolParams(protocol.label);
     }
-    if (address.isEmpty) return 'Пустой адрес сервера';
-    if (port < 1 || port > 65535) return 'Неверный порт: $port';
+    if (address.isEmpty) return L10n.current.validateEmptyAddress;
+    if (port < 1 || port > 65535) return L10n.current.validateInvalidPort(port);
     if (protocol == VpnProtocol.vless || protocol == VpnProtocol.vmess) {
-      if (uuid.isEmpty) return 'Пустой UUID';
+      if (uuid.isEmpty) return L10n.current.validateEmptyUuid;
     }
     if ((protocol == VpnProtocol.shadowsocks || protocol == VpnProtocol.trojan ||
          protocol == VpnProtocol.hysteria2) && (password == null || password!.isEmpty)) {
-      return 'Пустой пароль';
+      return L10n.current.validateEmptyPassword;
     }
     return null;
   }

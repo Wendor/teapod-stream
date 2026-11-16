@@ -2,14 +2,14 @@ import '../../core/interfaces/vpn_engine.dart';
 import '../../core/models/protocol_settings.dart';
 import '../../core/models/vpn_config.dart';
 
-/// Outbound (или endpoint) прокси в формате sing-box 1.14; тег всегда `proxy`.
+/// Proxy outbound (or endpoint) in sing-box 1.14 format; the tag is always `proxy`.
 abstract final class SingBoxOutbound {
   static const tag = 'proxy';
 
-  /// WireGuard/AmneziaWG в sing-box — endpoint, а не outbound.
+  /// WireGuard/AmneziaWG in sing-box is an endpoint, not an outbound.
   static bool isEndpoint(VpnConfig config) => config.protocol == VpnProtocol.wireguard;
 
-  /// Outbound без UDP: SSH и Naive (UDP только через udp_over_tcp, его серверы не обязаны уметь).
+  /// Outbound without UDP: SSH and Naive (UDP only via udp_over_tcp, which their servers needn't support).
   static bool isTcpOnly(VpnConfig config) =>
       config.protocol == VpnProtocol.ssh || config.protocol == VpnProtocol.naive;
 
@@ -52,7 +52,7 @@ abstract final class SingBoxOutbound {
     };
   }
 
-  /// WireGuard — встроенный endpoint sing-box; AmneziaWG — `awg` из teapod-core.
+  /// WireGuard — the built-in sing-box endpoint; AmneziaWG — `awg` from teapod-core.
   static Map<String, dynamic> _wireguard(VpnConfig config, WireGuardSettings wg) => {
         'type': wg.amnezia == null ? 'wireguard' : 'awg',
         'tag': tag,
@@ -110,7 +110,7 @@ abstract final class SingBoxOutbound {
       if (hop.isEmpty) 'server_port': config.port else 'server_ports': hopRanges(hop),
       'password': config.password ?? '',
       if (config.obfsPassword?.isNotEmpty ?? false) 'obfs': {'type': 'salamander', 'password': config.obfsPassword},
-      // QUIC требует стандартный TLS-стек: uTLS для Hysteria2 не включается.
+      // QUIC requires the standard TLS stack: uTLS is not enabled for Hysteria2.
       'tls': _tls(config, options, reality: false, utls: false),
     };
   }
@@ -149,7 +149,7 @@ abstract final class SingBoxOutbound {
     };
   }
 
-  /// xray `ech`: base64 ECHConfigList или `[домен+]DNS-сервер` — запрос HTTPS-записи.
+  /// xray `ech`: base64 ECHConfigList or `[domain+]DNS server` — an HTTPS record query.
   static Map<String, dynamic> _ech(String value) {
     if (!value.contains('://')) {
       return {

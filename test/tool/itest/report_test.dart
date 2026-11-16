@@ -33,7 +33,7 @@ void main() {
   });
 
   test('report reminds to reconnect the main app VPN', () {
-    expect(sample().render(), contains('основного приложения'));
+    expect(sample().render(), contains('main app VPN'));
   });
 
   test('case dir stays inside the run dir and rerun command quotes the id', () {

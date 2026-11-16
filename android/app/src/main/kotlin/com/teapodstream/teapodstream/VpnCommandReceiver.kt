@@ -6,8 +6,8 @@ import android.content.Intent
 
 class VpnCommandReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        // Receiver exported: без опции любое приложение могло бы выключить VPN
-        // и увидеть реальный IP.
+        // Receiver is exported: without the option any app could turn off the VPN
+        // and see the real IP.
         if (!XrayVpnService.automationEnabled(context)) return
         val serviceAction = when (intent.action) {
             ACTION_CONNECT -> XrayVpnService.ACTION_CONNECT_QUICK

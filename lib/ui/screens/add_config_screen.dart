@@ -11,6 +11,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/breadcrumb_bar.dart';
 import 'qr_scan_screen.dart';
+import '../../l10n/l10n.dart';
 
 class AddConfigScreen extends ConsumerStatefulWidget {
   const AddConfigScreen({super.key});
@@ -91,7 +92,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('КОНФИГУРАЦИЯ · НОВЫЙ ПРОФИЛЬ',
+                        Text(context.l10n.addTagline,
                             style: AppTheme.mono(
                                 size: 10, color: t.textMuted, letterSpacing: 1.5)),
                         const SizedBox(height: 8),
@@ -160,7 +161,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      'из буфера: ${_clipboardSuggestion!.length > 48 ? '${_clipboardSuggestion!.substring(0, 48)}…' : _clipboardSuggestion!}',
+                                      context.l10n.addFromClipboard(_clipboardSuggestion!.length > 48 ? '${_clipboardSuggestion!.substring(0, 48)}…' : _clipboardSuggestion!),
                                       style: AppTheme.mono(
                                           size: 10, color: t.accent, letterSpacing: 0.5),
                                       overflow: TextOverflow.ellipsis,
@@ -200,7 +201,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
                                       Icon(Icons.paste_rounded,
                                           size: 14, color: t.textDim),
                                       const SizedBox(width: 8),
-                                      Text('ВСТАВИТЬ',
+                                      Text(context.l10n.addPaste,
                                           style: AppTheme.mono(
                                               size: 11,
                                               color: t.textDim,
@@ -224,7 +225,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
                                       Icon(Icons.check_rounded,
                                           size: 14, color: t.bg),
                                       const SizedBox(width: 8),
-                                      Text('ДОБАВИТЬ',
+                                      Text(context.l10n.addAdd,
                                           style: AppTheme.mono(
                                               size: 11,
                                               color: t.bg,
@@ -268,7 +269,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
   Future<void> _import() async {
     final text = _uriController.text.trim();
     if (text.isEmpty) {
-      setState(() => _error = 'Введите URL');
+      setState(() => _error = context.l10n.addEnterUrl);
       return;
     }
     await _processUri(text);
@@ -298,7 +299,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
       } else if (parsed.scheme == 'teapod') {
         final result = DeeplinkRouter.parse(uri);
         if (result == null || result.connectionsBundle == null) {
-          setState(() => _error = 'Не удалось распознать диплинк');
+          setState(() => _error = context.l10n.addDeeplinkParseFailed);
           return;
         }
         final bundle = result.connectionsBundle!;
@@ -326,7 +327,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(
-                'Импортировано: $addedConfigs конфигов, $addedSubscriptions подписок'),
+                context.l10n.addImported(context.l10n.configsCount(addedConfigs), context.l10n.subscriptionsCount(addedSubscriptions))),
             duration: const Duration(seconds: 2),
           ));
           Navigator.pop(context);
@@ -340,7 +341,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
           return;
         }
         setState(() => _error =
-            'Не удалось распознать конфигурацию. Поддерживаются: vless://, vmess://, trojan://, ss://, hy2://, wireguard://, vpn:// (AmneziaVPN) и .conf WireGuard');
+            context.l10n.addParseFailed);
       }
     } on FormatException catch (e) {
       setState(() => _error = e.message);
@@ -353,7 +354,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
       }
       return;
     } catch (e) {
-      setState(() => _error = 'Ошибка: $e');
+      setState(() => _error = context.l10n.commonErrorWith('$e'));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -365,26 +366,25 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: t.bgElev,
-        title: Text('Ненадёжный сертификат',
+        title: Text(context.l10n.certUntrustedTitle,
             style: AppTheme.sans(size: 16, color: t.text)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Сервер использует самоподписанный сертификат. '
-              'Соединение может быть небезопасным.',
+              context.l10n.certUntrustedMessage,
               style: AppTheme.sans(size: 13, color: t.textDim),
             ),
             const SizedBox(height: 12),
-            Text('Сервер: ${e.host}',
+            Text(context.l10n.certServer(e.host),
                 style: AppTheme.mono(size: 11, color: t.textDim)),
-            Text('Субъект: ${e.subject}',
+            Text(context.l10n.certSubject(e.subject),
                 style: AppTheme.mono(size: 11, color: t.textDim)),
-            Text('Издатель: ${e.issuer}',
+            Text(context.l10n.certIssuer(e.issuer),
                 style: AppTheme.mono(size: 11, color: t.textDim)),
             const SizedBox(height: 12),
-            Text('Продолжить всё равно?',
+            Text(context.l10n.certContinueAnyway,
                 style: AppTheme.sans(size: 13, color: t.text)),
           ],
         ),
@@ -392,12 +392,12 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child:
-                Text('Отмена', style: AppTheme.mono(size: 12, color: t.textDim)),
+                Text(context.l10n.commonCancel, style: AppTheme.mono(size: 12, color: t.textDim)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child:
-                Text('Продолжить', style: AppTheme.mono(size: 12, color: t.danger)),
+                Text(context.l10n.commonContinue, style: AppTheme.mono(size: 12, color: t.danger)),
           ),
         ],
       ),

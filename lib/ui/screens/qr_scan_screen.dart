@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../theme/app_colors.dart';
+import '../../l10n/l10n.dart';
 
 class QrScanScreen extends StatefulWidget {
   const QrScanScreen({super.key});
@@ -30,7 +31,7 @@ class _QrScanScreenState extends State<QrScanScreen> {
       );
       if (mounted) setState(() {});
     } catch (e) {
-      if (mounted) setState(() => _error = 'Ошибка камеры: $e');
+      if (mounted) setState(() => _error = context.l10n.qrCameraError('$e'));
     }
   }
 
@@ -54,7 +55,7 @@ class _QrScanScreenState extends State<QrScanScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Сканировать QR'),
+        title: Text(context.l10n.qrTitle),
       ),
       body: _error != null
           ? Center(
@@ -70,7 +71,7 @@ class _QrScanScreenState extends State<QrScanScreen> {
                       setState(() { _error = null; _scanned = false; });
                       _initCamera();
                     },
-                    child: const Text('Повторить'),
+                    child: Text(context.l10n.commonRetry),
                   ),
                 ],
               ),
@@ -98,8 +99,8 @@ class _QrScanScreenState extends State<QrScanScreen> {
                             color: AppColors.bg.withValues(alpha: 0.8),
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: const Text(
-                            'Наведите камеру на QR-код',
+                          child: Text(
+                            context.l10n.qrHint,
                             style: TextStyle(color: AppColors.textPrimary),
                           ),
                         ),

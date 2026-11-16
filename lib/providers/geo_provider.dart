@@ -8,6 +8,7 @@ import '../core/constants/app_constants.dart';
 import '../core/services/tunnel_socks.dart';
 import 'settings_provider.dart';
 import 'vpn_provider.dart';
+import '../l10n/l10n.dart';
 
 sealed class GeoState {}
 
@@ -69,17 +70,17 @@ class GeoNotifier extends Notifier<GeoState> {
     try {
       dir = await _channel.invokeMethod<String>('getFilesDir') ?? '';
     } catch (_) {
-      state = GeoError('Не удалось получить путь к файлам');
+      state = GeoError(L10n.current.geoNoFilesDir);
       return;
     }
     if (dir.isEmpty) {
-      state = GeoError('Не удалось получить путь к файлам');
+      state = GeoError(L10n.current.geoNoFilesDir);
       return;
     }
 
     state = GeoDownloading(downloaded: 0, total: -1);
 
-    // GitHub CDN часто блокируют — при подключённом VPN качаем через туннель (#150).
+    // GitHub CDN is often blocked — with the VPN connected we download through the tunnel (#150).
     Future<void> run(TunnelSocks? socks) async {
       int totalDownloaded = 0;
       int grandTotal = -1;
@@ -154,7 +155,7 @@ class GeoNotifier extends Notifier<GeoState> {
 
       final sink = tmpFile.openWrite();
       try {
-        // Тайм-аут простоя: зависший туннель не должен держать загрузку вечно.
+        // Idle timeout: a stuck tunnel must not hold the download forever.
         await for (final chunk in resp.stream.timeout(const Duration(seconds: 30))) {
           sink.add(chunk);
           onProgress(chunk.length);

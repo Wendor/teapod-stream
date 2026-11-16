@@ -70,16 +70,16 @@ VpnConfig _vision(String id) => VpnConfig(
       createdAt: DateTime(2026),
     );
 
-/// Состояние нативной стороны и журнал вызовов.
+/// Native side state and a call log.
 class _Native {
   final calls = <MethodCall>[];
   Map<String, Object?> state = {'state': 'disconnected'};
   List<String> logs = [];
 
-  /// host → задержка через `measureOutbound`; null — сервер мёртв.
+  /// host → latency via `measureOutbound`; null — the server is dead.
   Map<String, int?> outboundMs = {};
 
-  /// host → задержка TCP-пинга.
+  /// host → TCP ping latency.
   Map<String, int?> pingMs = {};
   Object? Function()? onConnect;
   Object? Function()? onDisconnect;
@@ -138,7 +138,7 @@ void main() {
         _events, MockStreamHandler.inline(onListen: (_, sink) => native.sink = sink));
   });
 
-  /// Без await: внутри fakeAsync завершается через flushMicrotasks.
+  /// No await: inside fakeAsync it completes via flushMicrotasks.
   Future<void> boot({
     List<VpnConfig> configs = const [],
     String? activeId,
@@ -153,8 +153,8 @@ void main() {
     await storage.saveActiveConfigId(activeId);
     await storage.savePins(pins);
     final container = c = ProviderContainer();
-    // Незавершённые fire-and-forget операции (syncActiveSettings) не должны
-    // пережить контейнер.
+    // Unfinished fire-and-forget operations (syncActiveSettings) must not
+    // outlive the container.
     addTearDown(() async {
       await _settle();
       container.dispose();
@@ -204,7 +204,7 @@ void main() {
       await boot();
       await n().connect();
       expect(st().connectionState, VpnState.error);
-      expect(st().error, 'Конфигурация не выбрана');
+      expect(st().error, 'No configuration selected');
       expect(logs().last.level, LogLevel.error);
       expect(native.named('connect'), isEmpty);
     });
@@ -212,7 +212,7 @@ void main() {
     test('invalid config fails validation', () async {
       await boot(configs: [_cfg('a', password: '')], activeId: 'a');
       await n().connect();
-      expect(st().error, 'Пустой пароль');
+      expect(st().error, 'Empty password');
       expect(native.named('connect'), isEmpty);
     });
 
@@ -304,7 +304,7 @@ void main() {
       await n().connect();
       expect(native.lastConnect()['engine'], 'rust');
 
-      // proxy-only Rust не умеет — профиль уходит на следующее ядро.
+      // Rust can't do proxy-only — the profile goes to the next core.
       await boot(configs: [_cfg('a')], activeId: 'a',
           settings: _settings.copyWith(coreOrder: [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox], proxyOnly: true));
       await n().connect();
@@ -354,7 +354,7 @@ void main() {
       await c.read(configProvider.notifier).setActiveConfig('bad');
       await n().reconnectWithNewConfig();
       expect(st().isConnected, isTrue);
-      expect(st().error, 'Пустой пароль');
+      expect(st().error, 'Empty password');
       expect(native.named('connect'), hasLength(1));
     });
 
@@ -415,7 +415,7 @@ void main() {
       emit({'type': 'state', 'value': 'error'});
       await _settle();
       expect(st().connectionState, VpnState.error);
-      expect(st().error, 'Ошибка подключения');
+      expect(st().error, 'Connection error');
     });
 
     test('native failure reason reaches error and blocked states', () async {
@@ -473,7 +473,7 @@ void main() {
       await _settle();
       expect(st().stats.speedHistory.map((p) => p.uploadSpeed), [1, 2, 3, 4]);
 
-      // Опоздавший ответ не задваивает точки и сбрасывает эпоху.
+      // A late response doesn't duplicate points and resets the epoch.
       emit({'type': 'statsHistory', 'epoch': 1, 'from': 3, 'seq': 4, 'history': [pts(4)]});
       emit({'type': 'statsHistory', 'epoch': 1, 'from': 4, 'seq': 5, 'history': [pts(5)]});
       await _settle();
@@ -543,7 +543,7 @@ void main() {
       expect(native.named('measureOutbound'), hasLength(2));
       expect(c.read(configProvider).value!.activeConfigId, 'a');
       expect(native.named('connect'), hasLength(1));
-      expect(logs().last.message, contains('живых конфигов не найдено'));
+      expect(logs().last.message, contains('no live configs found'));
     });
 
     test('reconnect action ignores the event', () async {
@@ -601,7 +601,7 @@ void main() {
       await _settle();
       expect((native.named('saveQuickConnect').single.arguments as Map)['engine'], 'rust');
 
-      // Сырой конфиг Rust не берёт — ядро активного профиля не меняется.
+      // Rust doesn't take a raw config — the active profile's core doesn't change.
       native.calls.clear();
       await boot(configs: [_cfg('r', rawXray: _visionRaw)], activeId: 'r');
       await c.read(settingsProvider.notifier).save(_settings.copyWith(coreOrder: [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox]));
@@ -662,7 +662,7 @@ void main() {
     });
   });
 
-  // В fakeAsync события EventChannel не доставляются (root-зона), MethodChannel — работает.
+  // In fakeAsync EventChannel events aren't delivered (root zone), MethodChannel works.
   group('timeouts', () {
     test('connect without native confirmation times out after 45 s', () {
       fakeAsync((async) {
@@ -675,7 +675,7 @@ void main() {
         expect(st().connectionState, VpnState.connecting);
         async.elapse(const Duration(seconds: 2));
         expect(st().connectionState, VpnState.error);
-        expect(st().error, 'Таймаут подключения');
+        expect(st().error, 'Connection timeout');
         expect(native.named('disconnect'), hasLength(1));
         c.dispose();
       });
@@ -687,7 +687,7 @@ void main() {
         async.flushMicrotasks();
         n().connect();
         async.flushMicrotasks();
-        // syncNativeState не знает, чей это connecting, и снимает таймаут.
+        // syncNativeState doesn't know whose connecting this is, and clears the timeout.
         native.state = {'state': 'connecting'};
         n().syncNativeState();
         async.flushMicrotasks();

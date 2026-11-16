@@ -11,9 +11,10 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/hero_panel.dart';
 import '../widgets/breadcrumb_bar.dart';
+import '../../l10n/l10n.dart';
 
 class LogsScreen extends ConsumerStatefulWidget {
-  /// Имя родительского экрана для breadcrumb; null — экран без breadcrumb.
+  /// Parent screen name for the breadcrumb; null — no breadcrumb.
   final String? breadcrumbParent;
   const LogsScreen({super.key, this.breadcrumbParent});
 
@@ -61,7 +62,7 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
     if (!src.existsSync() || src.lengthSync() == 0) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Лог пуст'), duration: Duration(seconds: 2)),
+          SnackBar(content: Text(context.l10n.logsEmpty), duration: const Duration(seconds: 2)),
         );
       }
       return;
@@ -150,7 +151,7 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
             // ── Hero panel ──────────────────────────────────────
             HeroPanel(
               t: t,
-              tagline: 'ЖУРНАЛ · XRAY · TUN2SOCKS',
+              tagline: context.l10n.logsTagline,
               title: 'LOGS',
               subtitle: Row(
                 children: [

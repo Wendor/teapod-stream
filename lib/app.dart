@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'l10n/l10n.dart';
 import 'ui/theme/app_theme.dart';
 import 'ui/theme/app_colors.dart';
 import 'ui/screens/home_screen.dart';
@@ -16,13 +18,14 @@ import 'providers/settings_provider.dart';
 import 'providers/update_provider.dart';
 import 'providers/geo_provider.dart';
 import 'providers/theme_provider.dart';
+import 'providers/locale_provider.dart';
 import 'core/services/deeplink_handler.dart';
 import 'protocols/xray/xray_engine.dart';
 import 'itest/itest_agent.dart';
 import 'itest/itest_protocol.dart';
 
-/// Индекс активной вкладки. Отдельный provider, чтобы экраны
-/// (например, Home при пустом списке конфигов) могли переключать вкладку.
+/// Active tab index. A separate provider so screens
+/// (e.g. Home with an empty config list) can switch tabs.
 class TabIndexNotifier extends Notifier<int> {
   @override
   int build() => 0;
@@ -49,6 +52,7 @@ class _TeapodMaterialApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
     final accent    = ref.watch(accentProvider);
+    final locale    = ref.watch(localeProvider);
     final fontScale = ref.watch(settingsProvider).maybeWhen(
       data: (s) => s.fontScale == FontScale.large ? 1.2 : 1.0,
       orElse: () => 1.0,
@@ -58,12 +62,23 @@ class _TeapodMaterialApp extends ConsumerWidget {
       theme:     AppTheme.build(Brightness.light, accent),
       darkTheme:  AppTheme.build(Brightness.dark, accent),
       themeMode: themeMode,
-      builder: (ctx, child) => MediaQuery(
-        data: MediaQuery.of(ctx).copyWith(
-          textScaler: TextScaler.linear(fontScale),
-        ),
-        child: child!,
-      ),
+      locale: locale,
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      builder: (ctx, child) {
+        L10n.current = ctx.l10n;
+        return MediaQuery(
+          data: MediaQuery.of(ctx).copyWith(
+            textScaler: TextScaler.linear(fontScale),
+          ),
+          child: child!,
+        );
+      },
       home: const _AppShell(),
       debugShowCheckedModeBanner: false,
     );
@@ -119,13 +134,13 @@ class _AppShellState extends ConsumerState<_AppShell>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // Часовой фоновый таймер убран — staleness подписок проверяется здесь,
-      // после синхронизации: обновление должно видеть актуальный SOCKS туннеля.
+      // The hourly background timer is gone — subscription staleness is checked here,
+      // after the sync: the refresh must see the tunnel's current SOCKS.
       final vpn = ref.read(vpnProvider.notifier);
       vpn.syncNativeState().then((_) => vpn.refreshStaleSubscriptionsIfDue());
     } else if (state == AppLifecycleState.paused) {
-      // Не гонять MethodChannel-опрос статистики каждую секунду в фоне —
-      // syncNativeState() перезапустит его при возврате.
+      // Don't run the per-second MethodChannel stats polling in the background —
+      // syncNativeState() restarts it on resume.
       ref.read(vpnProvider.notifier).pauseStatsPolling();
     }
   }
@@ -197,7 +212,7 @@ class _AppShellState extends ConsumerState<_AppShell>
     ));
 
     final currentIndex = ref.watch(tabIndexProvider);
-    // История для графика тянется только на видимой вкладке home
+    // Chart history is pulled only while the home tab is visible
     ref.listen(tabIndexProvider, (_, next) {
       ref.read(vpnProvider.notifier).setChartVisible(next == 0);
     });
@@ -229,11 +244,12 @@ class _ConsoleTabBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context).extension<TeapodTokens>()!;
 
+    final l = context.l10n;
     final items = [
       _TabItem(icon: _TabIcon.shield,   label: 'VPN'),
-      _TabItem(icon: _TabIcon.key,      label: 'Конфиги'),
-      _TabItem(icon: _TabIcon.route,    label: 'Маршрут'),
-      _TabItem(icon: _TabIcon.cog,      label: 'Настройки', badge: hasUpdateBadge),
+      _TabItem(icon: _TabIcon.key,      label: l.tabConfigs),
+      _TabItem(icon: _TabIcon.route,    label: l.tabRouting),
+      _TabItem(icon: _TabIcon.cog,      label: l.tabSettings, badge: hasUpdateBadge),
     ];
 
     return Container(

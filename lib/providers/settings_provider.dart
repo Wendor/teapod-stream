@@ -9,7 +9,7 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
   Future<AppSettings> build() => _service.load();
 
   Future<void> save(AppSettings settings) async {
-    // Ждём загрузки профиля: иначе readonly не проверен и снимок профиля не обновится.
+    // Wait for the profile to load: otherwise readonly isn't checked and the profile snapshot won't update.
     final profileState = await ref.read(profileProvider.future).then<ProfileState?>((p) => p,
         onError: (Object _) => null);
     if (profileState?.isReadonly == true) return;

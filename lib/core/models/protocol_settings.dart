@@ -1,4 +1,4 @@
-/// Параметры протоколов, которых нет в общей модели `VpnConfig` (WireGuard, SSH, Naive).
+/// Parameters of protocols missing from the common `VpnConfig` model (WireGuard, SSH, Naive).
 sealed class ProtocolSettings {
   const ProtocolSettings();
 
@@ -16,7 +16,7 @@ sealed class ProtocolSettings {
 
 List<String> _strings(Object? v) => (v as List?)?.map((e) => e.toString()).toList() ?? const [];
 
-/// WireGuard / AmneziaWG (один peer). Сервер — `VpnConfig.address`/`port`.
+/// WireGuard / AmneziaWG (one peer). The server is `VpnConfig.address`/`port`.
 final class WireGuardSettings extends ProtocolSettings {
   final String privateKey;
   final List<String> addresses;
@@ -27,7 +27,7 @@ final class WireGuardSettings extends ProtocolSettings {
   final List<String> allowedIps;
   final int? keepalive;
 
-  /// null — обычный WireGuard.
+  /// null — plain WireGuard.
   final AmneziaParams? amnezia;
 
   const WireGuardSettings({
@@ -72,7 +72,7 @@ final class WireGuardSettings extends ProtocolSettings {
       );
 }
 
-/// Параметры AmneziaWG 3.1; null — не задан (AWG считает нулём).
+/// AmneziaWG 3.1 parameters; null — not set (AWG treats it as zero).
 final class AmneziaParams {
   final int? jc, jmin, jmax, s1, s2, s3, s4;
   final String? h1, h2, h3, h4, i1, i2, i3, i4, i5;
@@ -88,7 +88,7 @@ final class AmneziaParams {
     this.randomTrailers = false, this.disableCookies = false,
   });
 
-  /// Ключи в формате endpoint'а `awg` teapod-core (= ключи UAPI amneziawg-go).
+  /// Keys in the teapod-core `awg` endpoint format (= amneziawg-go UAPI keys).
   Map<String, dynamic> toJson() => {
         'jc': ?jc, 'jmin': ?jmin, 'jmax': ?jmax, 's1': ?s1, 's2': ?s2, 's3': ?s3, 's4': ?s4,
         'h1': ?h1, 'h2': ?h2, 'h3': ?h3, 'h4': ?h4,
@@ -122,7 +122,7 @@ final class AmneziaParams {
       );
 }
 
-/// SSH: пароль и/или приватный ключ; [hostKeys] — pin ключей сервера.
+/// SSH: password and/or private key; [hostKeys] — server key pins.
 final class SshSettings extends ProtocolSettings {
   final String user;
   final String? password;
@@ -160,7 +160,7 @@ final class SshSettings extends ProtocolSettings {
       );
 }
 
-/// NaiveProxy (HTTPS/HTTP3 CONNECT через Cronet).
+/// NaiveProxy (HTTPS/HTTP3 CONNECT via Cronet).
 final class NaiveSettings extends ProtocolSettings {
   final String user;
   final String password;

@@ -6,6 +6,7 @@ import '../../providers/settings_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/settings_shared.dart';
+import '../../l10n/l10n.dart';
 
 class DnsSettingsScreen extends ConsumerStatefulWidget {
   const DnsSettingsScreen({super.key});
@@ -113,7 +114,7 @@ class _DnsSettingsScreenState extends ConsumerState<DnsSettingsScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                       color: t.accent,
-                      child: Text('СОХРАНИТЬ',
+                      child: Text(context.l10n.commonSaveUpper,
                           style: AppTheme.mono(size: 10, color: t.bg, letterSpacing: 1)),
                     ),
                   ),
@@ -132,7 +133,7 @@ class _DnsSettingsScreenState extends ConsumerState<DnsSettingsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('НАСТРОЙКИ · DNS РЕЗОЛВЕР',
+                        Text(context.l10n.dnsTagline,
                             style: AppTheme.mono(
                                 size: 10, color: t.textMuted, letterSpacing: 1.5)),
                         const SizedBox(height: 8),
@@ -168,10 +169,10 @@ class _DnsSettingsScreenState extends ConsumerState<DnsSettingsScreen> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Режим DNS',
+                            Text(context.l10n.dnsMode,
                                 style: AppTheme.sans(size: 14, color: t.text)),
                             const SizedBox(height: 3),
-                            Text(_dnsMode == DnsMode.proxy ? 'через VPN-туннель' : 'напрямую',
+                            Text(_dnsMode == DnsMode.proxy ? context.l10n.dnsViaTunnel : context.l10n.dnsDirect,
                                 style: AppTheme.mono(
                                     size: 10, color: t.textMuted, letterSpacing: 0.5)),
                           ],
@@ -196,10 +197,10 @@ class _DnsSettingsScreenState extends ConsumerState<DnsSettingsScreen> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('DNS стратегия',
+                            Text(context.l10n.dnsStrategy,
                                 style: AppTheme.sans(size: 14, color: t.text)),
                             const SizedBox(height: 3),
-                            Text('IP-версия для DNS-запросов',
+                            Text(context.l10n.dnsStrategyHint,
                                 style: AppTheme.mono(
                                     size: 10, color: t.textMuted, letterSpacing: 0.5)),
                           ],
@@ -236,7 +237,7 @@ class _DnsSettingsScreenState extends ConsumerState<DnsSettingsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('ТИП ПРОТОКОЛА',
+                          Text(context.l10n.dnsProtocolType,
                               style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
                           const SizedBox(height: 10),
                           Container(
@@ -286,7 +287,7 @@ class _DnsSettingsScreenState extends ConsumerState<DnsSettingsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('АДРЕС СЕРВЕРА',
+                          Text(context.l10n.dnsServerAddress,
                               style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
                           const SizedBox(height: 10),
                           TextField(

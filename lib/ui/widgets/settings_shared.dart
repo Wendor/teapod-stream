@@ -7,20 +7,21 @@ import '../../providers/settings_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import 'pressable.dart';
+import '../../l10n/l10n.dart';
 
-/// Сохранение настроек с экрана: в readonly-профиле — снэкбар вместо молчаливого no-op.
+/// Saves settings from a screen: in a read-only profile shows a snackbar instead of a silent no-op.
 void saveSettings(BuildContext context, WidgetRef ref, AppSettings settings) {
   if (ref.read(profileProvider).value?.isReadonly == true) return showReadonlySnack(context);
   ref.read(settingsProvider.notifier).save(settings);
 }
 
-/// Снэкбар «профиль только для чтения» — единый для всех заблокированных рядов.
+/// The "profile is read-only" snackbar — shared by all locked rows.
 void showReadonlySnack(BuildContext context) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
-    ..showSnackBar(const SnackBar(
-      content: Text('Профиль только для чтения'),
-      duration: Duration(seconds: 2),
+    ..showSnackBar(SnackBar(
+      content: Text(context.l10n.settingsReadonlySnack),
+      duration: const Duration(seconds: 2),
     ));
 }
 
@@ -255,7 +256,7 @@ class SetCredField extends StatelessWidget {
   }
 }
 
-// ── Compact numeric text field (порт, MTU, интервалы) ────────────
+// ── Compact numeric text field (port, MTU, intervals) ────────────
 
 class SetNumField extends StatelessWidget {
   final TeapodTokens t;

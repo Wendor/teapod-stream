@@ -23,8 +23,8 @@ import java.net.InetSocketAddress
 class MainActivity : FlutterActivity() {
 
     companion object {
-        // Пинг всех конфигов и urltest по кандидатам шлют пачки вызовов: без лимита —
-        // по процессу `ping` / временному инстансу ядра на каждый конфиг одновременно.
+        // Pinging all configs and urltest over candidates send bursts of calls: without a limit —
+        // a `ping` process / temporary core instance per config at once.
         private val pingPool = java.util.concurrent.Executors.newFixedThreadPool(8)
         private val measurePool = java.util.concurrent.Executors.newFixedThreadPool(4)
         private const val METHOD_CHANNEL = "com.teapodstream/vpn"
@@ -38,8 +38,8 @@ class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
         if (BuildConfig.ITEST) {
-            // Команды раннера приходят интентом в активити: при погасшем экране или
-            // локскрине она не резюмится и интент не доходит до Dart.
+            // Runner commands arrive as an intent to the activity: with the screen off or on
+            // the lock screen it doesn't resume and the intent doesn't reach Dart.
             setShowWhenLocked(true)
             setTurnScreenOn(true)
         }
@@ -57,7 +57,7 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        // Инициализируем контекст для обновления Quick Settings плитки
+        // Initialize the context for updating the Quick Settings tile
         VpnEventStreamHandler.appContext = applicationContext
 
         // Event channel for native → Flutter events
@@ -127,8 +127,8 @@ class MainActivity : FlutterActivity() {
                         result.success(CoreKind.entries.filter { VpnCores.isAvailable(it) }.map { it.id })
                     }
 
-                    // Пересохранить конфиг quick-reconnect (плитка, автозапуск) без подключения —
-                    // при смене ядра в выключенном состоянии. Во время сессии — no-op.
+                    // Re-save the quick-reconnect config (tile, autostart) without connecting —
+                    // on a core change while disconnected. During a session — a no-op.
                     "saveQuickConnect" -> {
                         if (XrayVpnService.getNativeState() !in setOf("disconnected", "error")) {
                             result.success(false)
@@ -216,9 +216,9 @@ class MainActivity : FlutterActivity() {
                         }
                     }
 
-                    // Реальный замер задержки через кандидата: поднимает временный
-                    // xray-инстанс с его конфигом. В отличие от TCP-пинга видит,
-                    // что сервер жив на уровне протокола, а не только слушает порт.
+                    // A real latency measurement through a candidate: brings up a temporary
+                    // xray instance with its config. Unlike a TCP ping it sees
+                    // that the server is alive at the protocol level, not just listening on the port.
                     "measureOutbound" -> {
                         val config = call.argument<String>("config") ?: ""
                         val url = call.argument<String>("url") ?: ""

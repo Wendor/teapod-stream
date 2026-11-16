@@ -1,40 +1,40 @@
-/// Чем проверяется живость туннеля.
+/// What checks that the tunnel is alive.
 enum HeartbeatProbe {
-  /// Локальный сокет → SOCKS5 → xray → HTTP-запрос к [HeartbeatSettings.url].
+  /// Local socket → SOCKS5 → xray → HTTP request to [HeartbeatSettings.url].
   socks,
 
-  /// `Teapodcore.measureXrayDelay()` — запрос внутри ядра, без локального сокета;
-  /// сразу возвращает задержку в мс.
+  /// `Teapodcore.measureXrayDelay()` — a request inside the core, without a local socket;
+  /// returns the latency in ms directly.
   xrayDelay,
 
-  /// Без активных проб: только метрики tun2socks (последний rx, число соединений).
-  /// Экономит батарею, но обрыв виден лишь при попытке реального трафика.
+  /// No active probes: only tun2socks metrics (last rx, connection count).
+  /// Saves battery, but a drop is noticed only when real traffic is attempted.
   passive,
 }
 
-/// Что делать, когда проверки перестали проходить.
+/// What to do when checks stop passing.
 enum HeartbeatFailAction {
-  /// Переподключиться к тому же серверу (историческое поведение).
+  /// Reconnect to the same server (historical behavior).
   reconnect,
 
-  /// Перебрать кандидатов, замерить задержку и уйти на лучший живой.
+  /// Go through candidates, measure latency and move to the best live one.
   switchConfig,
 }
 
-/// Откуда брать кандидатов при [HeartbeatFailAction.switchConfig].
+/// Where to take candidates from for [HeartbeatFailAction.switchConfig].
 enum SwitchSource {
-  /// Конфиги подписки, которой принадлежит активный сервер.
+  /// Configs of the subscription the active server belongs to.
   subscription,
 
-  /// Закреплённые (pinned) конфиги.
+  /// Pinned configs.
   pinned,
 
-  /// Все сохранённые конфиги.
+  /// All saved configs.
   all,
 }
 
-/// Куда стучится проба. Все пресеты — плоский HTTP, чтобы один и тот же URL
-/// годился и для SOCKS-пробы, и для замера внутри ядра.
+/// Where the probe goes. All presets are plain HTTP so the same URL
+/// works both for the SOCKS probe and for the in-core measurement.
 enum HeartbeatTarget {
   cloudflare,
   google,
@@ -52,7 +52,7 @@ enum HeartbeatTarget {
 class HeartbeatSettings {
   final HeartbeatProbe probe;
 
-  /// Сколько провалов подряд до срабатывания [failAction], 1–10.
+  /// How many consecutive failures before [failAction] fires, 1–10.
   final int failureThreshold;
 
   final HeartbeatFailAction failAction;
@@ -69,7 +69,7 @@ class HeartbeatSettings {
     this.customUrl = '',
   });
 
-  /// Итоговый URL пробы; при пустом кастомном значении — пресет Cloudflare.
+  /// The final probe URL; with an empty custom value — the Cloudflare preset.
   String get url {
     if (target != HeartbeatTarget.custom) return target.url;
     final u = customUrl.trim();
@@ -108,7 +108,7 @@ class HeartbeatSettings {
           orElse: () => HeartbeatProbe.socks,
         ),
         failureThreshold: json['failureThreshold'] as int? ?? 3,
-        // До 1.6.4: action = reconnect | urltest, source = subscription | pinned | all.
+        // Before 1.6.4: action = reconnect | urltest, source = subscription | pinned | all.
         failAction: HeartbeatFailAction.values.firstWhere(
           (e) => e.name == json['failAction'],
           orElse: () => json['action'] == 'urltest'

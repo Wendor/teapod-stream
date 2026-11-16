@@ -12,10 +12,10 @@ import teapodcore.Teapodcore
 import java.io.File
 
 /**
- * Мост интеграционных тестов (tool/itest). Работает только в itest-сборке
- * (BuildConfig.ITEST): команды приходят интентом
- * `am start -a com.teapodstream.ITEST --es cmd '<json>'` и уходят в Dart
- * (ItestAgent), ответы и переходы состояния — строками TEAPOD_ITEST в logcat.
+ * Integration test bridge (tool/itest). Works only in the itest build
+ * (BuildConfig.ITEST): commands arrive as an intent
+ * `am start -a com.teapodstream.ITEST --es cmd '<json>'` and go to Dart
+ * (ItestAgent), responses and state transitions — as TEAPOD_ITEST lines in logcat.
  */
 object ItestBridge {
     const val ACTION = "com.teapodstream.ITEST"
@@ -52,7 +52,7 @@ object ItestBridge {
         }
     }
 
-    /** true — интент itest-команды (обработан здесь). */
+    /** true — an itest command intent (handled here). */
     fun onIntent(context: Context, intent: Intent?): Boolean {
         if (!BuildConfig.ITEST || intent?.action != ACTION) return false
         val cmd = intent.getStringExtra("cmd") ?: return true
@@ -70,8 +70,8 @@ object ItestBridge {
             return true
         }
         if (json.optString("op") == "goroutines") {
-            // Дамп горутин Go до disconnect: зависание видно только пока ядро живо.
-            // Ответ длинный — файлом, как у агента (раннер читает через run-as).
+            // Go goroutine dump before disconnect: a hang is visible only while the core is alive.
+            // The response is long — as a file, like the agent's (the runner reads it via run-as).
             val id = json.optString("id")
             try {
                 val file = File(context.filesDir, "itest_$id.json")

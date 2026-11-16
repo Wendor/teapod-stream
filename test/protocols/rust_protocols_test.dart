@@ -127,10 +127,10 @@ void main() {
     });
 
     test('rejects what xray-rust refuses or would silently change', () {
-      expectRejected(parse(trojan('tcp', 'none')), 'TLS или Reality');
+      expectRejected(parse(trojan('tcp', 'none')), 'TLS or Reality');
       expectRejected(parse(trojan('ws', 'reality')), 'Reality');
-      expectRejected(parse(trojan('quic', 'tls')), 'Транспорт');
-      expectRejected(parse(trojan('kcp', 'tls')), 'Транспорт');
+      expectRejected(parse(trojan('quic', 'tls')), 'Transport');
+      expectRejected(parse(trojan('kcp', 'tls')), 'Transport');
       expectRejected(
         parse(trojan('tcp', 'tls', '&headerType=http')),
         'headerType',
@@ -217,7 +217,7 @@ void main() {
 
     test('rejects unsupported VMess link fields', () {
       for (final net in ['kcp', 'quic', 'h2']) {
-        expectRejected(parse(vmess({'net': net})), 'Транспорт');
+        expectRejected(parse(vmess({'net': net})), 'Transport');
       }
       expectRejected(
         parse(vmess({'net': 'tcp', 'type': 'http'})),
@@ -229,7 +229,7 @@ void main() {
       for (final tls in ['TLS', 'Tls', ' tls']) {
         final config = parse(vmess({'tls': tls}));
         expect(config.security, VpnSecurity.none, reason: tls);
-        expectRejected(config, 'tls=«$tls»');
+        expectRejected(config, 'tls="$tls"');
       }
       expectRejected(parse(vmess({'id': 'not-a-uuid'})), 'UUID');
     });
@@ -282,11 +282,11 @@ void main() {
       }
       expectRejected(
         parse(ss('2022-blake3-chacha20-poly1305', '$key32:$key32')),
-        'один ключ',
+        'a single key',
       );
       expectRejected(
         parse(ss('2022-blake3-aes-128-gcm', List.filled(9, key16).join(':'))),
-        'до 8 ключей',
+        'up to 8',
       );
       expectRejected(parse(ss('2022-blake3-aes-256-gcm', key16)), 'base64');
       expectRejected(

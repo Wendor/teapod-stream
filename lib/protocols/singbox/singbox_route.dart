@@ -8,7 +8,7 @@ import '../../core/models/routing_settings.dart';
 import '../../core/services/settings_service.dart';
 import 'singbox_outbound.dart';
 
-/// DNS и маршрутизация sing-box 1.14: те же правила, что у xray, в нотации sing-box.
+/// sing-box 1.14 DNS and routing: the same rules as xray, in sing-box notation.
 abstract final class SingBoxRoute {
   static const inboundTag = 'socks-in';
   static const directTag = 'direct';
@@ -18,7 +18,7 @@ abstract final class SingBoxRoute {
   static String _geoipTag(String code) => 'geoip-${code.trim().toLowerCase()}';
   static String _geositeTag(String code) => 'geosite-${code.trim().toLowerCase()}';
 
-  /// [tcpOnlyProxy] — прокси без UDP (SSH, Naive): DNS через туннель идёт по TCP.
+  /// [tcpOnlyProxy] — a proxy without UDP (SSH, Naive): DNS through the tunnel goes over TCP.
   static Map<String, dynamic> dns(VpnEngineOptions o, {bool tcpOnlyProxy = false}) {
     final server = o.dnsServer;
     final detour = o.dnsMode == DnsMode.proxy ? {'detour': SingBoxOutbound.tag} : const <String, dynamic>{};
@@ -69,7 +69,7 @@ abstract final class SingBoxRoute {
     };
   }
 
-  /// Сервер по IP fallback (с SNI домена) или по имени.
+  /// Server by IP fallback (with the domain SNI) or by name.
   static Map<String, dynamic> _host(String host, DnsServerConfig server) {
     final ip = server.fallbackIp;
     if (server.domain != null && ip != null && ip.isNotEmpty) {
@@ -128,7 +128,7 @@ abstract final class SingBoxRoute {
         'domain_suffix': [for (final r in rules) if (r.startsWith('domain:')) r.substring(7)],
       };
 
-  /// В режиме «только выбранные» диагностика и проба всегда идут через прокси.
+  /// In "selected only" mode diagnostics and the probe always go through the proxy.
   static List<Map<String, dynamic>> _probeRules(VpnEngineOptions o) {
     final host = Uri.tryParse(o.heartbeat.url)?.host ?? '';
     final isIp = InternetAddress.tryParse(host) != null;
@@ -141,6 +141,6 @@ abstract final class SingBoxRoute {
     ];
   }
 
-  /// Адрес SOCKS-inbound (общий с xray).
+  /// SOCKS inbound address (shared with xray).
   static const listen = XrayDefaults.socksListen;
 }

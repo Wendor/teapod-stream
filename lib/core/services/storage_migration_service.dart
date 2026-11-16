@@ -5,8 +5,8 @@ import 'storage_secure_service.dart';
 /// Safe to call on every launch — skips immediately after the first successful run.
 class StorageMigrationService {
   static const _flagKey = 'storage_migrated_v2';
-  /// Одна миграция на сессию; параллельные вызовы (конфиги и настройки грузятся
-  /// одновременно) ждут её завершения, а не читают хранилище до переноса.
+  /// One migration per session; concurrent calls (configs and settings load
+  /// simultaneously) wait for it to finish instead of reading storage before the move.
   static Future<void>? _run;
   static bool _done = false;
 
@@ -16,7 +16,7 @@ class StorageMigrationService {
       await (_run ??= _migrate());
       _done = true;
     } catch (_) {
-      _run = null; // сбой до переноса (напр. getInstance) — следующий вызов повторит
+      _run = null; // failure before the move (e.g. getInstance) — the next call retries
       rethrow;
     }
   }

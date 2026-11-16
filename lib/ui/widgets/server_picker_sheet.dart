@@ -7,8 +7,8 @@ import '../../providers/vpn_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 
-/// Bottom sheet быстрой смены сервера: пины сверху, дальше группы.
-/// Выбор при подключённом VPN — автоматический reconnect.
+/// Bottom sheet for quick server switching: pins on top, then groups.
+/// Picking one while the VPN is connected reconnects automatically.
 Future<void> showServerPicker(BuildContext context, WidgetRef ref) {
   final t = Theme.of(context).extension<TeapodTokens>()!;
   return showModalBottomSheet(
@@ -30,7 +30,7 @@ class _ServerPickerSheet extends ConsumerWidget {
       return;
     }
     Navigator.pop(context);
-    // Тот же конфиг, что уже подключён, — без пересоздания туннеля.
+    // Same config as the connected one — no tunnel rebuild.
     final unchanged = ref.read(vpnProvider.notifier).runsConfig(c);
     ref.read(configProvider.notifier).setActiveConfig(c.id);
     final vpnState = ref.read(vpnProvider);

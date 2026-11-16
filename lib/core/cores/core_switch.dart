@@ -5,9 +5,9 @@ import 'core_resolver.dart';
 
 enum CoreSwitchAction { none, disconnect, saveQuickConnect, clearQuickConnect }
 
-/// Что сделать после смены ядра. [unsupported] — причина, по которой активный
-/// профиль (или настройки) не запустятся на новом ядре; null — запустятся.
-/// Подключённый VPN на поддерживаемом профиле ждёт переподключения (баннер).
+/// What to do after a core change. [unsupported] — why the active
+/// profile (or settings) won't start on the new core; null — they will.
+/// A connected VPN on a supported profile waits for a reconnect (banner).
 CoreSwitchAction coreSwitchAction({required VpnState state, required String? unsupported}) =>
     switch (state) {
       VpnState.connected || VpnState.connecting || VpnState.blocked =>
@@ -17,7 +17,7 @@ CoreSwitchAction coreSwitchAction({required VpnState state, required String? uns
       VpnState.disconnecting => CoreSwitchAction.none,
     };
 
-/// Кандидаты автопереключения, которые запускает хоть одно ядро, — с этим ядром.
+/// Auto-switch candidates that at least one core runs — with that core.
 List<({VpnConfig config, CoreBackend backend})> supportedCandidates(
         Iterable<VpnConfig> configs, CoreResolver resolver) =>
     [

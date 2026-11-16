@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/vpn_config.dart';
 import '../../providers/core_provider.dart';
 
-/// Профиль, который не запускает ни одно ядро: приглушён, под ним причина.
+/// A profile no core can run: dimmed, with the reason below.
 class CoreSupportGate extends ConsumerWidget {
   final VpnConfig config;
   final Widget child;
@@ -29,12 +29,12 @@ class CoreSupportGate extends ConsumerWidget {
   }
 }
 
-/// Причина, по которой [config] нельзя выбрать для подключения, или null.
+/// Why [config] can't be selected for connection, or null.
 String? unsupportedReason(WidgetRef ref, VpnConfig config) =>
     ref.read(coreResolverProvider).resolve(config).reason;
 
-/// Ядро профиля для строки списка — только если это не основное ядро
-/// (первое включённое): так видны лишь исключения.
+/// The profile's core for a list row — only if it's not the primary core
+/// (the first enabled one): this way only exceptions are visible.
 String? coreNote(WidgetRef ref, VpnConfig config) {
   final resolver = ref.watch(coreResolverProvider);
   final kind = resolver.resolve(config).backend?.kind;

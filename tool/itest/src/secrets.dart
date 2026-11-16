@@ -4,15 +4,15 @@ import 'dart:io';
 typedef SecretConfig = ({String uri, bool owned, String? egressIp});
 typedef SecretSub = ({String url, bool owned});
 
-/// `tool/itest/secrets.json` (не в git): тестовые подключения.
+/// `tool/itest/secrets.json` (not in git): test connections.
 class Secrets {
   final List<SecretConfig> configs;
   final List<SecretSub> subs;
 
-  /// nativeId ядра → имя опорного конфига (необязательно).
+  /// Core nativeId → reference config name (optional).
   final Map<String, String> reference;
 
-  /// Glob по `host:port`: такие конфиги (обычно из подписки) не тестируются.
+  /// Glob on `host:port`: such configs (usually from a subscription) aren't tested.
   final List<String> exclude;
 
   const Secrets(this.configs, this.subs, this.reference, [this.exclude = const []]);
@@ -32,7 +32,7 @@ class Secrets {
 
   static Secrets load(String path) {
     final f = File(path);
-    if (!f.existsSync()) throw StateError('нет $path — скопируйте secrets.example.json');
+    if (!f.existsSync()) throw StateError('no $path — copy secrets.example.json');
     return Secrets.fromJson(jsonDecode(f.readAsStringSync()) as Map<String, dynamic>);
   }
 }

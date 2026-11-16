@@ -22,6 +22,7 @@ import '../widgets/hero_panel.dart';
 import '../widgets/pressable.dart';
 import 'add_config_screen.dart';
 import 'subscription_settings_screen.dart';
+import '../../l10n/l10n.dart';
 
 class ConfigsScreen extends ConsumerStatefulWidget {
   const ConfigsScreen({super.key});
@@ -36,7 +37,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
   bool _isRefreshingAll = false;
   bool _hideGroups = false;
   bool _sortByPing = false;
-  bool _sortMode = false; // явный режим ручной сортировки (не персистится)
+  bool _sortMode = false; // explicit manual sort mode (not persisted)
 
   static const _keyHideGroups = 'cfg_hide_groups';
   static const _keySortByPing = 'cfg_sort_by_ping';
@@ -136,7 +137,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
                   child: CircularProgressIndicator(color: t.accent, strokeWidth: 1.5),
                 ),
                 error: (e, _) => Center(
-                  child: Text('Ошибка: $e',
+                  child: Text(context.l10n.commonErrorWith('$e'),
                       style: AppTheme.mono(size: 12, color: t.danger)),
                 ),
                 data: (cs) => _buildBody(context, cs, vpnState, t),
@@ -338,7 +339,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
               Container(height: 1, color: t.line),
               _ToggleTile(
                 t: t,
-                label: 'скрыть группы',
+                label: context.l10n.configsHideGroups,
                 value: _hideGroups,
                 onChanged: (v) {
                   setSheet(() {});
@@ -348,7 +349,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
               ),
               _ToggleTile(
                 t: t,
-                label: 'сортировать по ping',
+                label: context.l10n.configsSortByPing,
                 value: _sortByPing,
                 onChanged: (v) {
                   setSheet(() {});
@@ -361,7 +362,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
               ),
               _ToggleTile(
                 t: t,
-                label: 'режим сортировки',
+                label: context.l10n.configsSortMode,
                 value: _sortMode,
                 onChanged: (v) {
                   setSheet(() {});
@@ -388,7 +389,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(reason)));
       return;
     }
-    // Тот же конфиг, что уже подключён, — без пересоздания туннеля.
+    // Same config as the connected one — no tunnel rebuild.
     final unchanged = ref.read(vpnProvider.notifier).runsConfig(config);
     ref.read(configProvider.notifier).setActiveConfig(config.id);
     final vpnState = ref.read(vpnProvider);
@@ -448,7 +449,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
             Container(height: 1, color: t.line),
             _SheetTile(
               t: t,
-              label: isPinned ? 'Открепить' : 'Закрепить',
+              label: isPinned ? context.l10n.configsUnpin : context.l10n.configsPin,
               onTap: () {
                 Navigator.pop(ctx);
                 ref.read(configProvider.notifier).togglePin(config);
@@ -456,37 +457,37 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
             ),
             _SheetTile(
               t: t,
-              label: 'Ядро · ${ref.read(coreResolverProvider).resolve(config).backend?.kind.displayName ?? 'нет'}',
+              label: '${context.l10n.configsCore} · ${ref.read(coreResolverProvider).resolve(config).backend?.kind.displayName ?? context.l10n.configsCoreNone}',
               onTap: () {
                 Navigator.pop(ctx);
                 showCoreSheet(context, config);
               },
             ),
-            _SheetTile(t: t, label: 'Переименовать', onTap: () async {
+            _SheetTile(t: t, label: context.l10n.commonRename, onTap: () async {
               Navigator.pop(ctx);
               if (!context.mounted) return;
               await _renameConfig(context, ref, config);
             }),
-            _SheetTile(t: t, label: 'Редактировать URI', onTap: () async {
+            _SheetTile(t: t, label: context.l10n.configsEditUri, onTap: () async {
               Navigator.pop(ctx);
               if (!context.mounted) return;
               await _editConfig(context, ref, config);
             }),
-            _SheetTile(t: t, label: 'Копировать URL', onTap: () async {
+            _SheetTile(t: t, label: context.l10n.configsCopyUrl, onTap: () async {
               Navigator.pop(ctx);
               if (config.rawUri != null) {
                 await Clipboard.setData(ClipboardData(text: config.rawUri!));
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('URL скопирован'), duration: Duration(seconds: 1)));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(context.l10n.configsUrlCopied), duration: const Duration(seconds: 1)));
                 }
               }
             }),
-            _SheetTile(t: t, label: 'Поделиться', onTap: () async {
+            _SheetTile(t: t, label: context.l10n.configsShare, onTap: () async {
               Navigator.pop(ctx);
               if (config.rawUri != null) await Share.share(config.rawUri!);
             }),
-            _SheetTile(t: t, label: 'Удалить', color: t.danger, onTap: () async {
+            _SheetTile(t: t, label: context.l10n.commonDelete, color: t.danger, onTap: () async {
               Navigator.pop(ctx);
               if (!context.mounted) return;
               await _deleteConfig(context, ref, config);
@@ -503,15 +504,15 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Переименовать'),
+        title: Text(context.l10n.commonRename),
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(labelText: 'Имя', border: OutlineInputBorder()),
+          decoration: InputDecoration(labelText: context.l10n.commonName, border: const OutlineInputBorder()),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l10n.commonCancel)),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.l10n.commonSave)),
         ],
       ),
     );
@@ -525,7 +526,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Редактировать URI'),
+        title: Text(context.l10n.configsEditUri),
         content: SizedBox(
           width: MediaQuery.of(context).size.width * 0.8,
           child: TextField(
@@ -540,16 +541,16 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l10n.commonCancel)),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.l10n.commonSave)),
         ],
       ),
     );
     if (ok == true && controller.text.trim().isNotEmpty) {
       final updated = VlessParser.parseUri(controller.text.trim());
       if (updated != null) {
-        // Все разобранные поля — из новой ссылки; от старого профиля только
-        // идентичность, задержка, подписка и закреплённое ядро.
+        // All parsed fields come from the new link; the old profile keeps only
+        // identity, latency, subscription and pinned core.
         final renamed = updated.copyWith(
           id: config.id,
           createdAt: config.createdAt,
@@ -561,7 +562,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
         ref.read(configProvider.notifier).updateConfig(renamed);
       } else if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Не удалось распознать URI')),
+          SnackBar(content: Text(context.l10n.configsUriParseFailed)),
         );
       }
     }
@@ -571,14 +572,14 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Удалить?'),
-        content: Text('Конфигурация "${config.name}" будет удалена.'),
+        title: Text(context.l10n.configsDeleteTitle),
+        content: Text(context.l10n.configsDeleteMessage(config.name)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l10n.commonCancel)),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(foregroundColor: AppColors.danger),
-            child: const Text('Удалить'),
+            child: Text(context.l10n.commonDelete),
           ),
         ],
       ),
@@ -604,7 +605,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
       if (context.mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Подписка обновлена')));
+            SnackBar(content: Text(context.l10n.configsSubUpdated)));
       }
     } on UntrustedCertificateException catch (e) {
       if (!context.mounted) return;
@@ -612,27 +613,26 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Ненадёжный сертификат'),
+          title: Text(context.l10n.certUntrustedTitle),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Сервер использует самоподписанный или неизвестный сертификат. '
-                  'Соединение может быть небезопасным.'),
+              Text(context.l10n.certUntrustedMessage),
               const SizedBox(height: 12),
-              Text('Сервер: ${e.host}',
+              Text(context.l10n.certServer(e.host),
                   style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
-              Text('Сертификат: ${e.subject}',
+              Text(context.l10n.certSubject(e.subject),
                   style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
-              Text('Издатель: ${e.issuer}',
+              Text(context.l10n.certIssuer(e.issuer),
                   style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
               const SizedBox(height: 12),
-              const Text('Продолжить всё равно?'),
+              Text(context.l10n.certContinueAnyway),
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Продолжить')),
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l10n.commonCancel)),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.l10n.commonContinue)),
           ],
         ),
       );
@@ -643,7 +643,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
       if (context.mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка обновления: $e')),
+          SnackBar(content: Text(context.l10n.configsUpdateError('$e'))),
         );
       }
     }
@@ -654,15 +654,15 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Переименовать подписку'),
+        title: Text(context.l10n.configsRenameSub),
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(labelText: 'Имя', border: OutlineInputBorder()),
+          decoration: InputDecoration(labelText: context.l10n.commonName, border: const OutlineInputBorder()),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l10n.commonCancel)),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.l10n.commonSave)),
         ],
       ),
     );
@@ -676,7 +676,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Изменить URL подписки'),
+        title: Text(context.l10n.configsEditSubUrl),
         content: SizedBox(
           width: MediaQuery.of(context).size.width * 0.8,
           child: TextField(
@@ -692,9 +692,9 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l10n.commonCancel)),
           TextButton(
-              onPressed: () => Navigator.pop(ctx, true), child: const Text('Сохранить и обновить')),
+              onPressed: () => Navigator.pop(ctx, true), child: Text(context.l10n.configsSaveAndRefresh)),
         ],
       ),
     );
@@ -705,12 +705,12 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
             .addSubscriptionFromUrl(updatedUrl, name: sub.name, replaceId: sub.id);
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Подписка обновлена по новому URL')));
+              SnackBar(content: Text(context.l10n.configsSubUpdatedNewUrl)));
         }
       } catch (e) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Ошибка обновления: $e')));
+              SnackBar(content: Text(context.l10n.configsUpdateError('$e'))));
         }
       }
     }
@@ -720,14 +720,14 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Удалить подписку?'),
-        content: Text('Подписка "${sub.name}" и все её конфигурации будут удалены.'),
+        title: Text(context.l10n.configsDeleteSubTitle),
+        content: Text(context.l10n.configsDeleteSubMessage(sub.name)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l10n.commonCancel)),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(foregroundColor: AppColors.danger),
-            child: const Text('Удалить'),
+            child: Text(context.l10n.commonDelete),
           ),
         ],
       ),
@@ -758,8 +758,8 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
         final total = configState.subscriptions.length;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(failed.isEmpty
-              ? 'Подписки обновлены: $total'
-              : 'Обновлено ${total - failed.length} из $total\n${failed.join('\n')}'),
+              ? context.l10n.configsSubsUpdated(total)
+              : '${context.l10n.configsSubsUpdatedPartial(total - failed.length, total)}\n${failed.join('\n')}'),
         ));
       }
     } finally {
@@ -848,17 +848,17 @@ class _CfgTitlePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return HeroPanel(
       t: t,
-      tagline: 'КОНФИГУРАЦИИ',
+      tagline: context.l10n.configsTagline,
       title: 'CONFIGS',
       subtitle: Text('subs · standalone · imported',
           style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5)),
       trailing: Row(
         children: [
-          _IconBtn(t: t, icon: Icons.tune_rounded, accent: false, label: 'настройки отображения', onTap: onSettings),
+          _IconBtn(t: t, icon: Icons.tune_rounded, accent: false, label: context.l10n.configsDisplaySettings, onTap: onSettings),
           const SizedBox(width: 6),
-          _IconBtn(t: t, icon: Icons.schedule_rounded, accent: false, label: 'настройки подписок', onTap: onSubSettings),
+          _IconBtn(t: t, icon: Icons.schedule_rounded, accent: false, label: context.l10n.configsSubSettings, onTap: onSubSettings),
           const SizedBox(width: 6),
-          _IconBtn(t: t, icon: Icons.ios_share_rounded, accent: false, label: 'экспорт подключений', onTap: onExport),
+          _IconBtn(t: t, icon: Icons.ios_share_rounded, accent: false, label: context.l10n.configsExport, onTap: onExport),
           const SizedBox(width: 6),
           if (isRefreshing)
             SizedBox(
@@ -873,9 +873,9 @@ class _CfgTitlePanel extends StatelessWidget {
               ),
             )
           else
-            _IconBtn(t: t, icon: Icons.refresh_rounded, accent: false, label: 'обновить подписки', onTap: onRefreshAll),
+            _IconBtn(t: t, icon: Icons.refresh_rounded, accent: false, label: context.l10n.configsRefreshSubs, onTap: onRefreshAll),
           const SizedBox(width: 6),
-          _IconBtn(t: t, icon: Icons.add_rounded, accent: true, label: 'добавить', onTap: onAdd),
+          _IconBtn(t: t, icon: Icons.add_rounded, accent: true, label: context.l10n.configsAdd, onTap: onAdd),
         ],
       ),
     );
@@ -1075,21 +1075,21 @@ class _SubGroup extends StatelessWidget {
     required this.onReorderConfigs,
   });
 
-  String get _lastRefresh {
+  String _lastRefresh(AppLocalizations l) {
     final at = sub.lastFetchedAt;
-    if (at == null) return 'Не обновлялась';
+    if (at == null) return l.subNeverUpdated;
     final diff = DateTime.now().difference(at);
-    if (diff.inMinutes < 1) return 'Только что';
-    if (diff.inHours < 1) return '${diff.inMinutes} мин назад';
-    if (diff.inDays < 1) return '${diff.inHours} ч назад';
-    return '${diff.inDays} д назад';
+    if (diff.inMinutes < 1) return l.subJustNow;
+    if (diff.inHours < 1) return l.subMinutesAgo(diff.inMinutes);
+    if (diff.inDays < 1) return l.subHoursAgo(diff.inHours);
+    return l.subDaysAgo(diff.inDays);
   }
 
-  String? get _expireLabel {
+  String? _expireLabel(AppLocalizations l) {
     final exp = sub.expireAt;
     if (exp == null) return null;
     final days = exp.difference(DateTime.now()).inDays;
-    if (days < 0) return 'Истёк';
+    if (days < 0) return l.subExpired;
     if (days == 0) return 'expires:today';
     return null;
   }
@@ -1097,7 +1097,7 @@ class _SubGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hexAddr = '0x${addr.toString().padLeft(2, '0')}';
-    final expireLabel = _expireLabel;
+    final expireLabel = _expireLabel(context.l10n);
 
     final Widget addrWidget = SizedBox(
       width: 32,
@@ -1145,7 +1145,7 @@ class _SubGroup extends StatelessWidget {
                               children: [
                                 Text('cnt=${configs.length}',
                                     style: AppTheme.mono(size: 10, color: t.textMuted)),
-                                Text(' · $_lastRefresh',
+                                Text(' · ${_lastRefresh(context.l10n)}',
                                     style: AppTheme.mono(size: 10, color: t.textMuted)),
                                 if (expireLabel != null) ...[
                                   Text(' · ',
@@ -1177,7 +1177,7 @@ class _SubGroup extends StatelessWidget {
                       ),
                     ),
                     Semantics(
-                      label: 'меню подписки',
+                      label: context.l10n.configsSubMenu,
                       button: true,
                       child: GestureDetector(
                         onTap: () => _showSubMenu(context),
@@ -1221,7 +1221,7 @@ class _SubGroup extends StatelessWidget {
               children: [
                 if (sub.totalBytes != null && sub.totalBytes! > 0)
                   _DataUsageBanner(t: t, sub: sub),
-                // Сообщение провайдера (заголовок announce), ссылка — announce-url
+                // Provider message (announce header), link — announce-url
                 if (sub.announce?.isNotEmpty == true)
                   GestureDetector(
                     onTap: sub.announceUrl == null
@@ -1332,7 +1332,7 @@ class _SubGroup extends StatelessWidget {
                         style:
                             AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500)),
                   ),
-                  Text('sub · ${configs.length} конфигов',
+                  Text('sub · ${context.l10n.configsCount(configs.length)}',
                       style: AppTheme.mono(size: 10, color: t.textMuted)),
                 ],
               ),
@@ -1340,21 +1340,21 @@ class _SubGroup extends StatelessWidget {
             Container(height: 1, color: t.line),
             _SheetTile(
               t: t,
-              label: isActiveSubscription ? 'Сбросить авто-выбор' : 'Авто-выбор лучшего',
+              label: isActiveSubscription ? context.l10n.configsAutoSelectReset : context.l10n.configsAutoSelectBest,
               onTap: () { Navigator.pop(ctx); onSelectSubscription(); },
             ),
-            _SheetTile(t: t, label: 'Переименовать', onTap: () { Navigator.pop(ctx); onRename(); }),
-            _SheetTile(t: t, label: 'Изменить URL', onTap: () { Navigator.pop(ctx); onEditUrl(); }),
-            _SheetTile(t: t, label: 'Копировать URL', onTap: () async {
+            _SheetTile(t: t, label: context.l10n.commonRename, onTap: () { Navigator.pop(ctx); onRename(); }),
+            _SheetTile(t: t, label: context.l10n.configsEditUrl, onTap: () { Navigator.pop(ctx); onEditUrl(); }),
+            _SheetTile(t: t, label: context.l10n.configsCopyUrl, onTap: () async {
               Navigator.pop(ctx);
               await Clipboard.setData(ClipboardData(text: sub.url));
               if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('URL скопирован'), duration: Duration(seconds: 1)));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(context.l10n.configsUrlCopied), duration: const Duration(seconds: 1)));
               }
             }),
-            _SheetTile(t: t, label: 'Обновить', onTap: () { Navigator.pop(ctx); onRefresh(); }),
-            _SheetTile(t: t, label: 'Удалить', color: t.danger,
+            _SheetTile(t: t, label: context.l10n.configsRefresh, onTap: () { Navigator.pop(ctx); onRefresh(); }),
+            _SheetTile(t: t, label: context.l10n.commonDelete, color: t.danger,
                 onTap: () { Navigator.pop(ctx); onDelete(); }),
             const SizedBox(height: 8),
           ],
@@ -1436,7 +1436,7 @@ class _ConfigRow extends StatelessWidget {
   final bool indent;
   final bool pinned;
 
-  /// В режиме сортировки — индекс для ручки ≡; иначе показывается «⋮».
+  /// In sort mode — the index for the ≡ handle; otherwise "⋮" is shown.
   final int? draggableIndex;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
@@ -1478,7 +1478,7 @@ class _ConfigRow extends StatelessWidget {
             ),
           )
         : Semantics(
-            label: 'меню конфигурации',
+            label: context.l10n.configsConfigMenu,
             button: true,
             child: GestureDetector(
               onTap: onLongPress,
@@ -1538,7 +1538,7 @@ class _ConfigRow extends StatelessWidget {
                             overflow: TextOverflow.ellipsis),
                         const SizedBox(height: 2),
                         Consumer(builder: (_, ref, _) {
-                          // Ядро — только если профиль ушёл не на основное.
+                          // Core — only if the profile landed on a non-primary one.
                           final core = coreNote(ref, config);
                           return Text(
                               '${config.address}:${config.port}${core == null ? '' : ' · $core'}',
@@ -1603,13 +1603,13 @@ class _PinnedGroup extends StatelessWidget {
                     child: Text(pin.name,
                         style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500)),
                   ),
-                  Text('нет в подписке',
+                  Text(context.l10n.configsNotInSub,
                       style: AppTheme.mono(size: 10, color: t.textMuted)),
                 ],
               ),
             ),
             Container(height: 1, color: t.line),
-            _SheetTile(t: t, label: 'Открепить', color: t.danger, onTap: () {
+            _SheetTile(t: t, label: context.l10n.configsUnpin, color: t.danger, onTap: () {
               Navigator.pop(ctx);
               onUnpin(pin);
             }),
@@ -1643,7 +1643,7 @@ class _PinnedGroup extends StatelessWidget {
                         style: AppTheme.sans(
                             size: 13, weight: FontWeight.w500, color: t.text)),
                     const SizedBox(height: 2),
-                    Text('cnt=${pins.length} · закреплённые',
+                    Text('cnt=${pins.length} · ${context.l10n.configsPinned}',
                         style: AppTheme.mono(size: 10, color: t.textMuted)),
                   ],
                 ),
@@ -1737,7 +1737,7 @@ class _LostPinRow extends StatelessWidget {
                             letterSpacing: -0.2),
                         overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 2),
-                    Text('недоступен · нажмите чтобы открепить',
+                    Text(context.l10n.configsPinUnavailable,
                         style: AppTheme.mono(size: 10, color: t.textMuted),
                         overflow: TextOverflow.ellipsis),
                   ],
@@ -1828,7 +1828,7 @@ class _EmptyState extends StatelessWidget {
           Text('[ no configs ]',
               style: AppTheme.mono(size: 14, color: t.textMuted, letterSpacing: 1)),
           const SizedBox(height: 20),
-          Text('Добавьте конфигурацию\nили подписку',
+          Text(context.l10n.configsEmpty,
               textAlign: TextAlign.center,
               style: AppTheme.sans(size: 14, color: t.textDim)),
           const SizedBox(height: 24),

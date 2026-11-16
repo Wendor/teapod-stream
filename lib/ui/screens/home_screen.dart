@@ -18,6 +18,7 @@ import '../widgets/server_picker_sheet.dart';
 import '../widgets/core_sheet.dart';
 import '../../core/cores/core_resolver.dart';
 import 'logs_screen.dart';
+import '../../l10n/l10n.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -32,7 +33,7 @@ class HomeScreen extends ConsumerWidget {
         ? null
         : ref.watch(coreResolverProvider).resolve(effectiveConfig);
     final unsupported = core?.reason;
-    // Неподдерживаемый ядром профиль подключить нельзя; отключиться — можно.
+    // A profile no core supports can't be connected; disconnecting is still allowed.
     final canToggle = effectiveConfig != null &&
         (unsupported == null || vpnState.isConnected || vpnState.isBusy);
     final pingMs    = effectiveConfig?.latencyMs;
@@ -71,11 +72,11 @@ class HomeScreen extends ConsumerWidget {
                 protoLabel: protoLabel,
                 pingMs: pingMs,
                 canToggle: canToggle,
-                disabledLabel: effectiveConfig == null ? 'нет конфига' : 'не поддерживается',
+                disabledLabel: effectiveConfig == null ? context.l10n.homeNoConfigShort : context.l10n.homeUnsupported,
                 onToggle: () => ref.read(vpnProvider.notifier).toggle(),
-                // Без конфигов (или при ошибке загрузки) кнопка ведёт на вкладку «Конфиги»;
-                // пока они грузятся (сразу после запуска) — ничего, иначе тап «Подключить»
-                // уводил туда (#151).
+                // Without configs (or on a load error) the button opens the Configs tab;
+                // while they are loading (right after launch) it does nothing, otherwise a
+                // "Connect" tap led there (#151).
                 onDisabledTap: () {
                   final configs = ref.read(configProvider);
                   if (configs.hasValue || configs.hasError) ref.read(tabIndexProvider.notifier).set(1);
@@ -90,7 +91,7 @@ class HomeScreen extends ConsumerWidget {
                 serverName: effectiveConfig?.name ?? '—',
                 serverHint: effectiveConfig != null
                     ? '$protoLabel · $serverHint'
-                    : 'нет конфигурации',
+                    : context.l10n.homeNoConfig,
                 isConnected: isConn,
                 pingMs: pingMs,
                 history: history,
@@ -132,7 +133,7 @@ class _HeaderStrip extends StatelessWidget {
                   style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
               const SizedBox(width: 12),
               Semantics(
-                label: 'логи',
+                label: context.l10n.homeLogs,
                 button: true,
                 child: GestureDetector(
                   onTap: () => Navigator.push(
@@ -201,7 +202,7 @@ class _HeroPanel extends StatelessWidget {
             child: Column(
               children: [
                 Text(
-                  'ТУННЕЛЬ · $protoLabel',
+                  context.l10n.homeTunnel(protoLabel),
                   style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1.5),
                 ),
                 const SizedBox(height: 20),
@@ -263,23 +264,24 @@ class _StateInfo extends ConsumerWidget {
                 : (isConnecting ? 'HANDSHAKE' : (isDisconnecting ? 'SHUTDOWN' : 'OFFLINE'));
     final stateColor = isBlocked || isError ? t.danger : (isConn ? t.accent : t.textDim);
 
+    final l = context.l10n;
     String subtitle;
     if (isBlocked) {
-      subtitle = 'kill switch · трафик заблокирован${error != null ? '\n$error' : ''}';
+      subtitle = '${l.homeKillSwitchBlocked}${error != null ? '\n$error' : ''}';
     } else if (isError) {
-      subtitle = '${error ?? 'ошибка подключения'}\nнажмите для повтора';
+      subtitle = '${error ?? l.homeConnectError}\n${l.homeTapToRetry}';
     } else if (isConn) {
       final ipStr = ipAsync.maybeWhen(data: (d) => d?.ip, orElse: () => null) ?? '—';
       final cc    = ipAsync.maybeWhen(data: (d) => d?.countryCode.toLowerCase(), orElse: () => null) ?? '—';
       subtitle = pingMs != null ? '${pingMs}ms · $cc · $ipStr' : '$cc · $ipStr';
     } else if (isConnecting) {
-      subtitle = 'установка соединения…';
+      subtitle = l.homeConnecting;
     } else if (isDisconnecting) {
-      subtitle = 'завершение сеанса…';
+      subtitle = l.homeDisconnecting;
     } else if (!hasConfig) {
-      subtitle = 'нет конфигурации — добавьте';
+      subtitle = l.homeNoConfigAdd;
     } else {
-      subtitle = 'нажмите для подключения';
+      subtitle = l.homeTapToConnect;
     }
 
     return Column(
@@ -304,7 +306,7 @@ class _StateInfo extends ConsumerWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
               decoration: BoxDecoration(border: Border.all(color: t.danger)),
-              child: Text('ОТКЛЮЧИТЬ',
+              child: Text(l.homeDisconnectButton,
                   style: AppTheme.mono(size: 9, color: t.danger, letterSpacing: 1.5)),
             ),
           ),
@@ -366,10 +368,10 @@ class _PowerCoreState extends State<_PowerCore> with SingleTickerProviderStateMi
     final actionLabel = !widget.enabled
         ? widget.disabledLabel
         : blocked
-            ? 'переподключить'
+            ? context.l10n.homeActionReconnect
             : conn
-                ? 'отключить'
-                : (busy ? 'ожидание' : 'подключить');
+                ? context.l10n.homeActionDisconnect
+                : (busy ? context.l10n.homeActionWait : context.l10n.homeActionConnect);
 
     const coreSize  = 220.0;
     const outerSize = coreSize + 32.0;
@@ -645,14 +647,14 @@ class _MetricsGrid extends StatelessWidget {
             children: [
               Expanded(
                 child: Semantics(
-                  label: 'сменить сервер',
+                  label: context.l10n.homeChangeServer,
                   button: true,
                   child: GestureDetector(
                     onTap: onServerTap,
                     behavior: HitTestBehavior.opaque,
                     child: _MetricCell(
                       t: t,
-                      label: 'Сервер',
+                      label: context.l10n.homeServer,
                       value: serverName,
                       hint: serverHint,
                       borderRight: true,
@@ -665,7 +667,7 @@ class _MetricsGrid extends StatelessWidget {
               Expanded(
                 child: _MetricCell(
                   t: t,
-                  label: 'Пинг',
+                  label: context.l10n.homePing,
                   value: pingStr,
                   unit: pingMs != null ? 'ms' : null,
                   alignRight: true,
@@ -681,7 +683,7 @@ class _MetricsGrid extends StatelessWidget {
               Expanded(
                 child: _MetricCell(
                   t: t,
-                  label: '↑ Отдача',
+                  label: '↑ ${context.l10n.homeUpload}',
                   value: _bitrateValue(upSpeed),
                   unit: _bitrateUnit(upSpeed),
                   borderRight: true,
@@ -690,7 +692,7 @@ class _MetricsGrid extends StatelessWidget {
               Expanded(
                 child: _MetricCell(
                   t: t,
-                  label: '↓ Загрузка',
+                  label: '↓ ${context.l10n.homeDownload}',
                   value: _bitrateValue(downSpeed),
                   unit: _bitrateUnit(downSpeed),
                   alignRight: true,
@@ -712,7 +714,7 @@ class _MetricsGrid extends StatelessWidget {
 
 // ── Managed config warning ────────────────────────────────────────
 
-/// Ядро активного профиля (или почему его нечем запустить); тап — подробности.
+/// Core of the active profile (or why nothing can run it); tap for details.
 class _CoreLine extends StatelessWidget {
   final TeapodTokens t;
   final CoreResolution core;
@@ -728,7 +730,7 @@ class _CoreLine extends StatelessWidget {
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.only(top: 10),
-        // Смена ядра (закрепление, приоритет) — плавно, иначе неясно, применилось ли.
+        // Animate core changes (pinning, priority), otherwise it's unclear whether they applied.
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 250),
           child: RichText(
@@ -744,8 +746,8 @@ class _CoreLine extends StatelessWidget {
                 ),
                 TextSpan(
                   text: kind == null
-                      ? '${core.reason} · включите ядро в настройках или смените конфиг ›'
-                      : '${kind.displayName}${core.pinned ? ' · закреплено' : ''} ›',
+                      ? '${core.reason} · ${context.l10n.homeCoreEnableHint} ›'
+                      : '${kind.displayName}${core.pinned ? ' · ${context.l10n.homeCorePinned}' : ''} ›',
                 ),
               ],
             ),
@@ -766,8 +768,8 @@ class _ManagedWarning extends StatelessWidget {
   Widget build(BuildContext context) {
     final isOnlySelected = direction == RoutingDirection.onlySelected;
     final detail = isOnlySelected
-        ? 'режим «Только» по доменам и DNS-настройки не применяются · роутинг управляется сервером'
-        : 'DNS-настройки не применяются · роутинг управляется сервером';
+        ? context.l10n.homeManagedOnlySelected
+        : context.l10n.homeManagedDns;
 
     return Container(
       width: double.infinity,
@@ -800,7 +802,7 @@ class _MetricCell extends StatelessWidget {
   final bool borderRight;
   final bool alignRight;
 
-  /// Компактный текст значения (для имени сервера вместо цифр).
+  /// Compact value text (for the server name instead of digits).
   final bool compactValue;
   final bool chevron;
 
@@ -918,9 +920,9 @@ class _SparklineRow extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('ТРАФИК — LIVE',
+              Text(context.l10n.homeTrafficLive,
                   style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
-              Text('пик $peakStr',
+              Text(context.l10n.homePeak(peakStr),
                   style: AppTheme.mono(size: 10, color: t.textDim)),
             ],
           ),

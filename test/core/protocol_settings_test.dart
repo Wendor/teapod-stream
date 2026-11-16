@@ -54,9 +54,9 @@ void main() {
   });
 
   test('new protocols require their settings', () {
-    expect(_cfg(VpnProtocol.wireguard).validate(), 'Нет параметров протокола WireGuard');
+    expect(_cfg(VpnProtocol.wireguard).validate(), 'No WireGuard protocol parameters');
     expect(_cfg(VpnProtocol.wireguard, _wg).validate(), isNull);
-    expect(_cfg(VpnProtocol.naive, _ssh).validate(), 'Нет параметров протокола NaiveProxy');
+    expect(_cfg(VpnProtocol.naive, _ssh).validate(), 'No NaiveProxy protocol parameters');
   });
 
   test('Xray cores reject sing-box-only protocols', () {
@@ -65,7 +65,7 @@ void main() {
       (VpnProtocol.ssh, _ssh, 'SSH'),
       (VpnProtocol.naive, _naive, 'NaiveProxy'),
     ]) {
-      final reason = 'Протокол $name поддерживается только ядром sing-box.';
+      final reason = 'Protocol $name is supported only by the sing-box core.';
       expect(XrayConfigBuilder.unsupportedReason(_cfg(protocol, settings)), reason);
       expect(RustConfigBuilder.unsupportedReason(_cfg(protocol, settings)), reason);
     }

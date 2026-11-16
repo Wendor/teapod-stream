@@ -3,7 +3,7 @@ import '../models/core_kind.dart';
 import '../models/heartbeat_settings.dart';
 import '../models/vpn_config.dart';
 
-/// Возможности, которые ядро может не поддерживать.
+/// Features a core may not support.
 enum CoreFeature {
   socksAuthentication,
   proxyOnly,
@@ -27,32 +27,32 @@ enum CoreFeature {
   outboundDelayProbe,
 }
 
-/// [blocking] — подключение запрещено (причина); [warnings] — настройки,
-/// которые ядро проигнорирует.
+/// [blocking] — connecting is forbidden (the reason); [warnings] — settings
+/// the core will ignore.
 typedef SettingsCheck = ({String? blocking, List<String> warnings});
 
-/// Ядро со стороны Dart: возможности и построение конфига.
+/// A core on the Dart side: features and config building.
 abstract interface class CoreBackend {
   CoreKind get kind;
 
   bool supports(CoreFeature feature);
 
-  /// null, если [feature] поддерживается.
+  /// null if [feature] is supported.
   String? unavailableReason(CoreFeature feature);
 
-  /// null — профиль поддерживается; иначе причина (профиль disabled).
+  /// null — the profile is supported; otherwise the reason (the profile is disabled).
   String? checkConfig(VpnConfig config);
 
-  /// Глобальные настройки для подключения к [config].
+  /// Global settings for connecting to [config].
   SettingsCheck checkOptions(VpnConfig config, VpnEngineOptions options);
 
   HeartbeatProbe effectiveHeartbeatProbe(HeartbeatProbe requested);
 
-  /// Блокировать ли QUIC в TUN: по переключателю или из-за Vision-[flow].
+  /// Whether to block QUIC in TUN: by the switch or because of a Vision [flow].
   bool effectiveQuicBlock({required bool requested, required String? flow});
 
   String buildConfig(VpnConfig config, VpnEngineOptions options);
 
-  /// Конфиг временного инстанса для замера задержки кандидата.
+  /// Temporary instance config for measuring a candidate's latency.
   String buildProbeConfig(VpnConfig config, VpnEngineOptions options);
 }

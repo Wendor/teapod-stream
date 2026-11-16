@@ -13,16 +13,16 @@ import 'xray_go_backend.dart';
 class XrayEngine implements VpnEngine {
   static const _channel = MethodChannel(AppConstants.methodChannel);
 
-  /// Единственная подписка на нативные события. Второй `receiveBroadcastStream()`
-  /// на то же имя затёр бы обработчик первого (`setMessageHandler`) — все
-  /// слушатели (VpnNotifier, диплинки) подключаются к этому broadcast-потоку.
+  /// The single subscription to native events. A second `receiveBroadcastStream()`
+  /// on the same name would overwrite the first one's handler (`setMessageHandler`) — all
+  /// listeners (VpnNotifier, deeplinks) attach to this broadcast stream.
   static final Stream<dynamic> events =
       const EventChannel('${AppConstants.methodChannel}/events').receiveBroadcastStream();
 
   @override
   String get protocolName => 'xray';
 
-  /// Ядро для [connect] и [saveQuickConnect]; выставляется перед вызовом.
+  /// Core for [connect] and [saveQuickConnect]; set before the call.
   CoreBackend backend = const XrayGoBackend();
 
   @override
@@ -38,7 +38,7 @@ class XrayEngine implements VpnEngine {
     await _channel.invokeMethod('connect', _connectArgs(xrayConfig, config, options));
   }
 
-  /// Конфиг quick-reconnect (плитка, автозапуск) под текущее ядро без подключения.
+  /// Quick-reconnect config (tile, autostart) for the current core without connecting.
   Future<void> saveQuickConnect(VpnConfig config, VpnEngineOptions options) async {
     await _channel.invokeMethod(
         'saveQuickConnect', _connectArgs(backend.buildConfig(config, options), config, options));
@@ -76,8 +76,8 @@ class XrayEngine implements VpnEngine {
     await _channel.invokeMethod('disconnect');
   }
 
-  /// Замер задержки через кандидата: временный xray-инстанс с его конфигом
-  /// (`Teapodcore.measureOutboundDelay`). null — сервер не ответил.
+  /// Latency measurement through a candidate: a temporary xray instance with its config
+  /// (`Teapodcore.measureOutboundDelay`). null — the server didn't answer.
   Future<int?> measureOutbound(
       VpnConfig config, CoreBackend backend, VpnEngineOptions options, String url) async {
     try {
@@ -233,8 +233,8 @@ class XrayEngine implements VpnEngine {
     return (upload: 0, download: 0, uploadSpeed: 0, downloadSpeed: 0);
   }
 
-  /// История скоростей для графика после точки [since] эпохи [epoch]
-  /// (`{epoch, seq, from, full, history}`, см. XrayVpnService.getStatsHistory).
+  /// Speed history for the chart after point [since] of epoch [epoch]
+  /// (`{epoch, seq, from, full, history}`, see XrayVpnService.getStatsHistory).
   Future<Map<Object?, Object?>?> getStatsHistory(int epoch, int since) async {
     try {
       return await _channel.invokeMethod<Map<Object?, Object?>>(

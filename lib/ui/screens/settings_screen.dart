@@ -17,12 +17,14 @@ import 'profiles_screen.dart';
 import 'dns_settings_screen.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../providers/locale_provider.dart';
 import '../../providers/profile_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/settings_shared.dart';
 import '../widgets/reconnect_banner.dart';
 import 'subscription_settings_screen.dart';
+import '../../l10n/l10n.dart';
 
 // ── Screen ────────────────────────────────────────────────────────
 
@@ -86,7 +88,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 loading: () => Center(
                     child: CircularProgressIndicator(color: t.accent, strokeWidth: 1.5)),
                 error: (e, _) => Center(
-                    child: Text('Ошибка: $e',
+                    child: Text(context.l10n.commonErrorWith('$e'),
                         style: AppTheme.mono(size: 12, color: t.danger))),
                 data: (settings) => _SettingsBody(
                   settings: settings,
@@ -166,7 +168,7 @@ class _SetHeroPanel extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('ПАРАМЕТРЫ · ЛОКАЛЬНЫЙ ПРОФИЛЬ',
+                      Text(context.l10n.settingsTagline,
                           style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1.5)),
                       const SizedBox(height: 8),
                       Text(locked ? 'LOCKED' : 'CONFIG',
@@ -176,8 +178,8 @@ class _SetHeroPanel extends StatelessWidget {
                       const SizedBox(height: 6),
                       Text(
                         locked
-                            ? 'профиль заблокирован · только чтение'
-                            : 'профиль: $profileName · автосохранение',
+                            ? context.l10n.settingsProfileLocked
+                            : context.l10n.settingsProfileAutosave(profileName),
                         style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5),
                       ),
                     ],
@@ -313,7 +315,7 @@ class _SettingsBody extends StatelessWidget {
   final bool isProfileReadonly;
   final bool hasUpdate;
   final String version;
-  /// Версии ядер по `CoreKind.versionKey`; null — ещё не загружены.
+  /// Core versions by `CoreKind.versionKey`; null — not loaded yet.
   final Map<String, String>? coreVersions;
   final void Function(AppSettings) onUpdate;
 
@@ -331,13 +333,14 @@ class _SettingsBody extends StatelessWidget {
     final t = Theme.of(context).extension<TeapodTokens>()!;
     final s = settings;
     final locked = isProfileReadonly;
+    final l = context.l10n;
 
     return Stack(
       children: [
         ListView(
         padding: EdgeInsets.zero,
         children: [
-          // Доступно обновление — тайл наверху, чтобы не искать в конце списка
+          // Update available — tile at the top so it isn't lost at the end of the list
           if (hasUpdate)
             Container(
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
@@ -352,8 +355,8 @@ class _SettingsBody extends StatelessWidget {
           SetSectionHeader(t: t, addr: '0x10', label: 'diagnostics'),
           SetRowChev(
             t: t,
-            title: 'Логи',
-            hint: 'журнал приложения и xray',
+            title: l.settingsLogs,
+            hint: l.settingsLogsHint,
             last: true,
             onTap: () => Navigator.push(context, MaterialPageRoute(
                 builder: (_) => const LogsScreen(breadcrumbParent: 'settings'))),
@@ -367,43 +370,42 @@ class _SettingsBody extends StatelessWidget {
           SetSectionHeader(t: t, addr: '0x30', label: 'connection'),
           SetRowToggle(
             t: t,
-            title: 'Автоподключение',
-            hint: 'Подключаться при запуске приложения',
+            title: l.settingsAutoConnect,
+            hint: l.settingsAutoConnectHint,
             value: s.autoConnect,
             locked: locked,
             onChange: (v) => onUpdate(s.copyWith(autoConnect: v)),
           ),
           SetRowToggle(
             t: t,
-            title: 'Запуск при загрузке',
-            hint: 'Подключаться автоматически при перезагрузке устройства',
+            title: l.settingsStartOnBoot,
+            hint: l.settingsStartOnBootHint,
             value: s.autoStartOnBoot,
             locked: locked,
             onChange: (v) => onUpdate(s.copyWith(autoStartOnBoot: v)),
           ),
           SetRowToggle(
             t: t,
-            title: 'Автоматизация',
-            hint: 'Tasker/Anubis: команды CONNECT/DISCONNECT и рассылка состояния. '
-                'Любое приложение сможет выключить VPN и узнать, что он включён',
+            title: l.settingsAutomation,
+            hint: l.settingsAutomationHint,
             value: s.automationEnabled,
             locked: locked,
             onChange: (v) => onUpdate(s.copyWith(automationEnabled: v)),
           ),
           SetRowToggle(
             t: t,
-            title: 'Уведомление',
-            hint: 'Скорость и кнопка отключения в шторке',
+            title: l.settingsNotification,
+            hint: l.settingsNotificationHint,
             value: s.showNotification,
             locked: locked,
             onChange: (v) => onUpdate(s.copyWith(showNotification: v)),
           ),
           SetRowChev(
             t: t,
-            title: 'Подписки',
+            title: l.settingsSubscriptions,
             hint: s.subAutoRefresh
-                ? 'автообновление · ${s.subAutoRefreshHours}ч'
-                : 'автообновление выкл',
+                ? l.settingsSubAutoRefreshOn(s.subAutoRefreshHours)
+                : l.settingsSubAutoRefreshOff,
             last: true,
             onTap: () => Navigator.push(context, MaterialPageRoute(
                 builder: (_) =>
@@ -415,16 +417,16 @@ class _SettingsBody extends StatelessWidget {
           _CoreOrderList(t: t, settings: s, versions: coreVersions, locked: locked, onUpdate: onUpdate),
           SetRowChev(
             t: t,
-            title: 'Сеть',
+            title: l.settingsNetwork,
             hint: 'SOCKS ${s.randomPort ? 'random' : s.socksPort} · MTU ${s.mtu}'
-                '${s.proxyOnly ? ' · только прокси' : ''}',
+                '${s.proxyOnly ? ' · ${l.settingsProxyOnlyShort}' : ''}',
             onTap: () => Navigator.push(context, MaterialPageRoute(
                 builder: (_) => const NetworkSettingsScreen())),
           ),
           SetRowChev(
             t: t,
             title: 'DNS',
-            hint: '${s.dnsMode == DnsMode.proxy ? 'через VPN' : 'напрямую'} · ${_dnsLabel(s)}',
+            hint: '${s.dnsMode == DnsMode.proxy ? l.dnsViaVpn : l.dnsDirect} · ${_dnsLabel(s)}',
             last: true,
             onTap: () => Navigator.push(
                 context, MaterialPageRoute(builder: (_) => const DnsSettingsScreen())),
@@ -435,10 +437,10 @@ class _SettingsBody extends StatelessWidget {
           _ProfilesRow(t: t),
           SetInlineField(
             t: t,
-            label: 'Канал обновлений',
+            label: l.settingsUpdateChannel,
             child: const _UpdateChannelSegment(),
           ),
-          // Update tile (complex) — при доступном обновлении показан наверху
+          // Update tile (complex) — shown at the top when an update is available
           if (!hasUpdate)
             Container(
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
@@ -532,8 +534,8 @@ class _KVRowTap extends StatelessWidget {
 
 // ── Core priority ─────────────────────────────────────────────────
 
-/// Ядра в порядке приоритета: «↑» поднимает ядро, переключатель исключает его
-/// из выбора. Последнее включённое ядро выключить нельзя.
+/// Cores in priority order: "↑" moves a core up, the switch excludes it
+/// from selection. The last enabled core can't be turned off.
 class _CoreOrderList extends ConsumerStatefulWidget {
   final TeapodTokens t;
   final AppSettings settings;
@@ -554,7 +556,7 @@ class _CoreOrderList extends ConsumerStatefulWidget {
 }
 
 class _CoreOrderListState extends ConsumerState<_CoreOrderList> {
-  /// Только что поднятое ядро — коротко подсвечивается, иначе перестановка незаметна.
+  /// The core just moved up is briefly highlighted, otherwise the reorder goes unnoticed.
   CoreKind? _moved;
   Timer? _movedTimer;
 
@@ -577,7 +579,7 @@ class _CoreOrderListState extends ConsumerState<_CoreOrderList> {
       if (!on && usable.length == 1 && usable.first == k) {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
-          ..showSnackBar(const SnackBar(content: Text('Нужно хотя бы одно включённое ядро')));
+          ..showSnackBar(SnackBar(content: Text(context.l10n.settingsCoreLastEnabled)));
         return;
       }
       widget.onUpdate(settings.copyWith(
@@ -603,9 +605,9 @@ class _CoreOrderListState extends ConsumerState<_CoreOrderList> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Ядра', style: AppTheme.sans(size: 14, color: t.text)),
+              Text(context.l10n.settingsCores, style: AppTheme.sans(size: 14, color: t.text)),
               const SizedBox(height: 3),
-              Text('Профиль запускает первое ядро сверху, которое его поддерживает',
+              Text(context.l10n.settingsCoresHint,
                   style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5)),
             ],
           ),
@@ -618,14 +620,14 @@ class _CoreOrderListState extends ConsumerState<_CoreOrderList> {
             padding: const EdgeInsets.fromLTRB(8, 6, 20, 6),
             child: Row(
               children: [
-                // Поднять ядро на позицию выше; у первого кнопки нет.
+                // Move the core one position up; the first one has no button.
                 SizedBox(
                   width: 40,
                   height: 36,
                   child: i == 0
                       ? null
                       : Semantics(
-                          label: 'поднять ${k.displayName}',
+                          label: context.l10n.settingsCoreMoveUp(k.displayName),
                           button: true,
                           child: GestureDetector(
                             behavior: HitTestBehavior.opaque,
@@ -647,7 +649,7 @@ class _CoreOrderListState extends ConsumerState<_CoreOrderList> {
                       const SizedBox(height: 2),
                       Text(
                           !available.contains(k)
-                              ? 'не загружается на устройстве'
+                              ? context.l10n.settingsCoreUnavailable
                               : (widget.versions?[k.versionKey] ?? '...'),
                           style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5)),
                     ],
@@ -702,6 +704,8 @@ class _AppearanceRows extends ConsumerWidget {
     final themeMode = ref.watch(themeModeProvider);
     final accent    = ref.watch(accentProvider);
     final settings  = ref.watch(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
+    final locale    = ref.watch(localeProvider);
+    final l = context.l10n;
 
     return Column(
       children: [
@@ -712,18 +716,37 @@ class _AppearanceRows extends ConsumerWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Тема', style: AppTheme.sans(size: 14, color: t.text)),
+              Text(l.settingsTheme, style: AppTheme.sans(size: 14, color: t.text)),
               SetSegSquare(
                 t: t,
                 value: themeMode == ThemeMode.dark ? 'dark'
                     : themeMode == ThemeMode.light ? 'light' : 'system',
-                opts: const [('dark', 'ТЁМНАЯ'), ('light', 'СВЕТЛАЯ'), ('system', 'СИСТЕМА')],
+                opts: [('dark', l.settingsThemeDark), ('light', l.settingsThemeLight), ('system', l.settingsSystem)],
                 locked: false,
                 onChanged: (v) {
                   final m = v == 'dark' ? ThemeMode.dark
                       : v == 'light' ? ThemeMode.light : ThemeMode.system;
                   ref.read(themeModeProvider.notifier).set(m);
                 },
+              ),
+            ],
+          ),
+        ),
+        // Language
+        Container(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.lineSoft))),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(l.settingsLanguage, style: AppTheme.sans(size: 14, color: t.text)),
+              SetSegSquare(
+                t: t,
+                value: locale?.languageCode ?? 'system',
+                opts: [('system', l.settingsSystem), ('en', 'EN'), ('ru', 'RU')],
+                locked: false,
+                onChanged: (v) =>
+                    ref.read(localeProvider.notifier).set(v == 'system' ? null : Locale(v)),
               ),
             ],
           ),
@@ -735,12 +758,12 @@ class _AppearanceRows extends ConsumerWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Размер шрифта', style: AppTheme.sans(size: 14, color: t.text)),
+              Text(l.settingsFontSize, style: AppTheme.sans(size: 14, color: t.text)),
               if (settings != null)
                 SetSegSquare(
                   t: t,
                   value: settings.fontScale == FontScale.large ? 'large' : 'normal',
-                  opts: const [('normal', 'ОБЫЧНЫЙ'), ('large', 'КРУПНЫЙ')],
+                  opts: [('normal', l.settingsFontNormal), ('large', l.settingsFontLarge)],
                   locked: false,
                   onChanged: (v) {
                     final scale = v == 'large' ? FontScale.large : FontScale.normal;
@@ -757,7 +780,7 @@ class _AppearanceRows extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('АКЦЕНТНЫЙ ЦВЕТ',
+              Text(l.settingsAccentColor,
                   style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
               const SizedBox(height: 10),
               Wrap(
@@ -806,18 +829,19 @@ class _UpdateTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context).extension<TeapodTokens>()!;
     final updateState = ref.watch(updateProvider);
+    final l = context.l10n;
     return switch (updateState) {
       UpdateIdle() => _UpdateRow(
           t: t,
-          label: 'Обновления',
+          label: l.updateTitle,
           action: _SqBtn(
-            t: t, label: 'ПРОВЕРИТЬ',
+            t: t, label: l.updateCheck,
             onTap: () => ref.read(updateProvider.notifier).checkForUpdate(),
           ),
         ),
       UpdateChecking() => _UpdateRow(
           t: t,
-          label: 'Проверка...',
+          label: l.updateChecking,
           labelColor: t.textDim,
           action: SizedBox(
             width: 16, height: 16,
@@ -837,14 +861,14 @@ class _UpdateTile extends ConsumerWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Скачивается v${info.version}',
+                  Text(l.updateDownloading(info.version),
                       style: AppTheme.sans(size: 14, color: t.text)),
                   GestureDetector(
                     onTap: () => ref.read(updateProvider.notifier).cancelDownload(),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(border: Border.all(color: t.line)),
-                      child: Text('ОТМЕНА',
+                      child: Text(l.commonCancelUpper,
                           style: AppTheme.mono(size: 10, color: t.textDim, letterSpacing: 1)),
                     ),
                   ),
@@ -860,8 +884,8 @@ class _UpdateTile extends ConsumerWidget {
               const SizedBox(height: 4),
               Text(
                 total > 0
-                    ? '${(downloaded / 1024 / 1024).toStringAsFixed(1)} / ${(total / 1024 / 1024).toStringAsFixed(1)} МБ'
-                    : '${(downloaded / 1024 / 1024).toStringAsFixed(1)} МБ',
+                    ? '${(downloaded / 1024 / 1024).toStringAsFixed(1)} / ${(total / 1024 / 1024).toStringAsFixed(1)} ${l.unitMb}'
+                    : '${(downloaded / 1024 / 1024).toStringAsFixed(1)} ${l.unitMb}',
                 style: AppTheme.mono(size: 10, color: t.textDim),
               ),
             ],
@@ -869,9 +893,9 @@ class _UpdateTile extends ConsumerWidget {
         ),
       UpdateDownloaded(:final info, :final filePath) => _UpdateRow(
           t: t,
-          label: 'v${info.version} готова к установке',
+          label: l.updateReadyToInstall(info.version),
           action: _SqBtn(
-            t: t, label: 'УСТАНОВИТЬ', filled: true,
+            t: t, label: l.updateInstall, filled: true,
             onTap: () => ref.read(updateProvider.notifier).installApk(filePath),
           ),
         ),
@@ -880,7 +904,7 @@ class _UpdateTile extends ConsumerWidget {
           label: message,
           labelColor: t.danger,
           action: _SqBtn(
-            t: t, label: 'ПОВТОР',
+            t: t, label: l.commonRetryUpper,
             onTap: retryInfo != null
                 ? () => ref.read(updateProvider.notifier).startDownload(retryInfo)
                 : () => ref.read(updateProvider.notifier).checkForUpdate(),
@@ -971,8 +995,9 @@ class _UpdateVersionTile extends ConsumerWidget {
       ),
     );
 
-    final label = isUpdate ? 'доступно обновление' : 'актуальная версия';
-    final btnLabel = isUpdate ? (resumableBytes > 0 ? 'ПРОДОЛЖИТЬ' : 'СКАЧАТЬ') : 'ПЕРЕУСТАНОВИТЬ';
+    final l = context.l10n;
+    final label = isUpdate ? l.updateAvailable : l.updateUpToDate;
+    final btnLabel = isUpdate ? (resumableBytes > 0 ? l.updateResume : l.updateDownload) : l.updateReinstall;
     final onTap = isUpdate
         ? () => ref.read(updateProvider.notifier).startDownload(info)
         : () => ref.read(updateProvider.notifier).reinstall(info);
@@ -1019,8 +1044,8 @@ class _ProfilesRow extends ConsumerWidget {
     final profileState = ref.watch(profileProvider).maybeWhen(data: (d) => d, orElse: () => null);
     final profile = profileState?.activeProfile;
     final hint = profile == null
-        ? 'загрузка...'
-        : '${profile.name}${profile.readonly ? ' · только чтение' : ''}';
+        ? context.l10n.commonLoading
+        : '${profile.name}${profile.readonly ? ' · ${context.l10n.profileReadonly}' : ''}';
 
     return GestureDetector(
       onTap: () => Navigator.push(
@@ -1035,7 +1060,7 @@ class _ProfilesRow extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Профили', style: AppTheme.sans(size: 14, color: t.text)),
+                  Text(context.l10n.settingsProfiles, style: AppTheme.sans(size: 14, color: t.text)),
                   const SizedBox(height: 3),
                   Text(hint,
                       style: AppTheme.mono(

@@ -1,6 +1,6 @@
-/// Списки маршрутизации, общие для всех ядер.
+/// Routing lists shared by all cores.
 abstract final class RoutingDefaults {
-  /// Сервисы РФ в нотации xray: `domain:` — домен с поддоменами, `full:` — точный домен.
+  /// Russian services in xray notation: `domain:` — a domain with subdomains, `full:` — an exact domain.
   static const List<String> ruServicesDomains = [
     'domain:2gis.ru', 'domain:2gis.com', 'domain:ads.x5.ru', 'domain:aif.ru',
     'domain:aeroflot.ru', 'domain:alfabank.ru', 'domain:api.oneme.ru', 'domain:avito.ru',

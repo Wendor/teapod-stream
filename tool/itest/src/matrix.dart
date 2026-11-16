@@ -20,7 +20,7 @@ AgentConfig agentConfigFromJson(Map<String, dynamic> m) => (
       cores: (m['cores'] as List).cast<String>(),
     );
 
-/// nativeId ядра → имя в отчёте и фильтрах.
+/// Core nativeId → name in the report and filters.
 const coreNames = {'go': 'xray-core', 'rust': 'xray-rust', 'box': 'sing-box'};
 
 bool globMatch(String glob, String s) {
@@ -35,13 +35,13 @@ class CaseCtx {
   final Baseline baseline;
   final DeviceGuard device;
 
-  /// Ожидаемый выходной IP: из secrets (строго) или IP хоста сервера (подсказка).
+  /// Expected exit IP: from secrets (strict) or the server host IP (a hint).
   final String? egress;
   final bool strictEgress;
 
   CaseCtx(this.agent, this.probes, this.baseline, this.device, this.egress, {this.strictEgress = false});
 
-  /// Сервисы, по которым этот туннель отличим от прямого пути.
+  /// Services through which this tunnel is distinguishable from the direct path.
   List<String> get informativeUrls =>
       egress != null && egress == baseline.directRuIp ? const [] : informative(baseline.direct, egress);
 
@@ -50,7 +50,7 @@ class CaseCtx {
     return {for (var i = 0; i < urls.length; i++) urls[i]: ips[i]};
   }
 
-  /// Через туннель: [url] или все echo-сервисы.
+  /// Through the tunnel: [url] or all echo services.
   Future<Outcome> tunnel([String? url]) async {
     final urls = url == null ? baseline.direct.keys.toList() : [url];
     return classifyTunnel(
@@ -67,7 +67,7 @@ class CaseCtx {
   Future<Outcome> directRu() async =>
       classifyDirect(baseline: baseline.directRuIp, observed: await probes.ip(echoRu), egress: egress);
 
-  /// Два различимых сервиса для правил маршрутизации (a — правило, b — остальное).
+  /// Two distinguishable services for routing rules (a — the rule, b — the rest).
   (String, String)? get pair => informativeUrls.length < 2 ? null : (informativeUrls[0], informativeUrls[1]);
 }
 
@@ -99,7 +99,7 @@ class CaseResult {
       {'id': id, 'verdict': verdict.name, 'note': note, 'tookMs': took.inMilliseconds, 'dir': dir};
 }
 
-/// Все проверки: fail главнее skip, skip главнее pass.
+/// All checks: fail beats skip, skip beats pass.
 Outcome combine(List<Outcome> all) {
   final bad = all.where((o) => o.v == Verdict.fail);
   if (bad.isNotEmpty) return (v: Verdict.fail, note: bad.map((o) => o.note).join('; '));
@@ -115,7 +115,7 @@ Map<String, dynamic> _route(String direction, Map<String, dynamic> rules) =>
 
 Future<Outcome> _tunnelOnly(CaseCtx c) => c.tunnel();
 
-/// Правило на домен сервиса a: [aDirect] — a напрямую, b через туннель; иначе наоборот.
+/// A rule on service a's domain: [aDirect] — a direct, b through the tunnel; otherwise the reverse.
 Check _routePair({required bool aDirect}) => (c) async {
       final p = c.pair;
       if (p == null) return (v: Verdict.skip, note: 'need 2 usable echo services');
@@ -130,7 +130,7 @@ Future<Outcome> _splitDirect(CaseCtx c) async {
   return urls.isEmpty ? (v: Verdict.skip, note: 'egress = direct IP, indistinguishable') : c.direct(urls.first);
 }
 
-/// Хост первого пригодного echo-сервиса подставляется в правило при запуске.
+/// The host of the first suitable echo service is put into the rule at run time.
 const echoHostPlaceholder = r'$ECHO_A';
 
 Future<Outcome> _dns(CaseCtx c, {required bool proxy}) async => combine([
@@ -168,8 +168,8 @@ Future<Outcome> _proxyOnly(CaseCtx c) async {
       strictEgress: c.strictEgress);
 }
 
-/// Опции, поддержанные не всеми ядрами (`CoreBackend.supports`): имя → ядра.
-/// xray-rust отвечает на ping сам, выключить ICMP в нём нельзя.
+/// Options not supported by all cores (`CoreBackend.supports`): name → cores.
+/// xray-rust answers pings itself, ICMP can't be turned off in it.
 const _coreOptions = {
   'proxy-only': {'go'},
   'icmp-off': {'go', 'box'},
@@ -178,7 +178,7 @@ const _coreOptions = {
   'mtu-1280': {'go', 'box'},
 };
 
-/// Опционные кейсы: имя → (патч настроек, проверка).
+/// Option cases: name → (settings patch, check).
 final Map<String, (Map<String, dynamic>, Check)> optionCases = {
   'route-sites-direct': (
     _route('bypass', {'sitesEnabled': true, 'sites': [echoHostPlaceholder]}),
@@ -237,7 +237,7 @@ final Map<String, (Map<String, dynamic>, Check)> optionCases = {
   ),
   'icmp-off': (
     {'allowIcmp': false},
-    // Без VPN 1.1.1.1 не отвечает на ping — блокировку проверить нечем.
+    // Without VPN 1.1.1.1 doesn't answer ping — nothing to check the blocking with.
     (c) async => c.baseline.ping == false
         ? (v: Verdict.skip, note: 'no direct ping to 1.1.1.1')
         : await c.probes.ping('1.1.1.1')
@@ -255,7 +255,7 @@ final Map<String, (Map<String, dynamic>, Check)> optionCases = {
   'proxy-only': ({'proxyOnly': true}, _proxyOnly),
 };
 
-/// Кейсы прогона. [reference]: nativeId ядра → id опорного конфига (для opt-кейсов).
+/// Run cases. [reference]: core nativeId → reference config id (for opt cases).
 List<MatrixCase> buildMatrix(
   List<AgentConfig> configs, {
   required Map<String, bool> owned,
@@ -287,13 +287,13 @@ List<MatrixCase> buildMatrix(
   return caseGlob == null ? cases : cases.where((c) => globMatch(caseGlob, c.id)).toList();
 }
 
-/// Кейс неприменим ещё до подключения.
+/// The case is inapplicable even before connecting.
 class _Skip implements Exception {
   final String note;
   const _Skip(this.note);
 }
 
-/// Прогон одного кейса: настройки → подключение → проверка → отключение.
+/// Running one case: settings → connect → check → disconnect.
 Future<CaseResult> runCase(MatrixCase mc, CaseCtx ctx, RunDir run, Shell shell, Stream<String> logcat) async {
   final started = DateTime.now();
   final dir = run.caseDir(mc.id);
@@ -333,13 +333,13 @@ Future<CaseResult> runCase(MatrixCase mc, CaseCtx ctx, RunDir run, Shell shell, 
   } on ItestTimeout catch (e) {
     out = (v: Verdict.fail, note: e.message);
   } catch (e) {
-    // Ошибка самого раннера не должна обрывать весь прогон.
+    // An error of the runner itself must not abort the whole run.
     out = (v: Verdict.fail, note: 'internal: $e');
   }
   step('verdict ${out.v.name}: ${out.note}');
   if (out.v != Verdict.pass) await dumpGoroutines(ctx.agent, dir, step);
   try {
-    // Запоздалый маркер этого кейса не должен попасть в ожидание следующего.
+    // A late marker of this case must not leak into waiting for the next one.
     ctx.agent.lastState = null;
     await ctx.agent.send('disconnect');
     await ctx.agent.waitState({'disconnected', 'error'}, const Duration(seconds: 15));
@@ -351,7 +351,7 @@ Future<CaseResult> runCase(MatrixCase mc, CaseCtx ctx, RunDir run, Shell shell, 
   } catch (e) {
     step('diag: $e');
   }
-  // Чужой сервер мог просто не ответить; после подключения провал — уже наш.
+  // A foreign server might just not answer; after connecting a failure is ours.
   if (!mc.owned && connectSent && !connected && out.v == Verdict.fail) {
     out = (v: Verdict.skip, note: 'unreachable (not owned): ${out.note}');
   }
@@ -363,7 +363,7 @@ Future<CaseResult> runCase(MatrixCase mc, CaseCtx ctx, RunDir run, Shell shell, 
       configId: mc.configId);
 }
 
-/// Горутины Go-ядер до отключения — разбор зависаний (`goroutines.txt`).
+/// Goroutines of Go cores before disconnecting — for analyzing hangs (`goroutines.txt`).
 Future<void> dumpGoroutines(AgentClient agent, Directory dir, void Function(String) step) async {
   try {
     File('${dir.path}/goroutines.txt').writeAsStringSync(await agent.send('goroutines') as String);
@@ -372,7 +372,7 @@ Future<void> dumpGoroutines(AgentClient agent, Directory dir, void Function(Stri
   }
 }
 
-/// Снимок для разбора провала: сеть и журнал приложения.
+/// Snapshot for analyzing a failure: network and the app log.
 Future<void> collectDiag(Shell shell, Directory dir) async {
   File('${dir.path}/connectivity.txt')
       .writeAsStringSync((await shell.run(['shell', 'dumpsys connectivity'])).out);

@@ -4,15 +4,15 @@ import 'dart:io';
 import '../../core/models/vpn_config.dart';
 import 'wireguard_parser.dart';
 
-/// Ключи `vpn://` приложения AmneziaVPN: base64url(qCompress(JSON сервера)),
-/// qCompress = 4 байта длины big-endian + zlib. Клиентский конфиг AWG/WireGuard —
-/// wg-quick-текст в `containers[].awg|wireguard.last_config` (строка JSON, поле `config`).
+/// AmneziaVPN app `vpn://` keys: base64url(qCompress(server JSON)),
+/// qCompress = 4 bytes of big-endian length + zlib. The AWG/WireGuard client config is
+/// wg-quick text in `containers[].awg|wireguard.last_config` (a JSON string, the `config` field).
 abstract final class AmneziaKeyParser {
   static const _protocols = ['awg', 'wireguard'];
   static final _mtuLine = RegExp(r'^\s*MTU\s*=', multiLine: true, caseSensitive: false);
   static final _interface = RegExp(r'\[Interface\]', caseSensitive: false);
 
-  /// null — не ключ AmneziaVPN или в нём нет клиентского конфига WireGuard/AWG.
+  /// null — not an AmneziaVPN key or it has no WireGuard/AWG client config.
   static VpnConfig? parse(String key) {
     if (!key.startsWith('vpn://')) return null;
     try {
@@ -27,7 +27,7 @@ abstract final class AmneziaKeyParser {
           final last = jsonDecode(lastConfig) as Map<String, dynamic>;
           var text = last['config'] as String?;
           if (text == null || !WireGuardParser.isConf(text)) continue;
-          // AmneziaVPN кладёт MTU в last_config, а не в текст конфига.
+          // AmneziaVPN puts the MTU into last_config, not into the config text.
           final mtu = int.tryParse('${last['mtu'] ?? ''}');
           if (mtu != null && !_mtuLine.hasMatch(text)) text = text.replaceFirst(_interface, '[Interface]\nMTU = $mtu');
           final name = server['description'] as String?;

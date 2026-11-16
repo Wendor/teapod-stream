@@ -55,7 +55,7 @@ void main() {
     final s = shell();
     final g = DeviceGuard(s);
     await g.snapshot();
-    final pending = g.airplane(true); // команда ещё выполняется
+    final pending = g.airplane(true); // the command is still running
     s.calls.clear();
     await g.restore();
     await pending.catchError((_) {});
@@ -86,7 +86,7 @@ void main() {
     await g.snapshot();
     await g.wifi(false);
     await g.airplane(true);
-    s.codes.addAll([1, 0]); // откат wifi падает, airplane — нет
+    s.codes.addAll([1, 0]); // the wifi rollback fails, airplane doesn't
     await g.restore();
     s.calls.clear();
     await g.restore();

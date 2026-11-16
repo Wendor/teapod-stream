@@ -8,6 +8,7 @@ import '../core/services/profile_storage_service.dart';
 import '../core/services/settings_service.dart';
 import 'settings_provider.dart';
 import 'config_provider.dart';
+import '../l10n/l10n.dart';
 
 class ProfileState {
   final List<Profile> profiles;
@@ -45,7 +46,7 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
       final settings = await SettingsService().load();
       final defaultProfile = Profile(
         id: 'default',
-        name: 'По умолчанию',
+        name: L10n.current.profileDefaultName,
         isDefault: true,
         settings: settings,
         createdAt: DateTime.now(),
@@ -143,7 +144,7 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
   ProfileBundle exportBundle(String profileId, {bool includeConnections = false}) {
     final current = _current!;
     final stored = current.profiles.firstWhere((p) => p.id == profileId);
-    // Локальные секреты в файл не уходят (импорт их всё равно не берёт — _keepLocalSecurity).
+    // Local secrets don't go into the file (import ignores them anyway — _keepLocalSecurity).
     final profile = stored.copyWith(settings: stored.settings.copyWith(
       socksUser: '',
       socksPassword: '',
@@ -200,9 +201,9 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
     return newId;
   }
 
-  /// Чужой профиль не трогает поля, которыми вскрывается туннель: SOCKS (порт,
-  /// креды — открытый прокси на localhost), proxy-only (трафик мимо VPN), URL
-  /// пробы heartbeat (видит IP сервера), HWID и автоматизацию.
+  /// A foreign profile doesn't touch fields that expose the tunnel: SOCKS (port,
+  /// credentials — an open proxy on localhost), proxy-only (traffic bypassing the VPN), heartbeat
+  /// probe URL (sees the server IP), HWID and automation.
   static AppSettings _keepLocalSecurity(AppSettings imported, AppSettings local) =>
       imported.copyWith(
         socksPort: local.socksPort,

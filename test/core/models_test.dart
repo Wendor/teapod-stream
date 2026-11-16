@@ -152,25 +152,25 @@ void main() {
     });
 
     test('summary for global', () {
-      expect(const RoutingSettings().summary, 'Глобальный');
+      expect(const RoutingSettings().summary, 'Global');
       expect(const RoutingSettings(adBlockEnabled: true).summary, 'Ads✗');
     });
 
     test('summary lists every enabled part', () {
       expect(full.summary,
-          'Обход: ru, by…, .ru, .рф…, geosite:2, sites:1, RU+, LAN, Ads✗');
+          'Bypass: ru, by…, .ru, .рф…, geosite:2, sites:1, RU+, LAN, Ads✗');
     });
 
     test('summary keeps multi-level zones and handles empty only-mode', () {
       const s = RoutingSettings(
           direction: RoutingDirection.onlySelected, domainEnabled: true, domainZones: ['gov.spb.ru']);
-      expect(s.summary, 'Только: gov.spb.ru');
-      expect(const RoutingSettings(direction: RoutingDirection.onlySelected).summary, 'Только');
+      expect(s.summary, 'Only: gov.spb.ru');
+      expect(const RoutingSettings(direction: RoutingDirection.onlySelected).summary, 'Only');
     });
 
     test('disabled lists do not show in summary', () {
       const s = RoutingSettings(direction: RoutingDirection.bypass, geoCodes: ['ru']);
-      expect(s.summary, 'Обход');
+      expect(s.summary, 'Bypass');
     });
   });
 

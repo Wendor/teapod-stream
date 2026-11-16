@@ -16,7 +16,7 @@ const _link = 'wireguard://${'yAnz5TF%2BlXXJte14tji3zlMNq%2Bhd2rYUIgJBgB3fBmk%3D
     '&presharedkey=FpCyhws9cxwWoV4xELtfJvjJN%2BzQVRPISllRWgeopVE%3D'
     '&address=10.0.0.2%2F32,fd00%3A%3A2%2F128&mtu=1420&reserved=1,2,3&keepalive=25#Home%20WG';
 
-// Реальный конфиг: CRLF, комментарии, регистр ключей, лишние ключи wg-quick, IPv6-endpoint.
+// A real config: CRLF, comments, key case, extra wg-quick keys, an IPv6 endpoint.
 const _conf = '[Interface]\r\n'
     '# client\r\n'
     'privatekey = $_priv\r\n'
@@ -101,7 +101,7 @@ void main() {
   test('one peer only; missing keys are errors with a reason', () {
     expect(
       () => WireGuardParser.parseConf('$_conf\n[Peer]\nPublicKey = $_pub\nEndpoint = 1.2.3.4:1\n'),
-      throwsA(isA<FormatException>().having((e) => e.message, 'message', 'Поддерживается один [Peer]; в конфиге: 2.')),
+      throwsA(isA<FormatException>().having((e) => e.message, 'message', 'A single [Peer] is supported; the config has 2.')),
     );
     expect(() => WireGuardParser.parseConf('[Interface]\nAddress = 10.0.0.2/32\n[Peer]\nPublicKey = $_pub\nEndpoint = h:1\n'),
         throwsA(isA<FormatException>()));
@@ -204,9 +204,9 @@ void main() {
 
     test('sing-box rejects AWG settings the endpoint cannot apply', () {
       final weak = WireGuardParser.parseConf(awg3.replaceFirst('S3 = 16', 'S3 = 8'));
-      expect(SingBoxConfigBuilder.unsupportedReason(weak), 'AmneziaWG: защита заголовков требует S1–S4 не меньше 12.');
+      expect(SingBoxConfigBuilder.unsupportedReason(weak), 'AmneziaWG: header protection requires S1–S4 of at least 12.');
       final reserved = WireGuardParser.parseUri(WireGuardParser.toUri(WireGuardParser.parseConf(awg1)).replaceFirst('#', '&reserved=1,2,3#'))!;
-      expect(SingBoxConfigBuilder.unsupportedReason(reserved), 'AmneziaWG не поддерживает reserved.');
+      expect(SingBoxConfigBuilder.unsupportedReason(reserved), "AmneziaWG doesn't support reserved.");
       expect(SingBoxConfigBuilder.unsupportedReason(WireGuardParser.parseConf(awg3)), isNull);
     });
   });

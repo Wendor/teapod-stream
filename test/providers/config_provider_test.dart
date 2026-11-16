@@ -272,7 +272,7 @@ void main() {
         _cfg('s2', subId: 's'),
         _cfg('s3', subId: 's'),
       ]);
-      // Группа собирается в непрерывный блок на месте своего первого конфига.
+      // The group gathers into a contiguous block at the place of its first config.
       await n().reorderGroupConfigs('s', 2, 0);
       expect(s().configs.map((c) => c.id), ['l1', 's3', 's1', 's2', 'l2']);
       await n().reorderGroupConfigs(null, 0, 2);
@@ -403,8 +403,8 @@ void main() {
       expect({for (final c in s().configs) c.name: c.core}, {
         'B': null,
         'A': CoreKind.singBox,
-        'C renamed': CoreKind.xrayRust, // endpoint один — ядро переносится
-        'F': null, // endpoint не однозначен, имя не совпало
+        'C renamed': CoreKind.xrayRust, // a single endpoint — the core is carried over
+        'F': null, // ambiguous endpoint, the name didn't match
       });
     });
 
@@ -448,9 +448,9 @@ void main() {
       server.serve('', headers: {'x-hwid-max-devices-reached': 'true'});
       await expectLater(n().addSubscriptionFromUrl(server.url()),
           throwsA(predicate((e) => '$e'.contains('HWID'))));
-      server.serve('', headers: {'announce': 'base64:${base64Encode(utf8.encode('Оплатите подписку'))}'});
+      server.serve('', headers: {'announce': 'base64:${base64Encode(utf8.encode('Please renew your subscription'))}'});
       await expectLater(n().addSubscriptionFromUrl(server.url()),
-          throwsA(predicate((e) => '$e'.contains('Оплатите подписку'))));
+          throwsA(predicate((e) => '$e'.contains('Please renew your subscription'))));
     });
 
     test('refreshStaleSubscriptions refreshes only stale ones and backs off on failure', () async {

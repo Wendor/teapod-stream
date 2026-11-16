@@ -2,24 +2,24 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 
-/// Стандартная hero-панель: tagline · title · subtitle + trailing виджет.
-/// Используется на всех экранах вместо дублирующихся Container+Stack+Corner ticks.
+/// Standard hero panel: tagline · title · subtitle + a trailing widget.
+/// Used on all screens instead of duplicated Container+Stack+Corner ticks.
 class HeroPanel extends StatelessWidget {
   final TeapodTokens t;
 
-  /// Маленькая строка-подпись над заголовком (e.g. 'ЖУРНАЛ · XRAY · TUN2SOCKS').
+  /// Small caption line above the title (e.g. 'LOG · XRAY · TUN2SOCKS').
   final String tagline;
 
-  /// Крупный заголовок (e.g. 'LOGS').
+  /// Large title (e.g. 'LOGS').
   final String title;
 
-  /// Цвет заголовка. По умолчанию [TeapodTokens.text].
+  /// Title color. [TeapodTokens.text] by default.
   final Color? titleColor;
 
-  /// Содержимое под заголовком (Text, Row с PulseDot и т.д.).
+  /// Content below the title (Text, Row with PulseDot, etc.).
   final Widget? subtitle;
 
-  /// Виджет справа (кнопки, бейдж, summary-блок).
+  /// Widget on the right (buttons, badge, summary block).
   final Widget? trailing;
 
   const HeroPanel({

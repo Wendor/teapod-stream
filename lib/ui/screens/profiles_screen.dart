@@ -13,6 +13,7 @@ import '../theme/app_theme.dart';
 import '../theme/app_colors.dart';
 import '../widgets/breadcrumb_bar.dart';
 import '../widgets/hero_panel.dart';
+import '../../l10n/l10n.dart';
 
 // ── Screen ────────────────────────────────────────────────────────
 
@@ -50,9 +51,9 @@ class ProfilesScreen extends ConsumerWidget {
             BreadcrumbBar(t: t, parent: 'settings', current: 'profiles'),
             HeroPanel(
               t: t,
-              tagline: 'УПРАВЛЕНИЕ · ПРОФИЛИ',
+              tagline: context.l10n.profilesTagline,
               title: 'PROFILES',
-              subtitle: Text('переключение и управление профилями настроек',
+              subtitle: Text(context.l10n.profilesSubtitle,
                   style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5)),
               trailing: Row(
                 children: [
@@ -70,7 +71,7 @@ class ProfilesScreen extends ConsumerWidget {
                     child: CircularProgressIndicator(
                         color: t.accent, strokeWidth: 1.5)),
                 error: (e, _) => Center(
-                    child: Text('Ошибка: $e',
+                    child: Text(context.l10n.commonErrorWith('$e'),
                         style: AppTheme.mono(size: 12, color: t.danger))),
                 data: (state) => _ProfBody(state: state),
               ),
@@ -148,7 +149,7 @@ void _profShowCreateDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
         builder: (ctx, setState) => AlertDialog(
           backgroundColor: t.bg,
           shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-          title: Text('Новый профиль',
+          title: Text(context.l10n.profilesNew,
               style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -159,7 +160,7 @@ void _profShowCreateDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
                 autofocus: true,
                 style: AppTheme.mono(size: 13, color: t.text),
                 decoration: InputDecoration(
-                  hintText: 'Название профиля',
+                  hintText: context.l10n.profilesNameHint,
                   hintStyle: AppTheme.mono(size: 12, color: t.textMuted),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   isDense: true,
@@ -178,7 +179,7 @@ void _profShowCreateDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
                   children: [
                     _CheckBox(t: t, value: copyFromCurrent),
                     const SizedBox(width: 10),
-                    Text('Скопировать текущие настройки',
+                    Text(context.l10n.profilesCopyCurrent,
                         style: AppTheme.mono(size: 11, color: t.text)),
                   ],
                 ),
@@ -188,7 +189,7 @@ void _profShowCreateDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: Text('Отмена',
+              child: Text(context.l10n.commonCancel,
                   style: AppTheme.mono(size: 11, color: t.textMuted)),
             ),
             TextButton(
@@ -199,7 +200,7 @@ void _profShowCreateDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
                     .createProfile(name, copyFromCurrent: copyFromCurrent);
                 Navigator.pop(ctx);
               },
-              child: Text('Создать',
+              child: Text(context.l10n.commonCreate,
                   style: AppTheme.mono(size: 11, color: t.accent)),
             ),
           ],
@@ -219,7 +220,7 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
         builder: (ctx, setState) => AlertDialog(
           backgroundColor: t.bg,
           shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-          title: Text('Импорт профиля',
+          title: Text(context.l10n.profileImportTitle,
               style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -230,7 +231,7 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
                 maxLines: 4,
                 style: AppTheme.mono(size: 11, color: t.text),
                 decoration: InputDecoration(
-                  hintText: 'Вставьте ссылку (teapod://...) или JSON профиля',
+                  hintText: context.l10n.profilesImportHint,
                   hintStyle: AppTheme.mono(size: 10, color: t.textMuted),
                   contentPadding: const EdgeInsets.all(10),
                   isDense: true,
@@ -248,7 +249,7 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
                 child: Row(children: [
                   _CheckBox(t: t, value: switchTo),
                   const SizedBox(width: 10),
-                  Text('Переключиться после импорта',
+                  Text(context.l10n.profilesSwitchAfterImport,
                       style: AppTheme.mono(size: 11, color: t.text)),
                 ]),
               ),
@@ -258,7 +259,7 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
                 child: Row(children: [
                   _CheckBox(t: t, value: makeReadonly),
                   const SizedBox(width: 10),
-                  Text('Только чтение',
+                  Text(context.l10n.profilesReadonly,
                       style: AppTheme.mono(size: 11, color: t.text)),
                 ]),
               ),
@@ -267,7 +268,7 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: Text('Отмена',
+              child: Text(context.l10n.commonCancel,
                   style: AppTheme.mono(size: 11, color: t.textMuted)),
             ),
             TextButton(
@@ -292,7 +293,7 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
 
                 if (result == null) {
                   ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-                    content: Text(error.isNotEmpty ? error : 'Неверный формат',
+                    content: Text(error.isNotEmpty ? error : context.l10n.profilesInvalidFormat,
                         style: AppTheme.mono(size: 12, color: t.bg)),
                     backgroundColor: t.danger,
                     duration: const Duration(seconds: 2),
@@ -307,7 +308,7 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
                   sourceUrl: sourceUrl,
                 );
               },
-              child: Text('Импортировать',
+              child: Text(context.l10n.commonImport,
                   style: AppTheme.mono(size: 11, color: t.accent)),
             ),
           ],
@@ -371,7 +372,7 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
       builder: (ctx) => AlertDialog(
         backgroundColor: t.bg,
         shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-        title: Text('Переименовать',
+        title: Text(context.l10n.commonRename,
             style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500)),
         content: TextField(
           controller: ctrl,
@@ -389,7 +390,7 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Отмена', style: AppTheme.mono(size: 11, color: t.textMuted)),
+            child: Text(context.l10n.commonCancel, style: AppTheme.mono(size: 11, color: t.textMuted)),
           ),
           TextButton(
             onPressed: () {
@@ -398,7 +399,7 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
               ref.read(profileProvider.notifier).renameProfile(profile.id, name);
               Navigator.pop(ctx);
             },
-            child: Text('Сохранить', style: AppTheme.mono(size: 11, color: t.accent)),
+            child: Text(context.l10n.commonSave, style: AppTheme.mono(size: 11, color: t.accent)),
           ),
         ],
       ),
@@ -422,18 +423,18 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('ЭКСПОРТ · ${profile.name.toUpperCase()}',
+              Text('${context.l10n.profilesExportUpper} · ${profile.name.toUpperCase()}',
                   style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1.5)),
               const SizedBox(height: 16),
               _ExportRow(
                 t: t,
-                label: 'Копировать ссылку',
+                label: context.l10n.profilesCopyLink,
                 hint: 'teapod://import/profile?data=...',
                 onTap: () {
                   Clipboard.setData(ClipboardData(text: deeplink));
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text('Ссылка скопирована',
+                    content: Text(context.l10n.profilesLinkCopied,
                         style: AppTheme.mono(size: 12, color: t.bg)),
                     backgroundColor: t.accent,
                     duration: const Duration(seconds: 2),
@@ -442,7 +443,7 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
               ),
               _ExportRow(
                 t: t,
-                label: 'Поделиться файлом',
+                label: context.l10n.profilesShareFile,
                 hint: '${profile.name.toLowerCase().replaceAll(' ', '_')}.json',
                 onTap: () async {
                   Navigator.pop(ctx);
@@ -478,21 +479,21 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
       builder: (ctx) => AlertDialog(
         backgroundColor: t.bg,
         shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-        title: Text('Удалить профиль?',
+        title: Text(context.l10n.profilesDeleteTitle,
             style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500)),
-        content: Text('«${profile.name}» будет удалён без возможности восстановления.',
+        content: Text(context.l10n.profilesDeleteMessage(profile.name),
             style: AppTheme.mono(size: 12, color: t.textDim)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Отмена', style: AppTheme.mono(size: 11, color: t.textMuted)),
+            child: Text(context.l10n.commonCancel, style: AppTheme.mono(size: 11, color: t.textMuted)),
           ),
           TextButton(
             onPressed: () {
               ref.read(profileProvider.notifier).deleteProfile(profile.id);
               Navigator.pop(ctx);
             },
-            child: Text('Удалить', style: AppTheme.mono(size: 11, color: t.danger)),
+            child: Text(context.l10n.commonDelete, style: AppTheme.mono(size: 11, color: t.danger)),
           ),
         ],
       ),
@@ -511,14 +512,14 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
       Navigator.pop(context);
       if (result != null) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Профиль «${profile.name}» обновлён',
+          content: Text(context.l10n.profilesUpdated(profile.name),
               style: AppTheme.mono(size: 12, color: t.bg)),
           backgroundColor: t.accent,
           duration: const Duration(seconds: 2),
         ));
       } else {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Ошибка обновления',
+          content: Text(context.l10n.profilesUpdateError,
               style: AppTheme.mono(size: 12, color: t.bg)),
           backgroundColor: t.danger,
           duration: const Duration(seconds: 2),
@@ -676,19 +677,19 @@ class _ProfileActionsSheet extends StatelessWidget {
           Container(height: 1, color: t.line),
           if (!isActive)
             _ActionTile(
-                t: t, label: 'Переключиться', onTap: onSwitch),
+                t: t, label: context.l10n.profilesSwitch, onTap: onSwitch),
           if (onRefresh != null)
-            _ActionTile(t: t, label: 'Обновить', onTap: onRefresh!),
-          _ActionTile(t: t, label: 'Переименовать', onTap: onRename),
+            _ActionTile(t: t, label: context.l10n.configsRefresh, onTap: onRefresh!),
+          _ActionTile(t: t, label: context.l10n.commonRename, onTap: onRename),
           _ActionTile(
             t: t,
-            label: profile.readonly ? 'Разблокировать' : 'Заблокировать для редактирования',
+            label: profile.readonly ? context.l10n.profilesUnlock : context.l10n.profilesLock,
             onTap: onToggleReadonly,
           ),
-          _ActionTile(t: t, label: 'Экспортировать', onTap: onExport),
+          _ActionTile(t: t, label: context.l10n.profilesExport, onTap: onExport),
           if (onDelete != null)
             _ActionTile(
-                t: t, label: 'Удалить', color: t.danger, onTap: onDelete!),
+                t: t, label: context.l10n.commonDelete, color: t.danger, onTap: onDelete!),
           const SizedBox(height: 8),
         ],
       ),
@@ -821,7 +822,7 @@ Future<(ProfileBundle?, String, String?)> _parseProfileInput(String input) async
       if (deeplinkResult.source == DeeplinkSource.url) {
         final fetched = await DeeplinkRouter.fetchFromUrl(deeplinkResult);
         if (fetched is ProfileBundle) return (fetched, '', deeplinkResult.effectiveSourceUrl);
-        return (null, 'Не удалось загрузить данные по ссылке', null);
+        return (null, L10n.current.deeplinkFetchFailed, null);
       }
     }
     final json = jsonDecode(trimmed) as Map<String, dynamic>;

@@ -10,7 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:teapodstream/core/constants/app_constants.dart';
 import 'package:teapodstream/providers/ip_info_provider.dart';
 
-/// Минимальный SOCKS5 (user/pass) сервер: после CONNECT сам отвечает на HTTP-запрос.
+/// Minimal SOCKS5 (user/pass) server: after CONNECT it answers the HTTP request itself.
 class _Socks5 {
   final ServerSocket _server;
   final String httpBody;
@@ -67,7 +67,7 @@ class _Socks5 {
     final port = await take(2);
     targets.add('$host:${port[0] << 8 | port[1]}');
     s.add([5, 0, 0, 1, 0, 0, 0, 0, 0, 0]);
-    // Ждём конец HTTP-заголовков и отвечаем.
+    // Wait for the end of the HTTP headers and answer.
     while (!latin1.decode(buf).contains('\r\n\r\n')) {
       await Future<void>.delayed(const Duration(milliseconds: 5));
     }
@@ -85,7 +85,7 @@ void main() {
   late ProviderContainer c;
 
   setUp(() {
-    // Биндинг подменяет HttpClient заглушкой (400) — нужен настоящий.
+    // The binding replaces HttpClient with a stub (400) — a real one is needed.
     HttpOverrides.global = null;
     nativeState = {'state': 'disconnected'};
     messenger.setMockMethodCallHandler(const MethodChannel(AppConstants.methodChannel),

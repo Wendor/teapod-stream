@@ -179,7 +179,7 @@ void main() {
 
   test('rejects Hysteria2 features xray-rust 0.8.1 does not run', () {
     final cases = {
-      'obfs=salamander&obfs-password=abc': '4 до 4096',
+      'obfs=salamander&obfs-password=abc': '4 to 4096',
       'obfs=salamander': 'obfs-password',
       'obfs=gecko&obfs-password=secret-pass': 'gecko',
       'insecure=1': 'allowInsecure',

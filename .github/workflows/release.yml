@@ -1,8 +1,8 @@
 name: Release
 
-# Ручной запуск (Actions → Release → Run workflow или `gh workflow run release.yml`).
-# Собирает всю цепочку версии из pubspec.yaml: teapod-core (если его релиза v<версия> ещё нет)
-# → APK → GitHub Release. Три репозитория кладутся рядом — относительные пути build.sh работают как локально.
+# Manual run (Actions → Release → Run workflow or `gh workflow run release.yml`).
+# Builds the whole chain for the pubspec.yaml version: teapod-core (if its v<version> release doesn't exist yet)
+# → APK → GitHub Release. The three repositories are placed side by side — build.sh relative paths work as locally.
 on:
   workflow_dispatch:
     inputs:
@@ -11,15 +11,15 @@ on:
         type: boolean
         default: true
       rebuild_core:
-        description: Пересобрать teapod-core, даже если его релиз уже есть
+        description: Rebuild teapod-core even if its release already exists
         type: boolean
         default: false
       core_ref:
-        description: Ветка teapod-core (пусто — одноимённая этой, иначе ветка по умолчанию)
+        description: teapod-core branch (empty — the same name as this one, otherwise the default branch)
         type: string
         default: ''
       tun2socks_ref:
-        description: Ветка teapod-tun2socks (пусто — одноимённая этой, иначе ветка по умолчанию)
+        description: teapod-tun2socks branch (empty — the same name as this one, otherwise the default branch)
         type: string
         default: ''
 
@@ -33,7 +33,7 @@ permissions:
 env:
   FLUTTER_VERSION: 3.41.6
   NDK_VERSION: 28.2.13676358
-  # SHA-256 сертификата подписи всех выпущенных APK: другой ключ сломает обновление у пользователей
+  # SHA-256 of the signing certificate of all released APKs: another key would break updates for users
   CERT_SHA256: 1a9d47fabd88aacda435d2ae0098cf3f0666358113da858a974b2483fdd5eaaf
 
 jobs:
@@ -64,16 +64,16 @@ jobs:
           CORE_TOKEN: ${{ secrets.CORE_RELEASE_TOKEN }}
           BUILD_CORE: ${{ steps.ver.outputs.build_core }}
         run: |
-          [ -n "$KEYSTORE" ] || { echo "::error::Нет секрета DEBUG_KEYSTORE_BASE64"; exit 1; }
-          [ -z "$BUILD_CORE" ] || [ -n "$CORE_TOKEN" ] || { echo "::error::Нет секрета CORE_RELEASE_TOKEN"; exit 1; }
-          # Без ANDROID_USER_HOME AGP на runner'е берёт ~/.config/.android и генерирует новый ключ
+          [ -n "$KEYSTORE" ] || { echo "::error::Missing secret DEBUG_KEYSTORE_BASE64"; exit 1; }
+          [ -z "$BUILD_CORE" ] || [ -n "$CORE_TOKEN" ] || { echo "::error::Missing secret CORE_RELEASE_TOKEN"; exit 1; }
+          # Without ANDROID_USER_HOME AGP on the runner uses ~/.config/.android and generates a new key
           dir="$HOME/.android"
           echo "ANDROID_USER_HOME=$dir" >> "$GITHUB_ENV"
           mkdir -p "$dir"
           echo "$KEYSTORE" | base64 -d > "$dir/debug.keystore"
           fp=$(keytool -list -v -keystore "$dir/debug.keystore" -storepass android -alias androiddebugkey \
             | awk '/SHA256:/{print $2}' | tr -d ':' | tr 'A-F' 'a-f')
-          [ "$fp" = "$CERT_SHA256" ] || { echo "::error::DEBUG_KEYSTORE_BASE64 — не тот ключ: '$fp'"; exit 1; }
+          [ "$fp" = "$CERT_SHA256" ] || { echo "::error::DEBUG_KEYSTORE_BASE64 — wrong key: '$fp'"; exit 1; }
 
       - name: Resolve sibling branches
         if: steps.ver.outputs.build_core
@@ -162,7 +162,7 @@ jobs:
             out=$("$signer" verify --print-certs "$apk")
             grep -q "SHA-256 digest: $CERT_SHA256" <<< "$out" || {
               echo "$out"; find "$HOME" -name debug.keystore -not -path '*/.pub-cache/*' 2>/dev/null
-              echo "::error::$apk подписан не тем ключом"; exit 1
+              echo "::error::$apk is signed with the wrong key"; exit 1
             }
           done
 

@@ -3,7 +3,7 @@ package com.teapodstream.teapodstream.core
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Логин/пароль SOCKS-inbound `socks-in` из сохранённого конфига ядра; ("", "") — нет. */
+/** Login/password of the `socks-in` SOCKS inbound from the saved core config; ("", "") — none. */
 object SocksCredentials {
     private const val INBOUND_TAG = "socks-in"
 

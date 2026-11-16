@@ -13,8 +13,8 @@ object VpnEventStreamHandler : EventChannel.StreamHandler {
     private var eventSink: EventChannel.EventSink? = null
     private val handler = Handler(Looper.getMainLooper())
     private val eventBuffer = mutableListOf<Map<String, Any?>>()
-    // Application-контекст для плитки и уведомлений; не обнуляется при закрытии UI —
-    // сервис обновляет их и без Activity (WeakReference: держать Activity нельзя)
+    // Application context for the tile and notifications; not cleared when the UI closes —
+    // the service updates them without an Activity (WeakReference: holding an Activity is not allowed)
     private var _appContextRef: WeakReference<android.content.Context>? = null
     var appContext: android.content.Context?
         get() = _appContextRef?.get()
@@ -47,7 +47,7 @@ object VpnEventStreamHandler : EventChannel.StreamHandler {
                     "uploadSpeed" to currentStats["uploadSpeed"],
                     "downloadSpeed" to currentStats["downloadSpeed"],
                 ))
-                // Весь буфер истории для графика (full) — клиент синхронизирует эпоху
+                // The whole chart history buffer (full) — the client syncs the epoch
                 sendEvent(XrayVpnService.getStatsHistory(-1, 0) + ("type" to "statsHistory"))
             }
             "connecting", "disconnecting", "reconnecting", "blocked", "error" -> sendStateEvent(state)
@@ -85,7 +85,7 @@ object VpnEventStreamHandler : EventChannel.StreamHandler {
         val error = XrayVpnService.lastError?.takeIf { state == "error" || state == "blocked" }
         sendEvent(mapOf("type" to "state", "value" to state, "error" to error))
         ItestBridge.state(state)
-        // Обновляем плитку и уведомление при изменении состояния
+        // Update the tile and notification on state change
         appContext?.let { ctx ->
             VpnTileService.updateTile(ctx)
             XrayVpnService.onStateNotification(ctx, state)
@@ -116,8 +116,8 @@ object VpnEventStreamHandler : EventChannel.StreamHandler {
         sendEvent(mapOf("type" to "deeplink", "uri" to uri))
     }
 
-    /// Туннель не отвечает, а режим heartbeat — urltest: Flutter должен подобрать
-    /// живой конфиг и переподключиться. Если он молчит, сервис сам реконнектится.
+    /// The tunnel doesn't answer and the heartbeat mode is urltest: Flutter must pick
+    /// a live config and reconnect. If it stays silent, the service reconnects itself.
     fun sendTunnelDeadEvent(failures: Int) {
         sendEvent(mapOf("type" to "tunnel_dead", "failures" to failures))
     }

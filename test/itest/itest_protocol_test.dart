@@ -39,8 +39,8 @@ void main() {
   });
 
   test('pickCoreError reports the verdict reason of the wanted core', () {
-    const r = CoreResolution(null, [(kind: CoreKind.xrayGo, reason: 'SSH не поддерживается')]);
-    expect(pickCoreError(r, CoreKind.xrayGo), 'SSH не поддерживается');
+    const r = CoreResolution(null, [(kind: CoreKind.xrayGo, reason: 'SSH not supported')]);
+    expect(pickCoreError(r, CoreKind.xrayGo), 'SSH not supported');
   });
 
   test('marker is a single line with prefix', () {

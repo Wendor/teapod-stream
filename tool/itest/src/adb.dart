@@ -12,12 +12,12 @@ class ProcResult {
   bool get ok => code == 0;
 }
 
-/// Выполнение adb-команд; в тестах подменяется.
+/// Runs adb commands; replaced in tests.
 abstract class Shell {
   Future<ProcResult> run(List<String> args, {Duration timeout = const Duration(seconds: 30)});
 }
 
-/// Одинарные кавычки для shell на устройстве.
+/// Single quotes for the device shell.
 String shQuote(String s) => "'${s.replaceAll("'", r"'\''")}'";
 
 class Adb implements Shell {
@@ -25,7 +25,7 @@ class Adb implements Shell {
 
   Adb(this.serial);
 
-  /// Serial из аргумента, ANDROID_SERIAL или единственного подключённого.
+  /// Serial from the argument, ANDROID_SERIAL or the single connected device.
   static Future<Adb> connect([String? serial]) async {
     serial ??= Platform.environment['ANDROID_SERIAL'];
     if (serial != null && serial.isNotEmpty) return Adb(serial);
@@ -35,12 +35,12 @@ class Adb implements Shell {
         .where((l) => l.trim().endsWith('device'))
         .map((l) => l.split(RegExp(r'\s+')).first)
         .toList();
-    if (ids.length != 1) throw StateError('нужно ровно одно устройство (--serial), найдено: ${ids.length}');
+    if (ids.length != 1) throw StateError('exactly one device is required (--serial), found: ${ids.length}');
     return Adb(ids.single);
   }
 
-  /// `adb shell` изредка зависает на ~20 с (USB) — к таймауту добавляется запас,
-  /// зависший вызов повторяется один раз.
+  /// `adb shell` occasionally hangs for ~20 s (USB) — a margin is added to the timeout,
+  /// a hung call is retried once.
   static const _stall = Duration(seconds: 25);
 
   @override
@@ -60,14 +60,14 @@ class Adb implements Shell {
     return ProcResult(code, await out, await err);
   }
 
-  /// Поток logcat с текущего момента; каждая строка дописывается в [sink]
-  /// (через [mask]). Если `adb logcat` оборвался (USB, перезапуск adb-сервера),
-  /// он перезапускается с времени последней строки — ответ агента, пришедший во
-  /// время перезапуска, не теряется (повтор строки безвреден: ответы по id).
+  /// logcat stream from the current moment; every line is appended to [sink]
+  /// (through [mask]). If `adb logcat` broke off (USB, adb server restart),
+  /// it restarts from the time of the last line — an agent response that arrived during
+  /// the restart isn't lost (a repeated line is harmless: responses are matched by id).
   Future<Stream<String>> logcat(IOSink sink, {String Function(String) mask = _same}) async {
     await run(['logcat', '-c']);
     final out = StreamController<String>.broadcast();
-    // Позиция: время последней строки и сколько строк с этим временем уже отдано.
+    // Position: time of the last line and how many lines with that time were already emitted.
     String? last;
     var sameTime = 0;
     Future<void> start() async {
@@ -75,9 +75,9 @@ class Adb implements Shell {
       final p = await Process.start(
           'adb', ['-s', serial, 'logcat', '-v', 'threadtime', if (last != null) ...['-T', last!]]);
       _logcat = p;
-      // После перезапуска с `-T` повторяются строки с времени последней полученной:
-      // пропускаем более ранние и уже отданные с тем же временем, иначе старый
-      // маркер состояния сочтётся новым. Новые строки с тем же временем проходят.
+      // After a restart with `-T` lines from the time of the last received one repeat:
+      // skip earlier ones and those already emitted with the same time, otherwise an old
+      // state marker would be taken as new. New lines with the same time pass.
       final replayFrom = last;
       var replaySkip = sameTime;
       _sub = p.stdout.transform(_utf8).transform(const LineSplitter()).listen((l) {
@@ -85,7 +85,7 @@ class Adb implements Shell {
         final t = _logTime.firstMatch(l)?[0];
         if (replayFrom != null) {
           if (t == null) {
-            if (replaySkip >= 0) return; // заголовки logcat до первой новой строки
+            if (replaySkip >= 0) return; // logcat headers before the first new line
           } else if (replaySkip >= 0) {
             final c = t.compareTo(replayFrom);
             if (c < 0) return;
@@ -124,7 +124,7 @@ class Adb implements Shell {
   StreamSubscription<String>? _sub;
   var _stopped = false;
 
-  /// После вызова в sink больше ничего не пишется — его можно закрывать.
+  /// After the call nothing more is written to the sink — it can be closed.
   Future<void> stopLogcat() async {
     _stopped = true;
     _logcat?.kill();
@@ -132,5 +132,5 @@ class Adb implements Shell {
   }
 }
 
-/// logd режет длинные строки по байтам — кириллица может оборваться посередине.
+/// logd cuts long lines by bytes — Cyrillic can break in the middle.
 const _utf8 = Utf8Decoder(allowMalformed: true);

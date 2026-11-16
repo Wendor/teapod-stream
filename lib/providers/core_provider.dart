@@ -18,23 +18,23 @@ CoreBackend coreBackendFor(CoreKind kind) => switch (kind) {
       CoreKind.singBox => const SingBoxBackend(),
     };
 
-/// Выбор ядра для профилей по текущим настройкам. Пока список доступных ядер
-/// не загружен, доступными считаются все.
+/// Core choice for profiles by current settings. Until the list of available cores
+/// is loaded, all are considered available.
 final coreResolverProvider = Provider<CoreResolver>((ref) => CoreResolver(
       ref.watch(settingsProvider).value ?? const AppSettings(),
       ref.watch(availableCoresProvider).value ?? CoreKind.values.toSet(),
       coreBackendFor,
     ));
 
-/// Ядро, которым запустится активный профиль (`kind` null — ни одним или
-/// профиля нет); null — настройки или профили ещё не загружены.
+/// The core the active profile will run on (`kind` null — none, or
+/// no profile); null — settings or profiles aren't loaded yet.
 final activeCoreProvider = Provider<({CoreKind? kind})?>((ref) {
   if (!ref.watch(settingsProvider).hasValue || !ref.watch(configProvider).hasValue) return null;
   final config = ref.watch(effectiveConfigProvider);
   return (kind: config == null ? null : ref.watch(coreResolverProvider).resolve(config).backend?.kind);
 });
 
-/// Ядра, нативные библиотеки которых загружаются на этом устройстве.
+/// Cores whose native libraries load on this device.
 final availableCoresProvider = FutureProvider<Set<CoreKind>>((ref) async {
   try {
     final ids = await const MethodChannel(AppConstants.methodChannel)

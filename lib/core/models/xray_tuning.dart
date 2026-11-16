@@ -1,4 +1,4 @@
-/// Диапазон вида `от-до`, который xray разбирает через `ParseRangeString`.
+/// A `from-to` range that xray parses with `ParseRangeString`.
 final _rangeRe = RegExp(r'^\s*(\d+)\s*-\s*(\d+)\s*$');
 
 bool _isRange(String v, {bool minPositive = false}) {
@@ -10,19 +10,19 @@ bool _isRange(String v, {bool minPositive = false}) {
   return !minPositive || from > 0;
 }
 
-/// Фрагментация исходящего TCP-потока (xray freedom outbound `fragment`).
-/// Применяется через `sockopt.dialerProxy` на proxy-outbound: полезная нагрузка
-/// режется на части, чтобы DPI не собрал ClientHello целиком.
+/// Fragmentation of the outgoing TCP stream (xray freedom outbound `fragment`).
+/// Applied via `sockopt.dialerProxy` on the proxy outbound: the payload
+/// is split into pieces so DPI can't reassemble the whole ClientHello.
 class FragmentSettings {
   final bool enabled;
 
-  /// `tlshello` — резать только TLS ClientHello; диапазон вида `1-3` — первые N пакетов.
+  /// `tlshello` — split only the TLS ClientHello; a range like `1-3` — the first N packets.
   final String packets;
 
-  /// Длина куска в байтах, диапазон `от-до`.
+  /// Chunk length in bytes, a `from-to` range.
   final String length;
 
-  /// Пауза между кусками в мс, диапазон `от-до`.
+  /// Pause between chunks in ms, a `from-to` range.
   final String interval;
 
   const FragmentSettings({
@@ -59,9 +59,9 @@ class FragmentSettings {
         interval: json['interval'] as String? ?? '10-20',
       );
 
-  /// Поля вводятся руками: мусор в length/interval валит старт xray целиком
-  /// («Length can't be empty», «Invalid PacketsFrom»). Билдер применяет
-  /// фрагментацию только когда значения разбираемы.
+  /// Fields are entered by hand: garbage in length/interval breaks the whole xray startup
+  /// ("Length can't be empty", "Invalid PacketsFrom"). The builder applies
+  /// fragmentation only when the values parse.
   bool get isValid {
     final p = packets.trim();
     final packetsOk = p.isEmpty || p == 'tlshello' || _isRange(p, minPositive: true);
@@ -69,21 +69,21 @@ class FragmentSettings {
   }
 }
 
-/// Тип шумового пакета: случайный либо заданный пользователем.
+/// Noise packet type: random or user-defined.
 enum NoiseType { rand, str, hex, base64 }
 
-/// Шумовые UDP-пакеты перед первой полезной датаграммой (xray freedom `noises`).
-/// Работают только на UDP-плече — Hysteria2 и QUIC-транспорт; TCP-соединения
-/// шумом не обрабатываются (там работает [FragmentSettings]).
+/// Noise UDP packets before the first real datagram (xray freedom `noises`).
+/// Work only on the UDP leg — Hysteria2 and the QUIC transport; TCP connections
+/// aren't affected by noise (there [FragmentSettings] works).
 class NoiseSettings {
   final bool enabled;
   final NoiseType type;
 
-  /// Для `rand` — диапазон длины в байтах (`50-100`); для остальных типов —
-  /// сама строка / hex / base64.
+  /// For `rand` — a length range in bytes (`50-100`); for other types —
+  /// the string / hex / base64 itself.
   final String packet;
 
-  /// Пауза перед отправкой, мс, диапазон `от-до`.
+  /// Pause before sending, ms, a `from-to` range.
   final String delay;
 
   const NoiseSettings({
@@ -130,17 +130,17 @@ class NoiseSettings {
   }
 }
 
-/// Поведение xray-mux для UDP/443 (QUIC): отбрасывать, пускать через mux или мимо него.
+/// xray-mux behavior for UDP/443 (QUIC): drop, pass through mux or bypass it.
 enum XudpUdp443 { reject, allow, skip }
 
-/// Мультиплексирование нескольких соединений в одно (xray `mux`).
+/// Multiplexing several connections into one (xray `mux`).
 class MuxSettings {
   final bool enabled;
 
-  /// Число TCP-подпотоков в одном соединении, 1–1024.
+  /// Number of TCP substreams in one connection, 1–1024.
   final int concurrency;
 
-  /// Число XUDP-подпотоков, 1–1024. Отвечает за UDP поверх mux.
+  /// Number of XUDP substreams, 1–1024. Responsible for UDP over mux.
   final int xudpConcurrency;
 
   final XudpUdp443 xudpProxyUDP443;

@@ -17,8 +17,8 @@ class Subscription {
   final String? announce;
   final String? announceUrl;
 
-  /// DER (base64) самоподписанного сертификата, который пользователь принял
-  /// вручную (TOFU). Автообновление доверяет только ему, а не любому сертификату.
+  /// DER (base64) of a self-signed certificate the user accepted
+  /// manually (TOFU). Auto-refresh trusts only it, not any certificate.
   final String? pinnedCertDer;
 
   const Subscription({

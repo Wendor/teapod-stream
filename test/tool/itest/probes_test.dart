@@ -5,7 +5,7 @@ import 'fake_shell.dart';
 
 void main() {
   const a = 'https://a/ip', b = 'https://b/ip';
-  // Сеть: сервис a без VPN видит прямой IP 77.x, b роутер уже заворачивает на 144.x.
+  // Network: service a without VPN sees the direct IP 77.x, b is already rerouted by the router to 144.x.
   const base = {a: '77.0.0.1', b: '144.0.0.1'};
 
   group('classifyTunnel', () {
@@ -36,7 +36,7 @@ void main() {
       expect(r.note, contains('undetectable'));
     });
     test('server in the device network (egress = ISP IP) → pass, leak undetectable', () {
-      // Домашний сервер: его выход — тот же IP провайдера, а роутер заворачивает b на 144.x.
+      // Home server: its exit is the same ISP IP, and the router reroutes b to 144.x.
       final r = classifyTunnel(
           baseline: base, observed: {a: '77.0.0.1', b: '144.0.0.1'}, egress: '77.0.0.1', ispIp: '77.0.0.1');
       expect(r.v, Verdict.pass);

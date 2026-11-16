@@ -6,7 +6,7 @@ import '../models/vpn_config.dart';
 import '../services/settings_service.dart';
 import 'core_backend.dart';
 
-/// Опции подключения [config] на ядре [backend] из настроек.
+/// Connection options for [config] on core [backend] from settings.
 VpnEngineOptions buildEngineOptions(
   AppSettings settings,
   VpnConfig config,
@@ -38,8 +38,8 @@ VpnEngineOptions buildEngineOptions(
       sniffingEnabled: settings.sniffingEnabled,
       mtu: settings.mtu,
       dnsQueryStrategy: settings.dnsQueryStrategy,
-      // Vision отвергает UDP/443: браузеры ретраят QUIC ~30 с перед откатом на
-      // TCP. Политика блокировки — у ядра.
+      // Vision rejects UDP/443: browsers retry QUIC for ~30 s before falling back to
+      // TCP. The blocking policy belongs to the core.
       blockQuic: backend.effectiveQuicBlock(requested: settings.blockQuic, flow: _visionFlow(config)),
       ipv6Enabled: settings.ipv6Enabled,
       allowTethering: settings.allowTethering,
@@ -51,8 +51,8 @@ VpnEngineOptions buildEngineOptions(
       heartbeat: settings.heartbeat,
     );
 
-/// Vision-flow конфига (в т.ч. из полного JSON) — такие outbound'ы отвергают
-/// UDP/443, QUIC нужно отбивать на стороне TUN.
+/// The config's Vision flow (including from a full JSON) — such outbounds reject
+/// UDP/443, QUIC must be refused on the TUN side.
 String? _visionFlow(VpnConfig config) {
   final flow = config.flow;
   if (flow != null && flow.contains('vision')) return flow;

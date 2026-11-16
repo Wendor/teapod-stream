@@ -11,8 +11,9 @@ import 'package:teapodstream/core/services/config_storage_service.dart';
 import 'package:teapodstream/core/services/settings_service.dart';
 import 'package:teapodstream/ui/theme/app_colors.dart';
 import 'package:teapodstream/ui/theme/app_theme.dart';
+import 'package:teapodstream/l10n/app_localizations.dart';
 
-/// Нативная сторона для widget-тестов: журнал вызовов и простые ответы.
+/// Native side for widget tests: a call log and simple answers.
 class FakeNative {
   final calls = <MethodCall>[];
   Map<String, Object?> state = {'state': 'disconnected'};
@@ -52,7 +53,7 @@ VpnConfig testConfig(String id, {String? subId, int? latency}) => VpnConfig(
       rawUri: 'trojan://p@h$id.example:443#Server%20$id',
     );
 
-/// Мокает каналы, хранилища и данные; возвращает нативную заглушку.
+/// Mocks channels, storages and data; returns the native stub.
 Future<FakeNative> setUpScreenTest({
   AppSettings settings = const AppSettings(),
   List<VpnConfig> configs = const [],
@@ -79,9 +80,9 @@ Future<FakeNative> setUpScreenTest({
   return native;
 }
 
-/// Рендерит [screen] в теме приложения. Возвращает контейнер для проверок состояния.
+/// Renders [screen] in the app theme. Returns the container for state checks.
 Future<ProviderContainer> pumpScreen(WidgetTester tester, Widget screen) async {
-  // Тестовый шрифт шире реального: на узком экране переполнения были бы ложными.
+  // The test font is wider than the real one: on a narrow screen overflows would be false positives.
   tester.view.physicalSize = const Size(1500, 3000);
   tester.view.devicePixelRatio = 2.5;
   addTearDown(tester.view.reset);
@@ -89,6 +90,7 @@ Future<ProviderContainer> pumpScreen(WidgetTester tester, Widget screen) async {
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
     child: MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
       theme: AppTheme.build(Brightness.dark, AppColors.accentCyan),
       home: screen,
     ),
@@ -97,15 +99,15 @@ Future<ProviderContainer> pumpScreen(WidgetTester tester, Widget screen) async {
   return container;
 }
 
-/// Несколько кадров: моки хранилищ и каналов завершаются в fake-async.
-/// Без runAsync — иначе google_fonts реально пошёл бы в сеть за шрифтами.
+/// A few frames: storage and channel mocks complete in fake-async.
+/// Without runAsync — otherwise google_fonts would actually go to the network for fonts.
 Future<void> settle(WidgetTester tester) async {
   for (var i = 0; i < 10; i++) {
     await tester.pump(const Duration(milliseconds: 50));
   }
 }
 
-/// Размонтирует дерево (dispose контейнера снимает таймеры провайдеров).
+/// Unmounts the tree (disposing the container clears provider timers).
 Future<void> unmount(WidgetTester tester, ProviderContainer container) async {
   await tester.pumpWidget(const SizedBox.shrink());
   container.dispose();

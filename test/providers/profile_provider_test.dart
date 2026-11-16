@@ -27,7 +27,7 @@ const _local = AppSettings(
   heartbeat: HeartbeatSettings(target: HeartbeatTarget.apple),
 );
 
-/// Чужие настройки пытаются вскрыть туннель: открытый SOCKS, proxy-only, свой URL пробы.
+/// Foreign settings try to expose the tunnel: an open SOCKS, proxy-only, a custom probe URL.
 const _foreign = AppSettings(
   mtu: 1280,
   killSwitchEnabled: true,
@@ -251,7 +251,7 @@ void main() {
       expect(await refresh('default', () => http.Response('', 500)), isNull);
       expect(await refresh('default', () => http.Response('not json', 200)), isNull);
       expect(await refresh('ghost', () => http.Response(jsonEncode(_bundle().toJson()), 200)), isNull);
-      expect(s().activeProfile!.name, 'По умолчанию');
+      expect(s().activeProfile!.name, 'Default');
     });
   });
 }

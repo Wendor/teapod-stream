@@ -33,7 +33,7 @@ class SubscriptionFetchResult {
   final String? announceUrl;
   final HwidStatus? hwidStatus;
 
-  /// DER (base64) принятого недоверенного сертификата: сохраняется в подписке как пин.
+  /// DER (base64) of an accepted untrusted certificate: stored in the subscription as a pin.
   final String? acceptedCertDer;
 
   const SubscriptionFetchResult({
@@ -89,7 +89,7 @@ class SubscriptionService {
   /// untrusted certificate, throws [UntrustedCertificateException] with
   /// certificate details so the caller can decide whether to retry.
   /// If [allowSelfSigned] is true, certificate validation is skipped.
-  /// [pinnedCertDer] — ранее принятый сертификат: только он проходит без проверки.
+  /// [pinnedCertDer] — a previously accepted certificate: only it passes without verification.
   /// If [hwidEnabled] is true, HWID headers are sent to support device limits.
   /// If [userAgent] is non-empty, it overrides the default User-Agent.
   Future<SubscriptionFetchResult> fetchSubscription(
@@ -158,8 +158,8 @@ class SubscriptionService {
       }
 
       responseHeaders = response.headers;
-      // Тайм-аут простоя и лимит размера: медленный или огромный ответ не должен
-      // висеть вечно или съесть память.
+      // Idle timeout and size limit: a slow or huge response must not
+      // hang forever or eat memory.
       final bytes = BytesBuilder(copy: false);
       await for (final chunk in response.timeout(const Duration(seconds: 15))) {
         bytes.add(chunk);
@@ -170,7 +170,7 @@ class SubscriptionService {
       if (certError != null) throw certError!;
       rethrow;
     } finally {
-      // Без force соединение с непрочитанным телом (не-200, таймаут) живёт вечно.
+      // Without force a connection with an unread body (non-200, timeout) lives forever.
       httpClient.close(force: true);
     }
 

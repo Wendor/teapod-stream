@@ -29,7 +29,7 @@ class SpeedHistoryTest {
         assertEquals(emptyList<Long>(), h.since(epoch, 4).downloads())
     }
 
-    /** Отстал больше чем на буфер (фон, скрытая вкладка) — весь буфер, без дыр. */
+    /** Lagged behind by more than the buffer (background, hidden tab) — the whole buffer, no gaps. */
     @Test
     fun gapLargerThanBufferReturnsFullBuffer() {
         val h = SpeedHistory(3).apply { reset(); add(0, 1) }
@@ -41,7 +41,7 @@ class SpeedHistoryTest {
         assertEquals(3L, r["from"])
     }
 
-    /** Новая сессия — новая эпоха: старый клиент получает весь (новый) буфер. */
+    /** A new session is a new epoch: an old client gets the whole (new) buffer. */
     @Test
     fun resetStartsNewEpoch() {
         val h = SpeedHistory(3).apply { reset(); add(0, 1) }

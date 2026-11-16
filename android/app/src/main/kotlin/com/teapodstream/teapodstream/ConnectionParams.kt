@@ -15,16 +15,16 @@ internal data class ConnectionParams(
     val blockQuic: Boolean,
     val ipv6Enabled: Boolean = false,
     val mtu: Int = 1500,
-    /// "socks" | "xrayDelay" | "passive" — чем щупаем туннель.
+    /// "socks" | "xrayDelay" | "passive" — how we probe the tunnel.
     val heartbeatProbe: String = "socks",
-    /// "reconnect" — переподключиться к тому же серверу, "switchConfig" — попросить
-    /// Flutter подобрать живой конфиг (событие tunnel_dead).
+    /// "reconnect" — reconnect to the same server, "switchConfig" — ask
+    /// Flutter to pick a live config (the tunnel_dead event).
     val heartbeatAction: String = "reconnect",
     val heartbeatThreshold: Int = 3,
     val heartbeatUrl: String = "http://cp.cloudflare.com/generate_204",
-    /// allExcept: пропускать потоки без владельца (тетеринг) при непустых исключениях.
+    /// allExcept: let ownerless flows through (tethering) when exclusions are non-empty.
     val allowTethering: Boolean = false,
-    /// "go" | "rust" — ядро сессии; quick-reconnect поднимает то же ядро.
+    /// "go" | "rust" — the session core; quick-reconnect brings up the same core.
     val engine: String = "go",
 ) {
     fun save(dir: File, log: (String, String) -> Unit) {

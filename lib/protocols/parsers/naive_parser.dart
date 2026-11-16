@@ -3,10 +3,10 @@ import 'package:uuid/uuid.dart';
 import '../../core/models/protocol_settings.dart';
 import '../../core/models/vpn_config.dart';
 
-/// NaiveProxy: `naive+https://user:pass@host[:port]?extra-headers=…#имя` и `naive+quic://`.
-/// `extra-headers` — строки `Имя: значение`, разделённые `\r\n`.
+/// NaiveProxy: `naive+https://user:pass@host[:port]?extra-headers=…#name` and `naive+quic://`.
+/// `extra-headers` — `Name: value` lines separated by `\r\n`.
 abstract final class NaiveParser {
-  /// null — не naive-ссылка или нет логина/пароля.
+  /// null — not a naive link or no login/password.
   static VpnConfig? parseUri(String uri) {
     try {
       final parsed = Uri.parse(uri);

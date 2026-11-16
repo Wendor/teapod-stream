@@ -91,7 +91,7 @@ void main() {
     setUp(() => dir = Directory.systemTemp.createTempSync('apk'));
     tearDown(() => dir.deleteSync(recursive: true));
 
-    /// Отвечает на Range частичным содержимым, если [honorRange].
+    /// Answers Range with partial content if [honorRange].
     void serveFile({bool honorRange = true}) {
       server.handler = (r) async {
         final range = r.headers.value('range');

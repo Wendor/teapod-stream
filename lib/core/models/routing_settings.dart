@@ -1,3 +1,4 @@
+import '../../l10n/l10n.dart';
 enum RoutingDirection { global, bypass, onlySelected }
 
 class RoutingSettings {
@@ -94,7 +95,7 @@ class RoutingSettings {
   );
 
   String get summary {
-    if (direction == RoutingDirection.global && !adBlockEnabled) return 'Глобальный';
+    if (direction == RoutingDirection.global && !adBlockEnabled) return L10n.current.routingSummaryGlobal;
     final parts = <String>[];
     if (geoEnabled && geoCodes.isNotEmpty) {
       parts.add(geoCodes.take(2).join(', ') + (geoCodes.length > 2 ? '…' : ''));
@@ -117,7 +118,7 @@ class RoutingSettings {
     if (bypassLocal) parts.add('LAN');
     if (adBlockEnabled) parts.add('Ads✗');
     if (direction == RoutingDirection.global) return parts.join(', ');
-    final prefix = direction == RoutingDirection.bypass ? 'Обход' : 'Только';
+    final prefix = direction == RoutingDirection.bypass ? L10n.current.routingSummaryBypass : L10n.current.routingSummaryOnly;
     return parts.isEmpty ? prefix : '$prefix: ${parts.join(', ')}';
   }
 }

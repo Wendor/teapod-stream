@@ -6,19 +6,20 @@ import '../../core/models/heartbeat_settings.dart';
 import '../../core/models/vpn_config.dart';
 import '../../core/models/xray_tuning.dart';
 import 'rust_config_builder.dart';
+import '../../l10n/l10n.dart';
 
-/// xray-rust: неподдерживаемые профили — disabled, неподдерживаемые настройки
-/// игнорируются с предупреждением; proxy-only запрещает подключение.
+/// xray-rust: unsupported profiles are disabled, unsupported settings
+/// are ignored with a warning; proxy-only blocks connecting.
 class XrayRustBackend implements CoreBackend {
   const XrayRustBackend();
 
-  static const _unsupported = <CoreFeature, String>{
-    CoreFeature.proxyOnly: 'Режим «только прокси» недоступен в ядре xray-rust: оно работает только через TUN.',
-    CoreFeature.icmpToggle: 'ICMP обрабатывается ядром xray-rust локально; настройка не применяется.',
-    CoreFeature.customMtu: 'Ядро xray-rust работает с MTU 1500; другое значение не применяется.',
-    CoreFeature.mux: 'Mux недоступен в ядре xray-rust и не применяется.',
-    CoreFeature.observatory: 'Observatory и управляемые JSON-конфиги недоступны в ядре xray-rust.',
-    CoreFeature.rawConfig: 'Полный JSON-конфиг недоступен в ядре xray-rust.',
+  static Map<CoreFeature, String> get _unsupported => {
+    CoreFeature.proxyOnly: L10n.current.rustNoProxyOnly,
+    CoreFeature.icmpToggle: L10n.current.rustIcmpLocal,
+    CoreFeature.customMtu: L10n.current.rustMtuIgnored,
+    CoreFeature.mux: L10n.current.rustMuxIgnored,
+    CoreFeature.observatory: L10n.current.rustNoObservatory,
+    CoreFeature.rawConfig: L10n.current.rustNoRawConfig,
   };
 
   @override
@@ -41,8 +42,8 @@ class XrayRustBackend implements CoreBackend {
     return (blocking: null, warnings: _sanitize(config, options).warnings);
   }
 
-  /// Vision отвергает UDP/443. Для обычного Vision ядро само отвечает ICMP,
-  /// правило blackhole нужно только для -udp443 или по переключателю.
+  /// Vision rejects UDP/443. For plain Vision the core answers with ICMP itself,
+  /// the blackhole rule is needed only for -udp443 or by the switch.
   @override
   bool effectiveQuicBlock({required bool requested, required String? flow}) =>
       requested || flow == 'xtls-rprx-vision-udp443';
@@ -58,7 +59,7 @@ class XrayRustBackend implements CoreBackend {
   String buildProbeConfig(VpnConfig config, VpnEngineOptions options) =>
       RustConfigBuilder.buildProbeJson(config, _sanitize(config, options).options);
 
-  /// Опции, которые ядро не применит, заменяются допустимыми; каждая замена — предупреждение.
+  /// Options the core won't apply are replaced with allowed ones; each replacement is a warning.
   ({VpnEngineOptions options, List<String> warnings}) _sanitize(VpnConfig config, VpnEngineOptions o) {
     final routing = o.routing;
     final domainRules = routing.geositeEnabled || routing.domainEnabled ||
@@ -73,26 +74,25 @@ class XrayRustBackend implements CoreBackend {
       ..warn(when: o.allowIcmp, warning: _unsupported[CoreFeature.icmpToggle]!)
       ..drop(
         when: routing.isActive && !o.sniffingEnabled && domainRules,
-        warning: 'Доменные правила в ядре xray-rust требуют определения доменов — оно включено для этого подключения.',
+        warning: L10n.current.rustSniffingForced,
         fix: (v) => v.copyWith(sniffingEnabled: true),
       )
       ..drop(
         when: routing.adBlockEnabled && routing.isActive && routing.geositeEnabled &&
             routing.geositeCodes.any((c) => RustConfigBuilder.largeGeositeCodes.contains(c.trim().toLowerCase())),
-        warning: 'Блокировка рекламы вместе с большой категорией GeoSite превышает лимит ядра xray-rust '
-            'в 250 тыс. доменных правил — блокировка рекламы не применяется.',
+        warning: L10n.current.rustAdBlockDropped,
         fix: (v) => v.copyWith(routing: v.routing.copyWith(adBlockEnabled: false)),
       );
     final fragmentError = _maskError(() => RustConfigBuilder.fragmentMask(config, o.fragment));
     s.drop(
       when: fragmentError != null,
-      warning: 'Фрагментация не применяется: $fragmentError',
+      warning: L10n.current.rustFragmentDropped(fragmentError ?? ''),
       fix: (v) => v.copyWith(fragment: v.fragment.copyWith(enabled: false)),
     );
     final noiseError = _maskError(() => RustConfigBuilder.noiseMask(config, o.noise));
     s.drop(
       when: noiseError != null,
-      warning: 'Шумы не применяются: $noiseError',
+      warning: L10n.current.rustNoiseDropped(noiseError ?? ''),
       fix: (v) => v.copyWith(noise: v.noise.copyWith(enabled: false)),
     );
     return s.result;

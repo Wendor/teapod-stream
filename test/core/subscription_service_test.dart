@@ -37,7 +37,7 @@ void main() {
           [VpnProtocol.vless, VpnProtocol.wireguard, VpnProtocol.ssh, VpnProtocol.naive]);
       const go = XrayGoBackend();
       expect(configs.map(go.checkConfig).skip(1),
-          everyElement(endsWith('поддерживается только ядром sing-box.')));
+          everyElement(endsWith('is supported only by the sing-box core.')));
       final goOnly = CoreResolver(const AppSettings(), {CoreKind.xrayGo}, coreBackendFor);
       expect(supportedCandidates(configs, goOnly).map((c) => c.config.protocol), [VpnProtocol.vless]);
       final all = CoreResolver(const AppSettings(), CoreKind.values.toSet(), coreBackendFor);

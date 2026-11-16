@@ -8,6 +8,7 @@ import 'package:teapodstream/core/services/settings_service.dart';
 import 'package:teapodstream/protocols/xray/xray_rust_backend.dart';
 import 'package:teapodstream/providers/core_provider.dart';
 import 'package:teapodstream/ui/widgets/core_support_gate.dart';
+import 'package:teapodstream/l10n/app_localizations.dart';
 
 final _raw = VpnConfig.fromJson({
   ...VpnConfig(
@@ -23,6 +24,7 @@ Widget _host(Set<CoreKind> available) => ProviderScope(
         coreResolverProvider.overrideWithValue(CoreResolver(const AppSettings(), available, coreBackendFor)),
       ],
       child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
         home: Scaffold(
           body: CoreSupportGate(config: _raw, child: const Text('row')),
         ),

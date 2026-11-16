@@ -8,10 +8,11 @@ import '../theme/app_theme.dart';
 import '../widgets/breadcrumb_bar.dart';
 import '../widgets/hero_panel.dart';
 import '../widgets/settings_shared.dart';
+import '../../l10n/l10n.dart';
 
-/// Настройки подписок: автообновление по расписанию, HWID, User-Agent.
+/// Subscription settings: scheduled auto-refresh, HWID, User-Agent.
 class SubscriptionSettingsScreen extends ConsumerStatefulWidget {
-  /// Экран открывается из Настроек и с вкладки «Конфиги» — родитель для breadcrumb.
+  /// Opened from Settings and from the Configs tab — breadcrumb parent.
   final String breadcrumbParent;
 
   const SubscriptionSettingsScreen({super.key, required this.breadcrumbParent});
@@ -51,7 +52,7 @@ class _SubscriptionSettingsScreenState
           loading: () => Center(
               child: CircularProgressIndicator(color: t.accent, strokeWidth: 1.5)),
           error: (e, _) => Center(
-              child: Text('Ошибка: $e', style: AppTheme.mono(size: 12, color: t.danger))),
+              child: Text(context.l10n.commonErrorWith('$e'), style: AppTheme.mono(size: 12, color: t.danger))),
           data: (s) {
             _ensureControllers(s);
             return Column(
@@ -74,7 +75,7 @@ class _SubscriptionSettingsScreenState
                     t: t, parent: widget.breadcrumbParent, current: 'subscriptions'),
                 HeroPanel(
                   t: t,
-                  tagline: 'ПОДПИСКИ · ОБНОВЛЕНИЕ',
+                  tagline: context.l10n.subsTagline,
                   title: 'SUBS',
                 ),
                 Expanded(
@@ -84,8 +85,8 @@ class _SubscriptionSettingsScreenState
                       SetSectionHeader(t: t, addr: '0x10', label: 'refresh'),
                       SetRowToggle(
                         t: t,
-                        title: 'Автообновление подписок',
-                        hint: 'Обновлять подписки по расписанию',
+                        title: context.l10n.subsAutoRefresh,
+                        hint: context.l10n.subsAutoRefreshHint,
                         value: s.subAutoRefresh,
                         locked: locked,
                         onChange: (v) => _update(s.copyWith(subAutoRefresh: v)),
@@ -93,17 +94,14 @@ class _SubscriptionSettingsScreenState
                       if (s.subAutoRefresh)
                         SetInlineField(
                           t: t,
-                          label: 'Интервал',
+                          label: context.l10n.subsInterval,
                           locked: locked,
                           child: SetSegSquare(
                             t: t,
                             value: s.subAutoRefreshHours.toString(),
-                            opts: const [
-                              ('1', '1ч'),
-                              ('3', '3ч'),
-                              ('6', '6ч'),
-                              ('12', '12ч'),
-                              ('24', '24ч'),
+                            opts: [
+                              for (final h in const [1, 3, 6, 12, 24])
+                                ('$h', context.l10n.unitHours(h)),
                             ],
                             locked: locked,
                             onChanged: (v) =>
@@ -114,7 +112,7 @@ class _SubscriptionSettingsScreenState
                       SetRowToggle(
                         t: t,
                         title: 'HWID',
-                        hint: 'Отправлять ID устройства для привязки подписки',
+                        hint: context.l10n.subsHwidHint,
                         value: s.hwidEnabled,
                         locked: locked,
                         onChange: (v) => _update(s.copyWith(hwidEnabled: v)),
@@ -133,7 +131,7 @@ class _SubscriptionSettingsScreenState
                             onEditingComplete: () => FocusScope.of(context).unfocus(),
                             style: AppTheme.mono(size: 13, color: t.text),
                             decoration: InputDecoration(
-                              hintText: 'по умолчанию',
+                              hintText: context.l10n.commonDefaultLower,
                               hintStyle: AppTheme.mono(size: 12, color: t.textMuted),
                               contentPadding:
                                   const EdgeInsets.symmetric(horizontal: 8, vertical: 6),

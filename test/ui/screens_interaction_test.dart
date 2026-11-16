@@ -15,7 +15,7 @@ import 'package:teapodstream/ui/screens/split_tunnel_screen.dart';
 
 import '../helpers/ui_harness.dart';
 
-/// Открывает [screen] поверх пустого маршрута, чтобы Navigator.pop было куда возвращаться.
+/// Opens [screen] on top of an empty route so Navigator.pop has somewhere to return.
 class _Launcher extends StatelessWidget {
   final Widget screen;
   const _Launcher(this.screen);
@@ -31,7 +31,7 @@ class _Launcher extends StatelessWidget {
 
 Future<ProviderContainer> _open(WidgetTester tester, Widget screen) async {
   final c = await pumpScreen(tester, _Launcher(screen));
-  // Как в приложении: список конфигов уже загружен экраном, с которого открыли.
+  // As in the app: the config list is already loaded by the screen it was opened from.
   c.listen(configProvider, (_, _) {});
   await settle(tester);
   await tester.tap(find.text('open'));
@@ -47,7 +47,7 @@ void main() {
     final c = await pumpScreen(tester, const HomeScreen());
     expect(find.textContaining('Server 1'), findsWidgets);
     final semantics = tester.ensureSemantics();
-    await tester.tap(find.bySemanticsLabel(RegExp('^подключить')));
+    await tester.tap(find.bySemanticsLabel(RegExp('^connect')));
     semantics.dispose();
     await settle(tester);
     expect(native.named('connect'), hasLength(1));
@@ -63,7 +63,7 @@ void main() {
     final c = await pumpScreen(tester, const ConfigsScreen());
     expect(find.text('total [03]'), findsOneWidget);
     expect(find.text('My Sub'), findsOneWidget);
-    // [local] раскрыта по умолчанию, подписки свёрнуты; тап сворачивает.
+    // [local] is expanded by default, subscriptions are collapsed; a tap collapses.
     expect(find.text('Server 1'), findsOneWidget);
     expect(find.text('Server 2'), findsNothing);
     await tester.tap(find.text('[local]'));
@@ -77,7 +77,7 @@ void main() {
       await setUpScreenTest();
       final c = await _open(tester, const AddConfigScreen());
       await tester.enterText(find.byType(TextField), 'trojan://pw@new.example:443?security=tls#Fresh');
-      await tester.tap(find.text('ДОБАВИТЬ'));
+      await tester.tap(find.text('ADD'));
       await settle(tester);
       await settle(tester);
       final state = c.read(configProvider).value!;
@@ -90,14 +90,14 @@ void main() {
     testWidgets('empty and unknown input show errors', (tester) async {
       await setUpScreenTest();
       final c = await _open(tester, const AddConfigScreen());
-      await tester.tap(find.text('ДОБАВИТЬ'));
+      await tester.tap(find.text('ADD'));
       await settle(tester);
-      expect(find.text('Введите URL'), findsOneWidget);
+      expect(find.text('Enter a URL'), findsOneWidget);
 
       await tester.enterText(find.byType(TextField), 'wireguard://nope');
-      await tester.tap(find.text('ДОБАВИТЬ'));
+      await tester.tap(find.text('ADD'));
       await settle(tester);
-      expect(find.textContaining('Не удалось распознать'), findsOneWidget);
+      expect(find.textContaining("Couldn't recognize"), findsOneWidget);
       expect(c.read(configProvider).value!.configs, isEmpty);
       await unmount(tester, c);
     });
@@ -109,7 +109,7 @@ void main() {
           find.byType(TextField),
           'teapod://import/connections?data='
           'eyJ2ZXJzaW9uIjoxLCJleHBvcnRlZEF0IjoiMjAyNi0wMS0wMVQwMDowMDowMC4wMDAiLCJjb25maWdzIjpbInRyb2phbjovL3B3QGEuZXhhbXBsZTo0NDMjQSJdLCJzdWJzY3JpcHRpb25zIjpbXX0');
-      await tester.tap(find.text('ДОБАВИТЬ'));
+      await tester.tap(find.text('ADD'));
       await settle(tester);
       expect(c.read(configProvider).value!.configs.single.address, 'a.example');
       await unmount(tester, c);
@@ -121,7 +121,7 @@ void main() {
     final c = await _open(tester, const DnsSettingsScreen());
     await tester.tap(find.text('Google (DoH)'));
     await tester.pump();
-    await tester.tap(find.text('СОХРАНИТЬ'));
+    await tester.tap(find.text('SAVE'));
     await settle(tester);
     expect(c.read(settingsProvider).value!.dnsPreset, 'google_doh');
     await unmount(tester, c);
@@ -156,7 +156,7 @@ void main() {
   testWidgets('profiles screen shows the default profile', (tester) async {
     await setUpScreenTest();
     final c = await pumpScreen(tester, const ProfilesScreen());
-    expect(find.textContaining('По умолчанию'), findsWidgets);
+    expect(find.textContaining('Default'), findsWidgets);
     expect(find.text('ACTIVE'), findsOneWidget);
     await unmount(tester, c);
   });

@@ -75,7 +75,7 @@ void main() {
     client = AgentClient(shell, logcat.stream);
     final f = client.send('list');
     await Future<void>.delayed(Duration.zero);
-    shell.codes.add(1); // cat падает
+    shell.codes.add(1); // cat fails
     logcat.add('TEAPOD_ITEST {"id":"${_id(shell.calls.first)}","ok":true,"file":"/f.json"}');
     await expectLater(f, throwsA(isA<ItestAgentError>()));
     expect(shell.calls.where((c) => c.contains('rm -f')), isEmpty);

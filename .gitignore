@@ -65,7 +65,7 @@ wiki/
 redesign/
 docs/superpowers/
 
-# Интеграционные тесты на устройстве (tool/itest)
+# On-device integration tests (tool/itest)
 runs/
 tool/itest/secrets.json
 .superpowers/

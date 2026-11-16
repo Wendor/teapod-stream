@@ -6,7 +6,7 @@ import '../models/routing_settings.dart';
 import '../models/xray_tuning.dart';
 import '../services/settings_service.dart';
 
-/// blocked — kill switch удерживает TUN-sink после обрыва: трафик заблокирован.
+/// blocked — the kill switch keeps the TUN sink after a drop: traffic is blocked.
 enum VpnState { disconnected, connecting, connected, disconnecting, error, blocked }
 
 abstract class VpnEngine {
@@ -80,7 +80,7 @@ class VpnEngineOptions {
     this.heartbeat = const HeartbeatSettings(),
   });
 
-  /// Поля, которые ядро может заменить допустимыми значениями.
+  /// Fields the core may replace with allowed values.
   VpnEngineOptions copyWith({
     int? mtu,
     RoutingSettings? routing,

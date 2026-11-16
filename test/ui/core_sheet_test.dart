@@ -19,19 +19,19 @@ void main() {
 
     await tester.tap(line);
     await settle(tester);
-    expect(find.text('используется'), findsOneWidget);
-    expect(find.text('совместимо'), findsOneWidget); // sing-box
-    expect(find.text('Выключено в настройках.'), findsOneWidget); // Rust
-    // Выключенное ядро закрепить нельзя.
+    expect(find.text('in use'), findsOneWidget);
+    expect(find.text('compatible'), findsOneWidget); // sing-box
+    expect(find.text('Disabled in settings.'), findsOneWidget); // Rust
+    // A disabled core can't be pinned.
     expect(find.text('XRAY-RUST'), findsNothing);
 
     await tester.tap(find.text('SING-BOX'));
     await settle(tester);
     expect(c.read(configProvider).value!.configs.single.core, CoreKind.singBox);
     expect(find.text('★'), findsOneWidget);
-    expect(find.textContaining('sing-box · закреплено ›', findRichText: true), findsOneWidget);
+    expect(find.textContaining('sing-box · pinned ›', findRichText: true), findsOneWidget);
 
-    await tester.tap(find.text('АВТО'));
+    await tester.tap(find.text('AUTO'));
     await settle(tester);
     expect(c.read(configProvider).value!.configs.single.core, isNull);
     await unmount(tester, c);

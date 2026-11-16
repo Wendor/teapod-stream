@@ -1,9 +1,9 @@
 package com.teapodstream.teapodstream
 
 /**
- * Скорости для графика — последние [capacity] точек, пронумерованные: клиент
- * забирает только новые. Номер растёт монотонно, эпоха меняется на каждом
- * [reset] (новая сессия). Без Android-типов — покрыто JVM-тестами.
+ * Speeds for the chart — the last [capacity] points, numbered: the client
+ * fetches only new ones. The number grows monotonically, the epoch changes on every
+ * [reset] (a new session). No Android types — covered by JVM tests.
  */
 internal class SpeedHistory(private val capacity: Int) {
     private val points = ArrayDeque<Pair<Long, Long>>(capacity)
@@ -24,10 +24,10 @@ internal class SpeedHistory(private val capacity: Int) {
     }
 
     /**
-     * Точки после [since] той же [clientEpoch]. Если клиент отстал больше чем на
-     * буфер, опоздал на новую сессию или пришёл впервые (epoch < 0) — весь буфер
-     * с `full = true`. `from` — номер точки перед первой отданной: клиент применяет
-     * ответ, только если он продолжает его историю.
+     * Points after [since] of the same [clientEpoch]. If the client lagged behind by more than
+     * the buffer, missed a new session or came for the first time (epoch < 0) — the whole buffer
+     * with `full = true`. `from` — the number of the point before the first one returned: the client applies
+     * the response only if it continues its history.
      */
     @Synchronized
     fun since(clientEpoch: Int, since: Long): Map<String, Any> {

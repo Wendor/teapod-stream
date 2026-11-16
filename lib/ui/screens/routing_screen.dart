@@ -11,17 +11,18 @@ import '../widgets/reconnect_banner.dart';
 import '../widgets/pressable.dart';
 import '../widgets/settings_shared.dart' show SetRowChev, SetSquareSwitch, saveSettings;
 import 'split_tunnel_screen.dart';
+import '../../l10n/l10n.dart';
 
 String _formatDomainLabel(String zone) {
   if (zone == 'xn--p1ai') return '.рф';
   return zone.split('.').length > 2 ? zone : '.$zone';
 }
 
-String _splitHint(AppSettings s) {
-  if (!s.splitTunnelingEnabled) return 'выкл · все приложения через VPN';
+String _splitHint(AppLocalizations l, AppSettings s) {
+  if (!s.splitTunnelingEnabled) return l.routingSplitOff;
   return s.vpnMode == VpnMode.onlySelected
-      ? '${s.includedPackages.length} прил · ТОЛЬКО'
-      : '${s.excludedPackages.length} прил · КРОМЕ';
+      ? l.routingSplitOnly(s.includedPackages.length)
+      : l.routingSplitExcept(s.excludedPackages.length);
 }
 
 class RoutingScreen extends ConsumerWidget {
@@ -41,7 +42,7 @@ class RoutingScreen extends ConsumerWidget {
           },
           error: (e, _) {
             final t = Theme.of(context).extension<TeapodTokens>()!;
-            return Center(child: Text('Ошибка: $e',
+            return Center(child: Text(context.l10n.commonErrorWith('$e'),
                 style: AppTheme.mono(size: 12, color: t.danger)));
           },
           data: (settings) => _RoutingBody(
@@ -50,7 +51,7 @@ class RoutingScreen extends ConsumerWidget {
             geoipUrl: settings.geoipUrl,
             geositeUrl: settings.geositeUrl,
             sniffingEnabled: settings.sniffingEnabled,
-            splitTunnelHint: _splitHint(settings),
+            splitTunnelHint: _splitHint(context.l10n, settings),
             killSwitchEnabled: settings.killSwitchEnabled,
             onUpdate: (r) {
               saveSettings(context, ref, settings.copyWith(routing: r));
@@ -113,18 +114,19 @@ class _RoutingBody extends StatelessWidget {
     RoutingDirection.onlySelected => 'ONLY',
   };
 
-  String get _modeHint => switch (routing.direction) {
-    RoutingDirection.global       => 'весь трафик через VPN · правила выключены',
-    RoutingDirection.bypass       => '$_ruleCount правил · совпавшие напрямую, остальное через VPN',
-    RoutingDirection.onlySelected => '$_ruleCount правил · только совпавшие через VPN',
+  String _modeHint(AppLocalizations l) => switch (routing.direction) {
+    RoutingDirection.global       => l.routingModeGlobalHint,
+    RoutingDirection.bypass       => l.routingModeBypassHint(_ruleCount),
+    RoutingDirection.onlySelected => l.routingModeOnlyHint(_ruleCount),
   };
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).extension<TeapodTokens>()!;
     final ruleStr = _ruleCount.toString().padLeft(2, '0');
-    final geoHint = geoMissing ? 'Загрузите geo-базы (раздел geo.data ниже)' : null;
-    const sniffHint = 'Требует снифинг (переключатель «Снифинг» выше)';
+    final l = context.l10n;
+    final geoHint = geoMissing ? l.routingGeoMissingHint : null;
+    final sniffHint = l.routingSniffHint;
     final domainLocked  = !sniffingEnabled;
     final geositeLocked = geoMissing || !sniffingEnabled;
 
@@ -147,10 +149,10 @@ class _RoutingBody extends StatelessWidget {
         // ── Hero panel ──────────────────────────────────────────
         HeroPanel(
           t: t,
-          tagline: 'МАРШРУТИЗАЦИЯ · SPLIT-TUNNEL',
+          tagline: l.routingTagline,
           title: _modeWord,
           titleColor: t.accent,
-          subtitle: Text(_modeHint,
+          subtitle: Text(_modeHint(l),
               style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5)),
           trailing: Container(
             width: 88,
@@ -194,7 +196,7 @@ class _RoutingBody extends StatelessWidget {
                 _SectionHeader(t: t, addr: '0x10', label: 'apps'),
                 SetRowChev(
                   t: t,
-                  title: 'Сплит-туннелирование',
+                  title: l.routingSplitTunnel,
                   hint: splitTunnelHint,
                   last: true,
                   onTap: () => Navigator.push(context,
@@ -211,8 +213,8 @@ class _RoutingBody extends StatelessWidget {
                   // LAN
                   _RowToggle(
                     t: t,
-                    title: 'Локальные сети',
-                    hint: 'Не туннелировать 10/8, 192.168/16',
+                    title: l.routingLocalNetworks,
+                    hint: l.routingLocalNetworksHint,
                     value: routing.bypassLocal,
                     locked: false,
                     onChange: (v) => onUpdate(routing.copyWith(bypassLocal: v)),
@@ -230,13 +232,13 @@ class _RoutingBody extends StatelessWidget {
                     onRemove: geoMissing ? null : (code) => onUpdate(routing.copyWith(
                         geoCodes: routing.geoCodes.where((c) => c != code).toList())),
                     onAdd: geoMissing ? null : () => _showCountryPicker(context),
-                    addLabel: '+ регион',
+                    addLabel: '+ ${l.routingAddRegion}',
                   ),
                   // Sniffing
                   _RowToggle(
                     t: t,
-                    title: 'Снифинг',
-                    hint: 'Определять домен из TLS SNI · нужен для domain.suffix и geosite',
+                    title: l.routingSniffing,
+                    hint: l.routingSniffingHint,
                     value: sniffingEnabled,
                     locked: false,
                     onChange: onUpdateSniffing,
@@ -256,7 +258,7 @@ class _RoutingBody extends StatelessWidget {
                     onRemove: domainLocked ? null : (zone) => onUpdate(routing.copyWith(
                         domainZones: routing.domainZones.where((z) => z != zone).toList())),
                     onAdd: domainLocked ? null : () => _showDomainPicker(context),
-                    addLabel: '+ суффикс',
+                    addLabel: '+ ${l.routingAddSuffix}',
                   ),
 
                   // 0x40 GEOSITE
@@ -274,7 +276,7 @@ class _RoutingBody extends StatelessWidget {
                     onRemove: geositeLocked ? null : (code) => onUpdate(routing.copyWith(
                         geositeCodes: routing.geositeCodes.where((c) => c != code).toList())),
                     onAdd: geositeLocked ? null : () => _showGeositePicker(context),
-                    addLabel: '+ категория',
+                    addLabel: '+ ${l.routingAddCategory}',
                   ),
 
                   // 0x35 SITES
@@ -292,7 +294,7 @@ class _RoutingBody extends StatelessWidget {
                     onRemove: domainLocked ? null : (site) => onUpdate(routing.copyWith(
                         sites: routing.sites.where((s) => s != site).toList())),
                     onAdd: domainLocked ? null : () => _showSitesPicker(context),
-                    addLabel: '+ сайт',
+                    addLabel: '+ ${l.routingAddSite}',
                   ),
                 ],
 
@@ -300,7 +302,7 @@ class _RoutingBody extends StatelessWidget {
                 _SectionHeader(t: t, addr: '0x50', label: 'extras'),
                 _RowToggle(
                   t: t,
-                  title: 'Блокировка рекламы',
+                  title: l.routingAdBlock,
                   hint: geoHint ?? 'geosite:category-ads-all + geosite:win-spy → block',
                   value: routing.adBlockEnabled,
                   locked: geoMissing,
@@ -308,8 +310,8 @@ class _RoutingBody extends StatelessWidget {
                 ),
                 _RowToggle(
                   t: t,
-                  title: 'Российские сервисы',
-                  hint: 'Яндекс, VK, Сбер, Ozon, Авито и др. → выбранный outbound',
+                  title: l.routingRuServices,
+                  hint: l.routingRuServicesHint,
                   value: routing.ruServicesEnabled,
                   locked: false,
                   onChange: (v) => onUpdate(routing.copyWith(ruServicesEnabled: v)),
@@ -317,7 +319,7 @@ class _RoutingBody extends StatelessWidget {
                 _RowToggle(
                   t: t,
                   title: 'Kill Switch',
-                  hint: 'Блокировать трафик при обрыве VPN',
+                  hint: l.routingKillSwitchHint,
                   value: killSwitchEnabled,
                   locked: false,
                   last: true,
@@ -343,7 +345,7 @@ class _RoutingBody extends StatelessWidget {
                         border: Border(bottom: BorderSide(color: t.lineSoft))),
                     child: Row(
                       children: [
-                        Text('ИСТОЧНИК',
+                        Text(context.l10n.routingSource,
                             style: AppTheme.mono(
                                 size: 10, color: t.textMuted, letterSpacing: 1)),
                         const SizedBox(width: 10),
@@ -373,12 +375,12 @@ class _RoutingBody extends StatelessWidget {
 
   // ── Country picker ──────────────────────────────────────────────
 
-  static const _popularCountries = [
-    ('RU', 'Россия'), ('BY', 'Беларусь'), ('KZ', 'Казахстан'),
-    ('UA', 'Украина'), ('CN', 'Китай'), ('US', 'США'),
-    ('DE', 'Германия'), ('GB', 'Великобритания'), ('FR', 'Франция'),
-    ('NL', 'Нидерланды'), ('TR', 'Турция'), ('JP', 'Япония'),
-    ('SE', 'Швеция'), ('FI', 'Финляндия'), ('PL', 'Польша'),
+  static List<(String, String)> _popularCountries(AppLocalizations l) => [
+    ('RU', l.countryRu), ('BY', l.countryBy), ('KZ', l.countryKz),
+    ('UA', l.countryUa), ('CN', l.countryCn), ('US', l.countryUs),
+    ('DE', l.countryDe), ('GB', l.countryGb), ('FR', l.countryFr),
+    ('NL', l.countryNl), ('TR', l.countryTr), ('JP', l.countryJp),
+    ('SE', l.countrySe), ('FI', l.countryFi), ('PL', l.countryPl),
   ];
 
   static const _popularGeoipServices = [
@@ -402,7 +404,7 @@ class _RoutingBody extends StatelessWidget {
           builder: (_, sc) {
             final t = Theme.of(ctx).extension<TeapodTokens>()!;
             return _PickerShell(
-              t: t, title: 'GEO IP · РЕГИОНЫ',
+              t: t, title: 'GEO IP · ${ctx.l10n.routingRegions}',
               onDone: () {
                 onUpdate(routing.copyWith(geoCodes: selected.toList()));
                 Navigator.pop(ctx);
@@ -410,14 +412,14 @@ class _RoutingBody extends StatelessWidget {
               child: ListView(
                 controller: sc,
                 children: [
-                  _PickerSubLabel(t: t, label: 'страны'),
-                  for (final (code, name) in _popularCountries)
+                  _PickerSubLabel(t: t, label: ctx.l10n.routingCountries),
+                  for (final (code, name) in _popularCountries(ctx.l10n))
                     _CheckRow(
                       t: t, title: name, subtitle: code,
                       value: selected.contains(code),
                       onChanged: (v) => ss(() { v ? selected.add(code) : selected.remove(code); }),
                     ),
-                  _PickerSubLabel(t: t, label: 'сервисы'),
+                  _PickerSubLabel(t: t, label: ctx.l10n.routingServices),
                   for (final (code, name) in _popularGeoipServices)
                     _CheckRow(
                       t: t, title: name, subtitle: 'geoip:$code',
@@ -426,7 +428,7 @@ class _RoutingBody extends StatelessWidget {
                     ),
                   _CustomInputRow(
                     t: t, ctrl: customCtrl,
-                    hint: 'Код или категория (напр. IT, netflix)',
+                    hint: ctx.l10n.routingGeoipCustomHint,
                     onAdd: () {
                       final code = customCtrl.text.trim();
                       if (code.isNotEmpty) { ss(() => selected.add(code.toLowerCase())); customCtrl.clear(); }
@@ -475,7 +477,7 @@ class _RoutingBody extends StatelessWidget {
             initialChildSize: 0.7, minChildSize: 0.5, maxChildSize: 0.92,
             expand: false,
             builder: (_, sc) => _PickerShell(
-              t: t, title: 'DOMAIN · СУФФИКСЫ',
+              t: t, title: 'DOMAIN · ${ctx.l10n.routingSuffixes}',
               onDone: () {
                 onUpdate(routing.copyWith(domainZones: selected.toList()));
                 Navigator.pop(ctx);
@@ -499,7 +501,7 @@ class _RoutingBody extends StatelessWidget {
                     ),
                   _CustomInputRow(
                     t: t, ctrl: customCtrl,
-                    hint: 'Домен или зона (напр. example.com)',
+                    hint: ctx.l10n.routingDomainCustomHint,
                     onAdd: add,
                     onSubmit: add,
                   ),
@@ -546,7 +548,7 @@ class _RoutingBody extends StatelessWidget {
             initialChildSize: 0.7, minChildSize: 0.5, maxChildSize: 0.92,
             expand: false,
             builder: (_, sc) => _PickerShell(
-              t: t, title: 'SITES · САЙТЫ',
+              t: t, title: 'SITES · ${ctx.l10n.routingSites}',
               onDone: () {
                 onUpdate(routing.copyWith(sites: selected.toList()));
                 Navigator.pop(ctx);
@@ -570,7 +572,7 @@ class _RoutingBody extends StatelessWidget {
                     ),
                   _CustomInputRow(
                     t: t, ctrl: customCtrl,
-                    hint: 'Сайт (напр. example.com)',
+                    hint: ctx.l10n.routingSiteCustomHint,
                     onAdd: add,
                     onSubmit: add,
                   ),
@@ -586,9 +588,9 @@ class _RoutingBody extends StatelessWidget {
 
   // ── Geosite picker ──────────────────────────────────────────────
 
-  static const _popularGeosite = [
-    ('category-ru', 'Россия (категория)'),
-    ('category-ip-geo-detect', 'Geo-detect сервисы'),
+  static List<(String, String)> _popularGeosite(AppLocalizations l) => [
+    ('category-ru', l.geositeCategoryRu),
+    ('category-ip-geo-detect', l.geositeGeoDetect),
     ('apple', 'Apple'), ('apple-pki', 'Apple PKI'),
     ('huawei', 'Huawei'), ('xiaomi', 'Xiaomi'),
     ('category-android-app-download', 'Android App Download'),
@@ -596,18 +598,18 @@ class _RoutingBody extends StatelessWidget {
     ('yandex', 'Yandex'), ('vk', 'VK'),
     ('microsoft', 'Microsoft'), ('win-update', 'Windows Update'), ('win-extra', 'Windows Extra'),
     ('google-play', 'Google Play'), ('steam', 'Steam'),
-    ('cn', 'Китай'),
+    ('cn', l.countryCn),
     ('google', 'Google'), ('youtube', 'YouTube'), ('telegram', 'Telegram'),
     ('twitter', 'Twitter / X'), ('instagram', 'Instagram'), ('facebook', 'Facebook'),
     ('netflix', 'Netflix'), ('disney', 'Disney+'), ('amazon', 'Amazon / AWS'),
     ('cloudflare', 'Cloudflare'), ('github', 'GitHub'),
     ('openai', 'OpenAI / ChatGPT'),
-    ('tiktok', 'TikTok'), ('category-games', 'Игры'),
+    ('tiktok', 'TikTok'), ('category-games', l.geositeGames),
   ];
 
   Future<void> _showGeositePicker(BuildContext context) async {
     final selected    = Set<String>.from(routing.geositeCodes);
-    final popularKeys = _popularGeosite.map((e) => e.$1).toSet();
+    final popularKeys = _popularGeosite(context.l10n).map((e) => e.$1).toSet();
     final customCodes = Set<String>.from(selected.difference(popularKeys));
     final customCtrl  = TextEditingController();
 
@@ -629,7 +631,7 @@ class _RoutingBody extends StatelessWidget {
             initialChildSize: 0.7, minChildSize: 0.5, maxChildSize: 0.92,
             expand: false,
             builder: (_, sc) => _PickerShell(
-              t: t, title: 'GEOSITE · КАТЕГОРИИ',
+              t: t, title: 'GEOSITE · ${ctx.l10n.routingCategories}',
               onDone: () {
                 onUpdate(routing.copyWith(geositeCodes: selected.toList()));
                 Navigator.pop(ctx);
@@ -637,7 +639,7 @@ class _RoutingBody extends StatelessWidget {
               child: ListView(
                 controller: sc,
                 children: [
-                  for (final (code, name) in _popularGeosite)
+                  for (final (code, name) in _popularGeosite(ctx.l10n))
                     _CheckRow(
                       t: t, title: name, subtitle: 'geosite:$code',
                       value: selected.contains(code),
@@ -653,7 +655,7 @@ class _RoutingBody extends StatelessWidget {
                     ),
                   _CustomInputRow(
                     t: t, ctrl: customCtrl,
-                    hint: 'Категория (напр. geolocation-!cn)',
+                    hint: ctx.l10n.routingGeositeCustomHint,
                     onAdd: add,
                     onSubmit: add,
                   ),
@@ -716,10 +718,11 @@ class _ModeSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const opts = [
-      (RoutingDirection.global,       'FULL',   'весь трафик'),
-      (RoutingDirection.bypass,       'BYPASS', 'по правилам'),
-      (RoutingDirection.onlySelected, 'ONLY',   'только match'),
+    final l = context.l10n;
+    final opts = [
+      (RoutingDirection.global,       'FULL',   l.routingModeAll),
+      (RoutingDirection.bypass,       'BYPASS', l.routingModeRules),
+      (RoutingDirection.onlySelected, 'ONLY',   l.routingModeMatch),
     ];
 
     return Container(
@@ -901,7 +904,7 @@ class _RowToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Переключает вся строка, как в настройках.
+    // The whole row toggles, as in settings.
     return Pressable(
       onTap: locked ? null : () => onChange(!value),
       child: Container(
@@ -1056,7 +1059,7 @@ class _PickerShell extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                     color: t.accent,
-                    child: Text('ГОТОВО',
+                    child: Text(context.l10n.commonDone,
                         style: AppTheme.mono(size: 10, color: t.bg, letterSpacing: 1)),
                   ),
                 ),
@@ -1199,16 +1202,16 @@ class _GeoUpdateRow extends ConsumerWidget {
     return switch (geoState) {
       GeoMissing() => _GeoActionRow(
           t: t,
-          label: 'Geo-базы не загружены',
+          label: context.l10n.geoNotLoaded,
           labelColor: t.danger,
-          btnLabel: 'ЗАГРУЗИТЬ',
+          btnLabel: context.l10n.geoDownload,
           filled: true,
           onTap: () => ref.read(geoProvider.notifier).download(),
         ),
       GeoReady(:final lastUpdated) => _GeoActionRow(
           t: t,
-          label: lastUpdated != null ? _daysAgo(lastUpdated) : 'Geo-базы загружены',
-          btnLabel: 'ОБНОВИТЬ',
+          label: lastUpdated != null ? _daysAgo(context.l10n, lastUpdated) : context.l10n.geoLoaded,
+          btnLabel: context.l10n.geoUpdate,
           onTap: () => ref.read(geoProvider.notifier).download(),
         ),
       GeoDownloading(:final downloaded, :final total) => Padding(
@@ -1216,7 +1219,7 @@ class _GeoUpdateRow extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Загрузка geo-баз...',
+              Text(context.l10n.geoDownloading,
                   style: AppTheme.sans(size: 13, color: t.text)),
               const SizedBox(height: 8),
               LinearProgressIndicator(
@@ -1228,8 +1231,8 @@ class _GeoUpdateRow extends ConsumerWidget {
               const SizedBox(height: 4),
               Text(
                 total > 0
-                    ? '${(downloaded / 1024 / 1024).toStringAsFixed(1)} / ${(total / 1024 / 1024).toStringAsFixed(1)} МБ'
-                    : '${(downloaded / 1024 / 1024).toStringAsFixed(1)} МБ',
+                    ? '${(downloaded / 1024 / 1024).toStringAsFixed(1)} / ${(total / 1024 / 1024).toStringAsFixed(1)} ${context.l10n.unitMb}'
+                    : '${(downloaded / 1024 / 1024).toStringAsFixed(1)} ${context.l10n.unitMb}',
                 style: AppTheme.mono(size: 10, color: t.textDim),
               ),
             ],
@@ -1239,17 +1242,17 @@ class _GeoUpdateRow extends ConsumerWidget {
           t: t,
           label: message,
           labelColor: t.danger,
-          btnLabel: 'ПОВТОР',
+          btnLabel: context.l10n.commonRetryUpper,
           onTap: () => ref.read(geoProvider.notifier).download(),
         ),
     };
   }
 
-  String _daysAgo(DateTime dt) {
+  String _daysAgo(AppLocalizations l, DateTime dt) {
     final days = DateTime.now().difference(dt).inDays;
-    if (days == 0) return 'Обновлено сегодня';
-    if (days == 1) return 'Обновлено вчера';
-    return 'Обновлено $days дн. назад';
+    if (days == 0) return l.geoUpdatedToday;
+    if (days == 1) return l.geoUpdatedYesterday;
+    return l.geoUpdatedDaysAgo(days);
   }
 }
 
@@ -1470,7 +1473,7 @@ class _GeoSourceSheetState extends State<_GeoSourceSheet> {
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 color: t.accent,
                 alignment: Alignment.center,
-                child: Text('ПРИМЕНИТЬ',
+                child: Text(context.l10n.commonApplyUpper,
                     style: AppTheme.mono(
                         size: 11, color: t.bg, letterSpacing: 1)),
               ),

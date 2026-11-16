@@ -42,7 +42,7 @@ class _SparklinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (samples.isEmpty) return;
-    // Одна точка (первая секунда сессии) — горизонталь: иначе i / (n - 1) = NaN.
+    // A single point (first second of the session) — a flat line: otherwise i / (n - 1) = NaN.
     final data = samples.length == 1 ? [samples.first, samples.first] : samples;
 
     final max = data.fold<double>(0.5, (m, v) => v > m ? v : m);

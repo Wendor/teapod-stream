@@ -11,7 +11,7 @@ import '../../../tool/itest/src/matrix.dart';
 import '../../../tool/itest/src/probes.dart';
 import '../../../tool/itest/src/report.dart';
 
-/// Агент-заглушка: отвечает ok на каждую команду, на connect шлёт `connected`.
+/// Stub agent: answers ok to every command, sends `connected` on connect.
 class ScriptedShell implements Shell {
   final StreamController<String> logcat;
   final ops = <String>[];

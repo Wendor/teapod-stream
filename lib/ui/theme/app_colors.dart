@@ -144,17 +144,17 @@ class TeapodTokens extends ThemeExtension<TeapodTokens> {
     final hsl = HSLColor.fromColor(c);
     final l = hsl.lightness;
     
-    // Увеличили порог: если цвет уже темнее 0.48, не трогаем его (было 0.40)
+    // Raised threshold: if the color is already darker than 0.48, leave it alone (was 0.40)
     if (l <= 0.48) return c; 
     
     // Near-gray / mono — keep low saturation, but make it less intensely dark
-    // Подняли светлоту серого с очень темного 0.28 до более мягкого 0.38
+    // Raised gray lightness from a very dark 0.28 to a softer 0.38
     if (hsl.saturation < 0.18) {
       return hsl.withLightness(0.38).withSaturation((hsl.saturation * 0.6).clamp(0.0, 1.0)).toColor();
     }
     
     // Chromatic: target lightness 0.40 + small bonus for high-saturation colours
-    // Подняли базовую светлоту с 0.32 до 0.40, и сместили верхнюю границу до 0.48
+    // Raised base lightness from 0.32 to 0.40 and moved the upper bound to 0.48
     final target = (0.40 + hsl.saturation * 0.08).clamp(0.0, 0.48);
     return hsl.withLightness(target).toColor();
   }

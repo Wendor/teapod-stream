@@ -171,28 +171,28 @@ void main() {
     });
 
     test('Xray-only features', () {
-      expect(reason(_cfg(VpnProtocol.vless, transport: VpnTransport.xhttp)), 'Транспорт XHTTP недоступен в ядре sing-box.');
-      expect(reason(_cfg(VpnProtocol.vless, transport: VpnTransport.splithttp)), 'Транспорт XHTTP недоступен в ядре sing-box.');
+      expect(reason(_cfg(VpnProtocol.vless, transport: VpnTransport.xhttp)), "The XHTTP transport isn't available in the sing-box core.");
+      expect(reason(_cfg(VpnProtocol.vless, transport: VpnTransport.splithttp)), "The XHTTP transport isn't available in the sing-box core.");
       expect(reason(_cfg(VpnProtocol.vless, rawUri: 'vless://u@h:1?type=tcp&headerType=http#n')),
-          'TCP с HTTP-обфускацией недоступен в ядре sing-box.');
+          "TCP with HTTP obfuscation isn't available in the sing-box core.");
       expect(reason(_cfg(VpnProtocol.vless, encryption: 'mlkem768x25519plus.native.0rtt.x')),
-          'VLESS Encryption недоступен в ядре sing-box.');
+          "VLESS Encryption isn't available in the sing-box core.");
       expect(reason(_cfg(VpnProtocol.vless, flow: 'xtls-rprx-vision-udp443')),
-          'Flow «xtls-rprx-vision-udp443» недоступен в ядре sing-box.');
-      expect(reason(_cfg(VpnProtocol.vless, rawXrayConfig: '{}')), 'Полный JSON-конфиг Xray недоступен в ядре sing-box.');
+          'Flow "xtls-rprx-vision-udp443" isn\'t available in the sing-box core.');
+      expect(reason(_cfg(VpnProtocol.vless, rawXrayConfig: '{}')), "A full Xray JSON config isn't available in the sing-box core.");
       expect(reason(_cfg(VpnProtocol.vless, finalmask: {'udp': []})),
-          'Расширенные настройки Xray (finalmask/extra) недоступны в ядре sing-box.');
+          "Advanced Xray settings (finalmask/extra) aren't available in the sing-box core.");
     });
 
     test('Shadowsocks plugin and method', () {
       expect(reason(_cfg(VpnProtocol.shadowsocks, method: 'aes-128-gcm', rawUri: 'ss://x@h:1?plugin=obfs-local#n')),
-          'Плагины Shadowsocks недоступны в ядре sing-box.');
-      expect(reason(_cfg(VpnProtocol.shadowsocks, method: 'rc4')), 'Метод Shadowsocks «rc4» недоступен в ядре sing-box.');
+          "Shadowsocks plugins aren't available in the sing-box core.");
+      expect(reason(_cfg(VpnProtocol.shadowsocks, method: 'rc4')), 'Shadowsocks method "rc4" isn\'t available in the sing-box core.');
     });
 
     test('certificate pin is never dropped silently', () {
       expect(reason(_cfg(VpnProtocol.vless, pinSHA256: 'abcd')),
-          'Pin сертификата не поддерживается ядром sing-box: оно проверяет только хеш открытого ключа.');
+          "The sing-box core doesn't support certificate pinning: it checks only the public key hash.");
     });
   });
 }

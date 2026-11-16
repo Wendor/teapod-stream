@@ -13,8 +13,9 @@ import '../widgets/breadcrumb_bar.dart';
 import '../widgets/hero_panel.dart';
 import '../widgets/reconnect_banner.dart';
 import '../widgets/settings_shared.dart';
+import '../../l10n/l10n.dart';
 
-/// Экспертные сетевые настройки: SOCKS, TUN, TLS fingerprint, observatory.
+/// Expert network settings: SOCKS, TUN, TLS fingerprint, observatory.
 class NetworkSettingsScreen extends ConsumerStatefulWidget {
   const NetworkSettingsScreen({super.key});
 
@@ -80,7 +81,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
   static String _fpLabel(TlsFingerprint fp) =>
       fp == TlsFingerprint.defaultFp ? 'DEFAULT' : fp.name.toUpperCase();
 
-  /// Выпадающий список значений в стиле экрана; используется для перечислений.
+  /// Screen-styled dropdown of values; used for enums.
   void _showEnumPicker<T>(
     BuildContext context, {
     required String title,
@@ -194,6 +195,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
     final profileState =
         ref.watch(profileProvider).maybeWhen(data: (d) => d, orElse: () => null);
     final locked = profileState?.isReadonly ?? false;
+    final l = context.l10n;
 
     return Scaffold(
       body: SafeArea(
@@ -201,7 +203,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
           loading: () => Center(
               child: CircularProgressIndicator(color: t.accent, strokeWidth: 1.5)),
           error: (e, _) => Center(
-              child: Text('Ошибка: $e', style: AppTheme.mono(size: 12, color: t.danger))),
+              child: Text(l.commonErrorWith('$e'), style: AppTheme.mono(size: 12, color: t.danger))),
           data: (s) {
             _ensureControllers(s);
             return Column(
@@ -223,7 +225,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                 BreadcrumbBar(t: t, parent: 'settings', current: 'network'),
                 HeroPanel(
                   t: t,
-                  tagline: 'СЕТЬ · SOCKS · TUN',
+                  tagline: l.networkTagline,
                   title: 'NETWORK',
                 ),
                 const ReconnectBanner(),
@@ -234,8 +236,8 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                       SetSectionHeader(t: t, addr: '0x31', label: 'socks'),
                       SetRowToggle(
                         t: t,
-                        title: 'Случайный порт',
-                        hint: 'Случайный SOCKS порт при каждом подключении',
+                        title: l.networkRandomPort,
+                        hint: l.networkRandomPortHint,
                         value: s.randomPort,
                         locked: locked,
                         onChange: (v) => _update(s.copyWith(randomPort: v)),
@@ -243,7 +245,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                       if (!s.randomPort)
                         SetInlineField(
                           t: t,
-                          label: 'SOCKS5 порт',
+                          label: l.networkSocksPort,
                           locked: locked,
                           child: SetNumField(
                             t: t,
@@ -260,8 +262,8 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                         ),
                       SetRowToggle(
                         t: t,
-                        title: 'Случайные учётные данные',
-                        hint: 'Генерировать случайный логин/пароль SOCKS',
+                        title: l.networkRandomCreds,
+                        hint: l.networkRandomCredsHint,
                         value: s.randomCredentials,
                         locked: locked,
                         onChange: (v) => _update(s.copyWith(randomCredentials: v)),
@@ -269,12 +271,12 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                       if (!s.randomCredentials) ...[
                         SetInlineField(
                           t: t,
-                          label: 'Логин SOCKS',
+                          label: l.networkSocksLogin,
                           locked: locked,
                           child: SetCredField(
                             controller: _socksUserCtrl!,
                             enabled: !locked,
-                            hint: 'без пароля',
+                            hint: l.networkNoAuth,
                             onChanged: (_) => _update(s.copyWith(
                               socksUser: _socksUserCtrl!.text,
                               socksPassword: _socksPasswordCtrl!.text,
@@ -284,12 +286,12 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                         ),
                         SetInlineField(
                           t: t,
-                          label: 'Пароль SOCKS',
+                          label: l.networkSocksPassword,
                           locked: locked,
                           child: SetCredField(
                             controller: _socksPasswordCtrl!,
                             enabled: !locked,
-                            hint: 'без пароля',
+                            hint: l.networkNoAuth,
                             obscureText: true,
                             onChanged: (_) => _update(s.copyWith(
                               socksUser: _socksUserCtrl!.text,
@@ -303,8 +305,8 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                         feature: CoreFeature.proxyOnly,
                         child: SetRowToggle(
                         t: t,
-                        title: 'Только прокси',
-                        hint: 'Запустить SOCKS прокси без VPN-туннеля',
+                        title: l.networkProxyOnly,
+                        hint: l.networkProxyOnlyHint,
                         value: s.proxyOnly,
                         locked: locked,
                         onChange: (v) => _update(s.copyWith(proxyOnly: v)),
@@ -314,7 +316,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                       SetRowToggle(
                         t: t,
                         title: 'UDP',
-                        hint: 'Разрешить UDP-трафик через SOCKS',
+                        hint: l.networkUdpHint,
                         value: s.enableUdp,
                         locked: locked,
                         onChange: (v) => _update(s.copyWith(enableUdp: v)),
@@ -324,7 +326,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                         child: SetRowToggle(
                         t: t,
                         title: 'ICMP (ping)',
-                        hint: 'Отвечать на ping: прокси ICMP не передаёт, ответ даёт сам VPN — время не отражает задержку до узла',
+                        hint: l.networkIcmpHint,
                         value: s.allowIcmp,
                         locked: locked,
                         onChange: (v) => _update(s.copyWith(allowIcmp: v)),
@@ -332,8 +334,8 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                       ),
                       SetRowToggle(
                         t: t,
-                        title: 'Блокировать QUIC',
-                        hint: 'TUN отвечает на UDP 443 ICMP-ом "порт недоступен": браузер мгновенно падает на TCP вместо ожидания QUIC-таймаута (~55с). Трафик из устройства не уходит.',
+                        title: l.networkBlockQuic,
+                        hint: l.networkBlockQuicHint,
                         value: s.blockQuic,
                         locked: locked,
                         onChange: (v) => _update(s.copyWith(blockQuic: v)),
@@ -353,7 +355,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                                   Text('TLS fingerprint',
                                       style: AppTheme.sans(size: 14, color: t.text)),
                                   const SizedBox(height: 3),
-                                  Text('uTLS-маскировка ClientHello (TLS/REALITY)',
+                                  Text(l.networkFingerprintHint,
                                       style: AppTheme.mono(
                                           size: 10, color: t.textMuted, letterSpacing: 0.5)),
                                 ],
@@ -383,8 +385,8 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                       if (!s.proxyOnly)
                         SetRowToggle(
                           t: t,
-                          title: 'IPv6 в туннеле',
-                          hint: 'Добавить IPv6-адрес на TUN-интерфейс. Включайте только если VPN-сервер имеет IPv6: иначе приложения с IPv6-адресами (Telegram) зависают. При выключении IPv6 блокируется системой без утечек — приложения мгновенно переходят на IPv4.',
+                          title: l.networkIpv6,
+                          hint: l.networkIpv6Hint,
                           value: s.ipv6Enabled,
                           locked: locked,
                           onChange: (v) => _update(s.copyWith(ipv6Enabled: v)),
@@ -414,7 +416,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                         feature: CoreFeature.observatory,
                         child: SetInlineField(
                         t: t,
-                        label: 'Observatory мин. интервал, сек',
+                        label: l.networkObservatoryInterval,
                         locked: locked,
                         child: SetNumField(
                           t: t,
@@ -433,8 +435,8 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                       SetSectionHeader(t: t, addr: '0x34', label: 'fragment'),
                       SetRowToggle(
                         t: t,
-                        title: 'Фрагментация',
-                        hint: 'Режет исходящий TCP-поток на части, чтобы DPI не собрал ClientHello целиком. Не применяется к Hysteria2 (QUIC поверх UDP).',
+                        title: l.networkFragment,
+                        hint: l.networkFragmentHint,
                         value: s.fragment.enabled,
                         locked: locked,
                         onChange: (v) => _update(s.copyWith(fragment: s.fragment.copyWith(enabled: v))),
@@ -442,7 +444,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                       if (s.fragment.enabled) ...[
                         SetInlineField(
                           t: t,
-                          label: 'Пакеты',
+                          label: l.networkFragmentPackets,
                           locked: locked,
                           child: SetCredField(
                             t: t,
@@ -455,7 +457,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                         ),
                         SetInlineField(
                           t: t,
-                          label: 'Длина куска, байт',
+                          label: l.networkFragmentLength,
                           locked: locked,
                           child: SetCredField(
                             t: t,
@@ -468,7 +470,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                         ),
                         SetInlineField(
                           t: t,
-                          label: 'Пауза, мс',
+                          label: l.networkPauseMs,
                           locked: locked,
                           child: SetCredField(
                             t: t,
@@ -483,12 +485,12 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                       if (s.fragment.enabled && !s.fragment.isValid)
                         _HintRow(
                             t: t,
-                            text: 'Длина и пауза должны быть диапазонами вида 100-200 и 10-20, пакеты — tlshello или диапазон. Фрагментация не применяется.'),
+                            text: l.networkFragmentInvalid),
                       SetSectionHeader(t: t, addr: '0x35', label: 'noise'),
                       SetRowToggle(
                         t: t,
-                        title: 'Шумы',
-                        hint: 'Мусорные UDP-датаграммы перед первой полезной. Работают только на UDP-плече — Hysteria2 и QUIC-транспорт; на TCP не влияют (там фрагментация). DNS-запросы xray шумом не портит.',
+                        title: l.networkNoise,
+                        hint: l.networkNoiseHint,
                         value: s.noise.enabled,
                         locked: locked,
                         onChange: (v) => _update(s.copyWith(noise: s.noise.copyWith(enabled: v))),
@@ -496,8 +498,8 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                       if (s.noise.enabled) ...[
                         _PickerRow(
                           t: t,
-                          title: 'Тип пакета',
-                          hint: 'RAND — случайные байты; STR / HEX / BASE64 — заданный вручную',
+                          title: l.networkNoiseType,
+                          hint: l.networkNoiseTypeHint,
                           value: s.noise.type.name.toUpperCase(),
                           locked: locked,
                           onTap: () => _showEnumPicker<NoiseType>(
@@ -511,20 +513,20 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                         ),
                         SetInlineField(
                           t: t,
-                          label: s.noise.type == NoiseType.rand ? 'Длина, байт' : 'Пакет',
+                          label: s.noise.type == NoiseType.rand ? l.networkNoiseLength : l.networkNoisePacket,
                           locked: locked,
                           child: SetCredField(
                             t: t,
                             controller: _noisePacketCtrl!,
                             enabled: !locked,
-                            hint: s.noise.type == NoiseType.rand ? '50-100' : 'содержимое',
+                            hint: s.noise.type == NoiseType.rand ? '50-100' : l.networkNoiseContent,
                             onChanged: (v) =>
                                 _update(s.copyWith(noise: s.noise.copyWith(packet: v.trim()))),
                           ),
                         ),
                         SetInlineField(
                           t: t,
-                          label: 'Пауза, мс',
+                          label: l.networkPauseMs,
                           locked: locked,
                           child: SetCredField(
                             t: t,
@@ -539,8 +541,8 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                           _HintRow(
                               t: t,
                               text: s.noise.type == NoiseType.rand
-                                  ? 'Длина должна быть диапазоном вида 50-100, пауза — 10-20. Шумы не применяются.'
-                                  : 'Пакет не должен быть пустым, пауза — диапазон вида 10-20. Шумы не применяются.'),
+                                  ? l.networkNoiseInvalidRand
+                                  : l.networkNoiseInvalidPacket),
                       ],
                       SetSectionHeader(t: t, addr: '0x36', label: 'mux'),
                       FeatureGate(
@@ -548,7 +550,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                         child: SetRowToggle(
                         t: t,
                         title: 'Mux',
-                        hint: 'Мультиплексирует несколько соединений в одно — меньше хендшейков. При XTLS Vision TCP-ветка отключается автоматически (остаётся XUDP). Не применяется к Hysteria2.',
+                        hint: l.networkMuxHint,
                         value: s.mux.enabled,
                         locked: locked,
                         onChange: (v) => _update(s.copyWith(mux: s.mux.copyWith(enabled: v))),
@@ -557,7 +559,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                       if (s.mux.enabled) ...[
                         SetInlineField(
                           t: t,
-                          label: 'TCP-подпотоки',
+                          label: l.networkMuxTcp,
                           locked: locked,
                           child: SetNumField(
                             t: t,
@@ -575,7 +577,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                         ),
                         SetInlineField(
                           t: t,
-                          label: 'XUDP-подпотоки',
+                          label: l.networkMuxXudp,
                           locked: locked,
                           child: SetNumField(
                             t: t,
@@ -593,8 +595,8 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                         ),
                         _PickerRow(
                           t: t,
-                          title: 'QUIC (UDP/443) через mux',
-                          hint: 'reject — отбрасывать, allow — пускать через mux, skip — мимо mux',
+                          title: l.networkMuxQuic,
+                          hint: l.networkMuxQuicHint,
                           value: s.mux.xudpProxyUDP443.name.toUpperCase(),
                           locked: locked,
                           onTap: () => _showEnumPicker<XudpUdp443>(
@@ -611,8 +613,8 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                       SetSectionHeader(t: t, addr: '0x37', label: 'heartbeat'),
                       _PickerRow(
                         t: t,
-                        title: 'Тип проверки',
-                        hint: 'SOCKS — HTTP-запрос через SOCKS5 в xray; XRAYDELAY — замер внутри ядра, сразу даёт задержку; PASSIVE — без активных проб, только метрики tun2socks (экономит батарею, обрыв виден лишь при реальном трафике)',
+                        title: l.networkProbeType,
+                        hint: l.networkProbeTypeHint,
                         value: s.heartbeat.probe.name.toUpperCase(),
                         locked: locked,
                         onTap: () => _showEnumPicker<HeartbeatProbe>(
@@ -628,8 +630,8 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                       if (s.heartbeat.probe != HeartbeatProbe.passive) ...[
                         _PickerRow(
                           t: t,
-                          title: 'Адрес проверки',
-                          hint: 'Куда стучится проба. CUSTOM — свой URL ниже',
+                          title: l.networkProbeTarget,
+                          hint: l.networkProbeTargetHint,
                           value: s.heartbeat.target.name.toUpperCase(),
                           locked: locked,
                           onTap: () => _showEnumPicker<HeartbeatTarget>(
@@ -659,7 +661,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                       ],
                       SetInlineField(
                         t: t,
-                        label: 'Провалов до реакции',
+                        label: l.networkFailureThreshold,
                         locked: locked,
                         child: SetNumField(
                           t: t,
@@ -678,8 +680,8 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                       ),
                       _PickerRow(
                         t: t,
-                        title: 'При потере туннеля',
-                        hint: 'RECONNECT — переподключить тот же сервер; SWITCHCONFIG — уйти на самый быстрый живой конфиг',
+                        title: l.networkFailAction,
+                        hint: l.networkFailActionHint,
                         value: s.heartbeat.failAction.name.toUpperCase(),
                         locked: locked,
                         onTap: () => _showEnumPicker<HeartbeatFailAction>(
@@ -695,8 +697,8 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                       if (s.heartbeat.failAction == HeartbeatFailAction.switchConfig)
                         _PickerRow(
                           t: t,
-                          title: 'Откуда брать конфиг',
-                          hint: 'SUBSCRIPTION — конфиги той же подписки; PINNED — закреплённые; ALL — все сохранённые. Кандидаты проверяются полноценным замером через сам протокол, не TCP-пингом',
+                          title: l.networkSwitchSource,
+                          hint: l.networkSwitchSourceHint,
                           value: s.heartbeat.switchSource.name.toUpperCase(),
                           locked: locked,
                           onTap: () => _showEnumPicker<SwitchSource>(
@@ -722,7 +724,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
   }
 }
 
-/// Строка настройки со значением-кнопкой, открывающей выбор из списка.
+/// Setting row with a value button that opens a list picker.
 class _PickerRow extends StatelessWidget {
   final TeapodTokens t;
   final String title;
@@ -778,7 +780,7 @@ class _PickerRow extends StatelessWidget {
   }
 }
 
-/// Предупреждение под секцией: настройка введена неверно и в конфиг не попадёт.
+/// Warning under a section: the setting is invalid and won't make it into the config.
 class _HintRow extends StatelessWidget {
   final TeapodTokens t;
   final String text;

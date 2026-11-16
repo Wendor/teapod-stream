@@ -3,7 +3,7 @@ package com.teapodstream.teapodstream.core
 import android.content.Context
 import teapodcore.Teapodcore
 
-/** xray-core (Go) + teapod-tun2socks через локальный SOCKS5. */
+/** xray-core (Go) + teapod-tun2socks via a local SOCKS5. */
 object GoCore : Tun2SocksCore() {
     override val kind = CoreKind.GO
     override val logTag = "xray"

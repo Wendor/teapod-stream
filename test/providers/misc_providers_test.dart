@@ -48,7 +48,7 @@ void main() {
             {'packageName': 'a.pkg'},
           ];
       final apps = await c.read(installedAppsProvider.future);
-      // Без учёта регистра: «eBay» не уезжает в конец за «Zeta».
+      // Case-insensitive: "eBay" doesn't move to the end after "Zeta".
       expect(apps.map((a) => a.appName), ['a.pkg', 'eBay', 'Zeta']);
       expect(apps.last.isExcluded, isTrue);
       expect(apps.last.isSystem, isTrue);

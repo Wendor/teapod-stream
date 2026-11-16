@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 
-/// GestureDetector с подсветкой фона при нажатии (console-стиль, без ripple).
+/// GestureDetector with a background highlight on press (console style, no ripple).
 class Pressable extends StatefulWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
-  /// Цвет подсветки; по умолчанию `TeapodTokens.accentFade`.
+  /// Highlight color; `TeapodTokens.accentFade` by default.
   final Color? pressedColor;
   final Widget child;
 

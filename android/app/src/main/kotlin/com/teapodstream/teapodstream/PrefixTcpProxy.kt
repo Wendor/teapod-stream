@@ -24,7 +24,7 @@ class PrefixTcpProxy(
     // to the SS server through us. null = allow all (tests).
     private val clientAllowed: ((Socket) -> Boolean)? = null,
 ) {
-    // Только loopback: ServerSocket(0) слушал все интерфейсы, включая Wi-Fi и раздачу.
+    // Loopback only: ServerSocket(0) listened on all interfaces, including Wi-Fi and tethering.
     private val serverSocket = ServerSocket(0, 50, InetAddress.getLoopbackAddress())
     val localPort: Int = serverSocket.localPort
 

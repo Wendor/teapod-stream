@@ -1,4 +1,4 @@
-/// VPN-ядро.
+/// VPN core.
 enum CoreKind {
   xrayGo('go', 'xray-core', 'XRAY-CORE', 'xray-go'),
   xrayRust('rust', 'xray-rust', 'XRAY-RUST', 'xray-rust'),
@@ -6,17 +6,17 @@ enum CoreKind {
 
   const CoreKind(this.nativeId, this.displayName, this.shortLabel, this.versionKey);
 
-  /// Идентификатор ядра в native (`engine` в MethodChannel).
+  /// Core identifier in native (`engine` in the MethodChannel).
   final String nativeId;
   final String displayName;
 
-  /// Короткая подпись (порядок ядер в настройках).
+  /// Short label (core order in settings).
   final String shortLabel;
 
-  /// Ключ версии ядра в `getBinaryVersions`.
+  /// Core version key in `getBinaryVersions`.
   final String versionKey;
 
-  /// Приоритет по умолчанию: Rust экспериментальный — последний.
+  /// Default priority: the experimental Rust is last.
   static const defaultOrder = [xrayGo, singBox, xrayRust];
 
   static CoreKind? tryName(String? name) {
@@ -26,9 +26,9 @@ enum CoreKind {
     return null;
   }
 
-  /// Порядок из сохранённых имён: неизвестные отбрасываются, недостающие
-  /// дописываются в порядке по умолчанию. [first] (ядро из версий до
-  /// приоритетов) ставится первым, если порядка ещё нет.
+  /// Order from saved names: unknown ones are dropped, missing ones
+  /// are appended in default order. [first] (the core from versions before
+  /// priorities) goes first if there's no order yet.
   static List<CoreKind> parseOrder(Iterable<String>? names, {String? first}) {
     final order = <CoreKind>{
       if (names == null) ?tryName(first),

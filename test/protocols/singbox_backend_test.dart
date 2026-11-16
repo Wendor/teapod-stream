@@ -43,9 +43,9 @@ void main() {
     );
     expect(check.blocking, isNull);
     expect(check.warnings, [
-      'Шумы недоступны в ядре sing-box и не применяются.',
-      'Mux Xray несовместим с ядром sing-box и не применяется.',
-      'Фрагментация в ядре sing-box — только TLS ClientHello; режим «1-3» не применяется.',
+      "Noise isn't available in the sing-box core and is not applied.",
+      'Xray Mux is incompatible with the sing-box core and is not applied.',
+      'Fragmentation in the sing-box core covers only the TLS ClientHello; mode "1-3" is not applied.',
     ]);
     expect(box.checkOptions(_vless(), _opts()).warnings, isEmpty);
   });
@@ -54,7 +54,7 @@ void main() {
     final pqv = _vless(pqv: 'k');
     expect(box.checkConfig(pqv), isNull);
     expect(box.checkOptions(pqv, _opts()).warnings,
-        ['Reality: ядро sing-box не проверяет подпись ML-DSA (pqv) — сервер проверяется только по ключу Reality.']);
+        ["Reality: the sing-box core doesn't verify the ML-DSA signature (pqv) — the server is verified by the Reality key only."]);
   });
 
   test('QUIC block follows tun2socks rules of the Go core', () {

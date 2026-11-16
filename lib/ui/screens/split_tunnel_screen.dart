@@ -11,6 +11,7 @@ import '../theme/app_theme.dart';
 import '../widgets/breadcrumb_bar.dart';
 import '../widgets/hero_panel.dart';
 import '../widgets/settings_shared.dart';
+import '../../l10n/l10n.dart';
 
 class SplitTunnelScreen extends ConsumerStatefulWidget {
   const SplitTunnelScreen({super.key});
@@ -49,23 +50,20 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: t.bgElev,
-        title: Text('Раздача через VPN',
+        title: Text(context.l10n.splitTethering,
             style: AppTheme.sans(size: 16, color: t.text)),
         content: Text(
-          'Трафик точки доступа неотличим от трафика исключённых приложений. '
-          'С этой опцией любое исключённое приложение сможет отправить запрос '
-          'через VPN и узнать IP сервера — например, чтобы сообщить о нём.\n\n'
-          'Включайте, только если нужна раздача интернета через VPN.',
+          context.l10n.splitTetheringWarning,
           style: AppTheme.sans(size: 13, color: t.textDim),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Отмена', style: AppTheme.mono(size: 12, color: t.textDim)),
+            child: Text(context.l10n.commonCancel, style: AppTheme.mono(size: 12, color: t.textDim)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Включить', style: AppTheme.mono(size: 12, color: t.danger)),
+            child: Text(context.l10n.commonEnable, style: AppTheme.mono(size: 12, color: t.danger)),
           ),
         ],
       ),
@@ -111,12 +109,12 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
             // ── Hero panel ────────────────────────────────────────
             HeroPanel(
               t: t,
-              tagline: 'ПРИЛОЖЕНИЯ · SPLIT-TUNNEL',
+              tagline: context.l10n.splitTagline,
               title: 'APPS',
               subtitle: Text(
                 isOnlySelected
-                    ? '${packages.length} выбрано · только через VPN'
-                    : '${packages.length} исключено · остальное через VPN',
+                    ? context.l10n.splitSelectedOnly(packages.length)
+                    : context.l10n.splitExcluded(packages.length),
                 style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5),
               ),
               trailing: Container(
@@ -129,10 +127,10 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
             // ── Master toggle ─────────────────────────────────────
             SetRowToggle(
               t: t,
-              title: 'Сплит-туннелирование',
+              title: context.l10n.routingSplitTunnel,
               hint: settings?.splitTunnelingEnabled == true
-                  ? 'включено'
-                  : 'выключено — весь трафик через VPN',
+                  ? context.l10n.splitEnabled
+                  : context.l10n.splitDisabled,
               value: settings?.splitTunnelingEnabled ?? false,
               onChange: (v) {
                 if (settings != null) {
@@ -148,15 +146,15 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Режим VPN', style: AppTheme.sans(size: 14, color: t.text)),
+                  Text(context.l10n.splitVpnMode, style: AppTheme.sans(size: 14, color: t.text)),
                   Container(
                     decoration: BoxDecoration(border: Border.all(color: t.line)),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         for (final (mode, lab) in [
-                          (VpnMode.onlySelected, 'ТОЛЬКО'),
-                          (VpnMode.allExcept, 'КРОМЕ'),
+                          (VpnMode.onlySelected, context.l10n.splitModeOnly),
+                          (VpnMode.allExcept, context.l10n.splitModeExcept),
                         ]) ...[
                           GestureDetector(
                             onTap: () {
@@ -197,8 +195,8 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
                 settings.vpnMode == VpnMode.allExcept) ...[
               SetRowToggle(
                 t: t,
-                title: 'Раздача через VPN',
-                hint: 'Пускать в туннель трафик точки доступа',
+                title: context.l10n.splitTethering,
+                hint: context.l10n.splitTetheringHint,
                 value: settings.allowTethering,
                 onChange: (v) async {
                   if (v && !await _confirmTethering(t)) return;
@@ -212,7 +210,7 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
                   color: t.danger.withAlpha(0x1A),
                   child: Text(
-                    '⚠ Защита ослаблена: исключённые приложения могут выйти через VPN и узнать IP сервера',
+                    '⚠ ${context.l10n.splitTetheringWeakened}',
                     style: AppTheme.mono(size: 11, color: t.danger, letterSpacing: 0.5),
                   ),
                 ),
@@ -228,7 +226,7 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
                   style: AppTheme.mono(size: 12, color: t.text),
                   onChanged: (v) => setState(() => _search = v.toLowerCase()),
                   decoration: InputDecoration(
-                    hintText: 'поиск приложений...',
+                    hintText: context.l10n.splitSearchHint,
                     hintStyle: AppTheme.mono(size: 11, color: t.textMuted),
                     prefixIcon: Icon(Icons.search_rounded, size: 16, color: t.textMuted),
                     contentPadding:
@@ -249,7 +247,7 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Скрыть системные приложения',
+                    Text(context.l10n.splitHideSystem,
                         style: AppTheme.sans(size: 13, color: t.text)),
                     _SquareCheckbox(t: t, value: _hideSystemApps),
                   ],
@@ -262,7 +260,7 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
                 loading: () =>
                     Center(child: CircularProgressIndicator(color: t.accent, strokeWidth: 1.5)),
                 error: (e, _) => Center(
-                  child: Text('Ошибка: $e',
+                  child: Text(context.l10n.commonErrorWith('$e'),
                       style: AppTheme.mono(size: 12, color: t.danger)),
                 ),
                 data: (apps) {
@@ -295,7 +293,7 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
 
                   if (filtered.isEmpty) {
                     return Center(
-                      child: Text('[ нет приложений ]',
+                      child: Text('[ ${context.l10n.splitNoApps} ]',
                           style: AppTheme.mono(
                               size: 12, color: t.textMuted, letterSpacing: 1)),
                     );

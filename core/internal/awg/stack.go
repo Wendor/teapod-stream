@@ -80,6 +80,9 @@ func newStackDevice(mtu uint32, address []netip.Prefix) (*stackDevice, error) {
 		}
 		gErr := ipStack.AddProtocolAddress(tun.DefaultNIC, protoAddr, stack.AddressProperties{})
 		if gErr != nil {
+			// The stack already runs its TCP processor goroutines.
+			ipStack.Close()
+			ipStack.Wait()
 			return nil, E.New("parse local address ", protoAddr.AddressWithPrefix, ": ", gErr.String())
 		}
 	}
@@ -177,6 +180,13 @@ func (w *stackDevice) File() *os.File {
 }
 
 func (w *stackDevice) Read(bufs [][]byte, sizes []int, offset int) (count int, err error) {
+	// A pending wake goes first: the caller computed the S4 offset before Read, and a packet
+	// returned now would go out with the old offset.
+	select {
+	case <-w.wake:
+		return 0, nil
+	default:
+	}
 	select {
 	case packet, ok := <-w.outbound:
 		if !ok {

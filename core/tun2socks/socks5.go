@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"time"
 )
 
@@ -36,7 +37,7 @@ func NewSOCKS5Client(host string, port int, username, password string) *SOCKS5Cl
 // once the connection is established the context is not watched.
 func (s *SOCKS5Client) DialTCP(ctx context.Context, dstIP string, dstPort int) (net.Conn, error) {
 	d := net.Dialer{Timeout: dialTimeout}
-	conn, err := d.DialContext(ctx, "tcp", fmt.Sprintf("%s:%d", s.host, s.port))
+	conn, err := d.DialContext(ctx, "tcp", net.JoinHostPort(s.host, strconv.Itoa(s.port)))
 	if err != nil {
 		return nil, fmt.Errorf("socks5: dial proxy: %w", err)
 	}
@@ -93,7 +94,7 @@ func (a *UDPAssociation) Close() error {
 // ctx cancels the initial TCP dial; once established the context is not watched.
 func (s *SOCKS5Client) UDPAssociate(ctx context.Context) (*UDPAssociation, error) {
 	d := net.Dialer{Timeout: dialTimeout}
-	conn, err := d.DialContext(ctx, "tcp", fmt.Sprintf("%s:%d", s.host, s.port))
+	conn, err := d.DialContext(ctx, "tcp", net.JoinHostPort(s.host, strconv.Itoa(s.port)))
 	if err != nil {
 		return nil, fmt.Errorf("socks5: dial proxy for UDP ASSOCIATE: %w", err)
 	}
@@ -357,5 +358,5 @@ func readSocksAddress(conn net.Conn) (string, error) {
 		return "", fmt.Errorf("read bind port: %w", err)
 	}
 	port := binary.BigEndian.Uint16(portBuf)
-	return fmt.Sprintf("%s:%d", host, port), nil
+	return net.JoinHostPort(host, strconv.Itoa(int(port))), nil
 }

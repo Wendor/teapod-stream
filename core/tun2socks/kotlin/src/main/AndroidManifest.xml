@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Minimal manifest for the teapod-tun2socks Kotlin wrapper library.
+    Permissions (ACCESS_NETWORK_STATE, INTERNET, FOREGROUND_SERVICE) must be
+    declared in the consuming application's manifest.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" />

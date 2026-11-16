@@ -1,0 +1,38 @@
+# General
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+Thumbs.db
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+.claude/
+.qwen/
+
+# Gradle
+.gradle/
+build/
+*/build/
+local.properties
+*.hprof
+.externalNativeBuild/
+
+# Android
+capture/
+*.apk
+*.aar
+*.ap_
+*.dex
+*.class
+
+# Go
+go/bin/
+go/pkg/
+# go.sum is kept as per user request
+
+# Project specific
+output/

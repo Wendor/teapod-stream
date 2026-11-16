@@ -25,7 +25,7 @@ import (
 	"github.com/Wendor/teapod-core/internal/geoconv"
 )
 
-// boxProxyTag — тег outbound/endpoint прокси в конфиге sing-box (контракт с Dart).
+// boxProxyTag — tag of the proxy outbound/endpoint in the sing-box config (contract with Dart).
 const boxProxyTag = "proxy"
 
 type boxEngine struct {
@@ -46,8 +46,8 @@ func currentBox() *boxEngine {
 	return boxEng
 }
 
-// boxLogWriter передаёт логи sing-box в LogListener (формат — boxLogLine); префикс ядра
-// добавляет Kotlin.
+// boxLogWriter passes sing-box logs to LogListener (format — boxLogLine); the core prefix
+// is added by Kotlin.
 type boxLogWriter struct{}
 
 func (boxLogWriter) WriteMessage(level boxlog.Level, message string) {
@@ -60,7 +60,7 @@ func (boxLogWriter) WriteMessage(level boxlog.Level, message string) {
 	l.OnLog(boxLogLine(level, message))
 }
 
-// newBox создаёт (но не запускает) инстанс sing-box из JSON-конфига.
+// newBox creates (but doesn't start) a sing-box instance from a JSON config.
 func newBox(config string, dataDir string, logs bool) (*box.Box, context.CancelFunc, error) {
 	prepared, err := geoconv.Prepare([]byte(config), dataDir, filepath.Join(dataDir, "box-rules"),
 		func(name string) (io.ReadCloser, error) { return mobasset.Open(name) })
@@ -73,7 +73,7 @@ func newBox(config string, dataDir string, logs bool) (*box.Box, context.CancelF
 		cancel()
 		return nil, nil, fmt.Errorf("config error: %w", err)
 	}
-	// Включает AutoDetectInterfaceControl (protect сокетов) для любого конфига.
+	// Enables AutoDetectInterfaceControl (socket protect) for any config.
 	if opts.Route == nil {
 		opts.Route = &option.RouteOptions{}
 	}
@@ -104,7 +104,7 @@ func StartBox(config string, dataDir string, cb XrayCallback) {
 		eng.mu.Lock()
 		defer eng.mu.Unlock()
 
-		// См. StartXray: StopBox мог взять eng.mu раньше и не найти инстанс.
+		// See StartXray: StopBox may have taken eng.mu earlier and not found the instance.
 		if currentBox() != eng {
 			if cb != nil {
 				cb.OnStatus(-1, "start cancelled: core was stopped")
@@ -169,7 +169,7 @@ func GetBoxVersion() string {
 	return "sing-box v" + C.Version
 }
 
-// boxProxyDial — dial через outbound или endpoint прокси.
+// boxProxyDial — dial through the proxy outbound or endpoint.
 func boxProxyDial(inst *box.Box) (func(ctx context.Context, network, addr string) (net.Conn, error), error) {
 	var dialer N.Dialer
 	if out, ok := inst.Outbound().Outbound(boxProxyTag); ok {

@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# ── Инструменты (по умолчанию — homebrew; на CI ANDROID_HOME и go из окружения) ──
+# ── Tools (homebrew by default; on CI ANDROID_HOME and go come from the environment) ──
 export ANDROID_HOME="${ANDROID_HOME:-/opt/homebrew/share/android-commandlinetools}"
 export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/28.2.13676358"
 export PATH="/opt/homebrew/bin:$HOME/go/bin:$ANDROID_HOME/platform-tools:$PATH"
@@ -11,30 +11,30 @@ export PATH="/opt/homebrew/bin:$HOME/go/bin:$ANDROID_HOME/platform-tools:$PATH"
 GO_BIN="go"
 GOMOBILE_BIN="$HOME/go/bin/gomobile"
 
-# ── Общая версия проекта — единственный источник: teapodstream/pubspec.yaml ──
+# ── Shared project version — the single source: teapodstream/pubspec.yaml ──
 PUBSPEC="$SCRIPT_DIR/../teapodstream/pubspec.yaml"
-[[ -f "$PUBSPEC" ]] || { echo "Не найден $PUBSPEC (версия берётся из teapodstream)" >&2; exit 1; }
+[[ -f "$PUBSPEC" ]] || { echo "$PUBSPEC not found (the version is taken from teapodstream)" >&2; exit 1; }
 VERSION=$(awk '/^version:/{split($2,v,"+"); print v[1]; exit}' "$PUBSPEC")
-[[ -n "$VERSION" ]] || { echo "Не удалось прочитать version из $PUBSPEC" >&2; exit 1; }
+[[ -n "$VERSION" ]] || { echo "Couldn't read version from $PUBSPEC" >&2; exit 1; }
 
-# ── Архитектуры ──────────────────────────────────────────────────────────────
+# ── Architectures ──────────────────────────────────────────────────────────────
 ARCHS=("android/arm64:arm64-v8a" "android/amd64:x86_64")
-# Теги sing-box (как в официальной Android-сборке libbox, без лишних сервисов)
+# sing-box tags (as in the official libbox Android build, without extra services)
 TAGS="with_gvisor,with_quic,with_wireguard,with_utls,with_naive_outbound,badlinkname,tfogo_checklinkname0"
-# cronet-go (NaiveProxy) линкует `#cgo LDFLAGS: -l:libcronet.a`; Go 1.27.4+ без allow-листа
-# отвергает такой флаг («invalid flag in #cgo LDFLAGS»).
+# cronet-go (NaiveProxy) links `#cgo LDFLAGS: -l:libcronet.a`; Go 1.27.4+ rejects such a flag
+# without an allow-list ("invalid flag in #cgo LDFLAGS").
 export CGO_LDFLAGS_ALLOW='-l:libcronet\.a'
 
 OUTPUT_DIR="$SCRIPT_DIR/outputs"
 mkdir -p "$OUTPUT_DIR"
 
-# ── Rust-ядро: готовый AAR xray-rust-mobile (собран upstream из xray-rust без патчей) ──
+# ── Rust core: the prebuilt xray-rust-mobile AAR (built upstream from xray-rust without patches) ──
 XRAY_RUST_VERSION="0.9.0"
 XRAY_RUST_SHA256="8f882b5bba982bc0eb44439e1b02eb963299f8929dcfa93ec99246f6c7e78c50"
 XRAY_RUST_URL="https://github.com/aimalygin/xray-rust-mobile/releases/download/v${XRAY_RUST_VERSION}/xray-rust-mobile-${XRAY_RUST_VERSION}.aar"
 XRAY_RUST_AAR="$SCRIPT_DIR/.native/xray-rust-mobile-${XRAY_RUST_VERSION}.aar"
 
-# ── Цвета ────────────────────────────────────────────────────────────────────
+# ── Colors ────────────────────────────────────────────────────────────────────
 CYAN='\033[0;36m'; GREEN='\033[0;32m'; RED='\033[0;31m'; NC='\033[0m'
 log() { echo -e "${CYAN}▶ $*${NC}"; }
 ok()  { echo -e "${GREEN}✓ $*${NC}"; }
@@ -54,7 +54,7 @@ fetch_xray_rust() {
     ok "xray-rust-mobile $XRAY_RUST_VERSION (sha256 verified)"
 }
 
-# Добавляет в распакованный AAR Rust-ядро: .so для наших ABI, классы, proguard-правила.
+# Adds the Rust core to the unpacked AAR: .so for our ABIs, classes, proguard rules.
 merge_xray_rust() {
     local dest=$1
     local rust_dir classes_dir
@@ -74,18 +74,18 @@ merge_xray_rust() {
     rm -rf "$rust_dir" "$classes_dir"
 }
 
-# xray-core собирается из кэша модулей с патчами patches/xray-core/*.patch
+# xray-core is built from the module cache with patches/xray-core/*.patch applied
 # (go.mod: replace github.com/xtls/xray-core => ./.xray-core).
 prepare_xray_core() {
     local version dir dest="$SCRIPT_DIR/.xray-core"
     version=$(awk '$1=="github.com/xtls/xray-core"{print $2; exit}' "$SCRIPT_DIR/go.mod")
     dir=$(cd "$SCRIPT_DIR" && $GO_BIN mod download -json "github.com/xtls/xray-core@$version" | awk -F'"' '$2=="Dir"{print $4}')
-    [[ -d "$dir" ]] || err "xray-core $version: модуль не скачан"
+    [[ -d "$dir" ]] || err "xray-core $version: module not downloaded"
     rm -rf "$dest"
     cp -R "$dir" "$dest"
     chmod -R u+w "$dest"
     for p in "$SCRIPT_DIR"/patches/xray-core/*.patch; do
-        patch -p1 -s -d "$dest" < "$p" || err "Патч не применился: $(basename "$p")"
+        patch -p1 -s -d "$dest" < "$p" || err "Patch did not apply: $(basename "$p")"
     done
     ok "xray-core $version (patched)"
 }
@@ -94,10 +94,10 @@ build() {
     fetch_xray_rust
     prepare_xray_core
     log "Building teapod-core v$VERSION..."
-    # В outputs — только текущая версия: teapodstream берёт AAR строго по версии
+    # outputs holds only the current version: teapodstream takes the AAR strictly by version
     rm -f "$OUTPUT_DIR"/teapod-core-*.aar "$OUTPUT_DIR"/teapod-core-*-sources.jar
 
-    # Версия sing-box задаётся только через -X (иначе "unknown") — берём из go.mod.
+    # The sing-box version is set only via -X (otherwise "unknown") — taken from go.mod.
     local box_version
     box_version=$(cd "$SCRIPT_DIR" && go list -m -f '{{.Version}}' github.com/sagernet/sing-box)
 
@@ -159,9 +159,9 @@ push() {
     local tag="v$VERSION"
     local fat_aar="$OUTPUT_DIR/teapod-core-${VERSION}.aar"
 
-    # Проверяем наличие артефактов
+    # Check that the artifacts exist
     if [[ ! -f "$fat_aar" ]]; then
-        err "Fat AAR не найден: $fat_aar. Сначала выполните: ./build.sh build"
+        err "Fat AAR not found: $fat_aar. Run first: ./build.sh build"
     fi
 
     local per_abi_aars=()
@@ -171,31 +171,31 @@ push() {
         [[ -f "$f" ]] && per_abi_aars+=("$f")
     done
 
-    # Проверяем gh
-    command -v gh &>/dev/null || err "gh CLI не найден. Установите: brew install gh && gh auth login"
-    gh auth status &>/dev/null || err "Не авторизован. Выполните: gh auth login"
+    # Check gh
+    command -v gh &>/dev/null || err "gh CLI not found. Install it: brew install gh && gh auth login"
+    gh auth status &>/dev/null || err "Not logged in. Run: gh auth login"
 
-    log "Публикация релиза $tag..."
+    log "Publishing release $tag..."
 
     local assets=("$fat_aar" "${per_abi_aars[@]}")
 
     if gh release view "$tag" &>/dev/null; then
-        log "Релиз $tag уже существует, обновляю assets..."
+        log "Release $tag already exists, updating assets..."
         gh release upload "$tag" "${assets[@]}" --clobber
     else
-        # Тег — на текущий коммит, а не на ветку по умолчанию (master)
+        # The tag points to the current commit, not the default branch (master)
         local head
         head=$(git -C "$SCRIPT_DIR" rev-parse HEAD)
-        [[ -n "$(git -C "$SCRIPT_DIR" branch -r --contains "$head")" ]] || err "Коммит $head не запушен — сначала git push"
+        [[ -n "$(git -C "$SCRIPT_DIR" branch -r --contains "$head")" ]] || err "Commit $head is not pushed — git push first"
         local flags=("--title" "teapod-core $VERSION" "--generate-notes" "--target" "$head")
         [[ "$is_pre" == "true" ]] && flags+=("--prerelease")
         gh release create "$tag" "${flags[@]}" "${assets[@]}"
     fi
 
-    ok "Релиз $tag опубликован!"
+    ok "Release $tag published!"
 }
 
-# ── Точка входа ──────────────────────────────────────────────────────────────
+# ── Entry point ──────────────────────────────────────────────────────────────
 case "${1:-build}" in
     build)
         build
@@ -210,10 +210,10 @@ case "${1:-build}" in
         echo ""
         echo "  teapod-core build script  (v$VERSION)"
         echo ""
-        echo "  Команды:"
-        echo "    ./build.sh build    Собрать все ABI + fat AAR"
-        echo "    ./build.sh push     Опубликовать релиз на GitHub"
-        echo "    ./build.sh pushpre  Опубликовать pre-release на GitHub"
+        echo "  Commands:"
+        echo "    ./build.sh build    Build all ABIs + the fat AAR"
+        echo "    ./build.sh push     Publish a release on GitHub"
+        echo "    ./build.sh pushpre  Publish a pre-release on GitHub"
         echo ""
         ;;
 esac

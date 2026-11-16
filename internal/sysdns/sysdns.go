@@ -1,6 +1,6 @@
-// Package sysdns — DNS-транспорт sing-box `local` через системный резолвер.
-// Стандартный `local` читает /etc/resolv.conf, которого на Android нет; Go на
-// Android резолвит через bionic (cgo), а UID приложения исключён из VPN.
+// Package sysdns — the sing-box `local` DNS transport via the system resolver.
+// The standard `local` reads /etc/resolv.conf, which Android doesn't have; Go on
+// Android resolves via bionic (cgo), and the app's UID is excluded from the VPN.
 package sysdns
 
 import (
@@ -17,7 +17,7 @@ import (
 	"github.com/sagernet/sing-box/option"
 )
 
-// Register заменяет транспорт `local` в реестре DNS.
+// Register replaces the `local` transport in the DNS registry.
 func Register(registry *boxdns.TransportRegistry) {
 	boxdns.RegisterTransport[option.LocalDNSServerOptions](registry, C.DNSTypeLocal,
 		func(_ context.Context, _ log.ContextLogger, tag string, options option.LocalDNSServerOptions) (adapter.DNSTransport, error) {
@@ -45,7 +45,7 @@ func (t *Transport) Close() error { return nil }
 
 func (t *Transport) Reset() {}
 
-// Exchange отвечает только на A/AAAA: системный резолвер других типов не отдаёт.
+// Exchange answers only A/AAAA: the system resolver doesn't return other types.
 func (t *Transport) Exchange(ctx context.Context, message *dns.Msg) (*dns.Msg, error) {
 	if len(message.Question) == 0 {
 		return nil, errors.New("sysdns: empty question")

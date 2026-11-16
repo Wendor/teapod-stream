@@ -17,24 +17,24 @@ class AppVpnService : VpnService() {
     private val executor = Executors.newSingleThreadExecutor()
     private val statsExecutor = Executors.newScheduledThreadPool(1)
 
-    // Callback для статуса Xray
+    // Callback for the Xray status
     private val xrayCallback = object : XrayCallback {
         override fun onStatus(status: Long, message: String) {
             Log.d("AppVpnService", "Xray status ($status): $message")
         }
     }
 
-    // Валидатор для tun2socks
+    // Validator for tun2socks
     private val tunValidator = object : TunValidator {
         override fun onValidate(srcIP: String, srcPort: Long, dstIP: String, dstPort: Long, protocol: Long): Boolean {
             return true
         }
     }
 
-    // Поиск процесса для Xray правил
+    // Process lookup for Xray rules
     private val processFinder = object : ProcessFinder {
         override fun findProcessByConnection(network: String, srcIP: String, srcPort: Long, destIP: String, destPort: Long): Long {
-            // Эмуляция поиска процесса
+            // Process lookup emulation
             return -1
         }
     }
@@ -43,7 +43,7 @@ class AppVpnService : VpnService() {
         super.onCreate()
         Log.d("AppVpnService", "VPN Service created. Core version: ${Vpncore.getXrayVersion()}")
         
-        // Настройка ассетов (geoip/geosite), если лежат в /data/user/0/.../files/
+        // Asset setup (geoip/geosite) if they are in /data/user/0/.../files/
         // Vpncore.initCoreEnv(filesDir.absolutePath, "")
     }
 
@@ -74,7 +74,7 @@ class AppVpnService : VpnService() {
         Log.d("AppVpnService", "Starting Xray...")
         Vpncore.startXray(configContent, xrayCallback)
         
-        // Регистрация поиска процесса (опционально)
+        // Process lookup registration (optional)
         Vpncore.registerXrayProcessFinder(processFinder)
 
         Thread.sleep(500)
@@ -110,7 +110,7 @@ class AppVpnService : VpnService() {
                 val cache = Vpncore.getTunCacheSize()
                 Log.d("AppVpnService", "Stats: ↑$upload bytes, ↓$download bytes, cache size: $cache")
                 
-                // Пример получения статистики Xray (если в конфиге есть тег 'proxy')
+                // Example of getting Xray stats (if the config has a 'proxy' tag)
                 // val proxyDown = Vpncore.queryXrayStats("proxy", "downlink")
             }
         }, 5, 5, TimeUnit.SECONDS)

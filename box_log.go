@@ -9,8 +9,8 @@ import (
 
 var ansiEscape = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
-// boxLogLine — строка лога sing-box в формате xray ([Error]/[Warning]/[Info]) без
-// escape-кодов цвета: форматтер платформы sing-box красит вывод всегда.
+// boxLogLine — a sing-box log line in xray format ([Error]/[Warning]/[Info]) without
+// color escape codes: the sing-box platform formatter always colors output.
 func boxLogLine(level boxlog.Level, message string) string {
 	tag := "[Info]"
 	switch {

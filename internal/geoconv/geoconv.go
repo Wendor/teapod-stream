@@ -1,5 +1,5 @@
-// Package geoconv переводит коды geoip.dat/geosite.dat (формат xray) в rule-set'ы
-// sing-box (.srs): sing-box 1.12+ не читает старые гео-базы.
+// Package geoconv converts geoip.dat/geosite.dat codes (xray format) into sing-box
+// rule-sets (.srs): sing-box 1.12+ doesn't read the old geo databases.
 package geoconv
 
 import (
@@ -21,11 +21,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// tagPattern — теги rule-set'ов гео из конфига: geoip-<code>, geosite-<code>[@attr].
+// tagPattern — geo rule-set tags from the config: geoip-<code>, geosite-<code>[@attr].
 var tagPattern = regexp.MustCompile(`^(geoip|geosite)-([a-z0-9][a-z0-9!_.\-]*(?:@[a-z0-9!_.\-]+)?)$`)
 
-// Prepare генерирует .srs для локальных rule-set'ов с тегами geoip-*/geosite-*
-// в cacheDir и переписывает их path. .dat ищутся в datDir, иначе — через openAsset.
+// Prepare generates .srs for local rule-sets tagged geoip-*/geosite-*
+// in cacheDir and rewrites their path. .dat files are looked up in datDir, otherwise via openAsset.
 func Prepare(config []byte, datDir, cacheDir string, openAsset func(name string) (io.ReadCloser, error)) ([]byte, error) {
 	dec := json.NewDecoder(bytes.NewReader(config))
 	dec.UseNumber()
@@ -64,7 +64,7 @@ func Prepare(config []byte, datDir, cacheDir string, openAsset func(name string)
 	return json.Marshal(root)
 }
 
-// GeoSiteRules строит rule-set из кода geosite; "code@attr" — только домены с атрибутом.
+// GeoSiteRules builds a rule-set from a geosite code; "code@attr" — only domains with the attribute.
 func GeoSiteRules(list *geodata.GeoSiteList, code string) (option.PlainRuleSet, error) {
 	name, attr, _ := strings.Cut(code, "@")
 	for _, entry := range list.GetEntry() {
@@ -92,7 +92,7 @@ func GeoSiteRules(list *geodata.GeoSiteList, code string) (option.PlainRuleSet, 
 	return option.PlainRuleSet{}, fmt.Errorf("geosite code %q not found", name)
 }
 
-// GeoIPRules строит rule-set из кода geoip.
+// GeoIPRules builds a rule-set from a geoip code.
 func GeoIPRules(list *geodata.GeoIPList, code string) (option.PlainRuleSet, error) {
 	for _, entry := range list.GetEntry() {
 		if !strings.EqualFold(entry.GetCode(), code) {
@@ -123,7 +123,7 @@ func hasAttribute(d *geodata.Domain, attr string) bool {
 	return false
 }
 
-// ruleSet — пустой набор (нет доменов после фильтра) ничего не матчит.
+// ruleSet — an empty set (no domains after filtering) matches nothing.
 func ruleSet(r option.DefaultHeadlessRule) option.PlainRuleSet {
 	if len(r.Domain)+len(r.DomainSuffix)+len(r.DomainKeyword)+len(r.DomainRegex)+len(r.IPCIDR) == 0 {
 		return option.PlainRuleSet{}
@@ -131,8 +131,8 @@ func ruleSet(r option.DefaultHeadlessRule) option.PlainRuleSet {
 	return option.PlainRuleSet{Rules: []option.HeadlessRule{{Type: C.RuleTypeDefault, DefaultOptions: r}}}
 }
 
-// ensureRuleSet возвращает путь к актуальному .srs. Рядом лежит <tag>.srs.src
-// с размером и mtime исходного .dat; при несовпадении .srs пересобирается.
+// ensureRuleSet returns the path to an up-to-date .srs. Next to it lies <tag>.srs.src
+// with the size and mtime of the source .dat; on mismatch the .srs is rebuilt.
 func ensureRuleSet(kind, code, tag, cacheDir string, lists *datLoader) (string, error) {
 	out := filepath.Join(cacheDir, tag+".srs")
 	stamp := lists.stamp(kind)
@@ -191,7 +191,7 @@ func writeAtomic(path string, write func(io.Writer) error) error {
 	return os.Rename(tmp.Name(), path)
 }
 
-// datLoader читает .dat не больше одного раза за вызов Prepare.
+// datLoader reads a .dat at most once per Prepare call.
 type datLoader struct {
 	datDir    string
 	openAsset func(name string) (io.ReadCloser, error)
@@ -199,7 +199,7 @@ type datLoader struct {
 	ipList    *geodata.GeoIPList
 }
 
-// stamp — размер и mtime .dat на диске; "" — файла на диске нет (кэш не используется).
+// stamp — size and mtime of the .dat on disk; "" — no file on disk (the cache isn't used).
 func (l *datLoader) stamp(kind string) string {
 	fi, err := os.Stat(filepath.Join(l.datDir, kind+".dat"))
 	if err != nil {

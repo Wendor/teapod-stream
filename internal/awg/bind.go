@@ -23,8 +23,8 @@ import (
 
 var _ conn.Bind = (*clientBind)(nil)
 
-// clientBind — UDP-сокет к единственному peer'у (режим connect). В отличие от
-// оригинала байты 1–3 пакета не трогаются: в AWG там заголовок H1–H4, а не reserved.
+// clientBind — a UDP socket to the single peer (connect mode). Unlike
+// the original, packet bytes 1–3 aren't touched: in AWG they hold the H1–H4 header, not reserved.
 type clientBind struct {
 	ctx          context.Context
 	logger       logger.Logger
@@ -137,7 +137,7 @@ func (c *clientBind) SetMark(mark uint32) error {
 	return nil
 }
 
-// Send пишет в подключённый сокет: адрес ep не важен (режим connect).
+// Send writes to the connected socket: the ep address doesn't matter (connect mode).
 func (c *clientBind) Send(bufs [][]byte, ep conn.Endpoint) error {
 	udpConn, err := c.connect()
 	if err != nil {

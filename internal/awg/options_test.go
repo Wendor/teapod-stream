@@ -82,8 +82,8 @@ func TestEndpointOptionsUnmarshal(t *testing.T) {
 	}
 }
 
-// AWG 3.1: сервер с RandomTrailers дописывает хвост к рукопожатию — без флага клиент
-// отбрасывает ответ как «unknown type».
+// AWG 3.1: a server with RandomTrailers appends a tail to the handshake — without the flag the client
+// drops the response as "unknown type".
 func TestAmneziaIpcConfigFlags(t *testing.T) {
 	got, err := AmneziaOptions{RandomTrailers: true, DisableCookies: true}.IpcConfig()
 	if err != nil {

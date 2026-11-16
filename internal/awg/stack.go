@@ -203,9 +203,9 @@ func (w *stackDevice) Read(bufs [][]byte, sizes []int, offset int) (count int, e
 	}
 }
 
-// Reconfigured будит Read: читатель TUN amneziawg-go стартует в NewDevice и блокируется
-// со смещением под S4 на момент старта (0). Без пробуждения первый пакет после IpcSet уйдёт
-// без паддинга S4 и будет отброшен сервером (UDP — потерян: первый DNS-запрос ждал 10 с).
+// Reconfigured wakes Read: the amneziawg-go TUN reader starts in NewDevice and blocks
+// with the S4 offset as of the start (0). Without a wake-up the first packet after IpcSet goes out
+// without S4 padding and is dropped by the server (UDP is lost: the first DNS query waited 10 s).
 func (w *stackDevice) Reconfigured() {
 	select {
 	case w.wake <- struct{}{}:

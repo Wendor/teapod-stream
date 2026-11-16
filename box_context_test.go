@@ -14,7 +14,7 @@ import (
 	"github.com/sagernet/sing/common/json"
 )
 
-// sing-box без TUN-inbound (за tun2socks) должен стартовать с нашим platform interface.
+// sing-box without a TUN inbound (behind tun2socks) must start with our platform interface.
 func TestBoxStartsWithoutTunInbound(t *testing.T) {
 	ctx := newBoxContext(context.Background(), t.TempDir())
 	config := `{"log":{"disabled":true},
@@ -40,8 +40,8 @@ type discardLogs struct{}
 
 func (discardLogs) WriteMessage(log.Level, string) {}
 
-// С PlatformLogWriter sing-box всегда открывает cache.db; на Android cwd процесса — «/»
-// (read-only), поэтому относительные пути должны резолвиться в dataDir.
+// With PlatformLogWriter sing-box always opens cache.db; on Android the process cwd is "/"
+// (read-only), so relative paths must resolve into dataDir.
 func TestBoxCacheFileLivesInDataDir(t *testing.T) {
 	dataDir := t.TempDir()
 	readOnly := t.TempDir()

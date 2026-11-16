@@ -55,7 +55,7 @@ var serverAmnezia = AmneziaOptions{
 	H1: "100-200", H2: "300", H3: "400", H4: "500-600", I1: "<b 0xc0ffee><r 16>",
 }
 
-// startServer — эталонный amneziawg-go с HTTP-сервером на 10.66.0.1:80 внутри туннеля.
+// startServer — reference amneziawg-go with an HTTP server on 10.66.0.1:80 inside the tunnel.
 func startServer(t *testing.T, server, client keyPair, amnezia AmneziaOptions) uint16 {
 	t.Helper()
 	port, _ := startServerWithStack(t, server, client, amnezia)
@@ -113,7 +113,7 @@ func startServerWithStack(t *testing.T, server, client keyPair, amnezia AmneziaO
 	return 0, nil
 }
 
-// startClient — sing-box с endpoint'ом awg к серверу.
+// startClient — sing-box with an awg endpoint to the server.
 func startClient(t *testing.T, server, client keyPair, port uint16, amnezia AmneziaOptions) *box.Box {
 	t.Helper()
 	registry := include.EndpointRegistry()
@@ -180,7 +180,7 @@ func TestLoopbackHandshakeMismatchFails(t *testing.T) {
 	}
 }
 
-// Параметры сервера AmneziaVPN «AmneziaWG 2» (AWG 3.1) из реального ключа.
+// AmneziaVPN "AmneziaWG 2" server parameters (AWG 3.1) from a real key.
 func TestLoopbackHandshakeAmneziaAWG2(t *testing.T) {
 	server, client := newKeyPair(t), newKeyPair(t)
 	amnezia := AmneziaOptions{
@@ -198,8 +198,8 @@ func TestLoopbackHandshakeAmneziaAWG2(t *testing.T) {
 	}
 }
 
-// Первый UDP-пакет уходит, пока идёт рукопожатие (так шлёт DNS-запрос sing-box сразу после
-// старта) — он должен дойти: UDP не переспрашивает, DNS ждал бы 10 с.
+// The first UDP packet goes out while the handshake is in progress (sing-box sends a DNS query like this right after
+// start) — it must arrive: UDP doesn't retry, DNS would wait 10 s.
 func TestLoopbackFirstUDPPacketSurvivesHandshake(t *testing.T) {
 	server, client := newKeyPair(t), newKeyPair(t)
 	port, stack := startServerWithStack(t, server, client, serverAmnezia)

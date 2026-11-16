@@ -8,8 +8,8 @@ import (
 	"time"
 )
 
-// Читатель TUN, заблокированный в Read до IpcSet, должен проснуться и пересчитать
-// смещение под S4 — иначе первый пакет уйдёт без паддинга.
+// A TUN reader blocked in Read before IpcSet must wake up and recompute
+// the S4 offset — otherwise the first packet goes out without padding.
 func TestStackDeviceReconfiguredWakesRead(t *testing.T) {
 	dev, err := newStackDevice(1408, []netip.Prefix{netip.MustParsePrefix("10.66.0.2/32")})
 	if err != nil {

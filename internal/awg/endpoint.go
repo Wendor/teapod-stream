@@ -30,14 +30,14 @@ import (
 
 const defaultMTU = 1408
 
-// RegisterEndpoint регистрирует тип "awg" в реестре endpoint'ов sing-box.
+// RegisterEndpoint registers the "awg" type in the sing-box endpoint registry.
 func RegisterEndpoint(registry *endpoint.Registry) {
 	endpoint.Register[Options](registry, TypeAWG, NewEndpoint)
 }
 
 var _ adapter.Endpoint = (*Endpoint)(nil)
 
-// Endpoint — клиент AmneziaWG с одним peer'ом на gvisor-стеке sing-box.
+// Endpoint — an AmneziaWG client with a single peer on the sing-box gvisor stack.
 type Endpoint struct {
 	endpoint.Adapter
 	ctx       context.Context
@@ -106,9 +106,9 @@ func decodeKey(name, value string) (string, error) {
 	return hex.EncodeToString(raw), nil
 }
 
-// buildIpcConfig — UAPI amneziawg-go: ключ устройства, параметры AWG, затем peer.
-// В режиме connect адрес endpoint'а не используется для отправки, поэтому для
-// доменного сервера подставляется заглушка с тем же портом.
+// buildIpcConfig — amneziawg-go UAPI: device key, AWG parameters, then the peer.
+// In connect mode the endpoint address isn't used for sending, so for
+// a domain server a placeholder with the same port is substituted.
 func buildIpcConfig(options Options) (string, error) {
 	peer := options.Peers[0]
 	privateKey, err := decodeKey("private_key", options.PrivateKey)

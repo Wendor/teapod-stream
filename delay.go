@@ -9,14 +9,14 @@ import (
 	"time"
 )
 
-// measureDelayVia — HTTP-проба через dial: лучшее из двух попыток, мс.
+// measureDelayVia — an HTTP probe through dial: the best of two attempts, ms.
 func measureDelayVia(ctx context.Context, dial func(ctx context.Context, network, addr string) (net.Conn, error), url string) (int64, error) {
 	tr := &http.Transport{
 		TLSHandshakeTimeout: 6 * time.Second,
 		DisableKeepAlives:   false,
 		DialContext:         dial,
 	}
-	// Keep-alive соединение держит сессию outbound'а, а с ней — соединение к серверу.
+	// A keep-alive connection holds the outbound session, and with it the connection to the server.
 	defer tr.CloseIdleConnections()
 	client := &http.Client{Transport: tr, Timeout: 12 * time.Second}
 

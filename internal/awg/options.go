@@ -1,4 +1,4 @@
-// Package awg — endpoint AmneziaWG для sing-box на amneziawg-go.
+// Package awg — an AmneziaWG endpoint for sing-box on amneziawg-go.
 package awg
 
 import (
@@ -11,17 +11,17 @@ import (
 	"github.com/sagernet/sing-box/option"
 )
 
-// TypeAWG — тип endpoint'а в конфиге sing-box.
+// TypeAWG — the endpoint type in the sing-box config.
 const TypeAWG = "awg"
 
-// Options — опции WireGuard-endpoint'а sing-box плюс параметры AmneziaWG.
+// Options — sing-box WireGuard endpoint options plus AmneziaWG parameters.
 type Options struct {
 	option.WireGuardEndpointOptions
 	Amnezia AmneziaOptions `json:"amnezia"`
 }
 
-// AmneziaOptions — параметры AmneziaWG 3.1 (ключи UAPI amneziawg-go).
-// Нулевые/пустые значения не передаются: AWG считает их нулём.
+// AmneziaOptions — AmneziaWG 3.1 parameters (amneziawg-go UAPI keys).
+// Zero/empty values aren't passed: AWG treats them as zero.
 type AmneziaOptions struct {
 	Jc   int `json:"jc,omitempty"`
 	Jmin int `json:"jmin,omitempty"`
@@ -41,7 +41,7 @@ type AmneziaOptions struct {
 	I4 string `json:"i4,omitempty"`
 	I5 string `json:"i5,omitempty"`
 
-	// HeaderProtectionKey — base64, как в .conf; в UAPI уходит hex.
+	// HeaderProtectionKey — base64, as in .conf; hex goes to UAPI.
 	HeaderProtectionKey    string `json:"header_protection_key,omitempty"`
 	ContentPaddingAddition string `json:"content_padding_addition,omitempty"`
 	RekeyAfterTime         string `json:"rekey_after_time,omitempty"`
@@ -53,7 +53,7 @@ type AmneziaOptions struct {
 	DisableCookies         bool   `json:"disable_cookies,omitempty"`
 }
 
-// Validate проверяет ограничения AWG, которые иначе всплыли бы только при рукопожатии.
+// Validate checks AWG constraints that would otherwise surface only at the handshake.
 func (o AmneziaOptions) Validate() error {
 	if o.HeaderProtectionKey != "" && (o.S1 < 12 || o.S2 < 12 || o.S3 < 12 || o.S4 < 12) {
 		return errors.New("awg: header protection requires s1-s4 >= 12")
@@ -61,7 +61,7 @@ func (o AmneziaOptions) Validate() error {
 	return nil
 }
 
-// IpcConfig — строки UAPI amneziawg-go уровня устройства в фиксированном порядке.
+// IpcConfig — device-level amneziawg-go UAPI lines in a fixed order.
 func (o AmneziaOptions) IpcConfig() (string, error) {
 	var b strings.Builder
 	ints := []struct {

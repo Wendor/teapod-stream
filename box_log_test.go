@@ -6,8 +6,8 @@ import (
 	boxlog "github.com/sagernet/sing-box/log"
 )
 
-// Форматтер платформы sing-box 1.14 всегда красит вывод (log.disable_color на него не
-// действует) — в logcat и vpn_log.txt escape-коды не нужны.
+// The sing-box 1.14 platform formatter always colors output (log.disable_color doesn't
+// affect it) — escape codes aren't needed in logcat and vpn_log.txt.
 func TestBoxLogLineStripsColors(t *testing.T) {
 	got := boxLogLine(boxlog.LevelDebug, "\x1b[37mDEBUG\x1b[0m[0003] [\x1b[38;5;231m3995781847\x1b[0m 0ms] router: ok\n")
 	if want := "[Info] DEBUG[0003] [3995781847 0ms] router: ok"; got != want {

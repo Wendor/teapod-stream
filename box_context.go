@@ -16,8 +16,8 @@ import (
 	"github.com/Wendor/teapod-core/internal/sysdns"
 )
 
-// newBoxContext — реестры sing-box с endpoint'ом awg и platform interface без TUN.
-// Относительные пути sing-box (cache.db) — в dataDir: cwd процесса на Android — «/», read-only.
+// newBoxContext — sing-box registries with the awg endpoint and a platform interface without TUN.
+// Relative sing-box paths (cache.db) go to dataDir: the process cwd on Android is "/", read-only.
 func newBoxContext(ctx context.Context, dataDir string) context.Context {
 	endpoints := include.EndpointRegistry()
 	awg.RegisterEndpoint(endpoints)

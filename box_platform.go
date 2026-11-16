@@ -18,8 +18,8 @@ import (
 	"github.com/sagernet/sing/common/x/list"
 )
 
-// boxPlatform — platform interface без возможностей платформы: sing-box работает
-// за tun2socks (без TUN-inbound), сокеты приложения исключены из VPN самим сервисом.
+// boxPlatform — a platform interface without platform capabilities: sing-box runs
+// behind tun2socks (no TUN inbound), the app's sockets are excluded from the VPN by the service itself.
 
 type boxPlatform struct{}
 
@@ -28,7 +28,7 @@ var (
 	protectFn func(fd int)
 )
 
-// setProtectFd задаёт VpnService.protect для сокетов sing-box (nil — снять).
+// setProtectFd sets VpnService.protect for sing-box sockets (nil — remove).
 func setProtectFd(f func(fd int)) {
 	protectMu.Lock()
 	protectFn = f
@@ -52,9 +52,9 @@ func (s *boxPlatform) UsePlatformAutoDetectInterfaceControl() bool {
 	return true
 }
 
-// Каждый исходящий сокет — через VpnService.protect, как у xray: голые Go-сокеты
-// идут мимо netd-хуков bionic и после смены сети (LTE → Wi-Fi) до конца linger
-// старой сети уходят не туда — первое QUIC-рукопожатие hysteria2 висит 15 с.
+// Every outgoing socket goes through VpnService.protect, as with xray: bare Go sockets
+// bypass bionic's netd hooks and after a network change (LTE → Wi-Fi), until the old network's
+// linger ends, go to the wrong place — the first hysteria2 QUIC handshake hangs for 15 s.
 func (s *boxPlatform) AutoDetectInterfaceControl(fd int) error {
 	protectFd(fd)
 	return nil
@@ -111,10 +111,10 @@ func (s *boxPlatform) ReadWIFIState(ctx context.Context) adapter.WIFIState {
 	return adapter.WIFIState{}
 }
 
-// На Android sing-box ищет владельца каждого соединения всегда. За tun2socks
-// источник — 127.0.0.1, то есть мы сами: без платформенного поиска он лезет в
-// netlink, получает отказ SELinux и пишет «failed to search process» на каждое
-// соединение. Пустой владелец (UserId -1) отключает поиск без ошибок.
+// On Android sing-box always looks up the owner of every connection. Behind tun2socks
+// the source is 127.0.0.1, i.e. ourselves: without a platform lookup it goes to
+// netlink, gets a SELinux denial and logs "failed to search process" for every
+// connection. An empty owner (UserId -1) disables the lookup without errors.
 func (s *boxPlatform) UsePlatformConnectionOwnerFinder() bool {
 	return true
 }
@@ -198,7 +198,7 @@ func (s *boxPlatform) LocalDNSTransport() dns.TransportConstructorFunc[option.Lo
 type boxInterfaceMonitor struct{}
 
 func (s *boxInterfaceMonitor) Start() error {
-	// Монитор без событий: смену сети обрабатывает сервис полным реконнектом.
+	// A monitor without events: the service handles network changes with a full reconnect.
 	return nil
 }
 

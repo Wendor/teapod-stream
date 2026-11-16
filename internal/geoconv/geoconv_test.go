@@ -162,7 +162,7 @@ func TestPrepareRewritesPathsAndWritesSrs(t *testing.T) {
 	if p := ruleSetPaths(t, out)["geosite-test"]; p != want {
 		t.Fatalf("path = %q, want %q", p, want)
 	}
-	// В .srs domain/domain_suffix хранятся как DomainMatcher.
+	// In .srs domain/domain_suffix are stored as a DomainMatcher.
 	if r := rule(t, readSrs(t, want)); r.DomainMatcher == nil || !r.DomainMatcher.Match("a.example.com") ||
 		!r.DomainMatcher.Match("full.example.org") {
 		t.Fatalf("srs rule = %+v", r)

@@ -47,7 +47,8 @@ RustCore:          TUN fd → xray-rust → server
 - The console log writer writes to stdout only without a `LogListener` (no duplicate logcat lines).
 - sing-box: platform interface stub with protected sockets (`auto_detect_interface` forced); connection owner lookup
   off (behind tun2socks the source is always 127.0.0.1); `cache.db` in `dataDir` (cwd on Android is read-only `/`);
-  the `local` DNS transport uses the system resolver (`internal/sysdns`, Android has no `/etc/resolv.conf`); version
+  the `local` DNS transport uses the system resolver (`internal/sysdns`, Android has no `/etc/resolv.conf`; the name
+  stays absolute, so no search domain is appended); version
   injected by `build.sh` via `-ldflags`.
 - Geo for sing-box (`internal/geoconv`): sing-box 1.12+ can't read `.dat`; before start, local rule-sets tagged
   `geoip-<code>` / `geosite-<code>` are built into `<dataDir>/box-rules/*.srs` from the `.dat` files and cached by the

@@ -51,7 +51,8 @@ It reviews when the PR leaves draft and again after each push.
 ```bash
 gh pr checks <n> --watch                       # wait until the CodeRabbit check finishes
 gh api repos/Wendor/teapod-stream/pulls/<n>/comments --jq '.[] | select(.user.login|test("coderabbit")) | {id, path, line, body}'
-gh pr view <n> --comments                      # its summary and outside-diff comments
+gh api repos/Wendor/teapod-stream/pulls/<n>/reviews --jq '.[] | select(.user.login|test("coderabbit")) | .body'
+                                               # every review body: outside-diff and nitpick items live only here
 ```
 
 For each comment: check it against the code and the wiki. Valid → fix in a new commit. Wrong or out of scope →

@@ -235,7 +235,7 @@ func StartXray(config string, cb XrayCallback) {
 		eng.statsManager, _ = inst.GetFeature(corestats.ManagerType()).(corestats.Manager)
 
 		log.Println("[xray] starting core...")
-		if err := inst.Start(); err != nil {
+		if err := startXrayInstance(inst); err != nil {
 			log.Printf("[xray] startup failed: %v", err)
 			if cb != nil {
 				cb.OnStatus(-1, fmt.Sprintf("startup failed: %v", err))

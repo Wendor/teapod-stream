@@ -46,6 +46,8 @@ active connection table).
 - **Idle and zombie TCP:** activity tracked per direction; closed when both sides are silent ≥ 5 min, or after 2 min
   of "request sent, upstream silent" (a lost close after a server reset). Read deadlines in 30 s steps, no sweepers.
 - **Half-close:** EOF in one direction becomes `CloseWrite` on the other side; the reverse direction keeps working.
+- **UDP idle:** a flow ends after 60 s without a forwarded datagram in either direction, so send-only and
+  receive-only flows stay alive; dropped datagrams (foreign source, bad header) don't count.
 - **UDP relay** has a third goroutine watching the SOCKS5 ASSOCIATE control connection: when the core closes the
   relay, the flow ends at once instead of after the 60 s idle timeout.
 - **QUIC block** (`blockQuic`): UDP to port 443 is answered with ICMP Port Unreachable (v4 type 3 code 3, v6 type 1

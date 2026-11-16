@@ -4,11 +4,10 @@ import '../core/constants/app_constants.dart';
 import '../core/models/app_info.dart';
 import 'settings_provider.dart';
 
-final installedAppsProvider =
-    FutureProvider<List<AppInfo>>((ref) async {
+final installedAppsProvider = FutureProvider<List<AppInfo>>((ref) async {
   const channel = MethodChannel(AppConstants.methodChannel);
   try {
-    final result = await channel.invokeMethod<List>('getInstalledApps');
+    final result = await channel.invokeMethod<List<Object?>>('getInstalledApps');
     if (result == null) return [];
 
     final settings = ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
@@ -23,8 +22,7 @@ final installedAppsProvider =
         isSystem: map['isSystem'] as bool? ?? false,
         isExcluded: excluded.contains(pkg),
       );
-    }).toList()
-      ..sort((a, b) => a.appName.toLowerCase().compareTo(b.appName.toLowerCase()));
+    }).toList()..sort((a, b) => a.appName.toLowerCase().compareTo(b.appName.toLowerCase()));
   } on PlatformException {
     return [];
   }

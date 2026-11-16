@@ -27,7 +27,7 @@ const _local = AppSettings(
   heartbeat: HeartbeatSettings(target: HeartbeatTarget.apple),
 );
 
-/// Чужие настройки пытаются вскрыть туннель: открытый SOCKS, proxy-only, свой URL пробы.
+/// Foreign settings try to expose the tunnel: an open SOCKS, proxy-only, a custom probe URL.
 const _foreign = AppSettings(
   mtu: 1280,
   killSwitchEnabled: true,
@@ -39,19 +39,27 @@ const _foreign = AppSettings(
   proxyOnly: true,
   hwidEnabled: true,
   automationEnabled: true,
-  heartbeat: HeartbeatSettings(
-      failureThreshold: 8, target: HeartbeatTarget.custom, customUrl: 'http://attacker/log'),
+  heartbeat: HeartbeatSettings(failureThreshold: 8, target: HeartbeatTarget.custom, customUrl: 'http://attacker/log'),
 );
 
 VpnConfig _cfg(String id) => VpnConfig(
-      id: id, name: id, protocol: VpnProtocol.trojan, address: 'h$id', port: 443, uuid: '',
-      password: 'p', security: VpnSecurity.tls, transport: VpnTransport.tcp, createdAt: DateTime(2026));
+  id: id,
+  name: id,
+  protocol: VpnProtocol.trojan,
+  address: 'h$id',
+  port: 443,
+  uuid: '',
+  password: 'p',
+  security: VpnSecurity.tls,
+  transport: VpnTransport.tcp,
+  createdAt: DateTime(2026),
+);
 
 ProfileBundle _bundle({AppSettings settings = _foreign, bool withConfigs = false}) => ProfileBundle(
-      exportedAt: DateTime(2026),
-      profile: Profile(id: 'remote', name: 'Remote', settings: settings, createdAt: DateTime(2026)),
-      configs: withConfigs ? [_cfg('r1')] : null,
-    );
+  exportedAt: DateTime(2026),
+  profile: Profile(id: 'remote', name: 'Remote', settings: settings, createdAt: DateTime(2026)),
+  configs: withConfigs ? [_cfg('r1')] : null,
+);
 
 void main() {
   late ProviderContainer c;
@@ -117,8 +125,7 @@ void main() {
     });
 
     test('default and active profiles cannot be deleted', () async {
-      await boot(stored: [profile('def', isDefault: true), profile('act'), profile('other')],
-          activeId: 'act');
+      await boot(stored: [profile('def', isDefault: true), profile('act'), profile('other')], activeId: 'act');
       await n().deleteProfile('def');
       await n().deleteProfile('act');
       expect(s().profiles, hasLength(3));
@@ -129,8 +136,13 @@ void main() {
   });
 
   test('switchProfile applies its settings', () async {
-    await boot(stored: [profile('a', settings: _local), profile('b', settings: const AppSettings(mtu: 1300))],
-        activeId: 'a');
+    await boot(
+      stored: [
+        profile('a', settings: _local),
+        profile('b', settings: const AppSettings(mtu: 1300)),
+      ],
+      activeId: 'a',
+    );
     await n().switchProfile('b');
     expect(s().activeProfileId, 'b');
     expect(await profiles.loadActiveProfileId(), 'b');
@@ -149,7 +161,10 @@ void main() {
     });
 
     test('readonly profile blocks saving', () async {
-      await boot(stored: [profile('ro', settings: _local).copyWith(readonly: true)], activeId: 'ro');
+      await boot(
+        stored: [profile('ro', settings: _local).copyWith(readonly: true)],
+        activeId: 'ro',
+      );
       expect(s().isReadonly, isTrue);
       await c.read(settingsProvider.notifier).save(_local.copyWith(mtu: 1000));
       expect((await settings()).mtu, 1500);
@@ -199,8 +214,7 @@ void main() {
 
     test('readonly import without switching, connections imported', () async {
       await boot();
-      final id = await n().importBundle(_bundle(withConfigs: true),
-          switchToProfile: false, makeReadonly: true);
+      final id = await n().importBundle(_bundle(withConfigs: true), switchToProfile: false, makeReadonly: true);
       expect(s().activeProfileId, 'default');
       expect(s().profiles.firstWhere((p) => p.id == id).readonly, isTrue);
       expect((await ConfigStorageService().loadConfigs()).single.name, 'r1');
@@ -221,11 +235,15 @@ void main() {
 
   group('refreshProfile', () {
     Future<String?> refresh(String id, http.Response Function() respond) => http.runWithClient(
-        () => n().refreshProfile(id, 'https://src/profile.json'),
-        () => MockClient((_) async => respond()));
+      () => n().refreshProfile(id, 'https://src/profile.json'),
+      () => MockClient((_) async => respond()),
+    );
 
     test('updates name and settings, applies them to the active profile', () async {
-      await boot(stored: [profile('p', settings: _local)], activeId: 'p');
+      await boot(
+        stored: [profile('p', settings: _local)],
+        activeId: 'p',
+      );
       final r = await refresh('p', () => http.Response(jsonEncode(_bundle().toJson()), 200));
       expect(r, 'p');
       final p = s().activeProfile!;
@@ -240,7 +258,13 @@ void main() {
     });
 
     test('inactive profile is updated but not applied', () async {
-      await boot(stored: [profile('a', settings: _local), profile('b', settings: _local)], activeId: 'a');
+      await boot(
+        stored: [
+          profile('a', settings: _local),
+          profile('b', settings: _local),
+        ],
+        activeId: 'a',
+      );
       await refresh('b', () => http.Response(jsonEncode(_bundle().toJson()), 200));
       expect(s().profiles.last.settings.mtu, 1280);
       expect((await settings()).mtu, 1500);
@@ -251,7 +275,7 @@ void main() {
       expect(await refresh('default', () => http.Response('', 500)), isNull);
       expect(await refresh('default', () => http.Response('not json', 200)), isNull);
       expect(await refresh('ghost', () => http.Response(jsonEncode(_bundle().toJson()), 200)), isNull);
-      expect(s().activeProfile!.name, 'По умолчанию');
+      expect(s().activeProfile!.name, 'Default');
     });
   });
 }

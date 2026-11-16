@@ -8,33 +8,26 @@ import '../core/services/profile_storage_service.dart';
 import '../core/services/settings_service.dart';
 import 'settings_provider.dart';
 import 'config_provider.dart';
+import '../l10n/l10n.dart';
 
 class ProfileState {
   final List<Profile> profiles;
   final String activeProfileId;
 
-  const ProfileState({
-    required this.profiles,
-    required this.activeProfileId,
-  });
+  const ProfileState({required this.profiles, required this.activeProfileId});
 
-  Profile? get activeProfile =>
-      profiles.where((p) => p.id == activeProfileId).firstOrNull;
+  Profile? get activeProfile => profiles.where((p) => p.id == activeProfileId).firstOrNull;
 
   bool get isReadonly => activeProfile?.readonly ?? false;
 
   ProfileState copyWith({List<Profile>? profiles, String? activeProfileId}) =>
-      ProfileState(
-        profiles: profiles ?? this.profiles,
-        activeProfileId: activeProfileId ?? this.activeProfileId,
-      );
+      ProfileState(profiles: profiles ?? this.profiles, activeProfileId: activeProfileId ?? this.activeProfileId);
 }
 
 class ProfileNotifier extends AsyncNotifier<ProfileState> {
   final _storage = ProfileStorageService();
 
-  ProfileState? get _current =>
-      state.maybeWhen(data: (d) => d, orElse: () => null);
+  ProfileState? get _current => state.maybeWhen(data: (d) => d, orElse: () => null);
 
   @override
   Future<ProfileState> build() async {
@@ -45,7 +38,7 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
       final settings = await SettingsService().load();
       final defaultProfile = Profile(
         id: 'default',
-        name: 'По умолчанию',
+        name: L10n.current.profileDefaultName,
         isDefault: true,
         settings: settings,
         createdAt: DateTime.now(),
@@ -81,17 +74,11 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
     if (current == null) return;
 
     final settings = copyFromCurrent
-        ? (ref.read(settingsProvider).maybeWhen(
-            data: (d) => d, orElse: () => null) ?? const AppSettings())
+        ? (ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null) ?? const AppSettings())
         : const AppSettings();
 
     final id = 'profile_${DateTime.now().millisecondsSinceEpoch}';
-    final profile = Profile(
-      id: id,
-      name: name,
-      settings: settings,
-      createdAt: DateTime.now(),
-    );
+    final profile = Profile(id: id, name: name, settings: settings, createdAt: DateTime.now());
 
     final profiles = [...current.profiles, profile];
     await _storage.saveProfiles(profiles);
@@ -101,9 +88,7 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
   Future<void> renameProfile(String id, String newName) async {
     final current = _current;
     if (current == null) return;
-    final profiles = current.profiles
-        .map((p) => p.id == id ? p.copyWith(name: newName) : p)
-        .toList();
+    final profiles = current.profiles.map((p) => p.id == id ? p.copyWith(name: newName) : p).toList();
     await _storage.saveProfiles(profiles);
     state = AsyncData(current.copyWith(profiles: profiles));
   }
@@ -122,9 +107,7 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
   Future<void> toggleReadonly(String id) async {
     final current = _current;
     if (current == null) return;
-    final profiles = current.profiles
-        .map((p) => p.id == id ? p.copyWith(readonly: !p.readonly) : p)
-        .toList();
+    final profiles = current.profiles.map((p) => p.id == id ? p.copyWith(readonly: !p.readonly) : p).toList();
     await _storage.saveProfiles(profiles);
     state = AsyncData(current.copyWith(profiles: profiles));
   }
@@ -134,26 +117,25 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
     if (current == null) return;
     final id = current.activeProfileId;
     await _storage.updateProfileSettings(id, settings);
-    final profiles = current.profiles
-        .map((p) => p.id == id ? p.copyWith(settings: settings) : p)
-        .toList();
+    final profiles = current.profiles.map((p) => p.id == id ? p.copyWith(settings: settings) : p).toList();
     state = AsyncData(current.copyWith(profiles: profiles));
   }
 
   ProfileBundle exportBundle(String profileId, {bool includeConnections = false}) {
     final current = _current!;
     final stored = current.profiles.firstWhere((p) => p.id == profileId);
-    // Локальные секреты в файл не уходят (импорт их всё равно не берёт — _keepLocalSecurity).
-    final profile = stored.copyWith(settings: stored.settings.copyWith(
-      socksUser: '',
-      socksPassword: '',
-      heartbeat: stored.settings.heartbeat.copyWith(customUrl: ''),
-    ));
+    // Local secrets don't go into the file (import ignores them anyway — _keepLocalSecurity).
+    final profile = stored.copyWith(
+      settings: stored.settings.copyWith(
+        socksUser: '',
+        socksPassword: '',
+        heartbeat: stored.settings.heartbeat.copyWith(customUrl: ''),
+      ),
+    );
     if (!includeConnections) {
       return ProfileBundle(exportedAt: DateTime.now(), profile: profile);
     }
-    final configState = ref.read(configProvider)
-        .maybeWhen(data: (d) => d, orElse: () => null);
+    final configState = ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
     return ProfileBundle(
       exportedAt: DateTime.now(),
       profile: profile,
@@ -189,35 +171,35 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
     state = AsyncData(current.copyWith(profiles: profiles));
 
     if (bundle.hasConnections) {
-      await ref.read(configProvider.notifier).importBundle(ConnectionsBundle(
-        exportedAt: bundle.exportedAt,
-        configs: bundle.configs ?? [],
-        subscriptions: bundle.subscriptions ?? [],
-      ));
+      await ref
+          .read(configProvider.notifier)
+          .importBundle(
+            ConnectionsBundle(
+              exportedAt: bundle.exportedAt,
+              configs: bundle.configs ?? [],
+              subscriptions: bundle.subscriptions ?? [],
+            ),
+          );
     }
 
     if (switchToProfile) await switchProfile(newId);
     return newId;
   }
 
-  /// Чужой профиль не трогает поля, которыми вскрывается туннель: SOCKS (порт,
-  /// креды — открытый прокси на localhost), proxy-only (трафик мимо VPN), URL
-  /// пробы heartbeat (видит IP сервера), HWID и автоматизацию.
-  static AppSettings _keepLocalSecurity(AppSettings imported, AppSettings local) =>
-      imported.copyWith(
-        socksPort: local.socksPort,
-        randomPort: local.randomPort,
-        randomCredentials: local.randomCredentials,
-        socksUser: local.socksUser,
-        socksPassword: local.socksPassword,
-        proxyOnly: local.proxyOnly,
-        hwidEnabled: local.hwidEnabled,
-        automationEnabled: local.automationEnabled,
-        heartbeat: imported.heartbeat.copyWith(
-          target: local.heartbeat.target,
-          customUrl: local.heartbeat.customUrl,
-        ),
-      );
+  /// A foreign profile doesn't touch fields that expose the tunnel: SOCKS (port,
+  /// credentials — an open proxy on localhost), proxy-only (traffic bypassing the VPN), heartbeat
+  /// probe URL (sees the server IP), HWID and automation.
+  static AppSettings _keepLocalSecurity(AppSettings imported, AppSettings local) => imported.copyWith(
+    socksPort: local.socksPort,
+    randomPort: local.randomPort,
+    randomCredentials: local.randomCredentials,
+    socksUser: local.socksUser,
+    socksPassword: local.socksPassword,
+    proxyOnly: local.proxyOnly,
+    hwidEnabled: local.hwidEnabled,
+    automationEnabled: local.automationEnabled,
+    heartbeat: imported.heartbeat.copyWith(target: local.heartbeat.target, customUrl: local.heartbeat.customUrl),
+  );
 
   Future<String?> refreshProfile(String profileId, String url) async {
     final current = _current;
@@ -228,8 +210,7 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
       final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 15));
       if (response.statusCode != 200) return null;
 
-      bundle = ProfileBundle.fromJson(
-          jsonDecode(response.body) as Map<String, dynamic>);
+      bundle = ProfileBundle.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
     } catch (e) {
       return null;
     }
@@ -250,11 +231,15 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
     state = AsyncData(current.copyWith(profiles: profiles));
 
     if (bundle.hasConnections) {
-      await ref.read(configProvider.notifier).importBundle(ConnectionsBundle(
-        exportedAt: bundle.exportedAt,
-        configs: bundle.configs ?? [],
-        subscriptions: bundle.subscriptions ?? [],
-      ));
+      await ref
+          .read(configProvider.notifier)
+          .importBundle(
+            ConnectionsBundle(
+              exportedAt: bundle.exportedAt,
+              configs: bundle.configs ?? [],
+              subscriptions: bundle.subscriptions ?? [],
+            ),
+          );
     }
 
     // If this is the active profile, apply its settings
@@ -267,5 +252,4 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
   }
 }
 
-final profileProvider =
-    AsyncNotifierProvider<ProfileNotifier, ProfileState>(ProfileNotifier.new);
+final profileProvider = AsyncNotifierProvider<ProfileNotifier, ProfileState>(ProfileNotifier.new);

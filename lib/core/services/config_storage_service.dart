@@ -17,8 +17,8 @@ class Subscription {
   final String? announce;
   final String? announceUrl;
 
-  /// DER (base64) самоподписанного сертификата, который пользователь принял
-  /// вручную (TOFU). Автообновление доверяет только ему, а не любому сертификату.
+  /// DER (base64) of a self-signed certificate the user accepted
+  /// manually (TOFU). Auto-refresh trusts only it, not any certificate.
   final String? pinnedCertDer;
 
   const Subscription({
@@ -37,38 +37,34 @@ class Subscription {
   });
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'url': url,
-        'createdAt': createdAt.toIso8601String(),
-        'lastFetchedAt': lastFetchedAt?.toIso8601String(),
-        'expireAt': expireAt?.toIso8601String(),
-        'uploadBytes': uploadBytes,
-        'downloadBytes': downloadBytes,
-        'totalBytes': totalBytes,
-        'announce': announce,
-        'announceUrl': announceUrl,
-        'pinnedCertDer': pinnedCertDer,
-      };
+    'id': id,
+    'name': name,
+    'url': url,
+    'createdAt': createdAt.toIso8601String(),
+    'lastFetchedAt': lastFetchedAt?.toIso8601String(),
+    'expireAt': expireAt?.toIso8601String(),
+    'uploadBytes': uploadBytes,
+    'downloadBytes': downloadBytes,
+    'totalBytes': totalBytes,
+    'announce': announce,
+    'announceUrl': announceUrl,
+    'pinnedCertDer': pinnedCertDer,
+  };
 
   factory Subscription.fromJson(Map<String, dynamic> json) => Subscription(
-        id: json['id'] as String,
-        name: json['name'] as String,
-        url: json['url'] as String,
-        createdAt: DateTime.parse(json['createdAt'] as String),
-        lastFetchedAt: json['lastFetchedAt'] != null
-            ? DateTime.parse(json['lastFetchedAt'] as String)
-            : null,
-        expireAt: json['expireAt'] != null
-            ? DateTime.parse(json['expireAt'] as String)
-            : null,
-        uploadBytes: json['uploadBytes'] as int?,
-        downloadBytes: json['downloadBytes'] as int?,
-        totalBytes: json['totalBytes'] as int?,
-        announce: json['announce'] as String?,
-        announceUrl: json['announceUrl'] as String?,
-        pinnedCertDer: json['pinnedCertDer'] as String?,
-      );
+    id: json['id'] as String,
+    name: json['name'] as String,
+    url: json['url'] as String,
+    createdAt: DateTime.parse(json['createdAt'] as String),
+    lastFetchedAt: json['lastFetchedAt'] != null ? DateTime.parse(json['lastFetchedAt'] as String) : null,
+    expireAt: json['expireAt'] != null ? DateTime.parse(json['expireAt'] as String) : null,
+    uploadBytes: json['uploadBytes'] as int?,
+    downloadBytes: json['downloadBytes'] as int?,
+    totalBytes: json['totalBytes'] as int?,
+    announce: json['announce'] as String?,
+    announceUrl: json['announceUrl'] as String?,
+    pinnedCertDer: json['pinnedCertDer'] as String?,
+  );
 
   Subscription copyWith({
     String? name,
@@ -107,14 +103,11 @@ class ConfigStorageService {
     final raw = await _secure.readConfigsRaw();
     if (raw == null || raw.isEmpty) return [];
     final list = jsonDecode(raw) as List<dynamic>;
-    return list
-        .map((e) => VpnConfig.fromJson(e as Map<String, dynamic>))
-        .toList();
+    return list.map((e) => VpnConfig.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<void> saveConfigs(List<VpnConfig> configs) async {
-    await _secure.writeConfigsRaw(
-        jsonEncode(configs.map((c) => c.toJson()).toList()));
+    await _secure.writeConfigsRaw(jsonEncode(configs.map((c) => c.toJson()).toList()));
   }
 
   Future<void> addConfig(VpnConfig config) async {
@@ -178,14 +171,11 @@ class ConfigStorageService {
     final raw = await _secure.readSubscriptionsRaw();
     if (raw == null || raw.isEmpty) return [];
     final list = jsonDecode(raw) as List<dynamic>;
-    return list
-        .map((e) => Subscription.fromJson(e as Map<String, dynamic>))
-        .toList();
+    return list.map((e) => Subscription.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<void> saveSubscriptions(List<Subscription> subs) async {
-    await _secure.writeSubscriptionsRaw(
-        jsonEncode(subs.map((s) => s.toJson()).toList()));
+    await _secure.writeSubscriptionsRaw(jsonEncode(subs.map((s) => s.toJson()).toList()));
   }
 
   // ─── Pinned refs ───
@@ -194,14 +184,11 @@ class ConfigStorageService {
     final raw = await _secure.readPinsRaw();
     if (raw == null || raw.isEmpty) return [];
     final list = jsonDecode(raw) as List<dynamic>;
-    return list
-        .map((e) => PinnedRef.fromJson(e as Map<String, dynamic>))
-        .toList();
+    return list.map((e) => PinnedRef.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<void> savePins(List<PinnedRef> pins) async {
-    await _secure.writePinsRaw(
-        jsonEncode(pins.map((p) => p.toJson()).toList()));
+    await _secure.writePinsRaw(jsonEncode(pins.map((p) => p.toJson()).toList()));
   }
 
   Future<void> addSubscription(Subscription sub) async {
@@ -236,8 +223,7 @@ class ConfigStorageService {
   }
 
   /// Get configs that belong to a subscription
-  Future<List<VpnConfig>> getConfigsForSubscription(
-      String subscriptionId) async {
+  Future<List<VpnConfig>> getConfigsForSubscription(String subscriptionId) async {
     final configs = await loadConfigs();
     return configs.where((c) => c.subscriptionId == subscriptionId).toList();
   }

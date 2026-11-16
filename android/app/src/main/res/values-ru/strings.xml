@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="state_connecting">Подключение…</string>
+    <string name="state_disconnecting">Отключение…</string>
+    <string name="state_connected">Подключено</string>
+    <string name="state_disconnected">Отключено</string>
+    <string name="state_kill_switch">Kill switch: трафик заблокирован</string>
+    <string name="action_connect">Подключить</string>
+    <string name="action_disconnect">Отключить</string>
+    <string name="channel_status_name">VPN статус</string>
+    <string name="channel_status_description">Скорость и управление VPN</string>
+    <string name="channel_minimal_name">VPN (фоновый режим)</string>
+    <string name="channel_minimal_description">Фоновый VPN-сервис</string>
+</resources>

@@ -33,7 +33,7 @@ class PrefixTcpProxyTest {
             it.start()
         }
 
-    /** Целевой сервер: (первое чтение, остаток потока); отвечает [reply]. */
+    /** Target server: (first read, rest of the stream); answers [reply]. */
     private fun acceptOnce(reply: ByteArray): CompletableFuture<Pair<ByteArray, ByteArray>> =
         CompletableFuture.supplyAsync {
             target.accept().use { s ->
@@ -60,7 +60,7 @@ class PrefixTcpProxyTest {
             c.shutdownOutput()
         }
         val (first, rest) = received.get(5, TimeUnit.SECONDS)
-        // Префикс уходит одной записью с первыми данными клиента (обход DPI).
+        // The prefix goes out in one write with the client's first data (DPI bypass).
         assertArrayEquals(byteArrayOf(0x16, 0x03, 0x01) + "hello".toByteArray(), first)
         assertArrayEquals("more".toByteArray(), rest)
     }

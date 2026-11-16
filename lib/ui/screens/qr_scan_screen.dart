@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../theme/app_colors.dart';
+import '../../l10n/l10n.dart';
 
 class QrScanScreen extends StatefulWidget {
   const QrScanScreen({super.key});
@@ -30,7 +31,7 @@ class _QrScanScreenState extends State<QrScanScreen> {
       );
       if (mounted) setState(() {});
     } catch (e) {
-      if (mounted) setState(() => _error = 'Ошибка камеры: $e');
+      if (mounted) setState(() => _error = context.l10n.qrCameraError('$e'));
     }
   }
 
@@ -53,9 +54,7 @@ class _QrScanScreenState extends State<QrScanScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Сканировать QR'),
-      ),
+      appBar: AppBar(title: Text(context.l10n.qrTitle)),
       body: _error != null
           ? Center(
               child: Column(
@@ -67,46 +66,40 @@ class _QrScanScreenState extends State<QrScanScreen> {
                   const SizedBox(height: 8),
                   ElevatedButton(
                     onPressed: () {
-                      setState(() { _error = null; _scanned = false; });
+                      setState(() {
+                        _error = null;
+                        _scanned = false;
+                      });
                       _initCamera();
                     },
-                    child: const Text('Повторить'),
+                    child: Text(context.l10n.commonRetry),
                   ),
                 ],
               ),
             )
           : _controller == null
-              ? const Center(child: CircularProgressIndicator())
-              : Stack(
-                  children: [
-                    MobileScanner(
-                      controller: _controller!,
-                      onDetect: _onDetect,
-                    ),
-                    CustomPaint(
-                      painter: _ScanOverlayPainter(),
-                      child: const SizedBox.expand(),
-                    ),
-                    Positioned(
-                      bottom: 40,
-                      left: 0,
-                      right: 0,
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: AppColors.bg.withValues(alpha: 0.8),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Text(
-                            'Наведите камеру на QR-код',
-                            style: TextStyle(color: AppColors.textPrimary),
-                          ),
-                        ),
+          ? const Center(child: CircularProgressIndicator())
+          : Stack(
+              children: [
+                MobileScanner(controller: _controller!, onDetect: _onDetect),
+                CustomPaint(painter: _ScanOverlayPainter(), child: const SizedBox.expand()),
+                Positioned(
+                  bottom: 40,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.bg.withValues(alpha: 0.8),
+                        borderRadius: BorderRadius.circular(20),
                       ),
+                      child: Text(context.l10n.qrHint, style: TextStyle(color: AppColors.textPrimary)),
                     ),
-                  ],
+                  ),
                 ),
+              ],
+            ),
     );
   }
 }
@@ -114,7 +107,9 @@ class _QrScanScreenState extends State<QrScanScreen> {
 class _ScanOverlayPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.black54..style = PaintingStyle.fill;
+    final paint = Paint()
+      ..color = Colors.black54
+      ..style = PaintingStyle.fill;
     final scanSize = size.width * 0.65;
     final left = (size.width - scanSize) / 2;
     final top = (size.height - scanSize) / 2;
@@ -126,7 +121,10 @@ class _ScanOverlayPainter extends CustomPainter {
     cutoutPath.fillType = PathFillType.evenOdd;
     canvas.drawPath(cutoutPath, paint);
 
-    final cornerPaint = Paint()..color = Colors.white..strokeWidth = 3..style = PaintingStyle.stroke;
+    final cornerPaint = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 3
+      ..style = PaintingStyle.stroke;
     const cornerLen = 20.0;
     final corners = [
       Offset(left, top),

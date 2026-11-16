@@ -28,11 +28,19 @@ void main() {
     final id = _id(shell.calls.single);
     logcat.add('I flutter : TEAPOD_ITEST {"id":"other","ok":true,"data":1}');
     logcat.add('I flutter : TEAPOD_ITEST {"id":"$id","ok":true,"data":{"cores":["go"]}}');
-    expect(await f, {'cores': ['go']});
+    expect(await f, {
+      'cores': ['go'],
+    });
   });
 
   test('send quotes JSON for the device shell', () async {
-    unawaited(client.send('settings', {'patch': {'s': "it's"}}, const Duration(milliseconds: 10)).catchError((_) => null));
+    unawaited(
+      client
+          .send('settings', {
+            'patch': {'s': "it's"},
+          }, const Duration(milliseconds: 10))
+          .catchError((_) => null),
+    );
     await Future<void>.delayed(Duration.zero);
     expect(shell.calls.single, contains(r"""it'\''s"""));
   });
@@ -48,8 +56,7 @@ void main() {
   });
 
   test('send throws ItestTimeout when no marker', () {
-    expect(client.send('ping', const {}, const Duration(milliseconds: 50)),
-        throwsA(isA<ItestTimeout>()));
+    expect(client.send('ping', const {}, const Duration(milliseconds: 50)), throwsA(isA<ItestTimeout>()));
   });
 
   test('send throws ItestAgentError on ok:false with error text', () async {
@@ -60,7 +67,13 @@ void main() {
   });
 
   test('send reads large replies from the file named in the marker', () async {
-    shell = FakeShell({'cat ': jsonEncode({'id': 'x', 'ok': true, 'data': [1, 2, 3]})});
+    shell = FakeShell({
+      'cat ': jsonEncode({
+        'id': 'x',
+        'ok': true,
+        'data': [1, 2, 3],
+      }),
+    });
     client = AgentClient(shell, logcat.stream);
     final f = client.send('list');
     await Future<void>.delayed(Duration.zero);
@@ -75,7 +88,7 @@ void main() {
     client = AgentClient(shell, logcat.stream);
     final f = client.send('list');
     await Future<void>.delayed(Duration.zero);
-    shell.codes.add(1); // cat падает
+    shell.codes.add(1); // cat fails
     logcat.add('TEAPOD_ITEST {"id":"${_id(shell.calls.first)}","ok":true,"file":"/f.json"}');
     await expectLater(f, throwsA(isA<ItestAgentError>()));
     expect(shell.calls.where((c) => c.contains('rm -f')), isEmpty);

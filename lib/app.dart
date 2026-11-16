@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'l10n/l10n.dart';
 import 'ui/theme/app_theme.dart';
 import 'ui/theme/app_colors.dart';
 import 'ui/screens/home_screen.dart';
@@ -16,13 +18,14 @@ import 'providers/settings_provider.dart';
 import 'providers/update_provider.dart';
 import 'providers/geo_provider.dart';
 import 'providers/theme_provider.dart';
+import 'providers/locale_provider.dart';
 import 'core/services/deeplink_handler.dart';
 import 'protocols/xray/xray_engine.dart';
 import 'itest/itest_agent.dart';
 import 'itest/itest_protocol.dart';
 
-/// Индекс активной вкладки. Отдельный provider, чтобы экраны
-/// (например, Home при пустом списке конфигов) могли переключать вкладку.
+/// Active tab index. A separate provider so screens
+/// (e.g. Home with an empty config list) can switch tabs.
 class TabIndexNotifier extends Notifier<int> {
   @override
   int build() => 0;
@@ -36,9 +39,7 @@ class TeapodApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const ProviderScope(
-      child: _TeapodMaterialApp(),
-    );
+    return const ProviderScope(child: _TeapodMaterialApp());
   }
 }
 
@@ -48,22 +49,31 @@ class _TeapodMaterialApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
-    final accent    = ref.watch(accentProvider);
-    final fontScale = ref.watch(settingsProvider).maybeWhen(
-      data: (s) => s.fontScale == FontScale.large ? 1.2 : 1.0,
-      orElse: () => 1.0,
-    );
+    final accent = ref.watch(accentProvider);
+    final locale = ref.watch(localeProvider);
+    final fontScale = ref
+        .watch(settingsProvider)
+        .maybeWhen(data: (s) => s.fontScale == FontScale.large ? 1.2 : 1.0, orElse: () => 1.0);
     return MaterialApp(
       title: 'TeapodStream',
-      theme:     AppTheme.build(Brightness.light, accent),
-      darkTheme:  AppTheme.build(Brightness.dark, accent),
+      theme: AppTheme.build(Brightness.light, accent),
+      darkTheme: AppTheme.build(Brightness.dark, accent),
       themeMode: themeMode,
-      builder: (ctx, child) => MediaQuery(
-        data: MediaQuery.of(ctx).copyWith(
-          textScaler: TextScaler.linear(fontScale),
-        ),
-        child: child!,
-      ),
+      locale: locale,
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      builder: (ctx, child) {
+        L10n.current = ctx.l10n;
+        return MediaQuery(
+          data: MediaQuery.of(ctx).copyWith(textScaler: TextScaler.linear(fontScale)),
+          child: child!,
+        );
+      },
       home: const _AppShell(),
       debugShowCheckedModeBanner: false,
     );
@@ -79,17 +89,11 @@ class _AppShell extends ConsumerStatefulWidget {
   ConsumerState<_AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends ConsumerState<_AppShell>
-    with WidgetsBindingObserver {
+class _AppShellState extends ConsumerState<_AppShell> with WidgetsBindingObserver {
   bool _autoConnectAttempted = false;
-  StreamSubscription? _deeplinkSubscription;
+  StreamSubscription<dynamic>? _deeplinkSubscription;
 
-  static const _pages = [
-    HomeScreen(),
-    ConfigsScreen(),
-    RoutingScreen(),
-    SettingsScreen(),
-  ];
+  static const _pages = [HomeScreen(), ConfigsScreen(), RoutingScreen(), SettingsScreen()];
 
   @override
   void initState() {
@@ -119,19 +123,19 @@ class _AppShellState extends ConsumerState<_AppShell>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // Часовой фоновый таймер убран — staleness подписок проверяется здесь,
-      // после синхронизации: обновление должно видеть актуальный SOCKS туннеля.
+      // The hourly background timer is gone — subscription staleness is checked here,
+      // after the sync: the refresh must see the tunnel's current SOCKS.
       final vpn = ref.read(vpnProvider.notifier);
       vpn.syncNativeState().then((_) => vpn.refreshStaleSubscriptionsIfDue());
     } else if (state == AppLifecycleState.paused) {
-      // Не гонять MethodChannel-опрос статистики каждую секунду в фоне —
-      // syncNativeState() перезапустит его при возврате.
+      // Don't run the per-second MethodChannel stats polling in the background —
+      // syncNativeState() restarts it on resume.
       ref.read(vpnProvider.notifier).pauseStatsPolling();
     }
   }
 
   Future<void> _scheduleUpdateCheck() async {
-    await Future.delayed(const Duration(seconds: 5));
+    await Future<void>.delayed(const Duration(seconds: 5));
     if (!mounted) return;
     final updateState = ref.read(updateProvider);
     if (updateState is UpdateIdle) {
@@ -162,14 +166,8 @@ class _AppShellState extends ConsumerState<_AppShell>
   @override
   Widget build(BuildContext context) {
     ref.listen<AsyncValue<ConfigState>>(configProvider, (prev, next) {
-      final prevIds = prev?.maybeWhen(
-        data: (d) => d.configs.map((c) => c.id).toSet(),
-        orElse: () => null,
-      );
-      final nextIds = next.maybeWhen(
-        data: (d) => d.configs.map((c) => c.id).toSet(),
-        orElse: () => null,
-      );
+      final prevIds = prev?.maybeWhen(data: (d) => d.configs.map((c) => c.id).toSet(), orElse: () => null);
+      final nextIds = next.maybeWhen(data: (d) => d.configs.map((c) => c.id).toSet(), orElse: () => null);
       if (prevIds == null || nextIds == null) return;
       if (nextIds.difference(prevIds).isNotEmpty) {
         ref.read(vpnProvider.notifier).pingStaleConfigs();
@@ -177,27 +175,24 @@ class _AppShellState extends ConsumerState<_AppShell>
     });
 
     final updateState = ref.watch(updateProvider);
-    final hasUpdate = updateState is UpdateAvailable ||
-        updateState is UpdateDownloading ||
-        updateState is UpdateDownloaded;
+    final hasUpdate =
+        updateState is UpdateAvailable || updateState is UpdateDownloading || updateState is UpdateDownloaded;
 
     // Sync nav bar color with active theme
     final t = Theme.of(context).extension<TeapodTokens>()!;
-    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness:
-          Theme.of(context).brightness == Brightness.dark
-              ? Brightness.light
-              : Brightness.dark,
-      systemNavigationBarColor: t.bg,
-      systemNavigationBarIconBrightness:
-          Theme.of(context).brightness == Brightness.dark
-              ? Brightness.light
-              : Brightness.dark,
-    ));
+    SystemChrome.setSystemUIOverlayStyle(
+      SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Theme.of(context).brightness == Brightness.dark ? Brightness.light : Brightness.dark,
+        systemNavigationBarColor: t.bg,
+        systemNavigationBarIconBrightness: Theme.of(context).brightness == Brightness.dark
+            ? Brightness.light
+            : Brightness.dark,
+      ),
+    );
 
     final currentIndex = ref.watch(tabIndexProvider);
-    // История для графика тянется только на видимой вкладке home
+    // Chart history is pulled only while the home tab is visible
     ref.listen(tabIndexProvider, (_, next) {
       ref.read(vpnProvider.notifier).setChartVisible(next == 0);
     });
@@ -219,21 +214,18 @@ class _ConsoleTabBar extends ConsumerWidget {
   final bool hasUpdateBadge;
   final void Function(int) onTap;
 
-  const _ConsoleTabBar({
-    required this.currentIndex,
-    required this.hasUpdateBadge,
-    required this.onTap,
-  });
+  const _ConsoleTabBar({required this.currentIndex, required this.hasUpdateBadge, required this.onTap});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context).extension<TeapodTokens>()!;
 
+    final l = context.l10n;
     final items = [
-      _TabItem(icon: _TabIcon.shield,   label: 'VPN'),
-      _TabItem(icon: _TabIcon.key,      label: 'Конфиги'),
-      _TabItem(icon: _TabIcon.route,    label: 'Маршрут'),
-      _TabItem(icon: _TabIcon.cog,      label: 'Настройки', badge: hasUpdateBadge),
+      _TabItem(icon: _TabIcon.shield, label: 'VPN'),
+      _TabItem(icon: _TabIcon.key, label: l.tabConfigs),
+      _TabItem(icon: _TabIcon.route, label: l.tabRouting),
+      _TabItem(icon: _TabIcon.cog, label: l.tabSettings, badge: hasUpdateBadge),
     ];
 
     return Container(
@@ -247,8 +239,8 @@ class _ConsoleTabBar extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(8, 10, 8, 6),
           child: Row(
             children: items.asMap().entries.map((e) {
-              final idx    = e.key;
-              final item   = e.value;
+              final idx = e.key;
+              final item = e.value;
               final active = idx == currentIndex;
               return Expanded(
                 child: Semantics(
@@ -256,52 +248,38 @@ class _ConsoleTabBar extends ConsumerWidget {
                   button: true,
                   selected: active,
                   child: GestureDetector(
-                  onTap: () => onTap(idx),
-                  behavior: HitTestBehavior.opaque,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Active underline indicator
-                      Container(
-                        width: 28,
-                        height: 2,
-                        color: active ? t.accent : Colors.transparent,
-                      ),
-                      const SizedBox(height: 5),
-                      Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          _SvgTabIcon(
-                            icon: item.icon,
-                            color: active ? t.accent : t.textMuted,
-                          ),
-                          if (item.badge)
-                            Positioned(
-                              right: -3,
-                              top: -3,
-                              child: Container(
-                                width: 7,
-                                height: 7,
-                                decoration: BoxDecoration(
-                                  color: t.danger,
-                                  shape: BoxShape.circle,
+                    onTap: () => onTap(idx),
+                    behavior: HitTestBehavior.opaque,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Active underline indicator
+                        Container(width: 28, height: 2, color: active ? t.accent : Colors.transparent),
+                        const SizedBox(height: 5),
+                        Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            _SvgTabIcon(icon: item.icon, color: active ? t.accent : t.textMuted),
+                            if (item.badge)
+                              Positioned(
+                                right: -3,
+                                top: -3,
+                                child: Container(
+                                  width: 7,
+                                  height: 7,
+                                  decoration: BoxDecoration(color: t.danger, shape: BoxShape.circle),
                                 ),
                               ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        item.label.toUpperCase(),
-                        style: AppTheme.mono(
-                          size: 10,
-                          color: active ? t.accent : t.textMuted,
-                          letterSpacing: 0.5,
+                          ],
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        Text(
+                          item.label.toUpperCase(),
+                          style: AppTheme.mono(size: 10, color: active ? t.accent : t.textMuted, letterSpacing: 0.5),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
                 ),
               );
             }).toList(),
@@ -328,10 +306,7 @@ class _SvgTabIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      size: const Size(20, 20),
-      painter: _TabIconPainter(icon, color),
-    );
+    return CustomPaint(size: const Size(20, 20), painter: _TabIconPainter(icon, color));
   }
 }
 
@@ -387,11 +362,7 @@ class _TabIconPainter extends CustomPainter {
           final angle = i * math.pi / 4;
           final c = math.cos(angle);
           final s = math.sin(angle);
-          canvas.drawLine(
-            Offset(12 + c * 5, 12 + s * 5),
-            Offset(12 + c * 9, 12 + s * 9),
-            paint,
-          );
+          canvas.drawLine(Offset(12 + c * 5, 12 + s * 5), Offset(12 + c * 9, 12 + s * 9), paint);
         }
         break;
     }

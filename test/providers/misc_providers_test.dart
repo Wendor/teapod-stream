@@ -43,12 +43,12 @@ void main() {
       await SettingsService().save(const AppSettings(excludedPackages: {'b.pkg'}));
       await c.read(settingsProvider.future);
       reply = (_) => [
-            {'packageName': 'b.pkg', 'appName': 'Zeta', 'isSystem': true},
-            {'packageName': 'e.pkg', 'appName': 'eBay'},
-            {'packageName': 'a.pkg'},
-          ];
+        {'packageName': 'b.pkg', 'appName': 'Zeta', 'isSystem': true},
+        {'packageName': 'e.pkg', 'appName': 'eBay'},
+        {'packageName': 'a.pkg'},
+      ];
       final apps = await c.read(installedAppsProvider.future);
-      // Без учёта регистра: «eBay» не уезжает в конец за «Zeta».
+      // Case-insensitive: "eBay" doesn't move to the end after "Zeta".
       expect(apps.map((a) => a.appName), ['a.pkg', 'eBay', 'Zeta']);
       expect(apps.last.isExcluded, isTrue);
       expect(apps.last.isSystem, isTrue);
@@ -78,7 +78,12 @@ void main() {
 
   test('appVersionProvider prefixes v', () async {
     PackageInfo.setMockInitialValues(
-        appName: 'a', packageName: 'p', version: '1.2.3', buildNumber: '1', buildSignature: '');
+      appName: 'a',
+      packageName: 'p',
+      version: '1.2.3',
+      buildNumber: '1',
+      buildSignature: '',
+    );
     expect(await c.read(appVersionProvider.future), 'v1.2.3');
   });
 
@@ -128,8 +133,9 @@ void main() {
       await c.read(availableCoresProvider.future);
       await c.read(settingsProvider.future);
       expect(c.read(coreResolverProvider).primary, CoreKind.xrayGo);
-      await c.read(settingsProvider.notifier).save(
-          const AppSettings(coreOrder: [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox]));
+      await c
+          .read(settingsProvider.notifier)
+          .save(const AppSettings(coreOrder: [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox]));
       expect(c.read(coreResolverProvider).primary, CoreKind.xrayRust);
       reply = (_) => ['go'];
       c.invalidate(availableCoresProvider);

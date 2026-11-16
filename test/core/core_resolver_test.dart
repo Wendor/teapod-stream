@@ -8,12 +8,19 @@ import 'package:teapodstream/core/services/settings_service.dart';
 import 'package:teapodstream/protocols/xray/xray_rust_backend.dart';
 import 'package:teapodstream/providers/core_provider.dart';
 
-VpnConfig _cfg({VpnProtocol protocol = VpnProtocol.vless, ProtocolSettings? settings, CoreKind? core}) =>
-    VpnConfig(
-      id: 'c', name: 'c', protocol: protocol, address: '1.2.3.4', port: 443,
-      uuid: '11111111-2222-4333-8444-555555555555', security: VpnSecurity.tls,
-      transport: VpnTransport.tcp, createdAt: DateTime(2026), protocolSettings: settings, core: core,
-    );
+VpnConfig _cfg({VpnProtocol protocol = VpnProtocol.vless, ProtocolSettings? settings, CoreKind? core}) => VpnConfig(
+  id: 'c',
+  name: 'c',
+  protocol: protocol,
+  address: '1.2.3.4',
+  port: 443,
+  uuid: '11111111-2222-4333-8444-555555555555',
+  security: VpnSecurity.tls,
+  transport: VpnTransport.tcp,
+  createdAt: DateTime(2026),
+  protocolSettings: settings,
+  core: core,
+);
 
 const _wg = WireGuardSettings(privateKey: 'k', addresses: ['10.0.0.2/32'], peerPublicKey: 'p');
 const _rustFirst = [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox];
@@ -24,9 +31,11 @@ CoreResolver _resolver({
   Set<CoreKind> disabled = const {},
   Set<CoreKind>? available,
   bool proxyOnly = false,
-}) =>
-    CoreResolver(AppSettings(coreOrder: order, disabledCores: disabled, proxyOnly: proxyOnly),
-        available ?? _all, coreBackendFor);
+}) => CoreResolver(
+  AppSettings(coreOrder: order, disabledCores: disabled, proxyOnly: proxyOnly),
+  available ?? _all,
+  coreBackendFor,
+);
 
 void main() {
   test('first core by priority that supports the profile wins', () {
@@ -39,11 +48,13 @@ void main() {
   });
 
   test('disabled and unavailable cores are skipped with a reason', () {
-    final r = _resolver(order: _rustFirst, disabled: {CoreKind.xrayRust}, available: {CoreKind.xrayRust, CoreKind.singBox})
-        .resolve(_cfg());
+    final r = _resolver(
+      order: _rustFirst,
+      disabled: {CoreKind.xrayRust},
+      available: {CoreKind.xrayRust, CoreKind.singBox},
+    ).resolve(_cfg());
     expect(r.backend!.kind, CoreKind.singBox);
-    expect([for (final v in r.verdicts) v.reason],
-        [CoreResolver.disabledReason, CoreResolver.unavailableReason, null]);
+    expect([for (final v in r.verdicts) v.reason], [CoreResolver.disabledReason, CoreResolver.unavailableReason, null]);
   });
 
   test('a blocking setting skips the core, warnings do not', () {
@@ -71,7 +82,11 @@ void main() {
   });
 
   test('usable and primary follow order, switches and device', () {
-    final r = _resolver(order: _rustFirst, disabled: {CoreKind.xrayRust}, available: {CoreKind.xrayRust, CoreKind.singBox});
+    final r = _resolver(
+      order: _rustFirst,
+      disabled: {CoreKind.xrayRust},
+      available: {CoreKind.xrayRust, CoreKind.singBox},
+    );
     expect(r.usable, [CoreKind.singBox]);
     expect(r.primary, CoreKind.singBox);
   });

@@ -83,8 +83,7 @@ void main() {
       await download((req) async {
         requested.add('${req.method} ${req.url}');
         final body = req.url.path.endsWith('ip.dat') ? 'IPDATA' : 'SITEDATA!';
-        return http.Response(req.method == 'HEAD' ? '' : body, 200,
-            headers: {'content-length': '${body.length}'});
+        return http.Response(req.method == 'HEAD' ? '' : body, 200, headers: {'content-length': '${body.length}'});
       });
       expect(requested, [
         'HEAD https://g/ip.dat',

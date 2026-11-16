@@ -10,8 +10,15 @@ import 'package:teapodstream/core/services/settings_service.dart';
 void main() {
   test('plaintext prefs are moved to secure storage and wiped', () async {
     final config = {
-      'id': 'c1', 'name': 'n', 'protocol': 'vless', 'address': 'h', 'port': 443, 'uuid': 'u',
-      'security': 'none', 'transport': 'tcp', 'createdAt': '2026-01-01T00:00:00.000',
+      'id': 'c1',
+      'name': 'n',
+      'protocol': 'vless',
+      'address': 'h',
+      'port': 443,
+      'uuid': 'u',
+      'security': 'none',
+      'transport': 'tcp',
+      'createdAt': '2026-01-01T00:00:00.000',
     };
     final sub = {'id': 's1', 'name': 'S', 'url': 'https://s', 'createdAt': '2026-01-01T00:00:00.000'};
     SharedPreferences.setMockInitialValues({

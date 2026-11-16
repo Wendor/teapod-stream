@@ -12,8 +12,12 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  FLUTTER_VERSION: 3.41.6
+  NDK_VERSION: 28.2.13676358
+
 jobs:
-  test:
+  dart:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -21,12 +25,76 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: 3.41.6
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
-      # Каталог объявлен в pubspec; geodata тестам не нужны
+      # The directory is declared in pubspec; tests don't need geodata
       - run: mkdir -p assets/binaries
       - run: flutter pub get
+
+      - name: Generated localizations match the ARB files
+        run: |
+          flutter gen-l10n
+          git diff --exit-code -- lib/l10n || { echo "::error::Run 'flutter gen-l10n' and commit lib/l10n"; exit 1; }
+
+      - name: Format
+        run: |
+          dart format --output=none --set-exit-if-changed lib test tool \
+            || { echo "::error::Run 'dart format lib test tool'"; exit 1; }
+
       - run: flutter analyze
       - run: flutter test
+
+  kotlin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+          cache-dependency-path: |
+            android/*.gradle.kts
+            android/app/build.gradle.kts
+            android/gradle/wrapper/gradle-wrapper.properties
+
+      # From the cache by the core/ tree hash; built only when core/ changed
+      - uses: ./.github/actions/teapod-core
+        with:
+          ndk-version: ${{ env.NDK_VERSION }}
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Kotlin JVM tests
+        run: |
+          mkdir -p assets/binaries
+          flutter pub get
+          flutter build apk --debug --config-only
+          cd android && ./gradlew :app:testDebugUnitTest
+
+  core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: core
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: core/go.mod
+          cache-dependency-path: core/go.sum
+      - run: ./build.sh prepare
+      - run: go vet ./...
+      - run: go test ./...
+      # Tests the xray-core patches add, in the patched tree
+      - run: go test ./transport/internet/splithttp/ ./transport/internet/tls/ ./transport/internet/hysteria/
+        working-directory: core/.xray-core

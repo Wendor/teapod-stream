@@ -11,5 +11,5 @@
 # Keep other JNI boundaries if necessary
 -keep class com.teapodstream.teapodstream.** { *; }
 
-# Rust-ядро (xray-rust-mobile): JNI находит классы и колбэки по имени.
+# Rust core (xray-rust-mobile): JNI finds classes and callbacks by name.
 -keep class org.xrayrust.mobile.** { *; }

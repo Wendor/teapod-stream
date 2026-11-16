@@ -57,15 +57,22 @@ Thumbs.db
 #  AI assistants
 # ─────────────────────────────────────────
 .qwen/
-.claude/
 .gemini/
-CLAUDE.md
-AGENTS.md
-wiki/
+# Shared agent rules are tracked (a global excludesfile may ignore them)
+!/CLAUDE.md
+!.claude/
+.claude/*
+!.claude/skills/
+CLAUDE.local.md
+wiki/.obsidian/
+wiki/research/
+# Private notes, kept out of the public wiki for now
+wiki/tech-debt.md
+wiki/ux-review.md
 redesign/
 docs/superpowers/
 
-# Интеграционные тесты на устройстве (tool/itest)
+# On-device integration tests (tool/itest)
 runs/
 tool/itest/secrets.json
 .superpowers/

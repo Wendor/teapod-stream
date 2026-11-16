@@ -12,17 +12,17 @@ import 'package:teapodstream/core/services/settings_service.dart';
 import 'package:teapodstream/core/services/storage_secure_service.dart';
 
 VpnConfig _cfg(String id, {String? subId}) => VpnConfig(
-      id: id,
-      name: 'n$id',
-      protocol: VpnProtocol.vless,
-      address: 'h$id',
-      port: 443,
-      uuid: 'u',
-      security: VpnSecurity.none,
-      transport: VpnTransport.tcp,
-      createdAt: DateTime(2026),
-      subscriptionId: subId,
-    );
+  id: id,
+  name: 'n$id',
+  protocol: VpnProtocol.vless,
+  address: 'h$id',
+  port: 443,
+  uuid: 'u',
+  security: VpnSecurity.none,
+  transport: VpnTransport.tcp,
+  createdAt: DateTime(2026),
+  subscriptionId: subId,
+);
 
 Subscription _sub(String id, {String url = 'https://s'}) =>
     Subscription(id: id, name: 'S$id', url: url, createdAt: DateTime(2026));
@@ -144,8 +144,7 @@ void main() {
 
   group('ProfileStorageService', () {
     final s = ProfileStorageService();
-    Profile profile(String id) => Profile(
-        id: id, name: id, settings: const AppSettings(), createdAt: DateTime(2026));
+    Profile profile(String id) => Profile(id: id, name: id, settings: const AppSettings(), createdAt: DateTime(2026));
 
     test('active profile defaults to "default"', () async {
       expect(await s.loadActiveProfileId(), 'default');

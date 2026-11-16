@@ -15,7 +15,7 @@ class AppConstants {
     return 'TeapodStream/$app (Android; XrayNG-compatible) Xray-core/$xray';
   }
 
-  /// ABI, для которых собираются APK (armeabi-v7a не поддерживается).
+  /// ABIs APKs are built for (armeabi-v7a is not supported).
   static const Set<String> supportedAbis = {'arm64-v8a', 'x86_64'};
   static const String methodChannel = 'com.teapodstream/vpn';
   static const String vpnStatusChannel = 'com.teapodstream/vpn_status';

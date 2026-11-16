@@ -3,59 +3,60 @@ import '../models/vpn_config.dart';
 import '../services/settings_service.dart';
 import 'core_backend.dart';
 import 'engine_options.dart';
+import '../../l10n/l10n.dart';
 
-/// Ядро в порядке проверки: [reason] == null — ядро может запустить профиль.
+/// A core in check order: [reason] == null — the core can run the profile.
 typedef CoreVerdict = ({CoreKind kind, String? reason});
 
-/// Каким ядром запустится профиль и почему не другими.
+/// Which core runs the profile and why not the others.
 class CoreResolution {
-  /// null — профиль не запускает ни одно ядро.
+  /// null — no core runs the profile.
   final CoreBackend? backend;
 
-  /// Все ядра в порядке проверки: закреплённое, затем по приоритету.
+  /// All cores in check order: the pinned one, then by priority.
   final List<CoreVerdict> verdicts;
 
-  /// Ядро закреплено за профилем.
+  /// The core is pinned to the profile.
   final bool pinned;
 
   const CoreResolution(this.backend, this.verdicts, {this.pinned = false});
 
-  /// Почему профиль не запустится; null — запустится. Причина от самого
-  /// ядра важнее «выключено»/«не загружается».
+  /// Why the profile won't start; null — it will. A reason from the core
+  /// itself beats "disabled"/"doesn't load".
   String? get reason {
     if (backend != null) return null;
     final reasons = verdicts.map((v) => v.reason).nonNulls;
     return reasons.where((r) => r != CoreResolver.disabledReason && r != CoreResolver.unavailableReason).firstOrNull ??
         reasons.firstOrNull ??
-        'Нет доступных ядер.';
+        L10n.current.coreNoneAvailable;
   }
 }
 
-/// Выбор ядра для профиля: первое по приоритету, которое может его запустить.
-/// Предупреждения ядра (проигнорированные настройки) на выбор не влияют.
+/// Core choice for a profile: the first by priority that can run it.
+/// Core warnings (ignored settings) don't affect the choice.
 class CoreResolver {
   final AppSettings settings;
 
-  /// Ядра, нативные библиотеки которых загружаются на устройстве.
+  /// Cores whose native libraries load on the device.
   final Set<CoreKind> available;
   final CoreBackend Function(CoreKind) backendFor;
 
   CoreResolver(this.settings, this.available, this.backendFor);
 
-  /// Резолвер пересоздаётся при смене настроек/ядер, VpnConfig неизменяем — результат
-  /// кешируется по экземпляру: строки списка конфигов зовут resolve на каждый ребилд.
+  /// The resolver is recreated on settings/core changes and VpnConfig is immutable — the result
+  /// is cached per instance: config list rows call resolve on every rebuild.
   final _cache = Expando<CoreResolution>();
 
-  static const unavailableReason = 'Не загружается на этом устройстве.';
-  static const disabledReason = 'Выключено в настройках.';
+  static String get unavailableReason => L10n.current.coreUnavailable;
+  static String get disabledReason => L10n.current.coreDisabled;
 
-  /// Включённые и доступные ядра по приоритету.
+  /// Enabled and available cores by priority.
   List<CoreKind> get usable => [
-        for (final k in settings.coreOrder)
-          if (available.contains(k) && !settings.disabledCores.contains(k)) k,
-      ];
+    for (final k in settings.coreOrder)
+      if (available.contains(k) && !settings.disabledCores.contains(k)) k,
+  ];
 
-  /// Ядро, которым запускается большинство профилей.
+  /// The core that runs most profiles.
   CoreKind? get primary => usable.firstOrNull;
 
   CoreResolution resolve(VpnConfig config) => _cache[config] ??= _resolve(config);

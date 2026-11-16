@@ -33,16 +33,23 @@ void main() {
     test('mixed base64 subscription keeps every profile; Xray disables the new ones', () async {
       server.serve(base64Encode(utf8.encode('$_vless\n$_wg\n$_ssh\n$_naive\n')));
       final configs = (await svc.fetchSubscription(server.url())).configs;
-      expect(configs.map((c) => c.protocol),
-          [VpnProtocol.vless, VpnProtocol.wireguard, VpnProtocol.ssh, VpnProtocol.naive]);
+      expect(configs.map((c) => c.protocol), [
+        VpnProtocol.vless,
+        VpnProtocol.wireguard,
+        VpnProtocol.ssh,
+        VpnProtocol.naive,
+      ]);
       const go = XrayGoBackend();
-      expect(configs.map(go.checkConfig).skip(1),
-          everyElement(endsWith('поддерживается только ядром sing-box.')));
+      expect(configs.map(go.checkConfig).skip(1), everyElement(endsWith('is supported only by the sing-box core.')));
       final goOnly = CoreResolver(const AppSettings(), {CoreKind.xrayGo}, coreBackendFor);
       expect(supportedCandidates(configs, goOnly).map((c) => c.config.protocol), [VpnProtocol.vless]);
       final all = CoreResolver(const AppSettings(), CoreKind.values.toSet(), coreBackendFor);
-      expect(supportedCandidates(configs, all).map((c) => c.backend.kind),
-          [CoreKind.xrayGo, CoreKind.singBox, CoreKind.singBox, CoreKind.singBox]);
+      expect(supportedCandidates(configs, all).map((c) => c.backend.kind), [
+        CoreKind.xrayGo,
+        CoreKind.singBox,
+        CoreKind.singBox,
+        CoreKind.singBox,
+      ]);
     });
 
     test('plain subscription of only new schemes is not mistaken for base64', () async {
@@ -56,15 +63,14 @@ void main() {
     test('plain URI list skips blank and unknown lines', () async {
       server.serve('$_trojan\r\n\r\nfoo bar\n$_hy2\n  $_vless  \n');
       final r = await svc.fetchSubscription(server.url());
-      expect(r.configs.map((c) => c.protocol),
-          [VpnProtocol.trojan, VpnProtocol.hysteria2, VpnProtocol.vless]);
+      expect(r.configs.map((c) => c.protocol), [VpnProtocol.trojan, VpnProtocol.hysteria2, VpnProtocol.vless]);
       expect(r.configs.first.name, 'Trojan One');
     });
 
     test('base64 wrapped at 76 chars is decoded as a whole', () async {
       final b64 = base64.encode(utf8.encode([_trojan, _hy2, _vless].join('\n')));
       final wrapped = [
-        for (var i = 0; i < b64.length; i += 76) b64.substring(i, (i + 76).clamp(0, b64.length))
+        for (var i = 0; i < b64.length; i += 76) b64.substring(i, (i + 76).clamp(0, b64.length)),
       ].join('\n');
       server.serve(wrapped);
       final r = await svc.fetchSubscription(server.url());
@@ -83,39 +89,41 @@ void main() {
     });
 
     test('xray JSON array becomes managed configs', () async {
-      server.serve(jsonEncode([
-        {
-          'remarks': ' — Germany',
-          'outbounds': [
-            {'tag': 'direct', 'protocol': 'freedom'},
-            {
-              'tag': 'proxy',
-              'protocol': 'vless',
-              'settings': {
-                'vnext': [
-                  {'address': 'de.example', 'port': 8443}
-                ]
-              }
-            },
-          ],
-        },
-        {
-          'remarks': 'SS',
-          'outbounds': [
-            {
-              'tag': 'proxy',
-              'protocol': 'shadowsocks',
-              'settings': {
-                'servers': [
-                  {'address': 'ss.example', 'port': 1234}
-                ]
-              }
-            },
-          ],
-        },
-        {'outbounds': []},
-        'not a map',
-      ]));
+      server.serve(
+        jsonEncode([
+          {
+            'remarks': ' — Germany',
+            'outbounds': [
+              {'tag': 'direct', 'protocol': 'freedom'},
+              {
+                'tag': 'proxy',
+                'protocol': 'vless',
+                'settings': {
+                  'vnext': [
+                    {'address': 'de.example', 'port': 8443},
+                  ],
+                },
+              },
+            ],
+          },
+          {
+            'remarks': 'SS',
+            'outbounds': [
+              {
+                'tag': 'proxy',
+                'protocol': 'shadowsocks',
+                'settings': {
+                  'servers': [
+                    {'address': 'ss.example', 'port': 1234},
+                  ],
+                },
+              },
+            ],
+          },
+          {'outbounds': <Object>[]},
+          'not a map',
+        ]),
+      );
       final r = await svc.fetchSubscription(server.url());
       expect(r.configs, hasLength(3));
       final de = r.configs[0];
@@ -128,7 +136,7 @@ void main() {
     });
 
     test('single xray JSON object is accepted', () async {
-      server.serve(jsonEncode({'remarks': 'One', 'outbounds': []}));
+      server.serve(jsonEncode({'remarks': 'One', 'outbounds': <Object>[]}));
       expect((await svc.fetchSubscription(server.url())).configs.single.name, 'One');
     });
 
@@ -140,14 +148,17 @@ void main() {
 
   group('headers', () {
     test('metadata is parsed from response headers', () async {
-      server.serve(_trojan, headers: {
-        'profile-title': 'base64:${base64.encode(utf8.encode('Мой VPN'))}',
-        'subscription-userinfo': 'upload=10; download=20; total=30; expire=1800000000; junk; x=y',
-        'announce': 'Hello',
-        'announce-url': 'https://news',
-        'x-hwid-active': 'true',
-        'x-hwid-max-devices-reached': 'false',
-      });
+      server.serve(
+        _trojan,
+        headers: {
+          'profile-title': 'base64:${base64.encode(utf8.encode('Мой VPN'))}',
+          'subscription-userinfo': 'upload=10; download=20; total=30; expire=1800000000; junk; x=y',
+          'announce': 'Hello',
+          'announce-url': 'https://news',
+          'x-hwid-active': 'true',
+          'x-hwid-max-devices-reached': 'false',
+        },
+      );
       final r = await svc.fetchSubscription(server.url());
       expect(r.profileTitle, 'Мой VPN');
       expect(r.uploadBytes, 10);
@@ -163,11 +174,10 @@ void main() {
     });
 
     test('zero total/expire mean unlimited; no hwid headers means no status', () async {
-      server.serve(_trojan, headers: {
-        'profile-title': 'Plain',
-        'subscription-userinfo': 'total=0; expire=0',
-        'announce': 'base64:%%%',
-      });
+      server.serve(
+        _trojan,
+        headers: {'profile-title': 'Plain', 'subscription-userinfo': 'total=0; expire=0', 'announce': 'base64:%%%'},
+      );
       final r = await svc.fetchSubscription(server.url());
       expect(r.profileTitle, 'Plain');
       expect(r.totalBytes, isNull);
@@ -186,9 +196,11 @@ void main() {
 
     test('custom User-Agent and HWID headers are sent', () async {
       server.serve(_trojan);
-      await svc.fetchSubscription(server.url(),
-          userAgent: 'Happ/1.0',
-          hwid: const HwidDeviceInfo(deviceId: 'dev1', deviceModel: 'Pixel', osVersion: 34));
+      await svc.fetchSubscription(
+        server.url(),
+        userAgent: 'Happ/1.0',
+        hwid: const HwidDeviceInfo(deviceId: 'dev1', deviceModel: 'Pixel', osVersion: 34),
+      );
       final h = server.requests.single;
       expect(h.value('user-agent'), 'Happ/1.0');
       expect(h.value('x-hwid'), 'dev1');
@@ -199,8 +211,11 @@ void main() {
   });
 
   test('HwidDeviceInfo.toJson', () {
-    expect(const HwidDeviceInfo(deviceId: 'a', deviceModel: 'b', osVersion: 1).toJson(),
-        {'deviceId': 'a', 'deviceModel': 'b', 'osVersion': 1});
+    expect(const HwidDeviceInfo(deviceId: 'a', deviceModel: 'b', osVersion: 1).toJson(), {
+      'deviceId': 'a',
+      'deviceModel': 'b',
+      'osVersion': 1,
+    });
   });
 
   group('errors', () {
@@ -212,8 +227,9 @@ void main() {
     test('body over 10 MB throws', () async {
       server.serve(List<int>.filled(10 * 1024 * 1024 + 1, 0x61));
       await expectLater(
-          svc.fetchSubscription(server.url()),
-          throwsA(predicate((e) => e.toString().contains('exceeds 10 MB'))));
+        svc.fetchSubscription(server.url()),
+        throwsA(predicate((e) => e.toString().contains('exceeds 10 MB'))),
+      );
     });
   });
 
@@ -233,10 +249,12 @@ void main() {
     test('untrusted certificate throws with details', () async {
       await expectLater(
         svc.fetchSubscription(tls.url()),
-        throwsA(isA<UntrustedCertificateException>()
-            .having((e) => e.host, 'host', '127.0.0.1')
-            .having((e) => e.subject, 'subject', contains('localhost'))
-            .having((e) => e.toString(), 'toString', contains('127.0.0.1'))),
+        throwsA(
+          isA<UntrustedCertificateException>()
+              .having((e) => e.host, 'host', '127.0.0.1')
+              .having((e) => e.subject, 'subject', contains('localhost'))
+              .having((e) => e.toString(), 'toString', contains('127.0.0.1')),
+        ),
       );
     });
 
@@ -253,8 +271,10 @@ void main() {
     });
 
     test('a different pinned certificate is rejected', () async {
-      await expectLater(svc.fetchSubscription(tls.url(), pinnedCertDer: 'AAAA'),
-          throwsA(isA<UntrustedCertificateException>()));
+      await expectLater(
+        svc.fetchSubscription(tls.url(), pinnedCertDer: 'AAAA'),
+        throwsA(isA<UntrustedCertificateException>()),
+      );
     });
   });
 }

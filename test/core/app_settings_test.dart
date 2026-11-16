@@ -99,8 +99,14 @@ void main() {
 
     test('unknown enum names fall back to defaults', () {
       final s = AppSettings.fromJson(const {
-        'logLevel': 'x', 'vpnMode': 'x', 'dnsMode': 'x', 'updateChannel': 'x',
-        'fontScale': 'x', 'dnsQueryStrategy': 'x', 'tlsFingerprint': 'x', 'core': 'x',
+        'logLevel': 'x',
+        'vpnMode': 'x',
+        'dnsMode': 'x',
+        'updateChannel': 'x',
+        'fontScale': 'x',
+        'dnsQueryStrategy': 'x',
+        'tlsFingerprint': 'x',
+        'core': 'x',
         'fragment': 'not a map',
       });
       expect(s.toJson(), const AppSettings().toJson());
@@ -109,8 +115,7 @@ void main() {
     test('dnsServer maps preset and custom type', () {
       expect(const AppSettings().dnsServer.address, '1.1.1.1');
       expect(const AppSettings(dnsPreset: 'google_doh').dnsServer.type, DnsType.doh);
-      final dot = const AppSettings(dnsPreset: 'custom', customDnsAddress: 'd.example', customDnsType: 'dot')
-          .dnsServer;
+      final dot = const AppSettings(dnsPreset: 'custom', customDnsAddress: 'd.example', customDnsType: 'dot').dnsServer;
       expect(dot.type, DnsType.dot);
       expect(dot.port, 853);
       expect(const AppSettings(dnsPreset: 'custom', customDnsType: 'doh').dnsServer.type, DnsType.doh);
@@ -137,15 +142,13 @@ void main() {
     });
 
     test('unknown versions', () {
-      expect(AppConstants.subscriptionUserAgent,
-          'TeapodStream/unknown (Android; XrayNG-compatible) Xray-core/unknown');
+      expect(AppConstants.subscriptionUserAgent, 'TeapodStream/unknown (Android; XrayNG-compatible) Xray-core/unknown');
     });
 
     test('known versions', () {
       AppConstants.appVersion = '1.2.3';
       AppConstants.xrayCoreVersion = '26.1.1';
-      expect(AppConstants.subscriptionUserAgent,
-          'TeapodStream/1.2.3 (Android; XrayNG-compatible) Xray-core/26.1.1');
+      expect(AppConstants.subscriptionUserAgent, 'TeapodStream/1.2.3 (Android; XrayNG-compatible) Xray-core/26.1.1');
     });
   });
 

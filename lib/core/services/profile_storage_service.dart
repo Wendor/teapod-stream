@@ -12,14 +12,11 @@ class ProfileStorageService {
     final raw = await _secure.readProfilesRaw();
     if (raw == null || raw.isEmpty) return [];
     final list = jsonDecode(raw) as List<dynamic>;
-    return list
-        .map((e) => Profile.fromJson(e as Map<String, dynamic>))
-        .toList();
+    return list.map((e) => Profile.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<void> saveProfiles(List<Profile> profiles) async {
-    await _secure.writeProfilesRaw(
-        jsonEncode(profiles.map((p) => p.toJson()).toList()));
+    await _secure.writeProfilesRaw(jsonEncode(profiles.map((p) => p.toJson()).toList()));
   }
 
   Future<String> loadActiveProfileId() async {

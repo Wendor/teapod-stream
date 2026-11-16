@@ -11,15 +11,14 @@ class AppTheme {
     Color? color,
     double letterSpacing = 0,
     double? height,
-  }) =>
-      GoogleFonts.jetBrainsMono(
-        fontSize: size < 12 ? 12 : size,
-        fontWeight: weight,
-        color: color,
-        letterSpacing: letterSpacing,
-        height: height,
-        fontFeatures: const [FontFeature.tabularFigures()],
-      );
+  }) => GoogleFonts.jetBrainsMono(
+    fontSize: size < 12 ? 12 : size,
+    fontWeight: weight,
+    color: color,
+    letterSpacing: letterSpacing,
+    height: height,
+    fontFeatures: const [FontFeature.tabularFigures()],
+  );
 
   static TextStyle sans({
     double size = 14,
@@ -27,21 +26,19 @@ class AppTheme {
     Color? color,
     double letterSpacing = 0,
     double? height,
-  }) =>
-      GoogleFonts.interTight(
-        fontSize: size < 12 ? 12 : size,
-        fontWeight: weight,
-        color: color,
-        letterSpacing: letterSpacing,
-        height: height,
-      );
+  }) => GoogleFonts.interTight(
+    fontSize: size < 12 ? 12 : size,
+    fontWeight: weight,
+    color: color,
+    letterSpacing: letterSpacing,
+    height: height,
+  );
 
   // ── Theme builder ─────────────────────────────────────────────
 
   static ThemeData build(Brightness brightness, Color accent) {
     final isDark = brightness == Brightness.dark;
-    final tokens =
-        isDark ? TeapodTokens.dark(accent) : TeapodTokens.light(accent);
+    final tokens = isDark ? TeapodTokens.dark(accent) : TeapodTokens.light(accent);
 
     return ThemeData(
       useMaterial3: true,
@@ -65,8 +62,7 @@ class AppTheme {
         foregroundColor: tokens.text,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        titleTextStyle: sans(
-            size: 18, weight: FontWeight.w600, color: tokens.text),
+        titleTextStyle: sans(size: 18, weight: FontWeight.w600, color: tokens.text),
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: tokens.bg,
@@ -83,11 +79,7 @@ class AppTheme {
         ),
         margin: EdgeInsets.zero,
       ),
-      dividerTheme: DividerThemeData(
-        color: tokens.line,
-        thickness: 1,
-        space: 0,
-      ),
+      dividerTheme: DividerThemeData(color: tokens.line, thickness: 1, space: 0),
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) return tokens.accent;
@@ -101,14 +93,14 @@ class AppTheme {
         }),
       ),
       textTheme: TextTheme(
-        headlineLarge:  sans(size: 28, weight: FontWeight.w500, color: tokens.text, letterSpacing: -1),
+        headlineLarge: sans(size: 28, weight: FontWeight.w500, color: tokens.text, letterSpacing: -1),
         headlineMedium: sans(size: 22, weight: FontWeight.w600, color: tokens.text),
-        titleLarge:     sans(size: 18, weight: FontWeight.w600, color: tokens.text),
-        titleMedium:    sans(size: 16, weight: FontWeight.w500, color: tokens.text),
-        bodyLarge:      sans(size: 16, color: tokens.text),
-        bodyMedium:     sans(size: 14, color: tokens.textDim),
-        bodySmall:      sans(size: 12, color: tokens.textMuted),
-        labelSmall:     mono(size: 10, color: tokens.textMuted),
+        titleLarge: sans(size: 18, weight: FontWeight.w600, color: tokens.text),
+        titleMedium: sans(size: 16, weight: FontWeight.w500, color: tokens.text),
+        bodyLarge: sans(size: 16, color: tokens.text),
+        bodyMedium: sans(size: 14, color: tokens.textDim),
+        bodySmall: sans(size: 12, color: tokens.textMuted),
+        labelSmall: mono(size: 10, color: tokens.textMuted),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -126,7 +118,7 @@ class AppTheme {
           borderSide: BorderSide(color: tokens.accent, width: 1.5),
         ),
         labelStyle: TextStyle(color: tokens.textDim),
-        hintStyle:  TextStyle(color: tokens.textMuted),
+        hintStyle: TextStyle(color: tokens.textMuted),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(

@@ -11,11 +11,7 @@ class IpInfo {
   final String country;
   final String countryCode;
 
-  const IpInfo({
-    required this.ip,
-    required this.country,
-    required this.countryCode,
-  });
+  const IpInfo({required this.ip, required this.country, required this.countryCode});
 }
 
 class IpInfoNotifier extends AsyncNotifier<IpInfo?> {
@@ -45,11 +41,7 @@ class IpInfoNotifier extends AsyncNotifier<IpInfo?> {
     return null;
   }
 
-  Future<IpInfo?> _fetch({
-    required int socksPort,
-    required String socksUser,
-    required String socksPassword,
-  }) async {
+  Future<IpInfo?> _fetch({required int socksPort, required String socksUser, required String socksPassword}) async {
     if (socksPort <= 0) return null;
     final client = HttpClient();
     if (socksPort > 0) {

@@ -3,7 +3,7 @@ package com.teapodstream.teapodstream.core
 import android.content.Context
 import teapodcore.Teapodcore
 
-/** sing-box + teapod-tun2socks через локальный SOCKS5 (inbound mixed). */
+/** sing-box + teapod-tun2socks via a local SOCKS5 (mixed inbound). */
 object BoxCore : Tun2SocksCore() {
     override val kind = CoreKind.BOX
     override val logTag = "sing-box"

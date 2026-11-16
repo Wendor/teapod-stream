@@ -9,8 +9,9 @@ import '../../providers/core_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import 'settings_shared.dart';
+import '../../l10n/l10n.dart';
 
-/// Каким ядром запускается профиль, почему не другими; закрепление ядра.
+/// Which core runs the profile, why not the others; core pinning.
 Future<void> showCoreSheet(BuildContext context, VpnConfig config) {
   final t = Theme.of(context).extension<TeapodTokens>()!;
   return showModalBottomSheet(
@@ -44,8 +45,9 @@ class _CoreSheet extends ConsumerWidget {
 
     void pin(String value) {
       final kind = CoreKind.tryName(value);
-      ref.read(configProvider.notifier).updateConfig(
-          kind == null ? config.copyWith(clearCore: true) : config.copyWith(core: kind));
+      ref
+          .read(configProvider.notifier)
+          .updateConfig(kind == null ? config.copyWith(clearCore: true) : config.copyWith(core: kind));
     }
 
     return SafeArea(
@@ -58,9 +60,11 @@ class _CoreSheet extends ConsumerWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: Text(config.name,
-                      style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500),
-                      overflow: TextOverflow.ellipsis),
+                  child: Text(
+                    config.name,
+                    style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
                 Text('CORE', style: AppTheme.mono(size: 10, color: t.textMuted)),
               ],
@@ -72,14 +76,16 @@ class _CoreSheet extends ConsumerWidget {
               t: t,
               mark: v.kind == config.core ? '★' : '${resolver.settings.coreOrder.indexOf(v.kind) + 1}',
               name: v.kind.displayName,
-              status: v.kind == chosen?.kind ? 'используется' : (v.reason ?? 'совместимо'),
+              status: v.kind == chosen?.kind ? context.l10n.coreInUse : (v.reason ?? context.l10n.coreCompatible),
               active: v.kind == chosen?.kind,
               warnings: v.kind == chosen?.kind ? warnings : const [],
             ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
-            child: Text('ЯДРО ПРОФИЛЯ',
-                style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+            child: Text(
+              context.l10n.coreProfileCore,
+              style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1),
+            ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
@@ -90,7 +96,7 @@ class _CoreSheet extends ConsumerWidget {
                 child: SetSegSquare(
                   t: t,
                   value: config.core?.name ?? '',
-                  opts: [('', 'АВТО'), for (final k in pinOptions) (k.name, k.shortLabel)],
+                  opts: [('', context.l10n.coreAuto), for (final k in pinOptions) (k.name, k.shortLabel)],
                   onChanged: pin,
                 ),
               ),
@@ -99,9 +105,9 @@ class _CoreSheet extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
             child: Text(
-                'АВТО — первое подходящее ядро по приоритету из настроек. '
-                'Закреплённое ядро пробуется первым.',
-                style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.3)),
+              context.l10n.coreAutoHint,
+              style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.3),
+            ),
           ),
         ],
       ),
@@ -128,36 +134,34 @@ class _VerdictRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-        decoration: BoxDecoration(
-          color: active ? t.accentFade : Colors.transparent,
-          border: Border(bottom: BorderSide(color: t.lineSoft)),
+    duration: const Duration(milliseconds: 250),
+    padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+    decoration: BoxDecoration(
+      color: active ? t.accentFade : Colors.transparent,
+      border: Border(bottom: BorderSide(color: t.lineSoft)),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 22,
+          child: Text(mark, style: AppTheme.mono(size: 11, color: active ? t.accent : t.textMuted)),
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 22,
-              child: Text(mark, style: AppTheme.mono(size: 11, color: active ? t.accent : t.textMuted)),
-            ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(name, style: AppTheme.sans(size: 14, color: active ? t.accent : t.text)),
-                  const SizedBox(height: 3),
-                  Text(status,
-                      style: AppTheme.mono(size: 10, color: active ? t.accent : t.textMuted, letterSpacing: 0.3)),
-                  for (final w in warnings) ...[
-                    const SizedBox(height: 3),
-                    Text('⚠ $w',
-                        style: AppTheme.mono(size: 10, color: AppColors.accentOrange, letterSpacing: 0.3)),
-                  ],
-                ],
-              ),
-            ),
-          ],
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(name, style: AppTheme.sans(size: 14, color: active ? t.accent : t.text)),
+              const SizedBox(height: 3),
+              Text(status, style: AppTheme.mono(size: 10, color: active ? t.accent : t.textMuted, letterSpacing: 0.3)),
+              for (final w in warnings) ...[
+                const SizedBox(height: 3),
+                Text('⚠ $w', style: AppTheme.mono(size: 10, color: AppColors.accentOrange, letterSpacing: 0.3)),
+              ],
+            ],
+          ),
         ),
-      );
+      ],
+    ),
+  );
 }

@@ -23,8 +23,10 @@ void main() {
   });
 
   test('private key with passphrase and host keys', () {
-    final c = SshParser.parseUri('ssh://deploy@h.example:22?pk=${Uri.encodeComponent(_pem)}&pkp=secret'
-        '&hk=${Uri.encodeComponent('ssh-ed25519 AAAA1,ssh-rsa BBBB2')}')!;
+    final c = SshParser.parseUri(
+      'ssh://deploy@h.example:22?pk=${Uri.encodeComponent(_pem)}&pkp=secret'
+      '&hk=${Uri.encodeComponent('ssh-ed25519 AAAA1,ssh-rsa BBBB2')}',
+    )!;
     final s = _ssh(c);
     expect(s.privateKey, _pem);
     expect(s.privateKeyPassphrase, 'secret');
@@ -45,12 +47,22 @@ void main() {
   test('sing-box outbound', () {
     const opts = VpnEngineOptions(socksPort: 1, httpPort: 0, socksUser: '', socksPassword: '');
     expect(SingBoxOutbound.build(SshParser.parseUri('ssh://root:pw@h.example:2222?hk=k1')!, opts), {
-      'type': 'ssh', 'tag': 'proxy', 'server': 'h.example', 'server_port': 2222,
-      'user': 'root', 'password': 'pw', 'host_key': ['k1'],
+      'type': 'ssh',
+      'tag': 'proxy',
+      'server': 'h.example',
+      'server_port': 2222,
+      'user': 'root',
+      'password': 'pw',
+      'host_key': ['k1'],
     });
     expect(SingBoxOutbound.build(SshParser.parseUri('ssh://u@h.example?pk=b3BlbnNzaC1rZXktdjE%3D&pkp=x')!, opts), {
-      'type': 'ssh', 'tag': 'proxy', 'server': 'h.example', 'server_port': 22,
-      'user': 'u', 'private_key': [_pem], 'private_key_passphrase': 'x',
+      'type': 'ssh',
+      'tag': 'proxy',
+      'server': 'h.example',
+      'server_port': 22,
+      'user': 'u',
+      'private_key': [_pem],
+      'private_key_passphrase': 'x',
     });
   });
 }

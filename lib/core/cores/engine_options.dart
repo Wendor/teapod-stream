@@ -6,53 +6,52 @@ import '../models/vpn_config.dart';
 import '../services/settings_service.dart';
 import 'core_backend.dart';
 
-/// Опции подключения [config] на ядре [backend] из настроек.
+/// Connection options for [config] on core [backend] from settings.
 VpnEngineOptions buildEngineOptions(
   AppSettings settings,
   VpnConfig config,
   CoreBackend backend, {
   int socksPort = AppConstants.defaultSocksPort,
   ({String user, String password}) credentials = (user: '', password: ''),
-}) =>
-    VpnEngineOptions(
-      socksPort: socksPort,
-      httpPort: 0,
-      socksUser: credentials.user,
-      socksPassword: credentials.password,
-      excludedPackages: settings.splitTunnelingEnabled
-          ? (settings.vpnMode == VpnMode.allExcept ? settings.excludedPackages : <String>{})
-          : {},
-      includedPackages: settings.splitTunnelingEnabled
-          ? (settings.vpnMode == VpnMode.onlySelected ? settings.includedPackages : <String>{})
-          : {},
-      logLevel: settings.logLevel,
-      enableUdp: settings.enableUdp,
-      allowIcmp: settings.allowIcmp,
-      dnsMode: settings.dnsMode,
-      dnsServer: settings.dnsServer,
-      vpnMode: settings.splitTunnelingEnabled ? settings.vpnMode : VpnMode.allExcept,
-      proxyOnly: settings.proxyOnly,
-      showNotification: settings.showNotification,
-      killSwitch: settings.killSwitchEnabled,
-      routing: settings.routing,
-      sniffingEnabled: settings.sniffingEnabled,
-      mtu: settings.mtu,
-      dnsQueryStrategy: settings.dnsQueryStrategy,
-      // Vision отвергает UDP/443: браузеры ретраят QUIC ~30 с перед откатом на
-      // TCP. Политика блокировки — у ядра.
-      blockQuic: backend.effectiveQuicBlock(requested: settings.blockQuic, flow: _visionFlow(config)),
-      ipv6Enabled: settings.ipv6Enabled,
-      allowTethering: settings.allowTethering,
-      obsProbeIntervalSec: settings.obsProbeIntervalSec,
-      tlsFingerprint: settings.tlsFingerprint,
-      fragment: settings.fragment,
-      noise: settings.noise,
-      mux: settings.mux,
-      heartbeat: settings.heartbeat,
-    );
+}) => VpnEngineOptions(
+  socksPort: socksPort,
+  httpPort: 0,
+  socksUser: credentials.user,
+  socksPassword: credentials.password,
+  excludedPackages: settings.splitTunnelingEnabled
+      ? (settings.vpnMode == VpnMode.allExcept ? settings.excludedPackages : <String>{})
+      : {},
+  includedPackages: settings.splitTunnelingEnabled
+      ? (settings.vpnMode == VpnMode.onlySelected ? settings.includedPackages : <String>{})
+      : {},
+  logLevel: settings.logLevel,
+  enableUdp: settings.enableUdp,
+  allowIcmp: settings.allowIcmp,
+  dnsMode: settings.dnsMode,
+  dnsServer: settings.dnsServer,
+  vpnMode: settings.splitTunnelingEnabled ? settings.vpnMode : VpnMode.allExcept,
+  proxyOnly: settings.proxyOnly,
+  showNotification: settings.showNotification,
+  killSwitch: settings.killSwitchEnabled,
+  routing: settings.routing,
+  sniffingEnabled: settings.sniffingEnabled,
+  mtu: settings.mtu,
+  dnsQueryStrategy: settings.dnsQueryStrategy,
+  // Vision rejects UDP/443: browsers retry QUIC for ~30 s before falling back to
+  // TCP. The blocking policy belongs to the core.
+  blockQuic: backend.effectiveQuicBlock(requested: settings.blockQuic, flow: _visionFlow(config)),
+  ipv6Enabled: settings.ipv6Enabled,
+  allowTethering: settings.allowTethering,
+  obsProbeIntervalSec: settings.obsProbeIntervalSec,
+  tlsFingerprint: settings.tlsFingerprint,
+  fragment: settings.fragment,
+  noise: settings.noise,
+  mux: settings.mux,
+  heartbeat: settings.heartbeat,
+);
 
-/// Vision-flow конфига (в т.ч. из полного JSON) — такие outbound'ы отвергают
-/// UDP/443, QUIC нужно отбивать на стороне TUN.
+/// The config's Vision flow (including from a full JSON) — such outbounds reject
+/// UDP/443, QUIC must be refused on the TUN side.
 String? _visionFlow(VpnConfig config) {
   final flow = config.flow;
   if (flow != null && flow.contains('vision')) return flow;

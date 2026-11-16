@@ -3,9 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/vpn_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
+import '../../l10n/l10n.dart';
 
-/// Баннер «настройки изменены — переподключитесь».
-/// Виден только когда pendingReconnectProvider == true.
+/// "Settings changed — reconnect" banner.
+/// Visible only when pendingReconnectProvider == true.
 class ReconnectBanner extends ConsumerWidget {
   const ReconnectBanner({super.key});
 
@@ -24,20 +25,21 @@ class ReconnectBanner extends ConsumerWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text('настройки изменены · применятся после переподключения',
-                style: AppTheme.mono(size: 10, color: t.text, letterSpacing: 0.5)),
+            child: Text(
+              context.l10n.reconnectBanner,
+              style: AppTheme.mono(size: 10, color: t.text, letterSpacing: 0.5),
+            ),
           ),
           const SizedBox(width: 12),
           Semantics(
-            label: 'переподключить',
+            label: context.l10n.homeActionReconnect,
             button: true,
             child: GestureDetector(
               onTap: () => ref.read(vpnProvider.notifier).reconnectWithNewConfig(),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 color: t.accent,
-                child: Text('ПЕРЕПОДКЛЮЧИТЬ',
-                    style: AppTheme.mono(size: 9, color: t.bg, letterSpacing: 1)),
+                child: Text(context.l10n.reconnectButton, style: AppTheme.mono(size: 9, color: t.bg, letterSpacing: 1)),
               ),
             ),
           ),

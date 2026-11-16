@@ -8,7 +8,7 @@ import '../../core/models/routing_settings.dart';
 import '../../core/services/settings_service.dart';
 import 'singbox_outbound.dart';
 
-/// DNS и маршрутизация sing-box 1.14: те же правила, что у xray, в нотации sing-box.
+/// sing-box 1.14 DNS and routing: the same rules as xray, in sing-box notation.
 abstract final class SingBoxRoute {
   static const inboundTag = 'socks-in';
   static const directTag = 'direct';
@@ -18,7 +18,7 @@ abstract final class SingBoxRoute {
   static String _geoipTag(String code) => 'geoip-${code.trim().toLowerCase()}';
   static String _geositeTag(String code) => 'geosite-${code.trim().toLowerCase()}';
 
-  /// [tcpOnlyProxy] — прокси без UDP (SSH, Naive): DNS через туннель идёт по TCP.
+  /// [tcpOnlyProxy] — a proxy without UDP (SSH, Naive): DNS through the tunnel goes over TCP.
   static Map<String, dynamic> dns(VpnEngineOptions o, {bool tcpOnlyProxy = false}) {
     final server = o.dnsServer;
     final detour = o.dnsMode == DnsMode.proxy ? {'detour': SingBoxOutbound.tag} : const <String, dynamic>{};
@@ -55,7 +55,10 @@ abstract final class SingBoxRoute {
         };
     }
     return {
-      'servers': [main, {'type': 'local', 'tag': _localDns}],
+      'servers': [
+        main,
+        {'type': 'local', 'tag': _localDns},
+      ],
       if (o.routing.adBlockEnabled)
         'rules': [
           {'rule_set': _adBlockTags, 'action': 'predefined', 'rcode': 'NOERROR'},
@@ -69,11 +72,14 @@ abstract final class SingBoxRoute {
     };
   }
 
-  /// Сервер по IP fallback (с SNI домена) или по имени.
+  /// Server by IP fallback (with the domain SNI) or by name.
   static Map<String, dynamic> _host(String host, DnsServerConfig server) {
     final ip = server.fallbackIp;
     if (server.domain != null && ip != null && ip.isNotEmpty) {
-      return {'server': ip, 'tls': {'enabled': true, 'server_name': server.domain}};
+      return {
+        'server': ip,
+        'tls': {'enabled': true, 'server_name': server.domain},
+      };
     }
     return {'server': host};
   }
@@ -90,16 +96,26 @@ abstract final class SingBoxRoute {
     ];
     return {
       'rules': [
-        if (o.sniffingEnabled) {'inbound': [inboundTag], 'action': 'sniff'},
-        {'port': [53], 'action': 'hijack-dns'},
-        if (!o.enableUdp) {'network': ['udp'], 'action': 'reject'},
+        if (o.sniffingEnabled)
+          {
+            'inbound': [inboundTag],
+            'action': 'sniff',
+          },
+        {
+          'port': [53],
+          'action': 'hijack-dns',
+        },
+        if (!o.enableUdp)
+          {
+            'network': ['udp'],
+            'action': 'reject',
+          },
         ..._userRules(routing),
         if (routing.direction == RoutingDirection.onlySelected) ..._probeRules(o),
       ],
       if (ruleSets.isNotEmpty)
         'rule_set': [
-          for (final tag in ruleSets.toSet())
-            {'type': 'local', 'tag': tag, 'format': 'binary', 'path': '$tag.srs'},
+          for (final tag in ruleSets.toSet()) {'type': 'local', 'tag': tag, 'format': 'binary', 'path': '$tag.srs'},
         ],
       'final': routing.direction == RoutingDirection.onlySelected ? directTag : SingBoxOutbound.tag,
       'default_domain_resolver': _localDns,
@@ -124,11 +140,17 @@ abstract final class SingBoxRoute {
 
   /// `domain:x` → domain_suffix, `full:x` → domain.
   static Map<String, dynamic> _xrayDomains(List<String> rules) => {
-        'domain': [for (final r in rules) if (r.startsWith('full:')) r.substring(5)],
-        'domain_suffix': [for (final r in rules) if (r.startsWith('domain:')) r.substring(7)],
-      };
+    'domain': [
+      for (final r in rules)
+        if (r.startsWith('full:')) r.substring(5),
+    ],
+    'domain_suffix': [
+      for (final r in rules)
+        if (r.startsWith('domain:')) r.substring(7),
+    ],
+  };
 
-  /// В режиме «только выбранные» диагностика и проба всегда идут через прокси.
+  /// In "selected only" mode diagnostics and the probe always go through the proxy.
   static List<Map<String, dynamic>> _probeRules(VpnEngineOptions o) {
     final host = Uri.tryParse(o.heartbeat.url)?.host ?? '';
     final isIp = InternetAddress.tryParse(host) != null;
@@ -137,10 +159,14 @@ abstract final class SingBoxRoute {
         'domain': ['cp.cloudflare.com', 'ip-api.com', if (host.isNotEmpty && !isIp) host],
         'outbound': SingBoxOutbound.tag,
       },
-      if (isIp) {'ip_cidr': [host], 'outbound': SingBoxOutbound.tag},
+      if (isIp)
+        {
+          'ip_cidr': [host],
+          'outbound': SingBoxOutbound.tag,
+        },
     ];
   }
 
-  /// Адрес SOCKS-inbound (общий с xray).
+  /// SOCKS inbound address (shared with xray).
   static const listen = XrayDefaults.socksListen;
 }

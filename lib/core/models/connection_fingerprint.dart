@@ -2,10 +2,10 @@ import 'dart:convert';
 import '../services/settings_service.dart';
 import 'core_kind.dart';
 
-/// Детерминированный отпечаток настроек, влияющих на активное соединение.
-/// Изменился после подключения — нужен reconnect. Косметика (тема, шрифт,
-/// autoConnect, параметры подписок, geo-URL) не входит.
-/// [core] — ядро, которым запущен (запустится) активный профиль.
+/// Deterministic fingerprint of the settings that affect the active connection.
+/// Changed after connecting — a reconnect is needed. Cosmetics (theme, font,
+/// autoConnect, subscription parameters, geo URLs) are not included.
+/// [core] — the core the active profile runs (will run) on.
 String connectionFingerprint(AppSettings s, {CoreKind? core}) {
   final map = <String, Object?>{
     'core': core?.name,
@@ -40,7 +40,7 @@ String connectionFingerprint(AppSettings s, {CoreKind? core}) {
     'fragment': s.fragment.toJson(),
     'noise': s.noise.toJson(),
     'mux': s.mux.toJson(),
-    // switchSource не влияет на активную сессию — он читается уже после срыва.
+    // switchSource doesn't affect the active session — it is read only after a failure.
     'heartbeatProbe': s.heartbeat.probe.name,
     'heartbeatAction': s.heartbeat.failAction.name,
     'heartbeatThreshold': s.heartbeat.failureThreshold,

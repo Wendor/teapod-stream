@@ -1,0 +1,70 @@
+name: PR rules
+
+# Checks the PR against CONTRIBUTING.md: title, description sections, release-machinery paths, size.
+# pull_request_target runs this file from the base branch and never checks out the PR's code, so a PR
+# can't change its own checks. Contributors get errors; maintainers get the same findings as warnings.
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-rules-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  rules:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          TITLE: ${{ github.event.pull_request.title }}
+          BODY: ${{ github.event.pull_request.body }}
+          ASSOC: ${{ github.event.pull_request.author_association }}
+          MAX_LINES: 500
+        run: |
+          set -uo pipefail
+          errors=0
+          case "$ASSOC" in OWNER|MEMBER|COLLABORATOR) level=warning ;; *) level=error ;; esac
+          problem() { echo "::$level::$1"; echo "- $1" >> "$GITHUB_STEP_SUMMARY"; errors=$((errors + 1)); }
+          echo "### PR rules (CONTRIBUTING.md)" >> "$GITHUB_STEP_SUMMARY"
+
+          # Title: `area: what changed`
+          [[ "$TITLE" =~ ^[a-z0-9][a-z0-9/_-]*:\ .+ ]] \
+            || problem "Title must be 'area: what changed' (e.g. 'vpn: keep the kill switch sink during reconnect')"
+
+          # Description: template sections present and filled
+          for h in '## Why' '## What changed' '## Testing' '## Risks'; do
+            grep -qxF "$h" <<< "$BODY" || problem "Description is missing the '$h' section of the template"
+          done
+          for p in '<the reason>' '<a short summary>' '**Tested:** <' '**Not tested:** <' '<what could break'; do
+            grep -qF -- "$p" <<< "$BODY" && problem "Description still has the placeholder '$p'"
+          done
+
+          # Changed files
+          files=$(gh api --paginate "repos/$REPO/pulls/$NUMBER/files" \
+            --jq '.[] | [.filename, (.additions + .deletions), ((.patch // "") | test("(^|\n)[-+]version:"))] | @tsv')
+          while IFS=$'\t' read -r f n ver; do
+            [ -n "$f" ] || continue
+            case "$f" in
+              .github/*|build.sh|core/build.sh|android/app/libs/*) problem "Release machinery changed: $f (needs the maintainer's agreement)" ;;
+              pubspec.yaml) [ "$ver" = true ] && problem "pubspec.yaml version changed — releases are the maintainer's job" ;;
+            esac
+          done <<< "$files"
+
+          # Size, without generated files and translations
+          lines=$(awk -F'\t' '$1 !~ /^lib\/l10n\/|^pubspec\.lock$|^test\/fixtures\// {s += $2} END {print s + 0}' <<< "$files")
+          echo "Changed lines (without l10n and lock files): $lines" >> "$GITHUB_STEP_SUMMARY"
+          [ "$lines" -le "$MAX_LINES" ] \
+            || echo "::warning::$lines changed lines (> $MAX_LINES): split the PR or agree on its size in the issue"
+
+          [ "$errors" -eq 0 ] && echo "All rules pass" >> "$GITHUB_STEP_SUMMARY"
+          [ "$level" = warning ] || [ "$errors" -eq 0 ]

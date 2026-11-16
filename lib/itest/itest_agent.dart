@@ -17,8 +17,8 @@ import '../providers/settings_provider.dart';
 import '../providers/vpn_provider.dart';
 import 'itest_protocol.dart';
 
-/// Агент интеграционных тестов: исполняет команды раннера `tool/itest` через
-/// те же провайдеры, что и UI. Есть только в itest-сборке ([kItest]).
+/// Integration test agent: executes `tool/itest` runner commands through
+/// the same providers as the UI. Present only in the itest build ([kItest]).
 class ItestAgent {
   final ProviderContainer container;
 
@@ -28,13 +28,13 @@ class ItestAgent {
 
   static const _channel = MethodChannel('com.teapodstream/itest');
 
-  /// Flutter на Android режет строку logcat на ~1024 символах — длинный ответ уходит в файл.
+  /// Flutter on Android cuts a logcat line at ~1024 characters — a long response goes to a file.
   static const _maxInline = 900;
 
   static void start(ProviderContainer container) {
     final agent = ItestAgent(container);
-    // Раннер повторяет `am start` с тем же id, если adb завис: повтор не должен
-    // выполнить команду (например, import) второй раз — отдаём тот же ответ.
+    // The runner repeats `am start` with the same id if adb hung: the repeat must not
+    // run the command (e.g. import) a second time — return the same response.
     final seen = <String, Future<Map<String, Object?>>>{};
     _channel.setMethodCallHandler((call) async {
       if (call.method != 'command') return;
@@ -77,9 +77,9 @@ class ItestAgent {
   }
 
   Future<Object?> _ping() async => {
-        'version': AppConstants.appVersion,
-        'cores': [for (final k in await read(availableCoresProvider.future)) k.nativeId],
-      };
+    'version': AppConstants.appVersion,
+    'cores': [for (final k in await read(availableCoresProvider.future)) k.nativeId],
+  };
 
   Future<Object?> _reset(Map<String, dynamic> cmd) async {
     if (cmd['keepConfigs'] != true) {
@@ -146,11 +146,15 @@ class ItestAgent {
   }
 
   Future<Object?> _connect(String configId, String core) async {
-    final kind = CoreKind.values.firstWhere((k) => k.nativeId == core || k.displayName == core,
-        orElse: () => throw ArgumentError('unknown core: $core'));
+    final kind = CoreKind.values.firstWhere(
+      (k) => k.nativeId == core || k.displayName == core,
+      orElse: () => throw ArgumentError('unknown core: $core'),
+    );
     final configs = read(configProvider.notifier);
-    final config = read(configProvider).value!.configs.firstWhere((c) => c.id == configId,
-        orElse: () => throw ArgumentError('unknown config: $configId'));
+    final config = read(configProvider).value!.configs.firstWhere(
+      (c) => c.id == configId,
+      orElse: () => throw ArgumentError('unknown config: $configId'),
+    );
     final pinned = config.copyWith(core: kind);
     final error = pickCoreError(read(coreResolverProvider).resolve(pinned), kind);
     if (error != null) throw StateError('core ${kind.displayName}: $error');

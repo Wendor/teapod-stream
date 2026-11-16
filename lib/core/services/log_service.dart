@@ -43,17 +43,13 @@ class LogService extends Notifier<List<VpnLogEntry>> {
     state = _buffer.toList();
   }
 
-  void addInfo(String message, {String? source}) =>
-      add(VpnLogEntry.info(message, source: source));
+  void addInfo(String message, {String? source}) => add(VpnLogEntry.info(message, source: source));
 
-  void addError(String message, {String? source}) =>
-      add(VpnLogEntry.error(message, source: source));
+  void addError(String message, {String? source}) => add(VpnLogEntry.error(message, source: source));
 
-  void addWarning(String message, {String? source}) =>
-      add(VpnLogEntry.warning(message, source: source));
+  void addWarning(String message, {String? source}) => add(VpnLogEntry.warning(message, source: source));
 
-  void addDebug(String message, {String? source}) =>
-      add(VpnLogEntry.debug(message, source: source));
+  void addDebug(String message, {String? source}) => add(VpnLogEntry.debug(message, source: source));
 
   void loadFromEntries(List<VpnLogEntry> entries) {
     _buffer.clear();
@@ -69,5 +65,4 @@ class LogService extends Notifier<List<VpnLogEntry>> {
   }
 }
 
-final logServiceProvider =
-    NotifierProvider<LogService, List<VpnLogEntry>>(LogService.new);
+final logServiceProvider = NotifierProvider<LogService, List<VpnLogEntry>>(LogService.new);

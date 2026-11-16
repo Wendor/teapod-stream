@@ -29,7 +29,7 @@ class VpnTileService : TileService() {
         private var tileService: VpnTileService? = null
         private const val PREF_CONFIG_NAME = "tile_config_name"
 
-        /** Имя конфига quick-reconnect — его и подключит плитка; null — сброс на «TeapodStream». */
+        /** Quick-reconnect config name — the one the tile will connect; null — reset to "TeapodStream". */
         fun saveConfigName(context: Context, name: String?) {
             context.getSharedPreferences(XrayVpnService.PREFS_NAME, Context.MODE_PRIVATE).edit()
                 .putString(PREF_CONFIG_NAME, name?.takeIf { it.isNotBlank() })
@@ -70,7 +70,7 @@ class VpnTileService : TileService() {
                 action = if (isDisconnect) XrayVpnService.ACTION_DISCONNECT else XrayVpnService.ACTION_CONNECT_QUICK
             })
         }
-        // Выключить VPN с экрана блокировки может кто угодно — только после разблокировки.
+        // Anyone can turn the VPN off from the lock screen — only after unlocking.
         if (isDisconnect && isLocked) unlockAndRun { toggle() } else toggle()
     }
 
@@ -78,7 +78,7 @@ class VpnTileService : TileService() {
         val tile = qsTile ?: return
         setTileBase(tile, active = true)
         tile.state = Tile.STATE_UNAVAILABLE
-        setSubtitle(if (isDisconnect) "Отключение…" else "Подключение…")
+        setSubtitle(appString(if (isDisconnect) R.string.state_disconnecting else R.string.state_connecting))
         tile.updateTile()
     }
 
@@ -90,11 +90,11 @@ class VpnTileService : TileService() {
         when (vpnState) {
             "connected" -> {
                 tile.state = Tile.STATE_ACTIVE
-                setSubtitle("Подключено")
+                setSubtitle(appString(R.string.state_connected))
             }
             "connecting", "reconnecting", "disconnecting" -> {
                 tile.state = Tile.STATE_UNAVAILABLE
-                setSubtitle(if (vpnState == "disconnecting") "Отключение…" else "Подключение…")
+                setSubtitle(appString(if (vpnState == "disconnecting") R.string.state_disconnecting else R.string.state_connecting))
             }
             "blocked" -> {
                 tile.state = Tile.STATE_INACTIVE
@@ -102,7 +102,7 @@ class VpnTileService : TileService() {
             }
             else -> {
                 tile.state = Tile.STATE_INACTIVE
-                // Выключено: заголовок — приложение, подпись — что подключит плитка.
+                // Off: the title is the app, the subtitle is what the tile will connect.
                 setSubtitle(configName())
             }
         }
@@ -112,7 +112,7 @@ class VpnTileService : TileService() {
     private fun configName(): String? =
         getSharedPreferences(XrayVpnService.PREFS_NAME, MODE_PRIVATE).getString(PREF_CONFIG_NAME, null)
 
-    /** [active] — VPN включён или переходит: в заголовке имя конфига, иначе «TeapodStream». */
+    /** [active] — VPN is on or transitioning: the title is the config name, otherwise "TeapodStream". */
     private fun setTileBase(tile: Tile, active: Boolean) {
         tile.icon = Icon.createWithResource(this, R.drawable.ic_vpn_tile)
         tile.label = configName()?.takeIf { active } ?: "TeapodStream"

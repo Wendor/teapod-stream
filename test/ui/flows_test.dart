@@ -19,18 +19,15 @@ import 'package:teapodstream/ui/screens/profiles_screen.dart';
 
 import '../helpers/ui_harness.dart';
 
-/// Кнопка `go` вызывает DeeplinkHandler.handleUri с [uri].
+/// The `go` button calls DeeplinkHandler.handleUri with [uri].
 class _DeeplinkHost extends ConsumerWidget {
   final String uri;
   const _DeeplinkHost(this.uri);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => Scaffold(
-        body: TextButton(
-          onPressed: () => DeeplinkHandler(context, ref).handleUri(uri),
-          child: const Text('go'),
-        ),
-      );
+    body: TextButton(onPressed: () => DeeplinkHandler(context, ref).handleUri(uri), child: const Text('go')),
+  );
 }
 
 final _profileBundle = ProfileBundle(
@@ -54,21 +51,21 @@ void main() {
 
     testWidgets('inline profile is imported after confirmation', (tester) async {
       final c = await go(tester, _profileBundle.toDeeplink());
-      expect(find.text('Импорт профиля'), findsOneWidget);
-      expect(find.text('Профиль: «Shared»'), findsOneWidget);
-      expect(find.text('Экспорт: 2026-03-04 05:06'), findsOneWidget);
-      expect(find.text('+ 1 конфигов, 0 подписок'), findsOneWidget);
-      await tester.tap(find.text('Импортировать'));
+      expect(find.text('Import profile'), findsOneWidget);
+      expect(find.text('Profile: "Shared"'), findsOneWidget);
+      expect(find.text('Exported: 2026-03-04 05:06'), findsOneWidget);
+      expect(find.text('+ 1 config, 0 subscriptions'), findsOneWidget);
+      await tester.tap(find.text('Import'));
       await settle(tester);
       expect(c.read(profileProvider).value!.profiles.map((p) => p.name), contains('Shared'));
       expect(c.read(configProvider).value!.configs.single.address, 'hp1.example');
-      expect(find.textContaining('импортирован'), findsOneWidget);
+      expect(find.textContaining('imported'), findsOneWidget);
       await unmount(tester, c);
     });
 
     testWidgets('cancel leaves everything as is', (tester) async {
       final c = await go(tester, _profileBundle.toDeeplink());
-      await tester.tap(find.text('Отмена'));
+      await tester.tap(find.text('Cancel'));
       await settle(tester);
       expect(c.read(profileProvider).value!.profiles, hasLength(1));
       await unmount(tester, c);
@@ -77,52 +74,58 @@ void main() {
     testWidgets('inline connections are imported', (tester) async {
       final bundle = ConnectionsBundle(exportedAt: DateTime(2026), label: 'Pack', configs: [testConfig('x')]);
       final c = await go(tester, bundle.toDeeplink());
-      expect(find.text('Набор: «Pack»'), findsOneWidget);
-      expect(find.text('1 конфигов, 0 подписок'), findsOneWidget);
-      await tester.tap(find.text('Импортировать'));
+      expect(find.text('Bundle: "Pack"'), findsOneWidget);
+      expect(find.text('1 config, 0 subscriptions'), findsOneWidget);
+      await tester.tap(find.text('Import'));
       await settle(tester);
       expect(c.read(configProvider).value!.configs.single.address, 'hx.example');
-      expect(find.text('Добавлено: 1 новых конфигов'), findsOneWidget);
+      expect(find.text('Added: 1 new config'), findsOneWidget);
       await unmount(tester, c);
     });
 
     testWidgets('non-https url is refused without a request', (tester) async {
       var requests = 0;
-      await http.runWithClient(() async {
-        final c = await go(tester, 'teapod://import/profile?url=http://plain.example/p.json');
-        expect(find.text('Импорт по ссылке поддерживает только https'), findsOneWidget);
-        await unmount(tester, c);
-      }, () => MockClient((_) async {
-            requests++;
-            return http.Response('', 200);
-          }));
+      await http.runWithClient(
+        () async {
+          final c = await go(tester, 'teapod://import/profile?url=http://plain.example/p.json');
+          expect(find.text('Import by link supports https only'), findsOneWidget);
+          await unmount(tester, c);
+        },
+        () => MockClient((_) async {
+          requests++;
+          return http.Response('', 200);
+        }),
+      );
       expect(requests, 0);
     });
 
     testWidgets('https url asks first; declining makes no request', (tester) async {
       var requests = 0;
-      await http.runWithClient(() async {
-        final c = await go(tester, 'teapod://import/profile?url=https://cfg.example/p.json');
-        expect(find.text('Загрузить по ссылке?'), findsOneWidget);
-        expect(find.textContaining('cfg.example'), findsOneWidget);
-        await tester.tap(find.text('Отмена'));
-        await settle(tester);
-        await unmount(tester, c);
-      }, () => MockClient((_) async {
-            requests++;
-            return http.Response('', 200);
-          }));
+      await http.runWithClient(
+        () async {
+          final c = await go(tester, 'teapod://import/profile?url=https://cfg.example/p.json');
+          expect(find.text('Load from link?'), findsOneWidget);
+          expect(find.textContaining('cfg.example'), findsOneWidget);
+          await tester.tap(find.text('Cancel'));
+          await settle(tester);
+          await unmount(tester, c);
+        },
+        () => MockClient((_) async {
+          requests++;
+          return http.Response('', 200);
+        }),
+      );
       expect(requests, 0);
     });
 
     testWidgets('https url fetches after consent and shows the import dialog', (tester) async {
       await http.runWithClient(() async {
         final c = await go(tester, 'teapod://import/profile?url=https://cfg.example/p.json');
-        await tester.tap(find.text('Загрузить'));
+        await tester.tap(find.text('Load'));
         await settle(tester);
-        expect(find.text('Импорт профиля'), findsOneWidget);
-        expect(find.text('Источник: https://cfg.example/p.json'), findsOneWidget);
-        await tester.tap(find.text('Отмена'));
+        expect(find.text('Import profile'), findsOneWidget);
+        expect(find.text('Source: https://cfg.example/p.json'), findsOneWidget);
+        await tester.tap(find.text('Cancel'));
         await settle(tester);
         await unmount(tester, c);
       }, () => MockClient((_) async => http.Response(jsonEncode(_profileBundle.toJson()), 200)));
@@ -131,9 +134,9 @@ void main() {
     testWidgets('failed fetch shows an error', (tester) async {
       await http.runWithClient(() async {
         final c = await go(tester, 'teapod://import/connections?url=https://cfg.example/c.json');
-        await tester.tap(find.text('Загрузить'));
+        await tester.tap(find.text('Load'));
         await settle(tester);
-        expect(find.text('Не удалось загрузить данные по ссылке'), findsOneWidget);
+        expect(find.text("Couldn't load data from the link"), findsOneWidget);
         await unmount(tester, c);
       }, () => MockClient((_) async => http.Response('', 404)));
     });
@@ -162,17 +165,17 @@ void main() {
     native.state = {'state': 'connected', 'socksPort': 2000, 'socksUser': 'u', 'socksPassword': 'p'};
     final c = await pumpScreen(tester, const HomeScreen());
     expect(c.read(vpnProvider).isConnected, isTrue);
-    expect(find.text('ПЕРЕПОДКЛЮЧИТЬ'), findsNothing);
+    expect(find.text('RECONNECT'), findsNothing);
 
     final s = c.read(settingsProvider).value!;
     c.read(settingsProvider.notifier).save(s.copyWith(mtu: 1400));
     await settle(tester);
-    expect(find.text('ПЕРЕПОДКЛЮЧИТЬ'), findsOneWidget);
+    expect(find.text('RECONNECT'), findsOneWidget);
 
-    await tester.tap(find.text('ПЕРЕПОДКЛЮЧИТЬ'));
+    await tester.tap(find.text('RECONNECT'));
     await settle(tester);
     expect(native.named('connect'), hasLength(1));
-    expect(find.text('ПЕРЕПОДКЛЮЧИТЬ'), findsNothing);
+    expect(find.text('RECONNECT'), findsNothing);
     await unmount(tester, c);
   });
 
@@ -182,7 +185,7 @@ void main() {
     await tester.tap(find.byIcon(Icons.add_rounded));
     await settle(tester);
     await tester.enterText(find.byType(TextField), 'Travel');
-    await tester.tap(find.text('Создать'));
+    await tester.tap(find.text('Create'));
     await settle(tester);
     expect(c.read(profileProvider).value!.profiles.map((p) => p.name), contains('Travel'));
     expect(find.textContaining('Travel'), findsWidgets);

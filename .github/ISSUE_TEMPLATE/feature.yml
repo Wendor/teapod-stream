@@ -1,0 +1,22 @@
+name: Feature request
+description: An idea for something new
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What you want to do and can't, or what is inconvenient now.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Proposal
+      description: How it could work. Other clients that do it well are worth naming.
+  - type: checkboxes
+    id: pr
+    attributes:
+      label: Pull request
+      options:
+        - label: I'd like to implement it myself (wait for the approach to be agreed here first — see CONTRIBUTING.md)

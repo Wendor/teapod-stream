@@ -3,17 +3,17 @@ package com.teapodstream.teapodstream.core
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * Правило владельца потока GoCore (TunValidator) как чистая функция для TUN
- * admission xray-rust. Без Android-типов — покрыто JVM-тестами.
- * Перенесено из PR #152 (vivatfreedom).
+ * GoCore's flow owner rule (TunValidator) as a pure function for xray-rust TUN
+ * admission. No Android types — covered by JVM tests.
+ * Ported from PR #152 (vivatfreedom).
  *
- * [listedUids] are the allowed UIDs in «ТОЛЬКО» (own UID removed) and the excluded
- * UIDs plus the app's own in «КРОМЕ». A uid below zero is INVALID_UID: a tethered
+ * [listedUids] are the allowed UIDs in "ONLY" (own UID removed) and the excluded
+ * UIDs plus the app's own in "EXCEPT". A uid below zero is INVALID_UID: a tethered
  * client, or an app the VPN does not apply to that bound its socket to tun0.
  *
- * [tunDns] — адрес из addDnsServer(). На Android 10 DNS-сокеты открывает netd от
- * своего имени, и lookup даёт INVALID_UID: без исключения для DNS на этот адрес
- * выбранные приложения не резолвят имена (issue #155).
+ * [tunDns] — the address from addDnsServer(). On Android 10 netd opens DNS sockets
+ * under its own name, and the lookup gives INVALID_UID: without an exception for DNS to this address
+ * selected apps can't resolve names (issue #155).
  */
 internal class TunOwnerPolicy(
     val onlySelected: Boolean,
@@ -46,7 +46,7 @@ internal class TunOwnerPolicy(
     /**
      * Whether [admit] can refuse a flow that reaches this TUN, so the core needs the
      * hook. Android's getConnectionOwnerUid reports INVALID_UID for every UID the VPN
-     * does not apply to (the Go service relies on the same fact), so in «КРОМЕ» the
+     * does not apply to (the Go service relies on the same fact), so in "EXCEPT" the
      * listed (excluded) UIDs never come back as such and only [blockUnowned] can deny.
      * Without the hook xray-rust keeps its local ICMP replies, which an enabled policy
      * drops along with other protocols it cannot check.

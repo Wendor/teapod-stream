@@ -16,17 +16,17 @@ import 'package:teapodstream/protocols/xray/xray_rust_backend.dart';
 const _channel = MethodChannel(AppConstants.methodChannel);
 
 VpnConfig _vless({String address = '1.2.3.4', String? ssPrefix}) => VpnConfig(
-      id: 'v',
-      name: 'v',
-      protocol: VpnProtocol.vless,
-      address: address,
-      port: 443,
-      uuid: '11111111-2222-4333-8444-555555555555',
-      security: VpnSecurity.tls,
-      transport: VpnTransport.tcp,
-      createdAt: DateTime(2026),
-      ssPrefix: ssPrefix,
-    );
+  id: 'v',
+  name: 'v',
+  protocol: VpnProtocol.vless,
+  address: address,
+  port: 443,
+  uuid: '11111111-2222-4333-8444-555555555555',
+  security: VpnSecurity.tls,
+  transport: VpnTransport.tcp,
+  createdAt: DateTime(2026),
+  ssPrefix: ssPrefix,
+);
 
 const _opts = VpnEngineOptions(
   socksPort: 1080,
@@ -43,10 +43,11 @@ const _opts = VpnEngineOptions(
   allowTethering: true,
   mtu: 1400,
   heartbeat: HeartbeatSettings(
-      probe: HeartbeatProbe.xrayDelay,
-      failAction: HeartbeatFailAction.switchConfig,
-      failureThreshold: 4,
-      target: HeartbeatTarget.google),
+    probe: HeartbeatProbe.xrayDelay,
+    failAction: HeartbeatFailAction.switchConfig,
+    failureThreshold: 4,
+    target: HeartbeatTarget.google,
+  ),
 );
 
 void main() {
@@ -57,15 +58,15 @@ void main() {
   setUp(() {
     calls.clear();
     reply = (_) => null;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(_channel, (call) async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(_channel, (call) async {
       calls.add(call);
       return reply(call);
     });
   });
 
-  tearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-      .setMockMethodCallHandler(_channel, null));
+  tearDown(
+    () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(_channel, null),
+  );
 
   group('connect', () {
     test('sends the built config and every option', () async {
@@ -155,12 +156,12 @@ void main() {
   group('state and stats', () {
     test('getVpnState parses the native map', () async {
       reply = (_) => {
-            'state': 'reconnecting',
-            'socksPort': 5000,
-            'socksUser': 'su',
-            'socksPassword': 'sp',
-            'connectedAtMs': 1700000000000,
-          };
+        'state': 'reconnecting',
+        'socksPort': 5000,
+        'socksUser': 'su',
+        'socksPassword': 'sp',
+        'connectedAtMs': 1700000000000,
+      };
       final s = await XrayEngine().getVpnState();
       expect(s.state, VpnState.connecting);
       expect(s.socksPort, 5000);
@@ -211,13 +212,7 @@ void main() {
 
   group('logs and misc', () {
     test('getLogs parses "ts|level|message" and skips junk', () async {
-      reply = (_) => [
-            '1700000000000|error|boom | with pipe',
-            '1700000000001|bogus|m',
-            'no pipes',
-            'x|info|bad ts',
-            42,
-          ];
+      reply = (_) => ['1700000000000|error|boom | with pipe', '1700000000001|bogus|m', 'no pipes', 'x|info|bad ts', 42];
       final logs = await XrayEngine().getLogs();
       expect(logs, hasLength(2));
       expect(logs[0].level, LogLevel.error);
@@ -235,11 +230,11 @@ void main() {
 
     test('simple getters with fallbacks', () async {
       reply = (c) => switch (c.method) {
-            'getBinaryVersions' => {'xray': '26', 'tun2socks': '1'},
-            'getTunnelDiag' => '{"a":1}',
-            'getLogFilePath' => '/f/log.txt',
-            _ => null,
-          };
+        'getBinaryVersions' => {'xray': '26', 'tun2socks': '1'},
+        'getTunnelDiag' => '{"a":1}',
+        'getLogFilePath' => '/f/log.txt',
+        _ => null,
+      };
       final e = XrayEngine();
       expect(await e.getBinaryVersions(), {'xray': '26', 'tun2socks': '1'});
       expect(await e.getTunnelDiag(), '{"a":1}');

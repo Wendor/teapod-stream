@@ -36,9 +36,12 @@ void main() {
   });
 
   test('case glob selects split cases', () {
-    final ids = buildMatrix(configs, owned: {}, reference: {'box': '2', 'go': '2'}, caseGlob: 'opt/*/split-*')
-        .map((c) => c.id)
-        .toList();
+    final ids = buildMatrix(
+      configs,
+      owned: {},
+      reference: {'box': '2', 'go': '2'},
+      caseGlob: 'opt/*/split-*',
+    ).map((c) => c.id).toList();
     expect(ids, isNotEmpty);
     expect(ids, everyElement(matches(RegExp(r'^opt/[^/]+/split-'))));
   });
@@ -59,8 +62,10 @@ void main() {
       (id: 'a', name: 'XHTTP-TLS', protocol: 'vless', host: 'h', port: 4445, sub: 's', cores: ['go']),
       (id: 'b', name: 'XHTTP-TLS', protocol: 'vless', host: 'h', port: 4043, sub: 's', cores: ['go']),
     ];
-    expect(buildMatrix(dup, owned: {}).map((c) => c.id),
-        ['base/xray-core/XHTTP-TLS@h:4445', 'base/xray-core/XHTTP-TLS@h:4043']);
+    expect(buildMatrix(dup, owned: {}).map((c) => c.id), [
+      'base/xray-core/XHTTP-TLS@h:4445',
+      'base/xray-core/XHTTP-TLS@h:4043',
+    ]);
   });
 
   test('glob', () {

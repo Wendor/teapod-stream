@@ -5,10 +5,10 @@ import 'fake_shell.dart';
 
 void main() {
   FakeShell shell() => FakeShell({
-        'settings get global wifi_on': '1',
-        'settings get global airplane_mode_on': '0',
-        'settings get global stay_on_while_plugged_in': '0',
-      });
+    'settings get global wifi_on': '1',
+    'settings get global airplane_mode_on': '0',
+    'settings get global stay_on_while_plugged_in': '0',
+  });
 
   test('restore reverts only changed params, idempotent', () async {
     final s = shell();
@@ -29,11 +29,14 @@ void main() {
     await g.doze(true);
     s.calls.clear();
     await g.restore();
-    expect(s.calls, containsAll([
-      'shell cmd wifi set-wifi-enabled enabled',
-      'shell dumpsys deviceidle unforce',
-      'shell dumpsys battery reset',
-    ]));
+    expect(
+      s.calls,
+      containsAll([
+        'shell cmd wifi set-wifi-enabled enabled',
+        'shell dumpsys deviceidle unforce',
+        'shell dumpsys battery reset',
+      ]),
+    );
   });
 
   test('turning a fault off clears its undo', () async {
@@ -55,7 +58,7 @@ void main() {
     final s = shell();
     final g = DeviceGuard(s);
     await g.snapshot();
-    final pending = g.airplane(true); // команда ещё выполняется
+    final pending = g.airplane(true); // the command is still running
     s.calls.clear();
     await g.restore();
     await pending.catchError((_) {});
@@ -86,7 +89,7 @@ void main() {
     await g.snapshot();
     await g.wifi(false);
     await g.airplane(true);
-    s.codes.addAll([1, 0]); // откат wifi падает, airplane — нет
+    s.codes.addAll([1, 0]); // the wifi rollback fails, airplane doesn't
     await g.restore();
     s.calls.clear();
     await g.restore();

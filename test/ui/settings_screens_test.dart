@@ -34,7 +34,10 @@ void main() {
       }
       expect(find.text('1.14.4'), findsOneWidget);
 
-      await tester.tap(find.bySemanticsLabel('поднять sing-box'));
+      // The language row pushes the core list below the fold.
+      await tester.ensureVisible(find.bySemanticsLabel('move sing-box up'));
+      await settle(tester);
+      await tester.tap(find.bySemanticsLabel('move sing-box up'));
       await settle(tester);
       expect(_settings(c).coreOrder, [CoreKind.singBox, CoreKind.xrayGo, CoreKind.xrayRust]);
 
@@ -48,9 +51,9 @@ void main() {
       await settle(tester);
       await tester.tap(switchOf(CoreKind.xrayRust));
       await settle(tester);
-      // Последнее включённое ядро не выключается.
+      // The last enabled core can't be turned off.
       expect(_settings(c).disabledCores, {CoreKind.singBox, CoreKind.xrayGo});
-      expect(find.text('Нужно хотя бы одно включённое ядро'), findsOneWidget);
+      expect(find.text('At least one core must stay enabled'), findsOneWidget);
       await unmount(tester, c);
     });
 
@@ -73,9 +76,9 @@ void main() {
       expect(_settings(c).enableUdp, isTrue);
       await _tapRow(tester, 'UDP');
       expect(_settings(c).enableUdp, isFalse);
-      await _tapRow(tester, 'Блокировать QUIC');
+      await _tapRow(tester, 'Block QUIC');
       expect(_settings(c).blockQuic, isTrue);
-      await _tapRow(tester, 'Фрагментация');
+      await _tapRow(tester, 'Fragmentation');
       expect(_settings(c).fragment.enabled, isTrue);
       expect((await SettingsService().load()).fragment.enabled, isTrue);
       await unmount(tester, c);
@@ -84,10 +87,10 @@ void main() {
     testWidgets('fixed port reveals the port field', (tester) async {
       await setUpScreenTest();
       final c = await pumpScreen(tester, const NetworkSettingsScreen());
-      expect(find.text('SOCKS5 порт'), findsNothing);
-      await _tapRow(tester, 'Случайный порт');
+      expect(find.text('SOCKS5 port'), findsNothing);
+      await _tapRow(tester, 'Random port');
       expect(_settings(c).randomPort, isFalse);
-      expect(find.text('SOCKS5 порт'), findsOneWidget);
+      expect(find.text('SOCKS5 port'), findsOneWidget);
       await unmount(tester, c);
     });
 
@@ -112,9 +115,9 @@ void main() {
       final c = await pumpScreen(tester, const RoutingScreen());
       await _tapRow(tester, 'Kill Switch');
       expect(_settings(c).killSwitchEnabled, isTrue);
-      await _tapRow(tester, 'Российские сервисы');
+      await _tapRow(tester, 'Russian services');
       expect(_settings(c).routing.ruServicesEnabled, isTrue);
-      await _tapRow(tester, 'Блокировка рекламы');
+      await _tapRow(tester, 'Ad blocking');
       expect(_settings(c).routing.adBlockEnabled, isFalse);
       await unmount(tester, c);
     });
@@ -122,13 +125,14 @@ void main() {
     testWidgets('rule sections appear only in bypass/only modes', (tester) async {
       await setUpScreenTest();
       var c = await pumpScreen(tester, const RoutingScreen());
-      expect(find.text('Локальные сети'), findsNothing);
+      expect(find.text('Local networks'), findsNothing);
       await unmount(tester, c);
 
       await setUpScreenTest(
-          settings: const AppSettings(routing: RoutingSettings(direction: RoutingDirection.bypass)));
+        settings: const AppSettings(routing: RoutingSettings(direction: RoutingDirection.bypass)),
+      );
       c = await pumpScreen(tester, const RoutingScreen());
-      await _tapRow(tester, 'Локальные сети');
+      await _tapRow(tester, 'Local networks');
       expect(_settings(c).routing.bypassLocal, isTrue);
       await unmount(tester, c);
     });
@@ -138,11 +142,11 @@ void main() {
     testWidgets('connection toggles are saved', (tester) async {
       await setUpScreenTest();
       final c = await pumpScreen(tester, const SettingsScreen());
-      await _tapRow(tester, 'Автоподключение');
+      await _tapRow(tester, 'Auto-connect');
       expect(_settings(c).autoConnect, isTrue);
-      await _tapRow(tester, 'Автоматизация');
+      await _tapRow(tester, 'Automation');
       expect(_settings(c).automationEnabled, isTrue);
-      await _tapRow(tester, 'Уведомление');
+      await _tapRow(tester, 'Notification');
       expect(_settings(c).showNotification, isFalse);
       await unmount(tester, c);
     });
@@ -150,7 +154,7 @@ void main() {
     testWidgets('navigates to sub-screens', (tester) async {
       await setUpScreenTest();
       final c = await pumpScreen(tester, const SettingsScreen());
-      await _tapRow(tester, 'Сеть');
+      await _tapRow(tester, 'Network');
       expect(find.byType(NetworkSettingsScreen), findsOneWidget);
       await unmount(tester, c);
     });

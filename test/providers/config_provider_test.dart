@@ -15,27 +15,38 @@ import 'package:teapodstream/providers/vpn_provider.dart';
 
 import '../helpers/local_server.dart';
 
-VpnConfig _cfg(String id,
-        {String? subId, String? name, String address = '', int port = 443, int? latency, String? rawUri}) =>
-    VpnConfig(
-      id: id,
-      name: name ?? 'n$id',
-      protocol: VpnProtocol.trojan,
-      address: address.isEmpty ? 'h$id' : address,
-      port: port,
-      uuid: '',
-      password: 'p',
-      security: VpnSecurity.tls,
-      transport: VpnTransport.tcp,
-      createdAt: DateTime(2026),
-      subscriptionId: subId,
-      latencyMs: latency,
-      rawUri: rawUri,
-    );
+VpnConfig _cfg(
+  String id, {
+  String? subId,
+  String? name,
+  String address = '',
+  int port = 443,
+  int? latency,
+  String? rawUri,
+}) => VpnConfig(
+  id: id,
+  name: name ?? 'n$id',
+  protocol: VpnProtocol.trojan,
+  address: address.isEmpty ? 'h$id' : address,
+  port: port,
+  uuid: '',
+  password: 'p',
+  security: VpnSecurity.tls,
+  transport: VpnTransport.tcp,
+  createdAt: DateTime(2026),
+  subscriptionId: subId,
+  latencyMs: latency,
+  rawUri: rawUri,
+);
 
 Subscription _sub(String id, {String? url, String? pin, DateTime? fetched}) => Subscription(
-    id: id, name: 'S$id', url: url ?? 'https://$id', createdAt: DateTime(2026),
-    lastFetchedAt: fetched, pinnedCertDer: pin);
+  id: id,
+  name: 'S$id',
+  url: url ?? 'https://$id',
+  createdAt: DateTime(2026),
+  lastFetchedAt: fetched,
+  pinnedCertDer: pin,
+);
 
 String _trojan(String host, String name, {int port = 443}) =>
     'trojan://pw@$host:$port?security=tls#${Uri.encodeComponent(name)}';
@@ -67,8 +78,13 @@ void main() {
   }
 
   test('build loads persisted state', () async {
-    await boot(configs: [_cfg('1')], subs: [_sub('s')], activeId: '1', activeSubId: 's',
-        pins: [const PinnedRef(subscriptionId: null, name: 'n1')]);
+    await boot(
+      configs: [_cfg('1')],
+      subs: [_sub('s')],
+      activeId: '1',
+      activeSubId: 's',
+      pins: [const PinnedRef(subscriptionId: null, name: 'n1')],
+    );
     expect(s().configs.single.id, '1');
     expect(s().subscriptions.single.id, 's');
     expect(s().activeConfig?.id, '1');
@@ -121,7 +137,13 @@ void main() {
 
   group('ConfigState', () {
     test('groups configs by subscription', () {
-      final st = ConfigState(configs: [_cfg('a'), _cfg('b', subId: 's'), _cfg('c', subId: 's')]);
+      final st = ConfigState(
+        configs: [
+          _cfg('a'),
+          _cfg('b', subId: 's'),
+          _cfg('c', subId: 's'),
+        ],
+      );
       expect(st.standaloneConfigs.map((c) => c.id), ['a']);
       expect(st.configsBySubscription['s']!.map((c) => c.id), ['b', 'c']);
       expect(st.activeConfig, isNull);
@@ -137,12 +159,16 @@ void main() {
 
   group('effectiveConfigProvider', () {
     test('subscription mode picks the lowest latency, unknown last', () async {
-      await boot(configs: [
-        _cfg('a', subId: 's'),
-        _cfg('b', subId: 's', latency: 300),
-        _cfg('c', subId: 's', latency: 50),
-        _cfg('d', latency: 1),
-      ], activeId: 'd', activeSubId: 's');
+      await boot(
+        configs: [
+          _cfg('a', subId: 's'),
+          _cfg('b', subId: 's', latency: 300),
+          _cfg('c', subId: 's', latency: 50),
+          _cfg('d', latency: 1),
+        ],
+        activeId: 'd',
+        activeSubId: 's',
+      );
       expect(c.read(effectiveConfigProvider)?.id, 'c');
     });
 
@@ -152,7 +178,10 @@ void main() {
     });
 
     test('nothing selected', () async {
-      await boot(configs: [_cfg('a', subId: 's')], activeSubId: 's');
+      await boot(
+        configs: [_cfg('a', subId: 's')],
+        activeSubId: 's',
+      );
       expect(c.read(effectiveConfigProvider)?.id, 'a');
       await n().setActiveConfig(null);
       expect(c.read(effectiveConfigProvider), isNull);
@@ -173,7 +202,10 @@ void main() {
 
     test('legacy name-only pin resolves and is removed by toggle', () async {
       const legacy = PinnedRef(subscriptionId: 's', name: 'n1');
-      await boot(configs: [_cfg('1', subId: 's')], pins: [legacy]);
+      await boot(
+        configs: [_cfg('1', subId: 's')],
+        pins: [legacy],
+      );
       final cfg = s().configs.single;
       expect(s().resolvedPins.single.$2?.id, '1');
       await n().togglePin(cfg);
@@ -194,7 +226,10 @@ void main() {
   group('importBundle', () {
     test('dedupes configs, remaps and reuses subscriptions, selects first', () async {
       await boot(
-        configs: [_cfg('old', rawUri: 'trojan://dup'), _cfg('ep', address: 'same.host', port: 8443)],
+        configs: [
+          _cfg('old', rawUri: 'trojan://dup'),
+          _cfg('ep', address: 'same.host', port: 8443),
+        ],
         subs: [_sub('existing', url: 'https://known')],
       );
       final bundle = ConnectionsBundle(
@@ -237,12 +272,14 @@ void main() {
   });
 
   test('batchUpdatePingResults sets and clears latency by endpoint', () async {
-    await boot(configs: [
-      _cfg('a', address: 'h', port: 1, latency: 10),
-      _cfg('b', address: 'h', port: 1),
-      _cfg('c', address: 'dead', port: 2, latency: 20),
-      _cfg('d', address: 'other', port: 3, latency: 30),
-    ]);
+    await boot(
+      configs: [
+        _cfg('a', address: 'h', port: 1, latency: 10),
+        _cfg('b', address: 'h', port: 1),
+        _cfg('c', address: 'dead', port: 2, latency: 20),
+        _cfg('d', address: 'other', port: 3, latency: 30),
+      ],
+    );
     final at = DateTime(2026, 7);
     await n().batchUpdatePingResults({'h:1': 77, 'dead:2': null}, at);
     final byId = {for (final c in s().configs) c.id: c};
@@ -265,14 +302,16 @@ void main() {
     });
 
     test('configs move inside their group', () async {
-      await boot(configs: [
-        _cfg('l1'),
-        _cfg('s1', subId: 's'),
-        _cfg('l2'),
-        _cfg('s2', subId: 's'),
-        _cfg('s3', subId: 's'),
-      ]);
-      // Группа собирается в непрерывный блок на месте своего первого конфига.
+      await boot(
+        configs: [
+          _cfg('l1'),
+          _cfg('s1', subId: 's'),
+          _cfg('l2'),
+          _cfg('s2', subId: 's'),
+          _cfg('s3', subId: 's'),
+        ],
+      );
+      // The group gathers into a contiguous block at the place of its first config.
       await n().reorderGroupConfigs('s', 2, 0);
       expect(s().configs.map((c) => c.id), ['l1', 's3', 's1', 's2', 'l2']);
       await n().reorderGroupConfigs(null, 0, 2);
@@ -292,7 +331,10 @@ void main() {
 
     test('remove drops configs and clears selection that pointed into it', () async {
       await boot(
-        configs: [_cfg('1', subId: 's'), _cfg('2')],
+        configs: [
+          _cfg('1', subId: 's'),
+          _cfg('2'),
+        ],
         subs: [_sub('s'), _sub('t')],
         activeId: '1',
         activeSubId: 's',
@@ -308,9 +350,15 @@ void main() {
     test('remove drops pins of the subscription', () async {
       final keep = PinnedRef.of(_cfg('2'));
       await boot(
-        configs: [_cfg('1', subId: 's'), _cfg('2')],
+        configs: [
+          _cfg('1', subId: 's'),
+          _cfg('2'),
+        ],
         subs: [_sub('s')],
-        pins: [PinnedRef.of(_cfg('1', subId: 's')), keep],
+        pins: [
+          PinnedRef.of(_cfg('1', subId: 's')),
+          keep,
+        ],
       );
       await n().removeSubscription('s');
       expect(s().pins, [keep]);
@@ -318,7 +366,14 @@ void main() {
     });
 
     test('remove keeps an unrelated selection', () async {
-      await boot(configs: [_cfg('1', subId: 's'), _cfg('2')], subs: [_sub('s')], activeId: '2');
+      await boot(
+        configs: [
+          _cfg('1', subId: 's'),
+          _cfg('2'),
+        ],
+        subs: [_sub('s')],
+        activeId: '2',
+      );
       await n().removeSubscription('s');
       expect(s().activeConfigId, '2');
     });
@@ -331,8 +386,10 @@ void main() {
 
     test('new subscription: configs tagged, title used, first selected', () async {
       await boot();
-      server.serve([_trojan('a.example', 'A'), _trojan('b.example', 'B')].join('\n'),
-          headers: {'profile-title': 'Provider', 'subscription-userinfo': 'total=100'});
+      server.serve(
+        [_trojan('a.example', 'A'), _trojan('b.example', 'B')].join('\n'),
+        headers: {'profile-title': 'Provider', 'subscription-userinfo': 'total=100'},
+      );
       await n().addSubscriptionFromUrl(server.url('/sub'));
       final sub = s().subscriptions.single;
       expect(sub.name, 'Provider');
@@ -357,13 +414,15 @@ void main() {
       );
       final url = server.url('/sub');
       await storage.saveSubscriptions([
-        Subscription(id: 's', name: 'My name', url: url, createdAt: DateTime(2020), pinnedCertDer: 'CERT')
+        Subscription(id: 's', name: 'My name', url: url, createdAt: DateTime(2020), pinnedCertDer: 'CERT'),
       ]);
       c.invalidate(configProvider);
       await c.read(configProvider.future);
 
-      server.serve([_trojan('b.example', 'Same'), _trojan('a.example', 'Same'), _trojan('c.example', 'New')]
-          .join('\n'), headers: {'profile-title': 'Ignored'});
+      server.serve(
+        [_trojan('b.example', 'Same'), _trojan('a.example', 'Same'), _trojan('c.example', 'New')].join('\n'),
+        headers: {'profile-title': 'Ignored'},
+      );
       await n().addSubscriptionFromUrl(url);
 
       final sub = s().subscriptions.single;
@@ -373,8 +432,10 @@ void main() {
       final subConfigs = s().configs.where((c) => c.subscriptionId == 's').toList();
       expect(subConfigs, hasLength(3));
       expect(subConfigs.any((c) => c.id == 'o1' || c.id == 'o2'), isFalse);
-      expect({for (final c in subConfigs) c.address: c.latencyMs},
-          {'b.example': 22, 'a.example': 11, 'c.example': null});
+      expect(
+        {for (final c in subConfigs) c.address: c.latencyMs},
+        {'b.example': 22, 'a.example': 11, 'c.example': null},
+      );
       expect(s().activeConfig!.address, 'b.example');
       expect(await storage.loadActiveConfigId(), s().activeConfigId);
       expect(s().configs.where((c) => c.id == 'local'), hasLength(1));
@@ -393,19 +454,24 @@ void main() {
         ],
         subs: [_sub('s', url: url)],
       );
-      server.serve([
-        _trojan('x.example', 'B'),
-        _trojan('x.example', 'A'),
-        _trojan('y.example', 'C renamed'),
-        _trojan('z.example', 'F'),
-      ].join('\n'));
+      server.serve(
+        [
+          _trojan('x.example', 'B'),
+          _trojan('x.example', 'A'),
+          _trojan('y.example', 'C renamed'),
+          _trojan('z.example', 'F'),
+        ].join('\n'),
+      );
       await n().addSubscriptionFromUrl(url);
-      expect({for (final c in s().configs) c.name: c.core}, {
-        'B': null,
-        'A': CoreKind.singBox,
-        'C renamed': CoreKind.xrayRust, // endpoint один — ядро переносится
-        'F': null, // endpoint не однозначен, имя не совпало
-      });
+      expect(
+        {for (final c in s().configs) c.name: c.core},
+        {
+          'B': null,
+          'A': CoreKind.singBox,
+          'C renamed': CoreKind.xrayRust, // a single endpoint — the core is carried over
+          'F': null, // ambiguous endpoint, the name didn't match
+        },
+      );
     });
 
     test('refresh in subscription mode keeps the mode when the selected server is gone', () async {
@@ -434,7 +500,10 @@ void main() {
     });
 
     test('empty or failed fetch throws and leaves state untouched', () async {
-      await boot(configs: [_cfg('1', subId: 's')], subs: [_sub('s', url: server.url())]);
+      await boot(
+        configs: [_cfg('1', subId: 's')],
+        subs: [_sub('s', url: server.url())],
+      );
       server.serve('nothing useful');
       await expectLater(n().addSubscriptionFromUrl(server.url()), throwsA(isA<Exception>()));
       server.serve('', status: 500);
@@ -446,20 +515,23 @@ void main() {
     test('empty answer explains HWID limit or shows the announce', () async {
       await boot();
       server.serve('', headers: {'x-hwid-max-devices-reached': 'true'});
-      await expectLater(n().addSubscriptionFromUrl(server.url()),
-          throwsA(predicate((e) => '$e'.contains('HWID'))));
-      server.serve('', headers: {'announce': 'base64:${base64Encode(utf8.encode('Оплатите подписку'))}'});
-      await expectLater(n().addSubscriptionFromUrl(server.url()),
-          throwsA(predicate((e) => '$e'.contains('Оплатите подписку'))));
+      await expectLater(n().addSubscriptionFromUrl(server.url()), throwsA(predicate((e) => '$e'.contains('HWID'))));
+      server.serve('', headers: {'announce': 'base64:${base64Encode(utf8.encode('Please renew your subscription'))}'});
+      await expectLater(
+        n().addSubscriptionFromUrl(server.url()),
+        throwsA(predicate((e) => '$e'.contains('Please renew your subscription'))),
+      );
     });
 
     test('refreshStaleSubscriptions refreshes only stale ones and backs off on failure', () async {
       final now = DateTime.now();
-      await boot(subs: [
-        _sub('fresh', url: server.url('/fresh'), fetched: now),
-        _sub('stale', url: server.url('/stale'), fetched: now.subtract(const Duration(hours: 7))),
-        _sub('never', url: server.url('/never')),
-      ]);
+      await boot(
+        subs: [
+          _sub('fresh', url: server.url('/fresh'), fetched: now),
+          _sub('stale', url: server.url('/stale'), fetched: now.subtract(const Duration(hours: 7))),
+          _sub('never', url: server.url('/never')),
+        ],
+      );
       server.handler = (r) async {
         if (r.uri.path == '/never') {
           r.response.statusCode = 500;
@@ -474,8 +546,7 @@ void main() {
       expect(s().configs.where((c) => c.subscriptionId == 'stale'), hasLength(1));
 
       await n().refreshStaleSubscriptions(intervalHours: 6);
-      expect(server.paths, ['/stale', '/never'],
-          reason: 'fresh after refresh, failed one waits an hour');
+      expect(server.paths, ['/stale', '/never'], reason: 'fresh after refresh, failed one waits an hour');
     });
   });
 }

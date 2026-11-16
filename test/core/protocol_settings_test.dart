@@ -10,20 +10,51 @@ import 'package:teapodstream/protocols/xray/rust_config_builder.dart';
 import 'package:teapodstream/protocols/xray/xray_config_builder.dart';
 
 VpnConfig _cfg(VpnProtocol protocol, [ProtocolSettings? settings]) => VpnConfig(
-      id: protocol.name, name: protocol.name, protocol: protocol, address: 'srv.example.com', port: 51820,
-      uuid: '', security: VpnSecurity.none, transport: VpnTransport.tcp, createdAt: DateTime(2026),
-      protocolSettings: settings,
-    );
+  id: protocol.name,
+  name: protocol.name,
+  protocol: protocol,
+  address: 'srv.example.com',
+  port: 51820,
+  uuid: '',
+  security: VpnSecurity.none,
+  transport: VpnTransport.tcp,
+  createdAt: DateTime(2026),
+  protocolSettings: settings,
+);
 
 const _wg = WireGuardSettings(
-  privateKey: 'priv', addresses: ['10.0.0.2/32', 'fd00::2/128'], peerPublicKey: 'pub', presharedKey: 'psk',
-  mtu: 1280, reserved: [1, 2, 3], allowedIps: ['0.0.0.0/0'], keepalive: 25,
-  amnezia: AmneziaParams(jc: 4, jmin: 40, jmax: 70, s1: 16, s4: 16, h1: '100-200', i1: '<r 16>',
-      headerProtectionKey: 'hpk', contentPaddingAddition: '0-32', rekeyAfterTime: '120',
-      rekeyTimeout: '5', rejectAfterTime: '180', keepaliveTimeout: '10', maxHandshakeAttempts: '20'),
+  privateKey: 'priv',
+  addresses: ['10.0.0.2/32', 'fd00::2/128'],
+  peerPublicKey: 'pub',
+  presharedKey: 'psk',
+  mtu: 1280,
+  reserved: [1, 2, 3],
+  allowedIps: ['0.0.0.0/0'],
+  keepalive: 25,
+  amnezia: AmneziaParams(
+    jc: 4,
+    jmin: 40,
+    jmax: 70,
+    s1: 16,
+    s4: 16,
+    h1: '100-200',
+    i1: '<r 16>',
+    headerProtectionKey: 'hpk',
+    contentPaddingAddition: '0-32',
+    rekeyAfterTime: '120',
+    rekeyTimeout: '5',
+    rejectAfterTime: '180',
+    keepaliveTimeout: '10',
+    maxHandshakeAttempts: '20',
+  ),
 );
-const _ssh = SshSettings(user: 'root', password: 'pw', privateKey: 'PEM', privateKeyPassphrase: 'pp',
-    hostKeys: ['ssh-ed25519 AAAA']);
+const _ssh = SshSettings(
+  user: 'root',
+  password: 'pw',
+  privateKey: 'PEM',
+  privateKeyPassphrase: 'pp',
+  hostKeys: ['ssh-ed25519 AAAA'],
+);
 const _naive = NaiveSettings(user: 'u', password: 'p', quic: true, extraHeaders: {'X-A': '1'});
 
 void main() {
@@ -54,9 +85,9 @@ void main() {
   });
 
   test('new protocols require their settings', () {
-    expect(_cfg(VpnProtocol.wireguard).validate(), 'Нет параметров протокола WireGuard');
+    expect(_cfg(VpnProtocol.wireguard).validate(), 'No WireGuard protocol parameters');
     expect(_cfg(VpnProtocol.wireguard, _wg).validate(), isNull);
-    expect(_cfg(VpnProtocol.naive, _ssh).validate(), 'Нет параметров протокола NaiveProxy');
+    expect(_cfg(VpnProtocol.naive, _ssh).validate(), 'No NaiveProxy protocol parameters');
   });
 
   test('Xray cores reject sing-box-only protocols', () {
@@ -65,7 +96,7 @@ void main() {
       (VpnProtocol.ssh, _ssh, 'SSH'),
       (VpnProtocol.naive, _naive, 'NaiveProxy'),
     ]) {
-      final reason = 'Протокол $name поддерживается только ядром sing-box.';
+      final reason = 'Protocol $name is supported only by the sing-box core.';
       expect(XrayConfigBuilder.unsupportedReason(_cfg(protocol, settings)), reason);
       expect(RustConfigBuilder.unsupportedReason(_cfg(protocol, settings)), reason);
     }

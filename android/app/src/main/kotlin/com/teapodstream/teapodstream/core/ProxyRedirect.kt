@@ -3,15 +3,15 @@ package com.teapodstream.teapodstream.core
 import org.json.JSONObject
 
 /**
- * Подмена адреса сервера outbound'а `proxy` на локальный (Shadowsocks `?prefix=`:
- * трафик идёт через [com.teapodstream.teapodstream.PrefixTcpProxy]).
- * [redirect] получает реальный адрес и возвращает локальный порт (null — отказ).
+ * Replaces the `proxy` outbound's server address with a local one (Shadowsocks `?prefix=`:
+ * traffic goes through [com.teapodstream.teapodstream.PrefixTcpProxy]).
+ * [redirect] gets the real address and returns a local port (null — refusal).
  */
 object ProxyRedirect {
     private const val PROXY_TAG = "proxy"
     private const val LOOPBACK = "127.0.0.1"
 
-    /** Конфиг формата xray: `outbounds[tag=proxy].settings.servers[0]`. */
+    /** xray-format config: `outbounds[tag=proxy].settings.servers[0]`. */
     fun xray(config: String, redirect: (host: String, port: Int) -> Int?): String? {
         val json = JSONObject(config)
         val server = proxyOutbound(json)?.optJSONObject("settings")
@@ -22,7 +22,7 @@ object ProxyRedirect {
         return json.toString()
     }
 
-    /** Конфиг sing-box: `outbounds[tag=proxy].server/server_port`. */
+    /** sing-box config: `outbounds[tag=proxy].server/server_port`. */
     fun singBox(config: String, redirect: (host: String, port: Int) -> Int?): String? {
         val json = JSONObject(config)
         val outbound = proxyOutbound(json)?.takeIf { it.has("server") } ?: return null

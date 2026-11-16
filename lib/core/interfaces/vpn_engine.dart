@@ -6,7 +6,7 @@ import '../models/routing_settings.dart';
 import '../models/xray_tuning.dart';
 import '../services/settings_service.dart';
 
-/// blocked — kill switch удерживает TUN-sink после обрыва: трафик заблокирован.
+/// blocked — the kill switch keeps the TUN sink after a drop: traffic is blocked.
 enum VpnState { disconnected, connecting, connected, disconnecting, error, blocked }
 
 abstract class VpnEngine {
@@ -80,7 +80,7 @@ class VpnEngineOptions {
     this.heartbeat = const HeartbeatSettings(),
   });
 
-  /// Поля, которые ядро может заменить допустимыми значениями.
+  /// Fields the core may replace with allowed values.
   VpnEngineOptions copyWith({
     int? mtu,
     RoutingSettings? routing,
@@ -88,35 +88,34 @@ class VpnEngineOptions {
     FragmentSettings? fragment,
     NoiseSettings? noise,
     MuxSettings? mux,
-  }) =>
-      VpnEngineOptions(
-        socksPort: socksPort,
-        httpPort: httpPort,
-        socksUser: socksUser,
-        socksPassword: socksPassword,
-        excludedPackages: excludedPackages,
-        includedPackages: includedPackages,
-        logLevel: logLevel,
-        enableUdp: enableUdp,
-        allowIcmp: allowIcmp,
-        dnsMode: dnsMode,
-        dnsServer: dnsServer,
-        vpnMode: vpnMode,
-        proxyOnly: proxyOnly,
-        showNotification: showNotification,
-        killSwitch: killSwitch,
-        routing: routing ?? this.routing,
-        sniffingEnabled: sniffingEnabled ?? this.sniffingEnabled,
-        mtu: mtu ?? this.mtu,
-        dnsQueryStrategy: dnsQueryStrategy,
-        blockQuic: blockQuic,
-        ipv6Enabled: ipv6Enabled,
-        allowTethering: allowTethering,
-        obsProbeIntervalSec: obsProbeIntervalSec,
-        tlsFingerprint: tlsFingerprint,
-        fragment: fragment ?? this.fragment,
-        noise: noise ?? this.noise,
-        mux: mux ?? this.mux,
-        heartbeat: heartbeat,
-      );
+  }) => VpnEngineOptions(
+    socksPort: socksPort,
+    httpPort: httpPort,
+    socksUser: socksUser,
+    socksPassword: socksPassword,
+    excludedPackages: excludedPackages,
+    includedPackages: includedPackages,
+    logLevel: logLevel,
+    enableUdp: enableUdp,
+    allowIcmp: allowIcmp,
+    dnsMode: dnsMode,
+    dnsServer: dnsServer,
+    vpnMode: vpnMode,
+    proxyOnly: proxyOnly,
+    showNotification: showNotification,
+    killSwitch: killSwitch,
+    routing: routing ?? this.routing,
+    sniffingEnabled: sniffingEnabled ?? this.sniffingEnabled,
+    mtu: mtu ?? this.mtu,
+    dnsQueryStrategy: dnsQueryStrategy,
+    blockQuic: blockQuic,
+    ipv6Enabled: ipv6Enabled,
+    allowTethering: allowTethering,
+    obsProbeIntervalSec: obsProbeIntervalSec,
+    tlsFingerprint: tlsFingerprint,
+    fragment: fragment ?? this.fragment,
+    noise: noise ?? this.noise,
+    mux: mux ?? this.mux,
+    heartbeat: heartbeat,
+  );
 }

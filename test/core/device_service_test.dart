@@ -16,8 +16,7 @@ void main() {
     reply = (_) => null;
     FlutterSecureStorage.setMockInitialValues({});
     await DeviceService.clearCache();
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(_channel, (call) async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(_channel, (call) async {
       calls.add(call.method);
       return reply(call);
     });

@@ -7,18 +7,34 @@ import 'package:teapodstream/core/models/xray_tuning.dart';
 import 'package:teapodstream/protocols/singbox/singbox_backend.dart';
 
 VpnConfig _vless({String? flow, VpnTransport transport = VpnTransport.tcp, String? pqv}) => VpnConfig(
-      id: 'v', name: 'v', protocol: VpnProtocol.vless, address: 'h.example', port: 443,
-      uuid: '11111111-2222-4333-8444-555555555555',
-      security: pqv == null ? VpnSecurity.tls : VpnSecurity.reality, publicKey: pqv == null ? null : 'PK', postQuantumKey: pqv,
-      transport: transport, createdAt: DateTime(2026), encryption: 'none', flow: flow,
-    );
+  id: 'v',
+  name: 'v',
+  protocol: VpnProtocol.vless,
+  address: 'h.example',
+  port: 443,
+  uuid: '11111111-2222-4333-8444-555555555555',
+  security: pqv == null ? VpnSecurity.tls : VpnSecurity.reality,
+  publicKey: pqv == null ? null : 'PK',
+  postQuantumKey: pqv,
+  transport: transport,
+  createdAt: DateTime(2026),
+  encryption: 'none',
+  flow: flow,
+);
 
 VpnEngineOptions _opts({
   NoiseSettings noise = const NoiseSettings(),
   MuxSettings mux = const MuxSettings(),
   FragmentSettings fragment = const FragmentSettings(),
-}) =>
-    VpnEngineOptions(socksPort: 1, httpPort: 0, socksUser: 'u', socksPassword: 'p', noise: noise, mux: mux, fragment: fragment);
+}) => VpnEngineOptions(
+  socksPort: 1,
+  httpPort: 0,
+  socksUser: 'u',
+  socksPassword: 'p',
+  noise: noise,
+  mux: mux,
+  fragment: fragment,
+);
 
 void main() {
   const CoreBackend box = SingBoxBackend();
@@ -43,9 +59,9 @@ void main() {
     );
     expect(check.blocking, isNull);
     expect(check.warnings, [
-      'Шумы недоступны в ядре sing-box и не применяются.',
-      'Mux Xray несовместим с ядром sing-box и не применяется.',
-      'Фрагментация в ядре sing-box — только TLS ClientHello; режим «1-3» не применяется.',
+      "Noise isn't available in the sing-box core and is not applied.",
+      'Xray Mux is incompatible with the sing-box core and is not applied.',
+      'Fragmentation in the sing-box core covers only the TLS ClientHello; mode "1-3" is not applied.',
     ]);
     expect(box.checkOptions(_vless(), _opts()).warnings, isEmpty);
   });
@@ -53,8 +69,9 @@ void main() {
   test('Reality pqv: profile runs, ML-DSA check skipped with a warning', () {
     final pqv = _vless(pqv: 'k');
     expect(box.checkConfig(pqv), isNull);
-    expect(box.checkOptions(pqv, _opts()).warnings,
-        ['Reality: ядро sing-box не проверяет подпись ML-DSA (pqv) — сервер проверяется только по ключу Reality.']);
+    expect(box.checkOptions(pqv, _opts()).warnings, [
+      "Reality: the sing-box core doesn't verify the ML-DSA signature (pqv) — the server is verified by the Reality key only.",
+    ]);
   });
 
   test('QUIC block follows tun2socks rules of the Go core', () {

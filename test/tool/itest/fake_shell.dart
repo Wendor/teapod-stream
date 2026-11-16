@@ -1,11 +1,11 @@
 import '../../../tool/itest/src/adb.dart';
 
-/// Записывает команды; ответ — по первому совпавшему префиксу из [replies].
+/// Records commands; the answer is by the first matching prefix from [replies].
 class FakeShell implements Shell {
   final calls = <String>[];
   final Map<String, String> replies;
 
-  /// Коды выхода по очереди (−1 — таймаут); пусто — 0.
+  /// Exit codes in turn (−1 — timeout); empty — 0.
   final List<int> codes;
 
   FakeShell([this.replies = const {}, List<int>? codes]) : codes = codes ?? [];

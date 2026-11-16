@@ -13,17 +13,17 @@ import teapodcore.TunValidator
 import teapodcore.VpnProtector
 import teapodcore.XrayCallback
 
-/** Ядро за teapod-tun2socks: движок слушает локальный SOCKS5, TUN читает tun2socks. */
+/** A core behind teapod-tun2socks: the engine listens on a local SOCKS5, tun2socks reads TUN. */
 abstract class Tun2SocksCore : VpnCore {
     override val tunDnsServer = "1.1.1.1"
 
-    /** Префикс runtime-логов движка: `[xray]`, `[sing-box]`. */
+    /** Prefix of the engine's runtime logs: `[xray]`, `[sing-box]`. */
     protected abstract val logTag: String
 
-    /** Запускает движок с [config]; блокирует до готовности. */
+    /** Starts the engine with [config]; blocks until ready. */
     protected abstract fun startEngine(config: String, filesDir: String)
 
-    /** Останавливает движок (может висеть, вызывается с дедлайном). */
+    /** Stops the engine (may hang, called with a deadline). */
     protected abstract fun stopEngine()
 
     protected var log: (String, String) -> Unit = { _, _ -> }
@@ -38,8 +38,8 @@ abstract class Tun2SocksCore : VpnCore {
         Teapodcore.registerVpnProtector(object : VpnProtector {
             override fun protect(fd: Long): Boolean = service.protect(fd.toInt())
         })
-        // Runtime-логи движка (ошибки дозвона, access log) — в vpn_log.txt.
-        // Info/access → "debug": в файл, но не в UI release-сборки.
+        // Engine runtime logs (dial errors, access log) — to vpn_log.txt.
+        // Info/access → "debug": to the file, but not to the release build's UI.
         Teapodcore.registerLogListener(object : LogListener {
             override fun onLog(message: String) {
                 val level = when {
@@ -71,7 +71,7 @@ abstract class Tun2SocksCore : VpnCore {
         log("info", "tun2socks started successfully")
     }
 
-    /** Ждёт колбэк старта движка (до 30 с); [launch] получает колбэк. */
+    /** Waits for the engine start callback (up to 30 s); [launch] receives the callback. */
     protected fun awaitStart(name: String, launch: (XrayCallback) -> Unit) {
         val latch = CountDownLatch(1)
         val failed = AtomicBoolean(false)
@@ -87,16 +87,16 @@ abstract class Tun2SocksCore : VpnCore {
     }
 
     /**
-     * [blockUnowned] — отбрасывать потоки без видимого владельца (uid=-1) в allExcept.
-     * Исключённое приложение может привязать сокет к TUN (SO_BINDTODEVICE), и
-     * getConnectionOwnerUid() вернёт INVALID_UID — такой обход неотличим от
-     * тетеринга и блокируется при наличии исключений, если тетеринг не разрешён.
+     * [blockUnowned] — drop flows without a visible owner (uid=-1) in allExcept.
+     * An excluded app can bind a socket to TUN (SO_BINDTODEVICE), and
+     * getConnectionOwnerUid() returns INVALID_UID — such a bypass is indistinguishable from
+     * tethering and is blocked when there are exclusions unless tethering is allowed.
      */
     private fun buildTunValidator(allowedUids: Set<Int>, vpnMode: String, blockUnowned: Boolean): TunValidator? {
         val cm = connectivity ?: return null
         val policy = TunOwnerPolicy(vpnMode == "onlySelected", allowedUids, blockUnowned, tunDnsServer)
-        // «КРОМЕ» без блокировки бесхозных потоков никого не отвергает: null —
-        // tun2socks пропускает всё сам, без binder-IPC на каждое соединение.
+        // "EXCEPT" without blocking ownerless flows rejects nobody: null —
+        // tun2socks lets everything through itself, without binder IPC per connection.
         if (!policy.needsAdmission) return null
         return object : TunValidator {
             override fun onValidate(srcIP: String, srcPort: Long, dstIP: String, dstPort: Long, protocol: Long) =
@@ -114,7 +114,7 @@ abstract class Tun2SocksCore : VpnCore {
         log("info", "Stopping tun2socks")
         runWithDeadline("stopTun2Socks", 5000) { Teapodcore.stopTun2Socks() }
         log("info", "Stopping $logTag")
-        // Остановка движка может висеть, пока горутины дренируют соединения.
+        // Stopping the engine may hang while goroutines drain connections.
         runWithDeadline("stop $logTag", 3000) { stopEngine() }
     }
 

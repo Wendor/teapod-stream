@@ -35,8 +35,7 @@ class ThemeModeNotifier extends Notifier<ThemeMode> {
   }
 }
 
-final themeModeProvider =
-    NotifierProvider<ThemeModeNotifier, ThemeMode>(ThemeModeNotifier.new);
+final themeModeProvider = NotifierProvider<ThemeModeNotifier, ThemeMode>(ThemeModeNotifier.new);
 
 // ── Accent color ──────────────────────────────────────────────────
 
@@ -62,5 +61,4 @@ class AccentNotifier extends Notifier<Color> {
   }
 }
 
-final accentProvider =
-    NotifierProvider<AccentNotifier, Color>(AccentNotifier.new);
+final accentProvider = NotifierProvider<AccentNotifier, Color>(AccentNotifier.new);

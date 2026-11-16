@@ -9,17 +9,17 @@ import '../../core/constants/xray_defaults.dart';
 import '../../core/models/vpn_log_entry.dart' show LogLevel;
 import '../../core/services/settings_service.dart' show DnsQueryStrategy, TlsFingerprint;
 import 'vless_parser.dart';
+import '../../l10n/l10n.dart';
 
 class XrayConfigBuilder {
-
-  /// Профили, которые xray-core v26 отвергает при старте (`PrintRemovedFeatureError`
-  /// и битый пин): без проверки они падали бы «xray failed to start» и
-  /// попадали в кандидаты urltest. null — профиль собирается.
+  /// Profiles xray-core v26 rejects at startup (`PrintRemovedFeatureError`
+  /// and a broken pin): without the check they would fail with "xray failed to start" and
+  /// end up among urltest candidates. null — the profile builds.
   static String? unsupportedReason(VpnConfig config) {
     if (config.protocol.hasProtocolSettings) return config.protocol.singBoxOnlyReason;
     if (config.rawXrayConfig != null) return null;
     if (config.transport == VpnTransport.http2 || config.transport == VpnTransport.quic) {
-      return 'Транспорты HTTP/2 и QUIC удалены из Xray-core: сервер нужно перевести на xHTTP.';
+      return L10n.current.xrayNoH2Quic;
     }
     final pin = config.pinSHA256?.trim() ?? '';
     if (pin.isNotEmpty) {
@@ -31,8 +31,7 @@ class XrayConfigBuilder {
     }
     final tls = config.security == VpnSecurity.tls || config.protocol == VpnProtocol.hysteria2;
     if (tls && config.allowInsecure && pin.isEmpty) {
-      return 'Xray-core больше не поддерживает allowInsecure: укажи pinSHA256 сертификата '
-          'сервера или используй действительный сертификат.';
+      return L10n.current.xrayInsecure;
     }
     return null;
   }
@@ -59,10 +58,10 @@ class XrayConfigBuilder {
             'auth': options.socksUser.isNotEmpty ? 'password' : 'noauth',
             if (options.socksUser.isNotEmpty)
               'accounts': [
-                {'user': options.socksUser, 'pass': options.socksPassword}
+                {'user': options.socksUser, 'pass': options.socksPassword},
               ],
-            // UDP ASSOCIATE нужен всегда: через него tun2socks шлёт DNS приложений.
-            // Выключенный UDP режет правило _udpBlockRule (кроме порта 53).
+            // UDP ASSOCIATE is always needed: tun2socks sends app DNS through it.
+            // Disabled UDP is cut by the _udpBlockRule rule (except port 53).
             'udp': true,
           },
           'sniffing': {
@@ -109,7 +108,7 @@ class XrayConfigBuilder {
           // In ONLY mode the catch-all routes to direct, so diagnostic hosts that aren't
           // in the user's rules would bypass the proxy and may be blocked locally.
           // Force them via proxy so heartbeat and IP-detection always test the tunnel.
-          // Свой URL пробы тоже: иначе она мерила бы прямой интернет, а не туннель.
+          // The custom probe URL too: otherwise it would measure the direct internet, not the tunnel.
           if (routing.direction == RoutingDirection.onlySelected) ...[
             {
               'type': 'field',
@@ -121,13 +120,17 @@ class XrayConfigBuilder {
               'outboundTag': 'proxy',
             },
             if (_isIpAddress(probeHost))
-              {'type': 'field', 'ip': [probeHost], 'outboundTag': 'proxy'},
+              {
+                'type': 'field',
+                'ip': [probeHost],
+                'outboundTag': 'proxy',
+              },
           ],
           {
             'type': 'field',
             'inboundTag': ['socks-in'],
             'outboundTag': routing.direction == RoutingDirection.onlySelected ? 'direct' : 'proxy',
-          }
+          },
         ],
       },
       'policy': {
@@ -137,24 +140,20 @@ class XrayConfigBuilder {
             'connIdle': XrayDefaults.connIdleTimeout,
             'uplinkOnly': XrayDefaults.uplinkOnlyTimeout,
             'downlinkOnly': XrayDefaults.downlinkOnlyTimeout,
-          }
+          },
         },
-        'system': {
-          'statsInboundUplink': false,
-          'statsInboundDownlink': false,
-        }
+        'system': {'statsInboundUplink': false, 'statsInboundDownlink': false},
       },
     };
   }
 
-  /// Access-log (строка на каждое соединение: JNI → logcat + файл лога, по сути
-  /// история посещений на диске) — только при debug. Ошибки дозвона xray пишет
-  /// в error-log уровня info, они остаются.
+  /// Access log (a line per connection: JNI → logcat + log file, essentially
+  /// browsing history on disk) — debug only. xray writes dial errors
+  /// to the info-level error log, so they stay.
   static Map<String, dynamic> _logBlock(VpnEngineOptions options) => {
-        'loglevel': options.logLevel.name,
-        if (options.logLevel != LogLevel.debug)
-          'access': 'none',
-      };
+    'loglevel': options.logLevel.name,
+    if (options.logLevel != LogLevel.debug) 'access': 'none',
+  };
 
   static List<Map<String, dynamic>> _buildGeoRules(RoutingSettings routing) {
     if (!routing.isActive) return [];
@@ -163,16 +162,22 @@ class XrayConfigBuilder {
 
     // Private IPs always bypass regardless of direction
     if (routing.bypassLocal) {
-      rules.add({'type': 'field', 'ip': ['geoip:private'], 'outboundTag': 'direct'});
+      rules.add({
+        'type': 'field',
+        'ip': ['geoip:private'],
+        'outboundTag': 'direct',
+      });
     }
 
-    if (!routing.geoEnabled && !routing.domainEnabled && !routing.geositeEnabled &&
-        !routing.sitesEnabled && !routing.ruServicesEnabled) {
+    if (!routing.geoEnabled &&
+        !routing.domainEnabled &&
+        !routing.geositeEnabled &&
+        !routing.sitesEnabled &&
+        !routing.ruServicesEnabled) {
       return rules;
     }
 
-    final selectedOut =
-        routing.direction == RoutingDirection.bypass ? 'direct' : 'proxy';
+    final selectedOut = routing.direction == RoutingDirection.bypass ? 'direct' : 'proxy';
 
     if (routing.domainEnabled && routing.domainZones.isNotEmpty) {
       rules.add({
@@ -207,11 +212,7 @@ class XrayConfigBuilder {
     }
 
     if (routing.ruServicesEnabled) {
-      rules.add({
-        'type': 'field',
-        'domain': RoutingDefaults.ruServicesDomains,
-        'outboundTag': selectedOut,
-      });
+      rules.add({'type': 'field', 'domain': RoutingDefaults.ruServicesDomains, 'outboundTag': selectedOut});
     }
 
     return rules;
@@ -220,7 +221,7 @@ class XrayConfigBuilder {
   static String _queryStrategy(DnsQueryStrategy s) => switch (s) {
     DnsQueryStrategy.ipv4Only => 'UseIPv4',
     DnsQueryStrategy.ipv6Only => 'UseIPv6',
-    DnsQueryStrategy.auto     => 'UseIP',
+    DnsQueryStrategy.auto => 'UseIP',
   };
 
   static Map<String, dynamic> buildDnsBlock(VpnEngineOptions options) => _buildDnsBlock(options);
@@ -260,9 +261,7 @@ class XrayConfigBuilder {
     } else if (server.type == DnsType.doh || server.type == DnsType.dot) {
       // Bootstrap for domain-based custom DoH/DoT: without a static hosts entry,
       // xray can't resolve the server hostname (circular dependency).
-      final host = server.type == DnsType.doh
-          ? (Uri.tryParse(server.address)?.host ?? '')
-          : server.address;
+      final host = server.type == DnsType.doh ? (Uri.tryParse(server.address)?.host ?? '') : server.address;
       if (host.isNotEmpty && !_isIpAddress(host)) {
         servers.add({
           'address': XrayDefaults.bootstrapDns,
@@ -284,37 +283,31 @@ class XrayConfigBuilder {
     };
   }
 
-  /// Тег вспомогательного freedom-outbound, через который proxy дозванивается
-  /// до сервера: там живут фрагментация (TCP) и шумы (UDP).
+  /// Tag of the helper freedom outbound the proxy dials the server
+  /// through: fragmentation (TCP) and noise (UDP) live there.
   static const _dialerTag = 'dialer-out';
 
-  /// Fragment режет TCP-поток — для hysteria2 (QUIC поверх UDP) он неприменим.
+  /// Fragment splits the TCP stream — not applicable to hysteria2 (QUIC over UDP).
   static bool _fragmentApplies(VpnConfig config, VpnEngineOptions options) =>
-      options.fragment.enabled &&
-      options.fragment.isValid &&
-      config.protocol != VpnProtocol.hysteria2;
+      options.fragment.enabled && options.fragment.isValid && config.protocol != VpnProtocol.hysteria2;
 
-  /// Noise пишется только в UDP-плечо (`proxy/freedom`: ветка non-TCP), то есть
-  /// реально работает для Hysteria2 и QUIC-транспорта. Для TCP безвреден.
-  static bool _noiseApplies(VpnEngineOptions options) =>
-      options.noise.enabled && options.noise.isValid;
+  /// Noise is written only to the UDP leg (`proxy/freedom`: the non-TCP branch), i.e.
+  /// it really works for Hysteria2 and the QUIC transport. Harmless for TCP.
+  static bool _noiseApplies(VpnEngineOptions options) => options.noise.enabled && options.noise.isValid;
 
   static bool _dialerApplies(VpnConfig config, VpnEngineOptions options) =>
       _fragmentApplies(config, options) || _noiseApplies(options);
 
-  /// Mux бесполезен поверх hysteria2 (QUIC мультиплексирует сам) и xhttp
-  /// (свой xmux; двойное мультиплексирование upstream не рекомендует).
+  /// Mux is useless over hysteria2 (QUIC multiplexes itself) and xhttp
+  /// (its own xmux; upstream doesn't recommend double multiplexing).
   static bool _muxApplies(VpnConfig config, VpnEngineOptions options) =>
-      options.mux.enabled &&
-      config.protocol != VpnProtocol.hysteria2 &&
-      config.transport != VpnTransport.xhttp;
+      options.mux.enabled && config.protocol != VpnProtocol.hysteria2 && config.transport != VpnTransport.xhttp;
 
-  /// TCP_USER_TIMEOUT: соединение, где DPI молча дропает пакеты, рвётся через
-  /// 30 с неподтверждённых данных, а не висит в ретрансляции до tcp_retries2.
+  /// TCP_USER_TIMEOUT: a connection where DPI silently drops packets breaks after
+  /// 30 s of unacknowledged data instead of hanging in retransmission until tcp_retries2.
   static const _tcpUserTimeoutMs = 30000;
 
-  static Map<String, dynamic> _buildDialerOutbound(
-      VpnConfig config, VpnEngineOptions options) {
+  static Map<String, dynamic> _buildDialerOutbound(VpnConfig config, VpnEngineOptions options) {
     final f = options.fragment;
     final n = options.noise;
     return {
@@ -326,25 +319,17 @@ class XrayConfigBuilder {
       'settings': {
         'domainStrategy': 'AsIs',
         if (_fragmentApplies(config, options))
-          'fragment': {
-            'packets': f.packets.trim(),
-            'length': f.length.trim(),
-            'interval': f.interval.trim(),
-          },
+          'fragment': {'packets': f.packets.trim(), 'length': f.length.trim(), 'interval': f.interval.trim()},
         if (_noiseApplies(options))
           'noises': [
-            {
-              'type': n.type.name,
-              'packet': n.packet.trim(),
-              'delay': n.delay.trim(),
-            }
+            {'type': n.type.name, 'packet': n.packet.trim(), 'delay': n.delay.trim()},
           ],
       },
     };
   }
 
-  /// XTLS Vision несовместим с TCP-mux: сервер рвёт mux-соединения с TCP-запросами
-  /// (см. proxy/vless/outbound). Оставляем только XUDP-ветку — `concurrency: -1`.
+  /// XTLS Vision is incompatible with TCP mux: the server drops mux connections with TCP requests
+  /// (see proxy/vless/outbound). Only the XUDP branch is kept — `concurrency: -1`.
   static Map<String, dynamic> _buildMux(VpnConfig config, MuxSettings mux) {
     final vision = config.flow?.contains('xtls-rprx-vision') ?? false;
     return {
@@ -380,10 +365,10 @@ class XrayConfigBuilder {
               'address': config.address,
               'port': config.port,
               'users': [
-                {'id': config.uuid, 'encryption': config.encryption ?? 'none', 'flow': config.flow ?? ''}
-              ]
-            }
-          ]
+                {'id': config.uuid, 'encryption': config.encryption ?? 'none', 'flow': config.flow ?? ''},
+              ],
+            },
+          ],
         };
       case VpnProtocol.vmess:
         return {
@@ -392,20 +377,16 @@ class XrayConfigBuilder {
               'address': config.address,
               'port': config.port,
               'users': [
-                {'id': config.uuid, 'security': 'auto'}
-              ]
-            }
-          ]
+                {'id': config.uuid, 'security': 'auto'},
+              ],
+            },
+          ],
         };
       case VpnProtocol.trojan:
         return {
           'servers': [
-            {
-              'address': config.address,
-              'port': config.port,
-              'password': config.password ?? '',
-            }
-          ]
+            {'address': config.address, 'port': config.port, 'password': config.password ?? ''},
+          ],
         };
       case VpnProtocol.shadowsocks:
         return {
@@ -415,26 +396,21 @@ class XrayConfigBuilder {
               'port': config.port,
               'method': config.method ?? 'chacha20-ietf-poly1305',
               'password': config.password ?? '',
-            }
-          ]
+            },
+          ],
         };
       case VpnProtocol.hysteria2:
-        return {
-          'version': 2,
-          'address': config.address,
-          'port': config.port,
-        };
+        return {'version': 2, 'address': config.address, 'port': config.port};
       case VpnProtocol.wireguard || VpnProtocol.ssh || VpnProtocol.naive:
         throw UnsupportedError(config.protocol.singBoxOnlyReason);
     }
   }
 
   // xray uses "h2" for HTTP/2, not the enum name "http2".
-  static String _networkName(VpnTransport t) =>
-      t == VpnTransport.http2 ? 'h2' : t.name;
+  static String _networkName(VpnTransport t) => t == VpnTransport.http2 ? 'h2' : t.name;
 
-  /// `pinnedPeerCertSha256`: SHA-256 полного DER-сертификата в hex, через запятую.
-  /// `pinSHA256` из ссылки — hex (с двоеточиями или без) или base64 от 32 байт.
+  /// `pinnedPeerCertSha256`: SHA-256 of the full DER certificate in hex, comma-separated.
+  /// `pinSHA256` from the link — hex (with or without colons) or base64 of 32 bytes.
   static String certificatePins(String value) {
     final pins = <String>[];
     for (final entry in value.split(',')) {
@@ -449,18 +425,16 @@ class XrayConfigBuilder {
         if (bytes.length != 32) throw const FormatException();
         pins.add(bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join());
       } on FormatException {
-        throw const FormatException(
-          'pinSHA256 должен быть SHA-256 сертификата: 64 hex-символа или base64 от 32 байт.',
-        );
+        throw FormatException(L10n.current.xrayPinFormat);
       }
     }
     return pins.join(',');
   }
 
   static Map<String, dynamic> _buildStreamSettings(VpnConfig config, TlsFingerprint fp) {
-    // Глобальный override из настроек приложения; defaultFp — значение из конфига.
+    // Global override from app settings; defaultFp — the value from the config.
     final fingerprint = fp.xrayValue ?? config.fingerprint;
-    // Пин сильнее allowInsecure: принимается только этот сертификат.
+    // A pin beats allowInsecure: only this certificate is accepted.
     final pin = config.pinSHA256?.trim() ?? '';
     if (config.protocol == VpnProtocol.hysteria2) {
       final salamander = config.obfsPassword?.isNotEmpty ?? false;
@@ -469,29 +443,23 @@ class XrayConfigBuilder {
         'network': 'hysteria',
         'security': 'tls',
         'tlsSettings': {
-          // hysteria-dialer в xray не вызывает WithDestination: при пустом serverName
-          // SNI берётся из URL auth-запроса и становится литералом "hysteria".
+          // hysteria-dialer in xray doesn't call WithDestination: with an empty serverName
+          // the SNI is taken from the auth request URL and becomes the literal "hysteria".
           'serverName': (config.sni?.isNotEmpty ?? false) ? config.sni : config.address,
           'allowInsecure': config.allowInsecure && pin.isEmpty,
           if (pin.isNotEmpty) 'pinnedPeerCertSha256': certificatePins(pin),
         },
-        'hysteriaSettings': {
-          'version': 2,
-          'auth': config.password ?? '',
-        },
+        'hysteriaSettings': {'version': 2, 'auth': config.password ?? ''},
         if (salamander || hopping)
           'finalmask': {
             'udp': [
-              // Xray-core ≥ v26.9.9: port hopping — UDP-маска udphop (раньше
-              // quicParams.udpHop). Маска с собственным дозвоном обязана быть
-              // первой. Новый сокет + случайный порт раз в 30 с — как в Hysteria.
+              // Xray-core ≥ v26.9.9: port hopping is the udphop UDP mask (previously
+              // quicParams.udpHop). A mask with its own dialing must come
+              // first. A new socket + random port every 30 s — as in Hysteria.
               if (hopping)
                 {
                   'type': 'udphop',
-                  'settings': {
-                    'mode': 'intervalLocal,intervalRemote',
-                    'remotePorts': config.hopPorts,
-                  },
+                  'settings': {'mode': 'intervalLocal,intervalRemote', 'remotePorts': config.hopPorts},
                 },
               if (salamander)
                 {
@@ -520,13 +488,11 @@ class XrayConfigBuilder {
           'serverName': config.sni ?? '',
           'allowInsecure': config.allowInsecure && pin.isEmpty,
           if (pin.isNotEmpty) 'pinnedPeerCertSha256': certificatePins(pin),
-          if (fingerprint != null && fingerprint.isNotEmpty)
-            'fingerprint': fingerprint,
+          if (fingerprint != null && fingerprint.isNotEmpty) 'fingerprint': fingerprint,
           if (config.alpn != null && config.alpn!.isNotEmpty)
             'alpn': config.alpn!.split(',').map((s) => s.trim()).toList(),
-          // Ключ Xray-core — echConfigList; прежний echSettings молча игнорировался.
-          if (config.ech != null && config.ech!.isNotEmpty)
-            'echConfigList': config.ech,
+          // The Xray-core key is echConfigList; the old echSettings was silently ignored.
+          if (config.ech != null && config.ech!.isNotEmpty) 'echConfigList': config.ech,
         },
       if (_tcpHttpHeader(config))
         'tcpSettings': {
@@ -534,50 +500,39 @@ class XrayConfigBuilder {
             'type': 'http',
             'request': {
               'path': _csv(config.wsPath ?? '/', fallback: '/'),
-              'headers': {
-                if (config.wsHost?.isNotEmpty ?? false) 'Host': _csv(config.wsHost!),
-              },
+              'headers': {if (config.wsHost?.isNotEmpty ?? false) 'Host': _csv(config.wsHost!)},
             },
           },
         },
       if (config.transport == VpnTransport.ws)
         'wsSettings': {
           'path': config.wsPath ?? '/',
-          'headers': {'Host': config.wsHost ?? ''}
+          'headers': {'Host': config.wsHost ?? ''},
         },
-      if (config.transport == VpnTransport.grpc)
-        'grpcSettings': {
-          'serviceName': config.grpcServiceName ?? '',
-        },
+      if (config.transport == VpnTransport.grpc) 'grpcSettings': {'serviceName': config.grpcServiceName ?? ''},
       if (config.transport == VpnTransport.xhttp)
         'xhttpSettings': {
           'path': config.wsPath ?? '/',
-          if (config.wsHost != null && config.wsHost!.isNotEmpty)
-            'host': config.wsHost,
-          if (config.xhttpMode != null && config.xhttpMode!.isNotEmpty)
-            'mode': config.xhttpMode,
-          if (config.xhttpExtra != null && config.xhttpExtra!.isNotEmpty)
-            'extra': config.xhttpExtra,
+          if (config.wsHost != null && config.wsHost!.isNotEmpty) 'host': config.wsHost,
+          if (config.xhttpMode != null && config.xhttpMode!.isNotEmpty) 'mode': config.xhttpMode,
+          if (config.xhttpExtra != null && config.xhttpExtra!.isNotEmpty) 'extra': config.xhttpExtra,
         },
       if (config.transport == VpnTransport.splithttp)
         'splithttpSettings': {
           'path': config.wsPath ?? '/',
-          if (config.wsHost != null && config.wsHost!.isNotEmpty)
-            'host': config.wsHost,
+          if (config.wsHost != null && config.wsHost!.isNotEmpty) 'host': config.wsHost,
         },
       if (config.transport == VpnTransport.httpupgrade)
         'httpupgradeSettings': {
           'path': config.wsPath ?? '/',
-          if (config.wsHost != null && config.wsHost!.isNotEmpty)
-            'host': config.wsHost,
+          if (config.wsHost != null && config.wsHost!.isNotEmpty) 'host': config.wsHost,
         },
-      if (config.finalmask != null && config.finalmask!.isNotEmpty)
-        'finalmask': config.finalmask,
+      if (config.finalmask != null && config.finalmask!.isNotEmpty) 'finalmask': config.finalmask,
     };
   }
 
-  /// TCP с HTTP-маскировкой (`headerType=http`, у VMess — `type`). Полей в
-  /// [VpnConfig] нет — читаем исходную ссылку. Без заголовка сервер рвёт соединение.
+  /// TCP with HTTP camouflage (`headerType=http`, `type` for VMess). [VpnConfig] has no
+  /// such fields — we read the original link. Without the header the server drops the connection.
   static bool _tcpHttpHeader(VpnConfig config) {
     if (config.transport != VpnTransport.tcp || config.protocol == VpnProtocol.hysteria2) {
       return false;
@@ -590,7 +545,8 @@ class XrayConfigBuilder {
 
   static List<String> _csv(String value, {String? fallback}) {
     final items = [
-      for (final v in value.split(',')) if (v.trim().isNotEmpty) v.trim(),
+      for (final v in value.split(','))
+        if (v.trim().isNotEmpty) v.trim(),
     ];
     return items.isEmpty && fallback != null ? [fallback] : items;
   }
@@ -614,12 +570,14 @@ class XrayConfigBuilder {
     try {
       final cfg = jsonDecode(rawConfig) as Map<String, dynamic>;
 
-      // api/metrics с `listen` — gRPC (HandlerService.ListOutbounds: адреса, UUID,
-      // ключи) и pprof на localhost без аутентификации для любого приложения.
-      cfg..remove('api')..remove('metrics');
+      // api/metrics with `listen` — gRPC (HandlerService.ListOutbounds: addresses, UUIDs,
+      // keys) and pprof on localhost without authentication for any app.
+      cfg
+        ..remove('api')
+        ..remove('metrics');
 
-      // allowInsecure в xray v26 роняет старт всего конфига; без него узлы с
-      // самоподписанным сертификатом отказывают только на рукопожатии.
+      // allowInsecure in xray v26 breaks startup of the whole config; without it nodes with
+      // a self-signed certificate fail only at the handshake.
       for (final o in (cfg['outbounds'] as List? ?? const []).whereType<Map<String, dynamic>>()) {
         (o['streamSettings']?['tlsSettings'] as Map?)?.remove('allowInsecure');
       }
@@ -627,12 +585,13 @@ class XrayConfigBuilder {
       // Preserve the original socks inbound tag so server routing rules
       // (inboundTag: ["socks", "http"]) keep matching after we replace the inbound.
       final originalInbounds = List<dynamic>.from(cfg['inbounds'] as List? ?? []);
-      final socksTag = originalInbounds
-          .whereType<Map<String, dynamic>>()
-          .where((i) => i['protocol'] == 'socks')
-          .map((i) => i['tag'] as String?)
-          .firstWhere((t) => t != null && t.isNotEmpty, orElse: () => null)
-          ?? 'socks';
+      final socksTag =
+          originalInbounds
+              .whereType<Map<String, dynamic>>()
+              .where((i) => i['protocol'] == 'socks')
+              .map((i) => i['tag'] as String?)
+              .firstWhere((t) => t != null && t.isNotEmpty, orElse: () => null) ??
+          'socks';
 
       cfg['inbounds'] = [
         {
@@ -644,10 +603,10 @@ class XrayConfigBuilder {
             'auth': options.socksUser.isNotEmpty ? 'password' : 'noauth',
             if (options.socksUser.isNotEmpty)
               'accounts': [
-                {'user': options.socksUser, 'pass': options.socksPassword}
+                {'user': options.socksUser, 'pass': options.socksPassword},
               ],
-            // UDP ASSOCIATE нужен всегда: через него tun2socks шлёт DNS приложений.
-            // Выключенный UDP режет правило _udpBlockRule (кроме порта 53).
+            // UDP ASSOCIATE is always needed: tun2socks sends app DNS through it.
+            // Disabled UDP is cut by the _udpBlockRule rule (except port 53).
             'udp': true,
           },
           'sniffing': {
@@ -685,9 +644,7 @@ class XrayConfigBuilder {
       // In direct DNS mode, intercept port 53 so it bypasses the tunnel.
       // In proxy DNS mode we leave DNS handling to the server config entirely.
       if (options.dnsMode == DnsMode.direct) {
-        appRules.add({
-          'type': 'field', 'port': '53', 'network': 'udp,tcp', 'outboundTag': 'direct',
-        });
+        appRules.add({'type': 'field', 'port': '53', 'network': 'udp,tcp', 'outboundTag': 'direct'});
       }
 
       if (!options.enableUdp) {
@@ -700,7 +657,11 @@ class XrayConfigBuilder {
       if (routing.direction == RoutingDirection.bypass) {
         appRules.addAll(_buildGeoRules(routing));
       } else if (routing.bypassLocal) {
-        appRules.add({'type': 'field', 'ip': ['geoip:private'], 'outboundTag': 'direct'});
+        appRules.add({
+          'type': 'field',
+          'ip': ['geoip:private'],
+          'outboundTag': 'direct',
+        });
       }
 
       // No catch-all rule — the server's routing handles the remainder.
@@ -716,19 +677,19 @@ class XrayConfigBuilder {
 
       return jsonEncode(cfg);
     } catch (e) {
-      // Не отдаём конфиг как есть: в нём серверные inbounds (0.0.0.0, noauth).
-      throw FormatException('Не удалось разобрать JSON-конфиг подписки: $e');
+      // Don't pass the config as is: it has server inbounds (0.0.0.0, noauth).
+      throw FormatException(L10n.current.xrayRawJsonParse('$e'));
     }
   }
 
-  /// Выключенный UDP: весь UDP с socks-инбаунда, кроме DNS на порт 53, — в blackhole.
+  /// Disabled UDP: all UDP from the socks inbound, except DNS to port 53, goes to blackhole.
   static Map<String, dynamic> _udpBlockRule(String inbound, String outbound) => {
-        'type': 'field',
-        'inboundTag': [inbound],
-        'network': 'udp',
-        'port': '1-52,54-65535',
-        'outboundTag': outbound,
-      };
+    'type': 'field',
+    'inboundTag': [inbound],
+    'network': 'udp',
+    'port': '1-52,54-65535',
+    'outboundTag': outbound,
+  };
 
   /// Tag of the blackhole outbound injected into managed configs (fallback
   /// neutralization, adblock). Injected once by [_ensureBlackholeOutbound].
@@ -747,9 +708,7 @@ class XrayConfigBuilder {
     final balancers = routing['balancers'];
     if (balancers is! List) return;
 
-    final outbounds = (cfg['outbounds'] as List<dynamic>? ?? [])
-        .whereType<Map<String, dynamic>>()
-        .toList();
+    final outbounds = (cfg['outbounds'] as List<dynamic>? ?? []).whereType<Map<String, dynamic>>().toList();
     final freedomTags = outbounds
         .where((o) => o['protocol'] == 'freedom')
         .map((o) => o['tag'] as String?)
@@ -770,10 +729,7 @@ class XrayConfigBuilder {
 
   /// First outbound tag matching a balancer selector (xray selectors are tag
   /// prefixes), skipping non-proxy protocols.
-  static String? _firstSelectorOutbound(
-    List<Map<String, dynamic>> outbounds,
-    dynamic selector,
-  ) {
+  static String? _firstSelectorOutbound(List<Map<String, dynamic>> outbounds, dynamic selector) {
     if (selector is! List) return null;
     const nonProxy = {'freedom', 'blackhole', 'dns', 'loopback'};
     final prefixes = selector.whereType<String>().toList();
@@ -785,9 +741,9 @@ class XrayConfigBuilder {
     return null;
   }
 
-  /// Тег blackhole-outbound'а. Если тег [blackholeTag] занят серверным outbound'ом
-  /// другого протокола, он остаётся как есть (на него могут вести правила сервера),
-  /// а blackhole получает свободный тег с суффиксом.
+  /// Tag of the blackhole outbound. If [blackholeTag] is taken by a server outbound
+  /// of another protocol, it stays as is (server rules may point to it),
+  /// and the blackhole gets a free tag with a suffix.
   static String _ensureBlackholeOutbound(Map<String, dynamic> cfg) {
     final outbounds = cfg['outbounds'] as List<dynamic>? ?? (cfg['outbounds'] = <dynamic>[]);
     final byTag = {
@@ -798,7 +754,7 @@ class XrayConfigBuilder {
     for (var i = 2; byTag.containsKey(tag) && byTag[tag] != 'blackhole'; i++) {
       tag = '$blackholeTag-$i';
     }
-    if (!byTag.containsKey(tag)) outbounds.add({'tag': tag, 'protocol': 'blackhole', 'settings': {}});
+    if (!byTag.containsKey(tag)) outbounds.add({'tag': tag, 'protocol': 'blackhole', 'settings': <String, dynamic>{}});
     return tag;
   }
 

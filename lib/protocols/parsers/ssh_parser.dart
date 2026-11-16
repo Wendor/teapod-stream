@@ -3,13 +3,13 @@ import 'package:uuid/uuid.dart';
 import '../../core/models/protocol_settings.dart';
 import '../../core/models/vpn_config.dart';
 
-/// `ssh://user[:password]@host[:port]?pk=<ключ>&pkp=<passphrase>&hk=<host key>,…#имя`.
-/// `pk`/`hk` — как в hiddify (ray2sing); `pkp` — passphrase ключа.
+/// `ssh://user[:password]@host[:port]?pk=<key>&pkp=<passphrase>&hk=<host key>,…#name`.
+/// `pk`/`hk` — as in hiddify (ray2sing); `pkp` — the key passphrase.
 abstract final class SshParser {
   static const _pemHead = '-----BEGIN OPENSSH PRIVATE KEY-----';
   static const _pemTail = '-----END OPENSSH PRIVATE KEY-----';
 
-  /// null — не ssh:// или нет ни пароля, ни ключа.
+  /// null — not ssh:// or neither a password nor a key.
   static VpnConfig? parseUri(String uri) {
     try {
       final parsed = Uri.parse(uri);
@@ -46,7 +46,7 @@ abstract final class SshParser {
     }
   }
 
-  /// Полный PEM оставляется как есть; голое тело оборачивается в OpenSSH PEM.
+  /// A full PEM is kept as is; a bare body is wrapped into an OpenSSH PEM.
   static String? _privateKey(String? value) {
     final v = value?.trim() ?? '';
     if (v.isEmpty) return null;
@@ -55,9 +55,9 @@ abstract final class SshParser {
     return '$_pemHead\n$body\n$_pemTail\n';
   }
 
-  /// Значения query без превращения `+` в пробел (ключи в base64).
+  /// Query values without turning `+` into a space (keys are base64).
   static Map<String, String> _query(String query) => {
-        for (final part in query.split('&').where((p) => p.contains('=')))
-          part.substring(0, part.indexOf('=')).toLowerCase(): Uri.decodeComponent(part.substring(part.indexOf('=') + 1)),
-      };
+    for (final part in query.split('&').where((p) => p.contains('=')))
+      part.substring(0, part.indexOf('=')).toLowerCase(): Uri.decodeComponent(part.substring(part.indexOf('=') + 1)),
+  };
 }

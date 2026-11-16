@@ -1,0 +1,85 @@
+diff --color -ruN a/transport/internet/tls/ech_spec_test.go b/transport/internet/tls/ech_spec_test.go
+--- a/transport/internet/tls/ech_spec_test.go	1970-01-01 07:00:00.000000000 +0700
++++ b/transport/internet/tls/ech_spec_test.go	2026-11-08 02:49:42.129342399 +0700
+@@ -0,0 +1,34 @@
++package tls
++
++import (
++	"testing"
++
++	utls "github.com/refraction-networking/utls"
++)
++
++func TestECHSpecAddsMissingExtension(t *testing.T) {
++	for _, id := range []utls.ClientHelloID{utls.HelloSafari_Auto, utls.HelloIOS_Auto, utls.HelloEdge_Auto} {
++		spec, ok := echSpec(id)
++		if !ok {
++			t.Fatalf("%s: want ECH added", id.Str())
++		}
++		ech, pad := -1, len(spec.Extensions)
++		for i, ext := range spec.Extensions {
++			switch ext.(type) {
++			case utls.EncryptedClientHelloExtension:
++				if ech >= 0 {
++					t.Fatalf("%s: two ECH extensions", id.Str())
++				}
++				ech = i
++			case *utls.UtlsPaddingExtension:
++				pad = i
++			}
++		}
++		if ech < 0 || ech > pad {
++			t.Fatalf("%s: ECH at %d, padding at %d", id.Str(), ech, pad)
++		}
++	}
++	if _, ok := echSpec(utls.HelloChrome_Auto); ok {
++		t.Fatal("chrome already has ECH")
++	}
++}
+diff --color -ruN a/transport/internet/tls/tls.go b/transport/internet/tls/tls.go
+--- a/transport/internet/tls/tls.go	2026-11-08 02:49:42.125671805 +0700
++++ b/transport/internet/tls/tls.go	2026-11-08 02:49:42.128436240 +0700
+@@ -173,10 +173,43 @@
+ }
+ 
+ func UClient(c net.Conn, config *tls.Config, fingerprint *utls.ClientHelloID) net.Conn {
++	if config.EncryptedClientHelloConfigList != nil {
++		if spec, ok := echSpec(*fingerprint); ok {
++			utlsConn := utls.UClient(c, copyConfig(config), utls.HelloCustom)
++			if utlsConn.ApplyPreset(&spec) == nil {
++				return &UConn{UConn: utlsConn}
++			}
++		}
++	}
+ 	utlsConn := utls.UClient(c, copyConfig(config), *fingerprint)
+ 	return &UConn{UConn: utlsConn}
+ }
+ 
++// echSpec returns the fingerprint's spec with an ECH extension added when it has
++// none (Safari, iOS, Edge, QQ...). uTLS can only encrypt the inner hello into an
++// existing ECH extension; without one MarshalClientHello drops the error and the
++// handshake later fails with "tls: malformed outer client hello".
++// ok is false when the spec already carries ECH or cannot be built (randomized).
++func echSpec(id utls.ClientHelloID) (utls.ClientHelloSpec, bool) {
++	spec, err := utls.UTLSIdToSpec(id)
++	if err != nil {
++		return spec, false
++	}
++	at := len(spec.Extensions)
++	for i, ext := range spec.Extensions {
++		switch ext.(type) {
++		case utls.EncryptedClientHelloExtension:
++			return spec, false
++		case *utls.UtlsPaddingExtension, utls.PreSharedKeyExtension:
++			if i < at {
++				at = i // padding and PSK stay last
++			}
++		}
++	}
++	spec.Extensions = slices.Insert(spec.Extensions, at, utls.TLSExtension(utls.BoringGREASEECH()))
++	return spec, true
++}
++
+ func GeneraticUClient(c net.Conn, config *tls.Config) *utls.UConn {
+ 	return utls.UClient(c, copyConfig(config), utls.HelloChrome_Auto)
+ }

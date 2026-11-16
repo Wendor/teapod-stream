@@ -1,0 +1,923 @@
+{
+  "@@locale": "en",
+  "tabConfigs": "Configs",
+  "tabRouting": "Routing",
+  "tabSettings": "Settings",
+  "homeNoConfigShort": "no config",
+  "homeUnsupported": "not supported",
+  "homeNoConfig": "no configuration",
+  "homeLogs": "logs",
+  "homeTunnel": "TUNNEL · {proto}",
+  "@homeTunnel": {
+    "placeholders": {
+      "proto": {
+        "type": "String"
+      }
+    }
+  },
+  "homeKillSwitchBlocked": "kill switch · traffic blocked",
+  "homeConnectError": "connection error",
+  "homeTapToRetry": "tap to retry",
+  "homeConnecting": "establishing connection…",
+  "homeDisconnecting": "closing session…",
+  "homeNoConfigAdd": "no configuration — add one",
+  "homeTapToConnect": "tap to connect",
+  "homeDisconnectButton": "DISCONNECT",
+  "homeActionReconnect": "reconnect",
+  "homeActionDisconnect": "disconnect",
+  "homeActionWait": "waiting",
+  "homeActionConnect": "connect",
+  "homeChangeServer": "change server",
+  "homeServer": "Server",
+  "homePing": "Ping",
+  "homeUpload": "Upload",
+  "homeDownload": "Download",
+  "homeCoreEnableHint": "enable a core in settings or switch the config",
+  "homeCorePinned": "pinned",
+  "homeManagedOnlySelected": "domain \"Only\" mode and DNS settings don't apply · routing is controlled by the server",
+  "homeManagedDns": "DNS settings don't apply · routing is controlled by the server",
+  "homeTrafficLive": "TRAFFIC — LIVE",
+  "homePeak": "peak {value}",
+  "@homePeak": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "commonErrorWith": "Error: {error}",
+  "@commonErrorWith": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "commonRename": "Rename",
+  "commonDelete": "Delete",
+  "commonName": "Name",
+  "commonCancel": "Cancel",
+  "commonSave": "Save",
+  "commonContinue": "Continue",
+  "configsHideGroups": "hide groups",
+  "configsSortByPing": "sort by ping",
+  "configsSortMode": "sort mode",
+  "configsPin": "Pin",
+  "configsUnpin": "Unpin",
+  "configsCore": "Core",
+  "configsCoreNone": "none",
+  "configsEditUri": "Edit URI",
+  "configsCopyUrl": "Copy URL",
+  "configsUrlCopied": "URL copied",
+  "configsShare": "Share",
+  "configsUriParseFailed": "Couldn't parse the URI",
+  "configsDeleteTitle": "Delete?",
+  "configsDeleteMessage": "Configuration \"{name}\" will be deleted.",
+  "@configsDeleteMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "configsSubUpdated": "Subscription updated",
+  "certUntrustedTitle": "Untrusted certificate",
+  "certUntrustedMessage": "The server uses a self-signed or unknown certificate. The connection may be insecure.",
+  "certServer": "Server: {host}",
+  "@certServer": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "certSubject": "Certificate: {subject}",
+  "@certSubject": {
+    "placeholders": {
+      "subject": {
+        "type": "String"
+      }
+    }
+  },
+  "certIssuer": "Issuer: {issuer}",
+  "@certIssuer": {
+    "placeholders": {
+      "issuer": {
+        "type": "String"
+      }
+    }
+  },
+  "certContinueAnyway": "Continue anyway?",
+  "configsUpdateError": "Update error: {error}",
+  "@configsUpdateError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "configsRenameSub": "Rename subscription",
+  "configsEditSubUrl": "Change subscription URL",
+  "configsSaveAndRefresh": "Save and refresh",
+  "configsSubUpdatedNewUrl": "Subscription updated from the new URL",
+  "configsDeleteSubTitle": "Delete subscription?",
+  "configsDeleteSubMessage": "Subscription \"{name}\" and all its configurations will be deleted.",
+  "@configsDeleteSubMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "configsSubsUpdated": "Subscriptions updated: {count}",
+  "@configsSubsUpdated": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "configsSubsUpdatedPartial": "Updated {ok} of {total}",
+  "@configsSubsUpdatedPartial": {
+    "placeholders": {
+      "ok": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "configsTagline": "CONFIGURATIONS",
+  "configsDisplaySettings": "display settings",
+  "configsSubSettings": "subscription settings",
+  "configsExport": "export connections",
+  "configsRefreshSubs": "refresh subscriptions",
+  "configsAdd": "add",
+  "subNeverUpdated": "Never updated",
+  "subJustNow": "Just now",
+  "subMinutesAgo": "{count} min ago",
+  "@subMinutesAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "subHoursAgo": "{count} h ago",
+  "@subHoursAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "subDaysAgo": "{count} d ago",
+  "@subDaysAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "subExpired": "Expired",
+  "configsSubMenu": "subscription menu",
+  "configsCount": "{count, plural, one{{count} config} other{{count} configs}}",
+  "@configsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "configsAutoSelectReset": "Reset auto-select",
+  "configsAutoSelectBest": "Auto-select best",
+  "configsEditUrl": "Change URL",
+  "configsRefresh": "Refresh",
+  "configsConfigMenu": "configuration menu",
+  "configsNotInSub": "not in subscription",
+  "configsPinned": "pinned",
+  "configsPinUnavailable": "unavailable · tap to unpin",
+  "configsEmpty": "Add a configuration\nor a subscription",
+  "routingSplitOff": "off · all apps through VPN",
+  "routingSplitOnly": "{count} apps · ONLY",
+  "@routingSplitOnly": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "routingSplitExcept": "{count} apps · EXCEPT",
+  "@routingSplitExcept": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "routingModeGlobalHint": "all traffic through VPN · rules off",
+  "routingModeBypassHint": "{count, plural, one{{count} rule} other{{count} rules}} · matched go direct, the rest through VPN",
+  "@routingModeBypassHint": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "routingModeOnlyHint": "{count, plural, one{{count} rule} other{{count} rules}} · only matched through VPN",
+  "@routingModeOnlyHint": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "routingGeoMissingHint": "Download the geo databases (geo.data section below)",
+  "routingSniffHint": "Requires sniffing (the \"Sniffing\" switch above)",
+  "routingTagline": "ROUTING · SPLIT-TUNNEL",
+  "routingSplitTunnel": "Split tunneling",
+  "routingLocalNetworks": "Local networks",
+  "routingLocalNetworksHint": "Don't tunnel 10/8, 192.168/16",
+  "routingAddRegion": "region",
+  "routingSniffing": "Sniffing",
+  "routingSniffingHint": "Detect the domain from TLS SNI · needed for domain.suffix and geosite",
+  "routingAddSuffix": "suffix",
+  "routingAddCategory": "category",
+  "routingAddSite": "site",
+  "routingAdBlock": "Ad blocking",
+  "routingRuServices": "Russian services",
+  "routingRuServicesHint": "Yandex, VK, Sber, Ozon, Avito, etc. → selected outbound",
+  "routingKillSwitchHint": "Block traffic when the VPN drops",
+  "routingSource": "SOURCE",
+  "countryRu": "Russia",
+  "countryBy": "Belarus",
+  "countryKz": "Kazakhstan",
+  "countryUa": "Ukraine",
+  "countryCn": "China",
+  "countryUs": "USA",
+  "countryDe": "Germany",
+  "countryGb": "United Kingdom",
+  "countryFr": "France",
+  "countryNl": "Netherlands",
+  "countryTr": "Turkey",
+  "countryJp": "Japan",
+  "countrySe": "Sweden",
+  "countryFi": "Finland",
+  "countryPl": "Poland",
+  "routingRegions": "REGIONS",
+  "routingCountries": "countries",
+  "routingServices": "services",
+  "routingGeoipCustomHint": "Code or category (e.g. IT, netflix)",
+  "routingSuffixes": "SUFFIXES",
+  "routingDomainCustomHint": "Domain or zone (e.g. example.com)",
+  "routingSites": "SITES",
+  "routingSiteCustomHint": "Site (e.g. example.com)",
+  "geositeCategoryRu": "Russia (category)",
+  "geositeGeoDetect": "Geo-detect services",
+  "geositeGames": "Games",
+  "routingCategories": "CATEGORIES",
+  "routingGeositeCustomHint": "Category (e.g. geolocation-!cn)",
+  "routingModeAll": "all traffic",
+  "routingModeRules": "by rules",
+  "routingModeMatch": "match only",
+  "commonDone": "DONE",
+  "geoNotLoaded": "Geo databases not downloaded",
+  "geoDownload": "DOWNLOAD",
+  "geoLoaded": "Geo databases downloaded",
+  "geoUpdate": "UPDATE",
+  "geoDownloading": "Downloading geo databases...",
+  "unitMb": "MB",
+  "commonRetryUpper": "RETRY",
+  "geoUpdatedToday": "Updated today",
+  "geoUpdatedYesterday": "Updated yesterday",
+  "geoUpdatedDaysAgo": "Updated {count} days ago",
+  "@geoUpdatedDaysAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "commonApplyUpper": "APPLY",
+  "settingsTagline": "PARAMETERS · LOCAL PROFILE",
+  "settingsProfileLocked": "profile locked · read-only",
+  "settingsProfileAutosave": "profile: {name} · autosave",
+  "@settingsProfileAutosave": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsLogs": "Logs",
+  "settingsLogsHint": "app and xray log",
+  "settingsAutoConnect": "Auto-connect",
+  "settingsAutoConnectHint": "Connect when the app starts",
+  "settingsStartOnBoot": "Start on boot",
+  "settingsStartOnBootHint": "Connect automatically after the device reboots",
+  "settingsAutomation": "Automation",
+  "settingsAutomationHint": "Tasker/Anubis: CONNECT/DISCONNECT commands and state broadcasts. Any app will be able to turn off the VPN and learn that it is on",
+  "settingsNotification": "Notification",
+  "settingsNotificationHint": "Speed and a disconnect button in the shade",
+  "settingsSubscriptions": "Subscriptions",
+  "settingsSubAutoRefreshOn": "auto-refresh · {hours}h",
+  "@settingsSubAutoRefreshOn": {
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsSubAutoRefreshOff": "auto-refresh off",
+  "settingsNetwork": "Network",
+  "settingsProxyOnlyShort": "proxy only",
+  "dnsViaVpn": "via VPN",
+  "dnsDirect": "direct",
+  "settingsUpdateChannel": "Update channel",
+  "settingsCoreLastEnabled": "At least one core must stay enabled",
+  "settingsCores": "Cores",
+  "settingsCoresHint": "A profile runs on the topmost core that supports it",
+  "settingsCoreMoveUp": "move {core} up",
+  "@settingsCoreMoveUp": {
+    "placeholders": {
+      "core": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsCoreUnavailable": "doesn't load on this device",
+  "settingsTheme": "Theme",
+  "settingsThemeDark": "DARK",
+  "settingsThemeLight": "LIGHT",
+  "settingsSystem": "SYSTEM",
+  "settingsLanguage": "Language",
+  "settingsFontSize": "Font size",
+  "settingsFontNormal": "NORMAL",
+  "settingsFontLarge": "LARGE",
+  "settingsAccentColor": "ACCENT COLOR",
+  "updateTitle": "Updates",
+  "updateCheck": "CHECK",
+  "updateChecking": "Checking...",
+  "updateDownloading": "Downloading v{version}",
+  "@updateDownloading": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "commonCancelUpper": "CANCEL",
+  "updateReadyToInstall": "v{version} ready to install",
+  "@updateReadyToInstall": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateInstall": "INSTALL",
+  "updateAvailable": "update available",
+  "updateUpToDate": "up to date",
+  "updateResume": "RESUME",
+  "updateDownload": "DOWNLOAD",
+  "updateReinstall": "REINSTALL",
+  "commonLoading": "loading...",
+  "profileReadonly": "read-only",
+  "settingsProfiles": "Profiles",
+  "networkTagline": "NETWORK · SOCKS · TUN",
+  "networkRandomPort": "Random port",
+  "networkRandomPortHint": "Random SOCKS port on every connection",
+  "networkSocksPort": "SOCKS5 port",
+  "networkRandomCreds": "Random credentials",
+  "networkRandomCredsHint": "Generate a random SOCKS login/password",
+  "networkSocksLogin": "SOCKS login",
+  "networkNoAuth": "no password",
+  "networkSocksPassword": "SOCKS password",
+  "networkProxyOnly": "Proxy only",
+  "networkProxyOnlyHint": "Run the SOCKS proxy without a VPN tunnel",
+  "networkUdpHint": "Allow UDP traffic through SOCKS",
+  "networkIcmpHint": "Answer pings: the proxy doesn't carry ICMP, the VPN replies itself — the time doesn't reflect latency to the host",
+  "networkBlockQuic": "Block QUIC",
+  "networkBlockQuicHint": "TUN answers UDP 443 with an ICMP \"port unreachable\": the browser instantly falls back to TCP instead of waiting for the QUIC timeout (~55s). No traffic leaves the device.",
+  "networkFingerprintHint": "uTLS ClientHello camouflage (TLS/REALITY)",
+  "networkIpv6": "IPv6 in tunnel",
+  "networkIpv6Hint": "Add an IPv6 address to the TUN interface. Enable only if the VPN server has IPv6: otherwise apps with IPv6 addresses (Telegram) hang. When off, IPv6 is blocked by the system without leaks — apps fall back to IPv4 instantly.",
+  "networkObservatoryInterval": "Observatory min. interval, sec",
+  "networkFragment": "Fragmentation",
+  "networkFragmentHint": "Splits the outgoing TCP stream into pieces so DPI can't reassemble the whole ClientHello. Doesn't apply to Hysteria2 (QUIC over UDP).",
+  "networkFragmentPackets": "Packets",
+  "networkFragmentLength": "Chunk length, bytes",
+  "networkPauseMs": "Pause, ms",
+  "networkFragmentInvalid": "Length and pause must be ranges like 100-200 and 10-20, packets — tlshello or a range. Fragmentation is not applied.",
+  "networkNoise": "Noise",
+  "networkNoiseHint": "Junk UDP datagrams before the first real one. Work only on the UDP leg — Hysteria2 and the QUIC transport; they don't affect TCP (use fragmentation there). Xray DNS queries are not affected.",
+  "networkNoiseType": "Packet type",
+  "networkNoiseTypeHint": "RAND — random bytes; STR / HEX / BASE64 — set manually",
+  "networkNoiseLength": "Length, bytes",
+  "networkNoisePacket": "Packet",
+  "networkNoiseContent": "content",
+  "networkNoiseInvalidRand": "Length must be a range like 50-100, pause — 10-20. Noise is not applied.",
+  "networkNoiseInvalidPacket": "Packet must not be empty, pause — a range like 10-20. Noise is not applied.",
+  "networkMuxHint": "Multiplexes several connections into one — fewer handshakes. With XTLS Vision the TCP branch is disabled automatically (XUDP stays). Doesn't apply to Hysteria2.",
+  "networkMuxTcp": "TCP substreams",
+  "networkMuxXudp": "XUDP substreams",
+  "networkMuxQuic": "QUIC (UDP/443) via mux",
+  "networkMuxQuicHint": "reject — drop, allow — pass through mux, skip — bypass mux",
+  "networkProbeType": "Probe type",
+  "networkProbeTypeHint": "SOCKS — HTTP request through SOCKS5 into xray; XRAYDELAY — measured inside the core, gives latency directly; PASSIVE — no active probes, only tun2socks metrics (saves battery, a drop is noticed only with real traffic)",
+  "networkProbeTarget": "Probe target",
+  "networkProbeTargetHint": "Where the probe goes. CUSTOM — your own URL below",
+  "networkFailureThreshold": "Failures before action",
+  "networkFailAction": "When the tunnel is lost",
+  "networkFailActionHint": "RECONNECT — reconnect to the same server; SWITCHCONFIG — move to the fastest live config",
+  "networkSwitchSource": "Where to take a config from",
+  "networkSwitchSourceHint": "SUBSCRIPTION — configs of the same subscription; PINNED — pinned ones; ALL — all saved. Candidates are checked with a full measurement through the protocol itself, not a TCP ping",
+  "profilesTagline": "MANAGEMENT · PROFILES",
+  "profilesSubtitle": "switch and manage settings profiles",
+  "profilesNew": "New profile",
+  "profilesNameHint": "Profile name",
+  "profilesCopyCurrent": "Copy current settings",
+  "commonCreate": "Create",
+  "profileImportTitle": "Import profile",
+  "profilesImportHint": "Paste a link (teapod://...) or profile JSON",
+  "profilesSwitchAfterImport": "Switch after import",
+  "profilesReadonly": "Read-only",
+  "profilesInvalidFormat": "Invalid format",
+  "commonImport": "Import",
+  "profilesExportUpper": "EXPORT",
+  "profilesCopyLink": "Copy link",
+  "profilesLinkCopied": "Link copied",
+  "profilesShareFile": "Share as file",
+  "profilesDeleteTitle": "Delete profile?",
+  "profilesDeleteMessage": "\"{name}\" will be deleted permanently.",
+  "@profilesDeleteMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "profilesUpdated": "Profile \"{name}\" updated",
+  "@profilesUpdated": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "profilesUpdateError": "Update error",
+  "profilesSwitch": "Switch",
+  "profilesUnlock": "Unlock",
+  "profilesLock": "Lock editing",
+  "profilesExport": "Export",
+  "deeplinkFetchFailed": "Couldn't load data from the link",
+  "splitTethering": "Tethering through VPN",
+  "splitTetheringWarning": "Hotspot traffic is indistinguishable from the traffic of excluded apps. With this option any excluded app can send a request through the VPN and learn the server IP — for example, to report it.\n\nEnable only if you need to share internet through the VPN.",
+  "commonEnable": "Enable",
+  "splitTagline": "APPS · SPLIT-TUNNEL",
+  "splitSelectedOnly": "{count} selected · only through VPN",
+  "@splitSelectedOnly": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "splitExcluded": "{count} excluded · the rest through VPN",
+  "@splitExcluded": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "splitEnabled": "enabled",
+  "splitDisabled": "disabled — all traffic through VPN",
+  "splitVpnMode": "VPN mode",
+  "splitModeOnly": "ONLY",
+  "splitModeExcept": "EXCEPT",
+  "splitTetheringHint": "Route hotspot traffic into the tunnel",
+  "splitTetheringWeakened": "Protection weakened: excluded apps can go out through the VPN and learn the server IP",
+  "splitSearchHint": "search apps...",
+  "splitHideSystem": "Hide system apps",
+  "splitNoApps": "no apps",
+  "addTagline": "CONFIGURATION · NEW PROFILE",
+  "addFromClipboard": "from clipboard: {text}",
+  "@addFromClipboard": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "addPaste": "PASTE",
+  "addAdd": "ADD",
+  "addEnterUrl": "Enter a URL",
+  "addDeeplinkParseFailed": "Couldn't parse the deeplink",
+  "addImported": "Imported: {configs}, {subscriptions}",
+  "@addImported": {
+    "placeholders": {
+      "configs": {
+        "type": "String"
+      },
+      "subscriptions": {
+        "type": "String"
+      }
+    }
+  },
+  "subscriptionsCount": "{count, plural, one{{count} subscription} other{{count} subscriptions}}",
+  "@subscriptionsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "addParseFailed": "Couldn't recognize the configuration. Supported: vless://, vmess://, trojan://, ss://, hy2://, wireguard://, vpn:// (AmneziaVPN) and WireGuard .conf",
+  "subsTagline": "SUBSCRIPTIONS · REFRESH",
+  "subsAutoRefresh": "Subscription auto-refresh",
+  "subsAutoRefreshHint": "Refresh subscriptions on a schedule",
+  "subsInterval": "Interval",
+  "unitHours": "{count}h",
+  "@unitHours": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "subsHwidHint": "Send the device ID to bind the subscription",
+  "commonDefaultLower": "default",
+  "logsEmpty": "Log is empty",
+  "logsTagline": "LOG · XRAY · TUN2SOCKS",
+  "qrCameraError": "Camera error: {error}",
+  "@qrCameraError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "qrTitle": "Scan QR",
+  "commonRetry": "Retry",
+  "qrHint": "Point the camera at a QR code",
+  "commonSaveUpper": "SAVE",
+  "dnsTagline": "SETTINGS · DNS RESOLVER",
+  "dnsMode": "DNS mode",
+  "dnsViaTunnel": "via VPN tunnel",
+  "dnsStrategy": "DNS strategy",
+  "dnsStrategyHint": "IP version for DNS queries",
+  "dnsProtocolType": "PROTOCOL TYPE",
+  "dnsServerAddress": "SERVER ADDRESS",
+  "coreInUse": "in use",
+  "coreCompatible": "compatible",
+  "coreProfileCore": "PROFILE CORE",
+  "coreAuto": "AUTO",
+  "coreAutoHint": "AUTO — the first suitable core by the priority in settings. A pinned core is tried first.",
+  "featureUnsupported": "Not supported: {cores}.",
+  "@featureUnsupported": {
+    "placeholders": {
+      "cores": {
+        "type": "String"
+      }
+    }
+  },
+  "reconnectBanner": "settings changed · will apply after reconnecting",
+  "reconnectButton": "RECONNECT",
+  "settingsReadonlySnack": "Profile is read-only",
+  "deeplinkHttpsOnly": "Import by link supports https only",
+  "deeplinkProfile": "Profile: \"{name}\"",
+  "@deeplinkProfile": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "deeplinkExported": "Exported: {date}",
+  "@deeplinkExported": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "deeplinkSource": "Source: {url}",
+  "@deeplinkSource": {
+    "placeholders": {
+      "url": {
+        "type": "String"
+      }
+    }
+  },
+  "deeplinkProfileImported": "Profile \"{name}\" imported",
+  "@deeplinkProfileImported": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "deeplinkConnectionsTitle": "Import connections",
+  "deeplinkBundle": "Bundle: \"{label}\"",
+  "@deeplinkBundle": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "deeplinkAdded": "Added: {items}",
+  "@deeplinkAdded": {
+    "placeholders": {
+      "items": {
+        "type": "String"
+      }
+    }
+  },
+  "deeplinkAddedNew": "{count, plural, one{Added: {count} new config} other{Added: {count} new configs}}",
+  "deeplinkFetchTitle": "Load from link?",
+  "deeplinkFetchMessage": "Import data will be loaded from {host} directly, bypassing the VPN: the server will see your real IP.",
+  "@deeplinkFetchMessage": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "deeplinkFetchButton": "Load",
+  "rustNoRawJson": "Full JSON import isn't available in the xray-rust core yet.",
+  "rustNoFinalmask": "The xray-rust core doesn't apply the link's fm (finalmask) parameter. Set fragmentation and noise in network settings.",
+  "rustVlessEncryption": "The xray-rust core only accepts VLESS with encryption=none so far.",
+  "rustVlessUuid": "The VLESS UUID must be a real UUID: the Rust core doesn't accept arbitrary strings.",
+  "rustVlessSecurity": "For VLESS in the xray-rust core choose TLS or Reality.",
+  "rustVlessFlow": "Unknown VLESS flow.",
+  "rustVision": "Vision with encryption=none is supported only over TCP/RAW with TLS or Reality.",
+  "rustTrojanPassword": "The Trojan password must be non-empty and at most 4096 bytes.",
+  "rustTrojanSecurity": "Trojan in the xray-rust core works only with TLS or Reality.",
+  "rustVmessId": "The VMess id must be a real UUID: the Rust core doesn't accept arbitrary strings.",
+  "rustVmessSecurity": "The xray-rust core doesn't support VMess with security={security} from the link: TLS and an unencrypted transport are available.",
+  "@rustVmessSecurity": {
+    "placeholders": {
+      "security": {
+        "type": "String"
+      }
+    }
+  },
+  "rustVmessTls": "The VMess link sets tls=\"{value}\": the parser understands only an exact \"tls\", and the profile would go without TLS. Fix the value in the link.",
+  "@rustVmessTls": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "rustSsMethod": "The Rust core supports only Shadowsocks 2022 (2022-blake3-aes-128-gcm, 2022-blake3-aes-256-gcm, 2022-blake3-chacha20-poly1305). Method \"{method}\" is not supported.",
+  "@rustSsMethod": {
+    "placeholders": {
+      "method": {
+        "type": "String"
+      }
+    }
+  },
+  "rustSsPlugin": "The xray-rust core doesn't support Shadowsocks plugins (SIP003, plugin=…).",
+  "rustSsPrefix": "The xray-rust core doesn't support the Outline prefix (prefix=…) for Shadowsocks.",
+  "rustTransport": "Transport not supported. Available: TCP/RAW, WebSocket, HTTPUpgrade, gRPC and xHTTP.",
+  "rustTcpHeader": "The Rust core doesn't support TCP with HTTP camouflage (headerType={header}).",
+  "@rustTcpHeader": {
+    "placeholders": {
+      "header": {
+        "type": "String"
+      }
+    }
+  },
+  "rustReality": "Reality is supported with TCP/RAW, gRPC and xHTTP. WebSocket/HTTPUpgrade need TLS.",
+  "rustEch": "ECH isn't available in the xray-rust core yet.",
+  "rustSsOneKey": "{method} needs a single key (no colon-separated identity keys).",
+  "@rustSsOneKey": {
+    "placeholders": {
+      "method": {
+        "type": "String"
+      }
+    }
+  },
+  "rustSsMaxKeys": "{method} allows up to 8 colon-separated keys.",
+  "@rustSsMaxKeys": {
+    "placeholders": {
+      "method": {
+        "type": "String"
+      }
+    }
+  },
+  "rustSsKey": "The Shadowsocks 2022 key ({method}) must be padded base64 of at least {bytes} bytes.",
+  "@rustSsKey": {
+    "placeholders": {
+      "method": {
+        "type": "String"
+      },
+      "bytes": {
+        "type": "int"
+      }
+    }
+  },
+  "rustInsecure": "Rust doesn't support allowInsecure without pinSHA256. Use a valid TLS certificate or set the server certificate's pinSHA256.",
+  "rustHy2Obfs": "Hysteria2 obfuscation \"{obfs}\" is not supported: the Rust core knows only Salamander.",
+  "@rustHy2Obfs": {
+    "placeholders": {
+      "obfs": {
+        "type": "String"
+      }
+    }
+  },
+  "rustSalamanderNoPassword": "Salamander (obfs=salamander) needs obfs-password.",
+  "rustSalamanderPassword": "The Salamander password (obfs-password) must be 4 to 4096 bytes.",
+  "rustPortHopping": "The port hopping list is too long: the Rust core accepts up to 65535 ports.",
+  "rustHy2Password": "The Hysteria2 password must be non-empty, at most 4096 bytes and without control characters.",
+  "rustTunOnly": "Only VPN (TUN) mode is available in the xray-rust core.",
+  "rustMux": "Mux isn't available in the xray-rust core: turn it off in network settings.",
+  "rustMtu": "The xray-rust core works with MTU 1500: restore that value in network settings.",
+  "rustSniffing": "Enable domain sniffing for GeoSite and domain rules.",
+  "rustAdBlockLimit": "Ad blocking (~187k domains) together with a large GeoSite category (cn, china-list, category-ads-all) exceeds the Rust core's limit of 250k domain rules. Turn off one of the two.",
+  "rustFragmentPackets": "The Rust core splits only the TLS ClientHello: set tlshello in the fragmentation \"Packets\" field.",
+  "rustFragmentLength": "Fragment chunk length in the Rust core is 1 to 16384 bytes.",
+  "rustFragmentDelay": "Fragmentation pause in the Rust core is at most 1000 ms.",
+  "rustFragmentXhttp": "The Rust core doesn't apply ClientHello fragmentation to xHTTP with a separate downloadSettings. Fragmentation is a global setting: turn it off in network settings to connect to this profile.",
+  "rustNoiseSs": "The Rust core doesn't send noise before Shadowsocks UDP (only for Hysteria2 and xHTTP over HTTP/3). Noise is a global setting: turn it off in network settings to connect to this profile.",
+  "rustNoiseDelay": "Noise pause in the Rust core is at most 1000 ms.",
+  "rustNoiseHex": "HEX noise must consist of pairs of hex digits.",
+  "rustNoiseBase64": "BASE64 noise must be standard padded base64.",
+  "rustNoisePacket": "A noise packet in the Rust core is at most 4096 bytes.",
+  "coreSingBoxOnly": "Protocol {protocol} is supported only by the sing-box core.",
+  "@coreSingBoxOnly": {
+    "placeholders": {
+      "protocol": {
+        "type": "String"
+      }
+    }
+  },
+  "validateNoProtocolParams": "No {protocol} protocol parameters",
+  "@validateNoProtocolParams": {
+    "placeholders": {
+      "protocol": {
+        "type": "String"
+      }
+    }
+  },
+  "validateEmptyAddress": "Empty server address",
+  "validateInvalidPort": "Invalid port: {port}",
+  "@validateInvalidPort": {
+    "placeholders": {
+      "port": {
+        "type": "int"
+      }
+    }
+  },
+  "validateEmptyUuid": "Empty UUID",
+  "validateEmptyPassword": "Empty password",
+  "routingSummaryGlobal": "Global",
+  "routingSummaryBypass": "Bypass",
+  "routingSummaryOnly": "Only",
+  "dnsCustomServer": "Custom server",
+  "coreNoneAvailable": "No cores available.",
+  "coreUnavailable": "Doesn't load on this device.",
+  "coreDisabled": "Disabled in settings.",
+  "wgOneInterface": "A single [Interface] section is required.",
+  "wgNoPeer": "No [Peer] section.",
+  "wgOnePeer": "A single [Peer] is supported; the config has {count}.",
+  "@wgOnePeer": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wgMissingKey": "The config has no {key}.",
+  "@wgMissingKey": {
+    "placeholders": {
+      "key": {
+        "type": "String"
+      }
+    }
+  },
+  "wgInvalidEndpoint": "Invalid Endpoint: {value}",
+  "@wgInvalidEndpoint": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "singboxNoNoise": "Noise isn't available in the sing-box core and is not applied.",
+  "singboxNoMux": "Xray Mux is incompatible with the sing-box core and is not applied.",
+  "singboxNoObservatory": "Observatory and managed Xray JSON configs aren't available in the sing-box core.",
+  "singboxNoRawConfig": "A full Xray JSON config isn't available in the sing-box core.",
+  "singboxNoPqv": "Reality: the sing-box core doesn't verify the ML-DSA signature (pqv) — the server is verified by the Reality key only.",
+  "singboxFragmentMode": "Fragmentation in the sing-box core covers only the TLS ClientHello; mode \"{mode}\" is not applied.",
+  "@singboxFragmentMode": {
+    "placeholders": {
+      "mode": {
+        "type": "String"
+      }
+    }
+  },
+  "singboxNoXhttp": "The XHTTP transport isn't available in the sing-box core.",
+  "singboxNoXrayExtra": "Advanced Xray settings (finalmask/extra) aren't available in the sing-box core.",
+  "singboxNoCertPin": "The sing-box core doesn't support certificate pinning: it checks only the public key hash.",
+  "singboxNoVlessEncryption": "VLESS Encryption isn't available in the sing-box core.",
+  "singboxFlow": "Flow \"{flow}\" isn't available in the sing-box core.",
+  "@singboxFlow": {
+    "placeholders": {
+      "flow": {
+        "type": "String"
+      }
+    }
+  },
+  "singboxNoSsPlugins": "Shadowsocks plugins aren't available in the sing-box core.",
+  "singboxSsMethod": "Shadowsocks method \"{method}\" isn't available in the sing-box core.",
+  "@singboxSsMethod": {
+    "placeholders": {
+      "method": {
+        "type": "String"
+      }
+    }
+  },
+  "singboxAwgReserved": "AmneziaWG doesn't support reserved.",
+  "singboxAwgHeaders": "AmneziaWG: header protection requires S1–S4 of at least 12.",
+  "singboxNoTcpHttp": "TCP with HTTP obfuscation isn't available in the sing-box core.",
+  "rustNoProxyOnly": "\"Proxy only\" mode isn't available in the xray-rust core: it works only through TUN.",
+  "rustIcmpLocal": "ICMP is handled locally by the xray-rust core; the setting is not applied.",
+  "rustMtuIgnored": "The xray-rust core works with MTU 1500; another value is not applied.",
+  "rustMuxIgnored": "Mux isn't available in the xray-rust core and is not applied.",
+  "rustNoObservatory": "Observatory and managed JSON configs aren't available in the xray-rust core.",
+  "rustNoRawConfig": "A full JSON config isn't available in the xray-rust core.",
+  "rustSniffingForced": "Domain rules in the xray-rust core require domain sniffing — it is enabled for this connection.",
+  "rustAdBlockDropped": "Ad blocking together with a large GeoSite category exceeds the xray-rust core's limit of 250k domain rules — ad blocking is not applied.",
+  "rustFragmentDropped": "Fragmentation is not applied: {reason}",
+  "@rustFragmentDropped": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "rustNoiseDropped": "Noise is not applied: {reason}",
+  "@rustNoiseDropped": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "xrayNoH2Quic": "The HTTP/2 and QUIC transports were removed from Xray-core: the server needs to move to xHTTP.",
+  "xrayInsecure": "Xray-core no longer supports allowInsecure: set the server certificate's pinSHA256 or use a valid certificate.",
+  "xrayPinFormat": "pinSHA256 must be the certificate's SHA-256: 64 hex characters or base64 of 32 bytes.",
+  "xrayRawJsonParse": "Couldn't parse the subscription JSON config: {error}",
+  "@xrayRawJsonParse": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "profileDefaultName": "Default",
+  "geoNoFilesDir": "Couldn't get the files directory",
+  "subHwidLimit": "Subscription device limit reached (HWID)",
+  "subEmpty": "The subscription returned no configurations",
+  "updateUnsupportedDevice": "Device not supported: {abi}",
+  "@updateUnsupportedDevice": {
+    "placeholders": {
+      "abi": {
+        "type": "String"
+      }
+    }
+  },
+  "updateNoReleaseInfo": "Couldn't get release info",
+  "updateCheckError": "Check error: {error}",
+  "@updateCheckError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "updateDownloadError": "Download error: {error}",
+  "@updateDownloadError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "updateInstallError": "Install error",
+  "vpnConnectTimeout": "Connection timeout",
+  "vpnConnectError": "Connection error",
+  "vpnNoConfigSelected": "No configuration selected",
+  "@deeplinkAddedNew": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
+}

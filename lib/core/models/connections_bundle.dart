@@ -26,20 +26,20 @@ class ConnectionsBundle {
   });
 
   Map<String, dynamic> toJson() => {
-        'version': version,
-        'exportedAt': exportedAt.toIso8601String(),
-        if (label != null) 'label': label,
-        'configs': configs.map((c) => c.toJson()).toList(),
-        'subscriptions': subscriptions.map((s) => s.toJson()).toList(),
-      };
+    'version': version,
+    'exportedAt': exportedAt.toIso8601String(),
+    if (label != null) 'label': label,
+    'configs': configs.map((c) => c.toJson()).toList(),
+    'subscriptions': subscriptions.map((s) => s.toJson()).toList(),
+  };
 
   Map<String, dynamic> toCompactJson() => {
-        'version': version,
-        'exportedAt': exportedAt.toIso8601String(),
-        if (label != null) 'label': label,
-        'configs': configs.where((c) => c.rawUri != null).map((c) => c.rawUri!).toList(),
-        'subscriptions': subscriptions.map((s) => s.url).toList(),
-      };
+    'version': version,
+    'exportedAt': exportedAt.toIso8601String(),
+    if (label != null) 'label': label,
+    'configs': configs.where((c) => c.rawUri != null).map((c) => c.rawUri!).toList(),
+    'subscriptions': subscriptions.map((s) => s.url).toList(),
+  };
 
   factory ConnectionsBundle.fromJson(Map<String, dynamic> json) {
     final rawUris = <String>[];

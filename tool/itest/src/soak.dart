@@ -24,7 +24,7 @@ enum Fault {
   final String cli;
 
   static Fault fromCli(String s) =>
-      values.firstWhere((f) => f.cli == s, orElse: () => throw ArgumentError('неизвестный сбой: $s'));
+      values.firstWhere((f) => f.cli == s, orElse: () => throw ArgumentError('unknown fault: $s'));
 }
 
 typedef ProbeSample = ({DateTime t, bool ok, String? appState});
@@ -39,16 +39,16 @@ class FaultResult {
   FaultResult(this.fault, this.verdict, this.recovery, this.note, {DateTime? at}) : at = at ?? DateTime.now();
 
   Map<String, Object?> toJson() => {
-        'fault': fault.cli,
-        'verdict': verdict.name,
-        'recoveryMs': recovery?.inMilliseconds,
-        'note': note,
-        'at': at.toIso8601String(),
-      };
+    'fault': fault.cli,
+    'verdict': verdict.name,
+    'recoveryMs': recovery?.inMilliseconds,
+    'note': note,
+    'at': at.toIso8601String(),
+  };
 }
 
-/// Восстановление после сбоя: трафик в пределах [failAfter] — pass; иначе
-/// zombie, если приложение всё это время показывало connected, или fail.
+/// Recovery after a fault: traffic within [failAfter] — pass; otherwise
+/// zombie if the app showed connected all that time, or fail.
 FaultResult classifyRecovery({
   required Fault fault,
   required DateTime restoredAt,
@@ -64,16 +64,24 @@ FaultResult classifyRecovery({
   final failing = after.where((s) => !s.ok).toList();
   final connected = failing.reversed.takeWhile((s) => s.appState == 'connected').toList();
   if (connected.length > 1 && connected.first.t.difference(connected.last.t) >= zombieAfter) {
-    return FaultResult(fault, Verdict.zombie, null,
-        'connected without traffic for ${connected.first.t.difference(connected.last.t).inSeconds}s',
-        at: restoredAt);
+    return FaultResult(
+      fault,
+      Verdict.zombie,
+      null,
+      'connected without traffic for ${connected.first.t.difference(connected.last.t).inSeconds}s',
+      at: restoredAt,
+    );
   }
-  return FaultResult(fault, Verdict.fail, null,
-      'no traffic ${failAfter.inSeconds}s after restore (state ${after.lastOrNull?.appState})',
-      at: restoredAt);
+  return FaultResult(
+    fault,
+    Verdict.fail,
+    null,
+    'no traffic ${failAfter.inSeconds}s after restore (state ${after.lastOrNull?.appState})',
+    at: restoredAt,
+  );
 }
 
-/// Спокойный интервал: ≥ [minRun] проваленных проб подряд — отвал без причины.
+/// Quiet interval: ≥ [minRun] failed probes in a row — a drop without a cause.
 FaultResult classifyIdle(List<ProbeSample> samples, {int minRun = 3}) {
   var run = <ProbeSample>[];
   for (var i = 0; i <= samples.length; i++) {
@@ -85,18 +93,21 @@ FaultResult classifyIdle(List<ProbeSample> samples, {int minRun = 3}) {
     if (run.length >= minRun) {
       final zombie = run.every((r) => r.appState == 'connected');
       final secs = run.last.t.difference(run.first.t).inSeconds;
-      return FaultResult(Fault.idle, zombie ? Verdict.zombie : Verdict.fail, null,
-          'outage ${secs}s from ${run.first.t.toIso8601String().substring(11, 19)}, '
-          '${s == null ? 'not recovered' : 'recovered'} (state ${run.last.appState})',
-          at: run.first.t);
+      return FaultResult(
+        Fault.idle,
+        zombie ? Verdict.zombie : Verdict.fail,
+        null,
+        'outage ${secs}s from ${run.first.t.toIso8601String().substring(11, 19)}, '
+        '${s == null ? 'not recovered' : 'recovered'} (state ${run.last.appState})',
+        at: run.first.t,
+      );
     }
     run = [];
   }
-  return FaultResult(Fault.idle, Verdict.pass, null, '${samples.length} probes ok',
-      at: samples.firstOrNull?.t);
+  return FaultResult(Fault.idle, Verdict.pass, null, '${samples.length} probes ok', at: samples.firstOrNull?.t);
 }
 
-/// Долгий прогон одного ядра со сбоями.
+/// A long run of one core with faults.
 class Soak {
   final AgentClient agent;
   final Probes probes;
@@ -145,18 +156,20 @@ class Soak {
   void _event(String kind, [Map<String, Object?> extra = const {}]) =>
       _timeline.writeln(jsonEncode({'t': DateTime.now().toIso8601String(), 'kind': kind, ...extra}));
 
-  /// [fast] — замер восстановления: без повтора и с коротким таймаутом,
-  /// чтобы время восстановления не включало ретраи упавших попыток.
+  /// [fast] — recovery measurement: no retry and a short timeout,
+  /// so the recovery time doesn't include retries of failed attempts.
   Future<ProbeSample> _probe({bool fast = false}) async {
-    // Различимый сервис: ответ ≠ его прямому IP; иначе достаточно любого ответа.
-    final urls = egress != null && egress == baseline.directRuIp ? const <String>[] : informative(baseline.direct, egress);
+    // A distinguishable service: answer ≠ its direct IP; otherwise any answer is enough.
+    final urls = egress != null && egress == baseline.directRuIp
+        ? const <String>[]
+        : informative(baseline.direct, egress);
     final url = urls.isEmpty ? echoMain.first : urls.first;
     Future<String?> get(String u) =>
         fast ? probes.ip(u, timeout: const Duration(seconds: 5), retries: 0) : probes.ip(u);
     var (u, ip) = (url, await get(url));
     if (ip == null && urls.length > 1) (u, ip) = (urls[1], await get(urls[1]));
-    // Вне Wi-Fi из baseline прямой IP другой — «не прямой» ещё не значит «через VPN».
-    // Ожидаемый выход — подтверждённый на Wi-Fi (адрес входа сервера может отличаться).
+    // Off Wi-Fi the direct IP differs from the baseline — "not direct" doesn't yet mean "through VPN".
+    // The expected exit is the one confirmed on Wi-Fi (the server's entry address may differ).
     final expected = strictEgress ? egress : _tunnelIp ?? egress;
     final byEgress = expected != null && (strictEgress || !_onWifi);
     final ok = ip != null && (byEgress ? ip == expected : urls.isEmpty || ip != baseline.direct[u]);
@@ -166,7 +179,7 @@ class Soak {
     return s;
   }
 
-  /// Пробы каждые [probeInterval] в течение [d]; [untilOk] — до первой успешной.
+  /// Probes every [probeInterval] during [d]; [untilOk] — until the first success.
   Future<List<ProbeSample>> _sample(Duration d, {bool untilOk = false}) async {
     final out = <ProbeSample>[];
     final end = DateTime.now().add(d);
@@ -205,14 +218,14 @@ class Soak {
     try {
       await collectDiag(shell, d);
     } catch (e) {
-      // Без диагностики результат всё равно должен попасть в отчёт.
+      // Even without diagnostics the result must get into the report.
       _event('note', {'text': 'diag: $e'});
     }
     File('${d.path}/logcat.txt').writeAsStringSync('${maskSecrets(_recent.join('\n'))}\n');
     File('${d.path}/result.json').writeAsStringSync(jsonEncode(r.toJson()));
   }
 
-  /// Always-on VPN точно выключен (`null`); при ошибке или любом пакете — нет.
+  /// Always-on VPN is definitely off (`null`); on an error or any packet — it isn't.
   Future<bool> _alwaysOnOff() async {
     try {
       final r = await shell.run(['shell', 'settings get secure always_on_vpn_app']);
@@ -227,7 +240,7 @@ class Soak {
     onResult(r);
   }
 
-  /// Возвращает момент восстановления сети.
+  /// Returns the moment the network recovered.
   Future<DateTime> _inject(Fault f) async {
     _event('fault-start', {'fault': f.cli});
     _onWifi = false;
@@ -257,7 +270,7 @@ class Soak {
       case Fault.killApp:
         _faultLog = [];
         await device.killApp(itestPackage);
-        // Убитый процесс маркеров не шлёт: прежнее `connected` дало бы ложный ZOMBIE.
+        // A killed process sends no markers: the previous `connected` would give a false ZOMBIE.
         agent.lastState = null;
       case Fault.idle:
         break;
@@ -276,7 +289,8 @@ class Soak {
     final deadline = DateTime.now().add(duration);
     final schedule = [for (var i = 0; i < repeat; i++) ...faults];
     final idleLen = Duration(
-        seconds: (duration.inSeconds ~/ (2 * (schedule.isEmpty ? 1 : schedule.length))).clamp(60, 600));
+      seconds: (duration.inSeconds ~/ (2 * (schedule.isEmpty ? 1 : schedule.length))).clamp(60, 600),
+    );
     try {
       if (!await _connect()) {
         final r = FaultResult(Fault.idle, Verdict.fail, null, 'initial connect failed');
@@ -284,8 +298,8 @@ class Soak {
         _report(r);
         return;
       }
-      // Спокойный интервал → сбой → восстановление; по кругу до [duration].
-      // С --repeat > 1 — ровно repeat проходов по списку сбоев.
+      // Quiet interval → fault → recovery; in a loop until [duration].
+      // With --repeat > 1 — exactly repeat passes over the fault list.
       var i = 0;
       while (DateTime.now().isBefore(deadline)) {
         final idle = classifyIdle(await _sample(idleLen));
@@ -299,17 +313,22 @@ class Soak {
         final f = schedule[i++ % schedule.length];
         final restoredAt = await _inject(f);
         var r = classifyRecovery(
-            fault: f,
-            restoredAt: restoredAt,
-            after: await _sample(const Duration(minutes: 3, seconds: 30), untilOk: true));
-        // Android не перезапустил сервис — его гонка с системным Vpn (отвязка до
-        // обработки смерти процесса); без always-on VPN это поведение ОС. Только
-        // при подтверждении в logcat, иначе провал остаётся FAIL.
+          fault: f,
+          restoredAt: restoredAt,
+          after: await _sample(const Duration(minutes: 3, seconds: 30), untilOk: true),
+        );
+        // Android didn't restart the service — its race with the system Vpn (unbinding before
+        // the process death is handled); without always-on VPN this is OS behavior. Only
+        // when confirmed in logcat, otherwise the failure stays FAIL.
         final log = _faultLog ?? const <String>[];
         _faultLog = null;
-        final osRace = log.any((l) => l.contains('Exception when unbinding service $itestPackage/')) &&
+        final osRace =
+            log.any((l) => l.contains('Exception when unbinding service $itestPackage/')) &&
             !log.any((l) => l.contains('Scheduling restart of crashed service $itestPackage/'));
-        if (f == Fault.killApp && r.verdict != Verdict.pass && agent.lastState == null && osRace &&
+        if (f == Fault.killApp &&
+            r.verdict != Verdict.pass &&
+            agent.lastState == null &&
+            osRace &&
             await _alwaysOnOff()) {
           r = FaultResult(f, Verdict.skip, null, 'Android did not restart the service (always-on VPN off)', at: r.at);
         }

@@ -8,6 +8,7 @@ import '../core/services/update_service.dart';
 import '../core/constants/app_constants.dart';
 import 'vpn_provider.dart';
 import 'settings_provider.dart';
+import '../l10n/l10n.dart';
 
 sealed class UpdateState {}
 
@@ -65,7 +66,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
       final currentVersion = pkgInfo.version;
       final abi = await _channel.invokeMethod<String>('getAbi') ?? 'arm64-v8a';
       if (!AppConstants.supportedAbis.contains(abi)) {
-        state = UpdateError('Устройство не поддерживается: $abi');
+        state = UpdateError(L10n.current.updateUnsupportedDevice(abi));
         return;
       }
       final vpn = ref.read(vpnProvider);
@@ -81,7 +82,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
         force: true,
       );
       if (update == null) {
-        state = UpdateError('Не удалось получить данные о релизе');
+        state = UpdateError(L10n.current.updateNoReleaseInfo);
         return;
       }
       final path = await _apkPath(update.version, abi);
@@ -93,7 +94,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
         state = UpdateUpToDate(update);
       }
     } catch (e) {
-      state = UpdateError('Ошибка проверки: $e');
+      state = UpdateError(L10n.current.updateCheckError('$e'));
     }
   }
 
@@ -109,33 +110,36 @@ class UpdateNotifier extends Notifier<UpdateState> {
     final path = await _apkPath(info.version, abi);
     _currentApkPath = path;
 
-    state = UpdateDownloading(info,
-        downloaded: File(path).existsSync() ? File(path).lengthSync() : 0,
-        total: info.totalBytes ?? -1);
-
-    // Как и проверка релиза — через туннель, если он поднят (#150).
-    final socks = ref.read(vpnProvider).tunnelSocks;
-    _dlSub = _service.downloadApk(
-      info.downloadUrl,
-      path,
-      socksPort: socks?.port,
-      socksUser: socks?.user,
-      socksPassword: socks?.password,
-    ).listen(
-      (progress) {
-        if (progress.done) {
-          state = UpdateDownloaded(info, path);
-          _dlSub = null;
-        } else {
-          state = UpdateDownloading(info,
-              downloaded: progress.downloaded, total: progress.total);
-        }
-      },
-      onError: (e) {
-        state = UpdateError('Ошибка загрузки: $e', retryInfo: info);
-        _dlSub = null;
-      },
+    state = UpdateDownloading(
+      info,
+      downloaded: File(path).existsSync() ? File(path).lengthSync() : 0,
+      total: info.totalBytes ?? -1,
     );
+
+    // Like the release check — through the tunnel if it is up (#150).
+    final socks = ref.read(vpnProvider).tunnelSocks;
+    _dlSub = _service
+        .downloadApk(
+          info.downloadUrl,
+          path,
+          socksPort: socks?.port,
+          socksUser: socks?.user,
+          socksPassword: socks?.password,
+        )
+        .listen(
+          (progress) {
+            if (progress.done) {
+              state = UpdateDownloaded(info, path);
+              _dlSub = null;
+            } else {
+              state = UpdateDownloading(info, downloaded: progress.downloaded, total: progress.total);
+            }
+          },
+          onError: (Object e) {
+            state = UpdateError(L10n.current.updateDownloadError('$e'), retryInfo: info);
+            _dlSub = null;
+          },
+        );
   }
 
   Future<void> cancelDownload() async {
@@ -144,8 +148,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
     final cur = state;
     if (cur is UpdateDownloading) {
       final path = _currentApkPath;
-      final resumable =
-          path != null && File(path).existsSync() ? File(path).lengthSync() : 0;
+      final resumable = path != null && File(path).existsSync() ? File(path).lengthSync() : 0;
       state = UpdateAvailable(cur.info, resumableBytes: resumable);
     }
   }
@@ -156,7 +159,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
       await _cleanOldApks(keepPath: filePath);
       state = UpdateIdle();
     } on PlatformException catch (e) {
-      state = UpdateError(e.message ?? 'Ошибка установки');
+      state = UpdateError(e.message ?? L10n.current.updateInstallError);
     }
   }
 
@@ -188,5 +191,4 @@ class UpdateNotifier extends Notifier<UpdateState> {
   }
 }
 
-final updateProvider =
-    NotifierProvider<UpdateNotifier, UpdateState>(UpdateNotifier.new);
+final updateProvider = NotifierProvider<UpdateNotifier, UpdateState>(UpdateNotifier.new);

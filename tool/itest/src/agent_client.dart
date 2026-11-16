@@ -23,8 +23,8 @@ class ItestAgentError implements Exception {
 
 typedef AgentState = ({String state, DateTime t});
 
-/// Клиент агента itest-сборки: команды через `am start`, ответы и состояния —
-/// из logcat-маркеров `TEAPOD_ITEST`.
+/// itest build agent client: commands via `am start`, responses and states —
+/// from `TEAPOD_ITEST` logcat markers.
 class AgentClient {
   final Shell shell;
   final String pkg;
@@ -32,10 +32,10 @@ class AgentClient {
   final _states = StreamController<AgentState>.broadcast();
   var _seq = 0;
 
-  /// Последнее состояние VPN по нативному маркеру.
+  /// The last VPN state from the native marker.
   String? lastState;
 
-  /// Маркер последнего `connected` (содержит socksPort/socksUser/socksPassword).
+  /// The last `connected` marker (contains socksPort/socksUser/socksPassword).
   Map<String, dynamic>? lastConnected;
 
   AgentClient(this.shell, Stream<String> logcat, {this.pkg = itestPackage}) {
@@ -62,39 +62,49 @@ class AgentClient {
     }
   }
 
-  Future<Object?> send(String op,
-      [Map<String, dynamic> args = const {}, Duration timeout = const Duration(seconds: 30)]) async {
+  Future<Object?> send(
+    String op, [
+    Map<String, dynamic> args = const {},
+    Duration timeout = const Duration(seconds: 30),
+  ]) async {
     final id = '${++_seq}-${DateTime.now().millisecondsSinceEpoch}';
     final reply = Completer<Map<String, dynamic>>();
     _replies[id] = reply;
     final cmd = jsonEncode({'id': id, 'op': op, ...args});
-    // Повтор, если вызов не завершился (Adb сам повторяет зависшие вызовы, это
-    // страховка для других Shell).
+    // Retry if the call didn't finish (Adb retries hung calls itself, this
+    // is a safeguard for other Shells).
     final am = ['shell', 'am start -n $pkg/$_activity -a com.teapodstream.ITEST --es cmd ${shQuote(cmd)}'];
     if ((await shell.run(am, timeout: const Duration(seconds: 15))).code == -1) {
       await shell.run(am, timeout: const Duration(seconds: 15));
     }
-    var m = await reply.future.timeout(timeout, onTimeout: () {
-      _replies.remove(id);
-      throw ItestTimeout('$op: нет ответа агента за ${timeout.inSeconds} с');
-    });
+    var m = await reply.future.timeout(
+      timeout,
+      onTimeout: () {
+        _replies.remove(id);
+        throw ItestTimeout('$op: no agent response within ${timeout.inSeconds} s');
+      },
+    );
     if (m['file'] is String) {
       final file = m['file'];
       final r = await shell.run(['shell', 'run-as $pkg cat $file']);
-      if (!r.ok) throw ItestAgentError('$op: не прочитан $file (${r.code})');
+      if (!r.ok) throw ItestAgentError('$op: $file not read (${r.code})');
       m = jsonDecode(r.out) as Map<String, dynamic>;
-      // Удаляем только прочитанный файл; сбой очистки ответу не мешает.
+      // Delete only the read file; a cleanup failure doesn't affect the response.
       unawaited(shell.run(['shell', 'run-as $pkg rm -f $file']).then((_) {}, onError: (_) {}));
     }
     if (m['ok'] != true) throw ItestAgentError('$op: ${m['error']}');
     return m['data'];
   }
 
-  /// Ждёт состояние из [targets]; если оно уже текущее — сразу.
+  /// Waits for a state from [targets]; if it is already current — right away.
   Future<String> waitState(Set<String> targets, Duration timeout) async {
     if (targets.contains(lastState)) return lastState!;
-    final s = await states.firstWhere((s) => targets.contains(s.state)).timeout(timeout,
-        onTimeout: () => throw ItestTimeout('нет состояния $targets за ${timeout.inSeconds} с (сейчас $lastState)'));
+    final s = await states
+        .firstWhere((s) => targets.contains(s.state))
+        .timeout(
+          timeout,
+          onTimeout: () => throw ItestTimeout('no state $targets within ${timeout.inSeconds} s (now $lastState)'),
+        );
     return s.state;
   }
 }

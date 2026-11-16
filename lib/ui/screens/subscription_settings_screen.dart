@@ -8,21 +8,20 @@ import '../theme/app_theme.dart';
 import '../widgets/breadcrumb_bar.dart';
 import '../widgets/hero_panel.dart';
 import '../widgets/settings_shared.dart';
+import '../../l10n/l10n.dart';
 
-/// Настройки подписок: автообновление по расписанию, HWID, User-Agent.
+/// Subscription settings: scheduled auto-refresh, HWID, User-Agent.
 class SubscriptionSettingsScreen extends ConsumerStatefulWidget {
-  /// Экран открывается из Настроек и с вкладки «Конфиги» — родитель для breadcrumb.
+  /// Opened from Settings and from the Configs tab — breadcrumb parent.
   final String breadcrumbParent;
 
   const SubscriptionSettingsScreen({super.key, required this.breadcrumbParent});
 
   @override
-  ConsumerState<SubscriptionSettingsScreen> createState() =>
-      _SubscriptionSettingsScreenState();
+  ConsumerState<SubscriptionSettingsScreen> createState() => _SubscriptionSettingsScreenState();
 }
 
-class _SubscriptionSettingsScreenState
-    extends ConsumerState<SubscriptionSettingsScreen> {
+class _SubscriptionSettingsScreenState extends ConsumerState<SubscriptionSettingsScreen> {
   TextEditingController? _uaCtrl;
 
   void _ensureControllers(AppSettings s) {
@@ -41,42 +40,41 @@ class _SubscriptionSettingsScreenState
   Widget build(BuildContext context) {
     final t = Theme.of(context).extension<TeapodTokens>()!;
     final settingsAsync = ref.watch(settingsProvider);
-    final profileState =
-        ref.watch(profileProvider).maybeWhen(data: (d) => d, orElse: () => null);
+    final profileState = ref.watch(profileProvider).maybeWhen(data: (d) => d, orElse: () => null);
     final locked = profileState?.isReadonly ?? false;
 
     return Scaffold(
       body: SafeArea(
         child: settingsAsync.when(
-          loading: () => Center(
-              child: CircularProgressIndicator(color: t.accent, strokeWidth: 1.5)),
+          loading: () => Center(child: CircularProgressIndicator(color: t.accent, strokeWidth: 1.5)),
           error: (e, _) => Center(
-              child: Text('Ошибка: $e', style: AppTheme.mono(size: 12, color: t.danger))),
+            child: Text(context.l10n.commonErrorWith('$e'), style: AppTheme.mono(size: 12, color: t.danger)),
+          ),
           data: (s) {
             _ensureControllers(s);
             return Column(
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  decoration:
-                      BoxDecoration(border: Border(bottom: BorderSide(color: t.line))),
+                  decoration: BoxDecoration(
+                    border: Border(bottom: BorderSide(color: t.line)),
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('teapod.stream // subs',
-                          style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
-                      Text(s.subAutoRefresh ? 'auto [${s.subAutoRefreshHours}h]' : 'auto [off]',
-                          style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+                      Text(
+                        'teapod.stream // subs',
+                        style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1),
+                      ),
+                      Text(
+                        s.subAutoRefresh ? 'auto [${s.subAutoRefreshHours}h]' : 'auto [off]',
+                        style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1),
+                      ),
                     ],
                   ),
                 ),
-                BreadcrumbBar(
-                    t: t, parent: widget.breadcrumbParent, current: 'subscriptions'),
-                HeroPanel(
-                  t: t,
-                  tagline: 'ПОДПИСКИ · ОБНОВЛЕНИЕ',
-                  title: 'SUBS',
-                ),
+                BreadcrumbBar(t: t, parent: widget.breadcrumbParent, current: 'subscriptions'),
+                HeroPanel(t: t, tagline: context.l10n.subsTagline, title: 'SUBS'),
                 Expanded(
                   child: ListView(
                     padding: EdgeInsets.zero,
@@ -84,8 +82,8 @@ class _SubscriptionSettingsScreenState
                       SetSectionHeader(t: t, addr: '0x10', label: 'refresh'),
                       SetRowToggle(
                         t: t,
-                        title: 'Автообновление подписок',
-                        hint: 'Обновлять подписки по расписанию',
+                        title: context.l10n.subsAutoRefresh,
+                        hint: context.l10n.subsAutoRefreshHint,
                         value: s.subAutoRefresh,
                         locked: locked,
                         onChange: (v) => _update(s.copyWith(subAutoRefresh: v)),
@@ -93,28 +91,23 @@ class _SubscriptionSettingsScreenState
                       if (s.subAutoRefresh)
                         SetInlineField(
                           t: t,
-                          label: 'Интервал',
+                          label: context.l10n.subsInterval,
                           locked: locked,
                           child: SetSegSquare(
                             t: t,
                             value: s.subAutoRefreshHours.toString(),
-                            opts: const [
-                              ('1', '1ч'),
-                              ('3', '3ч'),
-                              ('6', '6ч'),
-                              ('12', '12ч'),
-                              ('24', '24ч'),
+                            opts: [
+                              for (final h in const [1, 3, 6, 12, 24]) ('$h', context.l10n.unitHours(h)),
                             ],
                             locked: locked,
-                            onChanged: (v) =>
-                                _update(s.copyWith(subAutoRefreshHours: int.parse(v))),
+                            onChanged: (v) => _update(s.copyWith(subAutoRefreshHours: int.parse(v))),
                           ),
                         ),
                       SetSectionHeader(t: t, addr: '0x20', label: 'identity'),
                       SetRowToggle(
                         t: t,
                         title: 'HWID',
-                        hint: 'Отправлять ID устройства для привязки подписки',
+                        hint: context.l10n.subsHwidHint,
                         value: s.hwidEnabled,
                         locked: locked,
                         onChange: (v) => _update(s.copyWith(hwidEnabled: v)),
@@ -133,20 +126,22 @@ class _SubscriptionSettingsScreenState
                             onEditingComplete: () => FocusScope.of(context).unfocus(),
                             style: AppTheme.mono(size: 13, color: t.text),
                             decoration: InputDecoration(
-                              hintText: 'по умолчанию',
+                              hintText: context.l10n.commonDefaultLower,
                               hintStyle: AppTheme.mono(size: 12, color: t.textMuted),
-                              contentPadding:
-                                  const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                               isDense: true,
                               enabledBorder: OutlineInputBorder(
-                                  borderSide: BorderSide(color: t.line),
-                                  borderRadius: BorderRadius.zero),
+                                borderSide: BorderSide(color: t.line),
+                                borderRadius: BorderRadius.zero,
+                              ),
                               focusedBorder: OutlineInputBorder(
-                                  borderSide: BorderSide(color: t.accent),
-                                  borderRadius: BorderRadius.zero),
+                                borderSide: BorderSide(color: t.accent),
+                                borderRadius: BorderRadius.zero,
+                              ),
                               disabledBorder: OutlineInputBorder(
-                                  borderSide: BorderSide(color: t.lineSoft),
-                                  borderRadius: BorderRadius.zero),
+                                borderSide: BorderSide(color: t.lineSoft),
+                                borderRadius: BorderRadius.zero,
+                              ),
                             ),
                           ),
                         ),

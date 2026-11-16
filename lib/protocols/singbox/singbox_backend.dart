@@ -6,17 +6,18 @@ import '../../core/models/heartbeat_settings.dart';
 import '../../core/models/vpn_config.dart';
 import '../../core/models/xray_tuning.dart';
 import 'singbox_config_builder.dart';
+import '../../l10n/l10n.dart';
 
-/// sing-box за tun2socks: неподдерживаемые профили — disabled, настройки Xray,
-/// которых нет в sing-box, игнорируются с предупреждением.
+/// sing-box behind tun2socks: unsupported profiles are disabled, Xray settings
+/// that sing-box lacks are ignored with a warning.
 class SingBoxBackend implements CoreBackend {
   const SingBoxBackend();
 
-  static const _unsupported = <CoreFeature, String>{
-    CoreFeature.noise: 'Шумы недоступны в ядре sing-box и не применяются.',
-    CoreFeature.mux: 'Mux Xray несовместим с ядром sing-box и не применяется.',
-    CoreFeature.observatory: 'Observatory и управляемые JSON-конфиги Xray недоступны в ядре sing-box.',
-    CoreFeature.rawConfig: 'Полный JSON-конфиг Xray недоступен в ядре sing-box.',
+  static Map<CoreFeature, String> get _unsupported => {
+    CoreFeature.noise: L10n.current.singboxNoNoise,
+    CoreFeature.mux: L10n.current.singboxNoMux,
+    CoreFeature.observatory: L10n.current.singboxNoObservatory,
+    CoreFeature.rawConfig: L10n.current.singboxNoRawConfig,
   };
 
   @override
@@ -33,19 +34,18 @@ class SingBoxBackend implements CoreBackend {
 
   @override
   SettingsCheck checkOptions(VpnConfig config, VpnEngineOptions options) => (
-        blocking: null,
-        warnings: [
-          ..._sanitize(options).warnings,
-          // Подпись ML-DSA — лишнее расширение сертификата; основная проверка Reality та же.
-          if (config.postQuantumKey?.isNotEmpty ?? false)
-            'Reality: ядро sing-box не проверяет подпись ML-DSA (pqv) — сервер проверяется только по ключу Reality.',
-        ],
-      );
+    blocking: null,
+    warnings: [
+      ..._sanitize(options).warnings,
+      // The ML-DSA signature is an extra certificate extension; the main Reality check is the same.
+      if (config.postQuantumKey?.isNotEmpty ?? false) L10n.current.singboxNoPqv,
+    ],
+  );
 
   @override
   HeartbeatProbe effectiveHeartbeatProbe(HeartbeatProbe requested) => requested;
 
-  /// QUIC режет tun2socks, как у Go-ядра: Vision отвергает UDP/443.
+  /// tun2socks drops QUIC, as with the Go core: Vision rejects UDP/443.
   @override
   bool effectiveQuicBlock({required bool requested, required String? flow}) =>
       requested || (flow?.contains('vision') ?? false);
@@ -73,7 +73,7 @@ class SingBoxBackend implements CoreBackend {
           )
           ..drop(
             when: o.fragment.enabled && packets != 'tlshello',
-            warning: 'Фрагментация в ядре sing-box — только TLS ClientHello; режим «$packets» не применяется.',
+            warning: L10n.current.singboxFragmentMode(packets),
             fix: (v) => v.copyWith(fragment: v.fragment.copyWith(enabled: false)),
           ))
         .result;

@@ -12,27 +12,35 @@ void main() {
   group('classifyRecovery', () {
     test('first ok probe within window → pass with recovery time', () {
       final r = classifyRecovery(
-          fault: Fault.offline10s, restoredAt: t0, after: [s(20, false, 'connecting'), s(40, true)]);
+        fault: Fault.offline10s,
+        restoredAt: t0,
+        after: [s(20, false, 'connecting'), s(40, true)],
+      );
       expect(r.verdict, Verdict.pass);
       expect(r.recovery, const Duration(seconds: 40));
     });
 
     test('no traffic for 4 min while reconnecting → fail', () {
       final r = classifyRecovery(
-          fault: Fault.offline1m, restoredAt: t0, after: [for (var i = 20; i <= 240; i += 20) s(i, false, 'connecting')]);
+        fault: Fault.offline1m,
+        restoredAt: t0,
+        after: [for (var i = 20; i <= 240; i += 20) s(i, false, 'connecting')],
+      );
       expect(r.verdict, Verdict.fail);
       expect(r.recovery, isNull);
     });
 
     test('no traffic for 4 min while app says connected → zombie', () {
       final r = classifyRecovery(
-          fault: Fault.wifiLte, restoredAt: t0, after: [for (var i = 20; i <= 240; i += 20) s(i, false)]);
+        fault: Fault.wifiLte,
+        restoredAt: t0,
+        after: [for (var i = 20; i <= 240; i += 20) s(i, false)],
+      );
       expect(r.verdict, Verdict.zombie);
     });
 
     test('ok probe only after the window → fail', () {
-      final r = classifyRecovery(
-          fault: Fault.doze, restoredAt: t0, after: [s(60, false, 'connecting'), s(200, true)]);
+      final r = classifyRecovery(fault: Fault.doze, restoredAt: t0, after: [s(60, false, 'connecting'), s(200, true)]);
       expect(r.verdict, Verdict.fail);
     });
   });
@@ -53,8 +61,10 @@ void main() {
     });
 
     test('outage with connecting state → fail, with connected → zombie', () {
-      expect(classifyIdle([s(0, false, 'connecting'), s(20, false, 'connecting'), s(40, false, 'connecting')]).verdict,
-          Verdict.fail);
+      expect(
+        classifyIdle([s(0, false, 'connecting'), s(20, false, 'connecting'), s(40, false, 'connecting')]).verdict,
+        Verdict.fail,
+      );
       expect(classifyIdle([s(0, false), s(20, false), s(40, false)]).verdict, Verdict.zombie);
     });
   });

@@ -4,8 +4,8 @@ import 'package:http/http.dart' as http;
 import 'package:socks5_proxy/exceptions.dart';
 import 'package:socks5_proxy/socks.dart';
 
-/// Локальный SOCKS-инбаунд активного туннеля. Само приложение исключено из TUN,
-/// поэтому без него собственные загрузки (подписки, гео-базы) идут мимо VPN (#150).
+/// Local SOCKS inbound of the active tunnel. The app itself is excluded from TUN,
+/// so without it the app's own downloads (subscriptions, geo databases) bypass the VPN (#150).
 class TunnelSocks {
   final int port;
   final String user;
@@ -13,35 +13,37 @@ class TunnelSocks {
 
   const TunnelSocks(this.port, this.user, this.password);
 
-  /// Учётные данные SOCKS: при пустом [user] — без авторизации.
+  /// SOCKS credentials: with an empty [user] — no authentication.
   ProxySettings get proxySettings => ProxySettings(
-        InternetAddress.loopbackIPv4,
-        port,
-        username: user.isNotEmpty ? user : null,
-        password: user.isNotEmpty ? password : null,
-      );
+    InternetAddress.loopbackIPv4,
+    port,
+    username: user.isNotEmpty ? user : null,
+    password: user.isNotEmpty ? password : null,
+  );
 
-  /// Направить [client] через туннель. TLS поверх SOCKS поднимает фабрика соединений —
-  /// `badCertificateCallback` клиента туда не доходит, проверку передают в
-  /// [onBadCertificate] с хостом фактического соединения (после редиректа — новым).
-  void apply(HttpClient client,
-      {bool Function(X509Certificate cert, String host, int port)? onBadCertificate}) {
+  /// Route [client] through the tunnel. TLS over SOCKS is set up by the connection factory —
+  /// the client's `badCertificateCallback` doesn't reach it, verification is passed to
+  /// [onBadCertificate] with the host of the actual connection (after a redirect — the new one).
+  void apply(HttpClient client, {bool Function(X509Certificate cert, String host, int port)? onBadCertificate}) {
     final proxies = [proxySettings];
     client.connectionFactory = (uri, proxyHost, proxyPort) async {
       final socket = SocksTCPClient.connect(
-          proxies, InternetAddress(uri.host, type: InternetAddressType.unix), uri.port);
+        proxies,
+        InternetAddress(uri.host, type: InternetAddressType.unix),
+        uri.port,
+      );
       if (uri.scheme != 'https') {
         return ConnectionTask.fromSocket(socket, () async => (await socket).close().ignore());
       }
-      final secure = (await socket).secure(uri.host,
-          onBadCertificate: onBadCertificate == null
-              ? null
-              : (cert) => onBadCertificate(cert, uri.host, uri.port));
+      final secure = (await socket).secure(
+        uri.host,
+        onBadCertificate: onBadCertificate == null ? null : (cert) => onBadCertificate(cert, uri.host, uri.port),
+      );
       return ConnectionTask.fromSocket(secure, () async => (await secure).close().ignore());
     };
   }
 
-  /// Сбой связи (туннель мёртв), а не ответ сервера: только его есть смысл повторять напрямую.
+  /// A connectivity failure (tunnel dead), not a server response: only that is worth retrying directly.
   static bool isTransportError(Object e) =>
       e is SocketException ||
       e is TimeoutException ||
@@ -51,9 +53,9 @@ class TunnelSocks {
       e is SocksClientException ||
       e is ByteReaderException;
 
-  /// Через туннель, при сбое связи — напрямую: обновлять подписку часто приходится как раз
-  /// при мёртвом туннеле. Ответ сервера (HTTP-ошибка, сертификат) напрямую не повторяется —
-  /// туннель работает, а запрос ушёл бы мимо VPN.
+  /// Through the tunnel, on a connectivity failure — directly: a subscription often has to be refreshed
+  /// exactly when the tunnel is dead. A server response (HTTP error, certificate) isn't retried directly —
+  /// the tunnel works, and the request would bypass the VPN.
   static Future<T> orDirect<T>(TunnelSocks? socks, Future<T> Function(TunnelSocks? socks) run) async {
     if (socks == null) return run(null);
     try {

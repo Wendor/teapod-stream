@@ -3,9 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/cores/core_backend.dart';
 import '../../providers/core_provider.dart';
+import '../../l10n/l10n.dart';
 
-/// Настройка, которую часть включённых ядер не поддерживает: остаётся
-/// доступной (её применят другие ядра), под ней — какие ядра её не применят.
+/// A setting some enabled cores don't support: it stays available
+/// (other cores apply it), with the cores that won't apply it listed below.
 class FeatureGate extends ConsumerWidget {
   final CoreFeature feature;
   final Widget child;
@@ -25,8 +26,10 @@ class FeatureGate extends ConsumerWidget {
         child,
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-          child: Text('Не поддерживается: ${lacking.join(', ')}.',
-              style: Theme.of(context).textTheme.bodySmall),
+          child: Text(
+            context.l10n.featureUnsupported(lacking.join(', ')),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         ),
       ],
     );

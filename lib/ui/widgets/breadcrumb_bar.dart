@@ -8,13 +8,7 @@ class BreadcrumbBar extends StatelessWidget {
   final String current;
   final VoidCallback? onBack;
 
-  const BreadcrumbBar({
-    super.key,
-    required this.t,
-    required this.parent,
-    required this.current,
-    this.onBack,
-  });
+  const BreadcrumbBar({super.key, required this.t, required this.parent, required this.current, this.onBack});
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +16,9 @@ class BreadcrumbBar extends StatelessWidget {
       onTap: onBack ?? () => Navigator.pop(context),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
-        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.lineSoft))),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: t.lineSoft)),
+        ),
         child: Row(
           children: [
             Text('‹', style: AppTheme.mono(size: 12, color: t.textMuted)),

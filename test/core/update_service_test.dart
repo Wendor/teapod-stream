@@ -6,18 +6,15 @@ import 'package:teapodstream/core/services/update_service.dart';
 
 import '../helpers/local_server.dart';
 
-Map<String, dynamic> _release(String tag,
-        {bool draft = false, String? body = '  notes  ', List<String>? assets}) =>
-    {
-      'tag_name': tag,
-      'draft': draft,
-      'body': body,
-      'assets': [
-        for (final a in assets ??
-            ['teapod-stream-arm64-v8a-release-$tag.apk', 'teapod-stream-x86_64-release-$tag.apk'])
-          {'name': a, 'browser_download_url': 'https://dl/$a', 'size': 100},
-      ],
-    };
+Map<String, dynamic> _release(String tag, {bool draft = false, String? body = '  notes  ', List<String>? assets}) => {
+  'tag_name': tag,
+  'draft': draft,
+  'body': body,
+  'assets': [
+    for (final a in assets ?? ['teapod-stream-arm64-v8a-release-$tag.apk', 'teapod-stream-x86_64-release-$tag.apk'])
+      {'name': a, 'browser_download_url': 'https://dl/$a', 'size': 100},
+  ],
+};
 
 void main() {
   late LocalServer server;
@@ -27,10 +24,15 @@ void main() {
   tearDown(() => server.close());
 
   group('checkForUpdate', () {
-    Future<UpdateInfo?> check(String current,
-            {String abi = 'arm64-v8a', UpdateChannel channel = UpdateChannel.stable, bool force = false}) =>
-        HttpOverrides.runWithHttpOverrides(
-            () => svc.checkForUpdate(current, abi, channel: channel, force: force), RedirectHttpOverrides(server.port));
+    Future<UpdateInfo?> check(
+      String current, {
+      String abi = 'arm64-v8a',
+      UpdateChannel channel = UpdateChannel.stable,
+      bool force = false,
+    }) => HttpOverrides.runWithHttpOverrides(
+      () => svc.checkForUpdate(current, abi, channel: channel, force: force),
+      RedirectHttpOverrides(server.port),
+    );
 
     test('newer stable release picks the APK for the ABI', () async {
       server.serve(jsonEncode(_release('v1.8.0')));
@@ -68,11 +70,7 @@ void main() {
     });
 
     test('beta takes the newest non-draft release', () async {
-      server.serve(jsonEncode([
-        _release('v2.0.0', draft: true),
-        _release('v1.9.0-beta'),
-        _release('v1.8.0'),
-      ]));
+      server.serve(jsonEncode([_release('v2.0.0', draft: true), _release('v1.9.0-beta'), _release('v1.8.0')]));
       final u = (await check('1.7.3', channel: UpdateChannel.beta))!;
       expect(u.version, '1.9.0-beta');
       expect(server.paths.single, '/repos/Wendor/teapod-stream/releases?per_page=10');
@@ -91,7 +89,7 @@ void main() {
     setUp(() => dir = Directory.systemTemp.createTempSync('apk'));
     tearDown(() => dir.deleteSync(recursive: true));
 
-    /// Отвечает на Range частичным содержимым, если [honorRange].
+    /// Answers Range with partial content if [honorRange].
     void serveFile({bool honorRange = true}) {
       server.handler = (r) async {
         final range = r.headers.value('range');
@@ -154,8 +152,10 @@ void main() {
 
     test('error status throws', () async {
       server.serve('', status: 500);
-      expect(svc.downloadApk(server.url(), '${dir.path}/a.apk').toList(),
-          throwsA(predicate((e) => e.toString().contains('HTTP 500'))));
+      expect(
+        svc.downloadApk(server.url(), '${dir.path}/a.apk').toList(),
+        throwsA(predicate((e) => e.toString().contains('HTTP 500'))),
+      );
     });
   });
 }

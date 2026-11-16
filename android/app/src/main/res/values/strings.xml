@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="state_connecting">Connecting…</string>
+    <string name="state_disconnecting">Disconnecting…</string>
+    <string name="state_connected">Connected</string>
+    <string name="state_disconnected">Disconnected</string>
+    <string name="state_kill_switch">Kill switch: traffic blocked</string>
+    <string name="action_connect">Connect</string>
+    <string name="action_disconnect">Disconnect</string>
+    <string name="channel_status_name">VPN status</string>
+    <string name="channel_status_description">VPN speed and controls</string>
+    <string name="channel_minimal_name">VPN (background)</string>
+    <string name="channel_minimal_description">Background VPN service</string>
+</resources>

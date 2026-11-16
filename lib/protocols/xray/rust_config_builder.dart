@@ -1,4 +1,4 @@
-// Основано на RustConfigBuilder из PR #152 (vivatfreedom).
+// Based on RustConfigBuilder from PR #152 (vivatfreedom).
 import 'dart:convert';
 import 'dart:math';
 
@@ -8,6 +8,7 @@ import '../../core/models/vpn_config.dart';
 import '../../core/models/xray_tuning.dart';
 import 'vless_parser.dart';
 import 'xray_config_builder.dart';
+import '../../l10n/l10n.dart';
 
 /// Profiles xray-rust 0.8.1 runs through Android TUN: VLESS, Trojan, VMess
 /// AEAD, Shadowsocks 2022 and Hysteria2, translated from the Go builder's
@@ -23,11 +24,7 @@ class RustConfigBuilder {
   static const visionFlows = {'xtls-rprx-vision', 'xtls-rprx-vision-udp443'};
 
   /// xray-rust 0.9.0 (`shadowsocks2022::Cipher`): SS2022 only, no AEAD-2017.
-  static const ss2022Methods = {
-    '2022-blake3-aes-128-gcm',
-    '2022-blake3-aes-256-gcm',
-    '2022-blake3-chacha20-poly1305',
-  };
+  static const ss2022Methods = {'2022-blake3-aes-128-gcm', '2022-blake3-aes-256-gcm', '2022-blake3-chacha20-poly1305'};
 
   /// VMess AEAD body ciphers (`vmess::Cipher`). The core refuses `none`,
   /// `zero` and CFB; a link's other `scy` is sent as `auto`, as Go always does.
@@ -41,28 +38,19 @@ class RustConfigBuilder {
     VpnTransport.xhttp,
     VpnTransport.splithttp,
   };
-  static const _urlTransports = {
-    'tcp',
-    'raw',
-    'ws',
-    'websocket',
-    'httpupgrade',
-    'grpc',
-    'xhttp',
-    'splithttp',
-  };
+  static const _urlTransports = {'tcp', 'raw', 'ws', 'websocket', 'httpupgrade', 'grpc', 'xhttp', 'splithttp'};
 
   static bool supports(VpnConfig config) => unsupportedReason(config) == null;
 
   static String? unsupportedReason(VpnConfig config) {
     if (config.protocol.hasProtocolSettings) return config.protocol.singBoxOnlyReason;
     if (config.rawXrayConfig != null) {
-      return 'Импорт полного JSON в ядре xray-rust пока недоступен.';
+      return L10n.current.rustNoRawJson;
     }
-    // Go вставляет fm из ссылки в streamSettings как есть; xray-rust принимает
-    // лишь узкое подмножество FinalMask, которое собирает сам этот билдер.
+    // Go inserts fm from the link into streamSettings as is; xray-rust accepts
+    // only a narrow subset of FinalMask, which this builder assembles itself.
     if (config.finalmask?.isNotEmpty ?? false) {
-      return 'Параметр fm (finalmask) из ссылки ядро xray-rust не применяет. Фрагментацию и шумы задай в настройках сети.';
+      return L10n.current.rustNoFinalmask;
     }
     return switch (config.protocol) {
       VpnProtocol.hysteria2 => _hysteria2UnsupportedReason(config),
@@ -76,31 +64,26 @@ class RustConfigBuilder {
 
   static String? _vlessUnsupportedReason(VpnConfig config) {
     if (config.encryption != null && config.encryption != 'none') {
-      return 'Ядро xray-rust пока принимает VLESS с encryption=none.';
+      return L10n.current.rustVlessEncryption;
     }
     if (!_isUuid(config.uuid)) {
-      return 'UUID VLESS должен быть настоящим UUID: Rust-ядро не принимает произвольные строки.';
+      return L10n.current.rustVlessUuid;
     }
     final params = VlessParser.linkParams(config);
-    final carrier = _carrierReason(
-      config,
-      declaredTransport: params['type'],
-      headerType: params['headerType'],
-    );
+    final carrier = _carrierReason(config, declaredTransport: params['type'], headerType: params['headerType']);
     if (carrier != null) return carrier;
-    if (config.security != VpnSecurity.tls &&
-        config.security != VpnSecurity.reality) {
-      return 'Для VLESS в ядре xray-rust выбери TLS или Reality.';
+    if (config.security != VpnSecurity.tls && config.security != VpnSecurity.reality) {
+      return L10n.current.rustVlessSecurity;
     }
     final flow = config.flow ?? '';
     if (flow.isNotEmpty && !visionFlows.contains(flow)) {
-      return 'Неизвестный VLESS flow.';
+      return L10n.current.rustVlessFlow;
     }
-    // xray-rust 0.8.0 исправил Vision поверх обычного TLS на RAW; на WS,
-    // HTTPUpgrade, gRPC и xHTTP Vision без VLESS-шифрования ядро по-прежнему
-    // отвергает перед подключением, как и Xray-core.
+    // xray-rust 0.8.0 fixed Vision over plain TLS on RAW; on WS,
+    // HTTPUpgrade, gRPC and xHTTP the core still rejects Vision without VLESS encryption
+    // before connecting, as Xray-core does.
     if (flow.isNotEmpty && config.transport != VpnTransport.tcp) {
-      return 'Vision с encryption=none поддерживается только поверх TCP/RAW с TLS или Reality.';
+      return L10n.current.rustVision;
     }
     return null;
   }
@@ -108,98 +91,79 @@ class RustConfigBuilder {
   static String? _trojanUnsupportedReason(VpnConfig config) {
     final password = config.password ?? '';
     if (password.isEmpty || utf8.encode(password).length > 4096) {
-      return 'Пароль Trojan должен быть непустым и не длиннее 4096 байт.';
+      return L10n.current.rustTrojanPassword;
     }
     final params = VlessParser.linkParams(config);
-    final carrier = _carrierReason(
-      config,
-      declaredTransport: params['type'],
-      headerType: params['headerType'],
-    );
+    final carrier = _carrierReason(config, declaredTransport: params['type'], headerType: params['headerType']);
     if (carrier != null) return carrier;
-    // xray-rust отвергает Trojan без TLS/Reality для публичного сервера.
-    if (config.security != VpnSecurity.tls &&
-        config.security != VpnSecurity.reality) {
-      return 'Trojan в ядре xray-rust работает только с TLS или Reality.';
+    // xray-rust rejects Trojan without TLS/Reality for a public server.
+    if (config.security != VpnSecurity.tls && config.security != VpnSecurity.reality) {
+      return L10n.current.rustTrojanSecurity;
     }
     return null;
   }
 
   static String? _vmessUnsupportedReason(VpnConfig config) {
     if (!_isUuid(config.uuid)) {
-      return 'id VMess должен быть настоящим UUID: Rust-ядро не принимает произвольные строки.';
+      return L10n.current.rustVmessId;
     }
-    // aid из ссылки не применяется, как и в Go: alterId в конфиг не пишется,
-    // клиент всегда говорит VMess AEAD, а сервер Xray/v2fly 4.28+ принимает
-    // AEAD при любом своём alterId.
+    // aid from the link isn't applied, as in Go: alterId isn't written to the config,
+    // the client always speaks VMess AEAD, and an Xray/v2fly 4.28+ server accepts
+    // AEAD with any alterId of its own.
     final json = VlessParser.vmessJson(config);
-    // Парсер считает всё, кроме точного tls, отсутствием защиты: reality из
-    // ссылки молча превратился бы в VMess без TLS.
+    // The parser treats anything but an exact tls as no security: reality from
+    // the link would silently turn into VMess without TLS.
     final rawTls = json['tls']?.toString() ?? '';
     final tls = rawTls.trim().toLowerCase();
     if (tls.isNotEmpty && tls != 'tls' && tls != 'none') {
-      return 'VMess с security=$tls из ссылки ядро xray-rust не поддерживает: доступны TLS и транспорт без шифрования.';
+      return L10n.current.rustVmessSecurity(tls);
     }
-    // «TLS» или « tls» парсер тоже не узнаёт: профиль ушёл бы на TLS-порт
-    // голым VMess.
+    // "TLS" or " tls" isn't recognized by the parser either: the profile would hit the TLS port
+    // with bare VMess.
     if (tls == 'tls' && config.security != VpnSecurity.tls) {
-      return 'VMess-ссылка задаёт tls=«$rawTls»: парсер понимает только точное «tls», и профиль ушёл бы без TLS. Исправь значение в ссылке.';
+      return L10n.current.rustVmessTls(rawTls);
     }
-    return _carrierReason(
-      config,
-      declaredTransport: json['net']?.toString(),
-      headerType: json['type']?.toString(),
-    );
+    return _carrierReason(config, declaredTransport: json['net']?.toString(), headerType: json['type']?.toString());
   }
 
   static String? _shadowsocksUnsupportedReason(VpnConfig config) {
     final method = config.method ?? '';
     if (!ss2022Methods.contains(method)) {
-      return 'Rust-ядро поддерживает только Shadowsocks 2022 (2022-blake3-aes-128-gcm, '
-          '2022-blake3-aes-256-gcm, 2022-blake3-chacha20-poly1305). '
-          'Метод «$method» не поддерживается.';
+      return L10n.current.rustSsMethod(method);
     }
     final keys = _ss2022KeyReason(method, config.password ?? '');
     if (keys != null) return keys;
     if (VlessParser.linkParams(config)['plugin']?.trim().isNotEmpty ?? false) {
-      return 'Плагины Shadowsocks (SIP003, plugin=…) ядро xray-rust не поддерживает.';
+      return L10n.current.rustSsPlugin;
     }
     if (config.ssPrefix?.isNotEmpty ?? false) {
-      return 'Префикс Outline (prefix=…) для Shadowsocks ядро xray-rust не поддерживает.';
+      return L10n.current.rustSsPrefix;
     }
     return null;
   }
 
   /// Transport, TCP header and outer TLS/REALITY rules shared by the protocols
   /// on xray-rust's stream carriers (VLESS, Trojan, VMess).
-  static String? _carrierReason(
-    VpnConfig config, {
-    String? declaredTransport,
-    String? headerType,
-  }) {
+  static String? _carrierReason(VpnConfig config, {String? declaredTransport, String? headerType}) {
     final declared = declaredTransport?.trim().toLowerCase() ?? '';
-    if (!_transports.contains(config.transport) ||
-        (declared.isNotEmpty && !_urlTransports.contains(declared))) {
-      return 'Транспорт не поддерживается. Доступны TCP/RAW, WebSocket, HTTPUpgrade, gRPC и xHTTP.';
+    if (!_transports.contains(config.transport) || (declared.isNotEmpty && !_urlTransports.contains(declared))) {
+      return L10n.current.rustTransport;
     }
-    // Парсер не читает headerType: без проверки TCP с HTTP-маскировкой молча
-    // ушёл бы голым TCP. xray-rust принимает только header.type none.
+    // The parser doesn't read headerType: without the check TCP with HTTP camouflage would silently
+    // go out as bare TCP. xray-rust accepts only header.type none.
     final header = headerType?.trim().toLowerCase() ?? '';
-    if (config.transport == VpnTransport.tcp &&
-        header.isNotEmpty &&
-        header != 'none') {
-      return 'TCP с HTTP-маскировкой (headerType=$header) Rust-ядро не поддерживает.';
+    if (config.transport == VpnTransport.tcp && header.isNotEmpty && header != 'none') {
+      return L10n.current.rustTcpHeader(header);
     }
     if (config.security == VpnSecurity.reality &&
-        (config.transport == VpnTransport.ws ||
-            config.transport == VpnTransport.httpupgrade)) {
-      return 'Reality поддерживается с TCP/RAW, gRPC и xHTTP. Для WebSocket/HTTPUpgrade нужен TLS.';
+        (config.transport == VpnTransport.ws || config.transport == VpnTransport.httpupgrade)) {
+      return L10n.current.rustReality;
     }
     if (config.security == VpnSecurity.tls && _insecureWithoutPin(config)) {
       return _insecureReason;
     }
     if (config.ech?.isNotEmpty ?? false) {
-      return 'ECH пока недоступен в ядре xray-rust.';
+      return L10n.current.rustEch;
     }
     return null;
   }
@@ -220,18 +184,13 @@ class RustConfigBuilder {
     final keyLength = method == '2022-blake3-aes-128-gcm' ? 16 : 32;
     final keys = password.split(':');
     final chacha = method == '2022-blake3-chacha20-poly1305';
-    if (password.isEmpty ||
-        utf8.encode(password).length > 8192 ||
-        keys.length > 8 ||
-        (chacha && keys.length != 1)) {
-      return chacha
-          ? 'Для $method нужен один ключ (без identity-ключей через двоеточие).'
-          : 'Для $method допускается до 8 ключей через двоеточие.';
+    if (password.isEmpty || utf8.encode(password).length > 8192 || keys.length > 8 || (chacha && keys.length != 1)) {
+      return chacha ? L10n.current.rustSsOneKey(method) : L10n.current.rustSsMaxKeys(method);
     }
     for (final key in keys) {
       final decoded = _strictBase64(key);
       if (decoded == null || decoded.length < keyLength) {
-        return 'Ключ Shadowsocks 2022 ($method) должен быть base64 с паддингом не короче $keyLength байт.';
+        return L10n.current.rustSsKey(method, keyLength);
       }
     }
     return null;
@@ -239,9 +198,7 @@ class RustConfigBuilder {
 
   /// Standard padded base64, as the `base64` crate's STANDARD engine decodes.
   static List<int>? _strictBase64(String value) {
-    if (value.isEmpty ||
-        value.length % 4 != 0 ||
-        !RegExp(r'^[A-Za-z0-9+/]+={0,2}$').hasMatch(value)) {
+    if (value.isEmpty || value.length % 4 != 0 || !RegExp(r'^[A-Za-z0-9+/]+={0,2}$').hasMatch(value)) {
       return null;
     }
     try {
@@ -265,48 +222,41 @@ class RustConfigBuilder {
   /// china-list 110,433) cannot be parsed and the VPN would not start.
   static const largeGeositeCodes = {'cn', 'china-list', 'category-ads-all'};
 
-  static const _insecureReason =
-      'Rust не поддерживает allowInsecure без pinSHA256. Используй действительный TLS-сертификат или укажи pinSHA256 сертификата сервера.';
+  static String get _insecureReason => L10n.current.rustInsecure;
 
-  static bool _hasPin(VpnConfig config) =>
-      config.pinSHA256?.trim().isNotEmpty ?? false;
+  static bool _hasPin(VpnConfig config) => config.pinSHA256?.trim().isNotEmpty ?? false;
 
-  static bool _insecureWithoutPin(VpnConfig config) =>
-      config.allowInsecure && !_hasPin(config);
+  static bool _insecureWithoutPin(VpnConfig config) => config.allowInsecure && !_hasPin(config);
 
   /// xray-rust 0.9.0: Hysteria2 over stock QUIC TLS (h3), default BBR, with
   /// optional FinalMask Salamander and `quicParams.udpHop` in Xray-core
   /// v26.7.28's spelling (the Go builder's `udphop` mask is converted back). Brutal,
   /// bandwidth and other QUIC overrides and sockopt stay rejected by the core.
   static String? _hysteria2UnsupportedReason(VpnConfig config) {
-    // Парсер берёт пароль только у obfs=salamander: другой тип или пустой
-    // пароль Go молча отбрасывает и подключается без обфускации.
+    // The parser takes the password only for obfs=salamander: another type or an empty
+    // password Go silently drops and connects without obfuscation.
     final obfs = VlessParser.linkParams(config)['obfs']?.trim() ?? '';
     if (obfs.isNotEmpty && obfs != 'none' && obfs != 'salamander') {
-      return 'Обфускация Hysteria2 «$obfs» не поддерживается: Rust-ядро знает только Salamander.';
+      return L10n.current.rustHy2Obfs(obfs);
     }
     final salamander = config.obfsPassword ?? '';
     if (obfs == 'salamander' && salamander.isEmpty) {
-      return 'Для Salamander (obfs=salamander) нужен obfs-password.';
+      return L10n.current.rustSalamanderNoPassword;
     }
-    if (salamander.isNotEmpty &&
-        (utf8.encode(salamander).length < 4 ||
-            utf8.encode(salamander).length > 4096)) {
-      return 'Пароль Salamander (obfs-password) должен содержать от 4 до 4096 байт.';
+    if (salamander.isNotEmpty && (utf8.encode(salamander).length < 4 || utf8.encode(salamander).length > 4096)) {
+      return L10n.current.rustSalamanderPassword;
     }
     final hop = config.hopPorts ?? '';
     if (hop.isNotEmpty && _expandedPortCount(hop) > 65535) {
-      return 'Список портов для port hopping слишком длинный: Rust-ядро принимает до 65535 портов.';
+      return L10n.current.rustPortHopping;
     }
     final auth = config.password ?? '';
-    if (auth.isEmpty ||
-        utf8.encode(auth).length > 4096 ||
-        auth.codeUnits.any((c) => c < 0x20 || c == 0x7f)) {
-      return 'Пароль Hysteria2 должен быть непустым, не длиннее 4096 байт и без управляющих символов.';
+    if (auth.isEmpty || utf8.encode(auth).length > 4096 || auth.codeUnits.any((c) => c < 0x20 || c == 0x7f)) {
+      return L10n.current.rustHy2Password;
     }
     if (_insecureWithoutPin(config)) return _insecureReason;
     if (config.ech?.isNotEmpty ?? false) {
-      return 'ECH пока недоступен в ядре xray-rust.';
+      return L10n.current.rustEch;
     }
     return null;
   }
@@ -322,29 +272,20 @@ class RustConfigBuilder {
     return count;
   }
 
-  static Map<String, dynamic> build(
-    VpnConfig config,
-    VpnEngineOptions options,
-  ) {
+  static Map<String, dynamic> build(VpnConfig config, VpnEngineOptions options) {
     final reason = unsupportedReason(config);
     if (reason != null) throw FormatException(reason);
     if (options.proxyOnly || options.httpPort != 0) {
-      throw const FormatException(
-        'В ядре xray-rust доступен только режим VPN (TUN).',
-      );
+      throw FormatException(L10n.current.rustTunOnly);
     }
-    // Go не применяет Mux к Hysteria2 (QUIC сам мультиплексирует потоки),
-    // значит и здесь он не мешает.
+    // Go doesn't apply Mux to Hysteria2 (QUIC multiplexes streams itself),
+    // so it doesn't get in the way here either.
     final hysteria2 = config.protocol == VpnProtocol.hysteria2;
     if (options.mux.enabled && !hysteria2) {
-      throw const FormatException(
-        'Mux недоступен в ядре xray-rust: выключи его в настройках сети.',
-      );
+      throw FormatException(L10n.current.rustMux);
     }
     if (options.mtu != 1500) {
-      throw const FormatException(
-        'Ядро xray-rust работает с MTU 1500: верни это значение в настройках сети.',
-      );
+      throw FormatException(L10n.current.rustMtu);
     }
     final fragment = fragmentMask(config, options.fragment);
     final noise = noiseMask(config, options.noise);
@@ -354,21 +295,13 @@ class RustConfigBuilder {
             options.routing.domainEnabled ||
             options.routing.sitesEnabled ||
             options.routing.ruServicesEnabled)) {
-      throw const FormatException(
-        'Включи определение доменов для GeoSite и доменных правил.',
-      );
+      throw FormatException(L10n.current.rustSniffing);
     }
     if (options.routing.adBlockEnabled &&
         options.routing.isActive &&
         options.routing.geositeEnabled &&
-        options.routing.geositeCodes.any(
-          (c) => largeGeositeCodes.contains(c.trim().toLowerCase()),
-        )) {
-      throw const FormatException(
-        'Блокировка рекламы (~187 тыс. доменов) вместе с большой категорией GeoSite '
-        '(cn, china-list, category-ads-all) превышает лимит Rust-ядра в 250 тыс. '
-        'доменных правил. Отключи одно из двух.',
-      );
+        options.routing.geositeCodes.any((c) => largeGeositeCodes.contains(c.trim().toLowerCase()))) {
+      throw FormatException(L10n.current.rustAdBlockLimit);
     }
 
     // Reuse the existing profile and domain-routing translation, then replace
@@ -379,8 +312,7 @@ class RustConfigBuilder {
     // the server (every supported protocol carries domain destinations)
     // without an extra client-side DNS round trip for every new host.
     result['routing']['domainStrategy'] =
-        options.routing.isActive &&
-            (options.routing.geoEnabled || options.routing.bypassLocal)
+        options.routing.isActive && (options.routing.geoEnabled || options.routing.bypassLocal)
         ? 'IPIfNonMatch'
         : 'AsIs';
     // Rust 0.6 restores domain identity from FakeDNS before TUN routing.
@@ -402,9 +334,9 @@ class RustConfigBuilder {
     final inbounds = result['inbounds'] as List<dynamic>;
     final socks = inbounds.single as Map<String, dynamic>;
     socks['listen'] = '127.0.0.1';
-    // `udp` как в Go; xray-rust его лишь разбирает, UDP SOCKS при выключенном
-    // UDP гасит правило из _blockTunUdp.
-    // xray-rust ≥ 0.9.0: пароль SOCKS inbound (RFC 1929), формат Xray.
+    // `udp` as in Go; xray-rust only parses it, SOCKS UDP with UDP disabled
+    // is killed by the rule from _blockTunUdp.
+    // xray-rust ≥ 0.9.0: SOCKS inbound password (RFC 1929), Xray format.
     socks['settings'] = options.socksUser.isNotEmpty && options.socksPassword.isNotEmpty
         ? {
             'auth': 'password',
@@ -427,7 +359,7 @@ class RustConfigBuilder {
     outbounds.removeWhere((dynamic out) => out['tag'] == 'dialer-out');
     if (options.routing.adBlockEnabled) _blockAdsInDnsOutbound(result);
     final rules = (result['routing'] as Map)['rules'] as List<dynamic>;
-    // Выключенный UDP Go закрывает правилом socks-in; здесь его заменяет _blockTunUdp.
+    // Go closes disabled UDP with a socks-in rule; here _blockTunUdp replaces it.
     rules.removeWhere((dynamic r) => r['network'] == 'udp' && r['inboundTag']?.first == 'socks-in');
     for (final dynamic rule in rules) {
       final tags = rule['inboundTag'];
@@ -445,15 +377,14 @@ class RustConfigBuilder {
     final proxy = outbounds.first as Map<String, dynamic>;
     final stream = proxy['streamSettings'] as Map<String, dynamic>;
     stream.remove('sockopt');
-    // xray-rust складывает Host из headers в host с предупреждением об
-    // устаревшем поле; пустой Host и без того означает serverName/адрес.
+    // xray-rust moves Host from headers into host with a warning about
+    // the deprecated field; an empty Host means serverName/address anyway.
     final ws = stream['wsSettings'] as Map?;
     if (ws != null) {
       final host = (ws.remove('headers') as Map?)?['Host'] as String? ?? '';
       if (host.isNotEmpty) ws['host'] = host;
     }
-    if (config.transport == VpnTransport.xhttp ||
-        config.transport == VpnTransport.splithttp) {
+    if (config.transport == VpnTransport.xhttp || config.transport == VpnTransport.splithttp) {
       stream['network'] = 'xhttp';
       stream.remove('splithttpSettings');
       stream['xhttpSettings'] = {
@@ -463,12 +394,12 @@ class RustConfigBuilder {
         if (config.xhttpExtra != null) 'extra': config.xhttpExtra,
       };
     }
-    // pinnedPeerCertSha256 и allowInsecure: false при пине уже выставил
-    // XrayConfigBuilder — тот же ключ читают оба ядра.
+    // pinnedPeerCertSha256 and allowInsecure: false with a pin were already set by
+    // XrayConfigBuilder — both cores read the same key.
     final tls = stream['tlsSettings'] as Map<String, dynamic>?;
     if (hysteria2 && tls != null) {
-      // QUIC TLS не маскируется под браузер, ALPN Hysteria2 — только h3,
-      // и ядро подставляет его само.
+      // QUIC TLS isn't disguised as a browser, the Hysteria2 ALPN is only h3,
+      // and the core fills it in itself.
       tls.remove('fingerprint');
       tls.remove('alpn');
     }
@@ -478,10 +409,10 @@ class RustConfigBuilder {
     }
     _legacyUdpHop(stream);
     if (fragment != null || noise != null) {
-      // Salamander и udpHop Go уже записал; шум идёт после Salamander, то есть
-      // сырым, как пакеты freedom под обфускацией в Go.
+      // Go already wrote Salamander and udpHop; noise goes after Salamander, i.e.
+      // raw, like freedom packets under obfuscation in Go.
       final mask = <String, dynamic>{
-        ...?stream['finalmask'] as Map?,
+        ...?(stream['finalmask'] as Map<String, dynamic>?),
         if (fragment != null) 'tcp': [fragment],
       };
       if (noise != null) {
@@ -490,28 +421,25 @@ class RustConfigBuilder {
       stream['finalmask'] = mask;
     }
     if (options.routing.direction == RoutingDirection.onlySelected) {
-      final direct = outbounds.singleWhere(
-        (dynamic out) => out['tag'] == 'direct',
-      );
+      final direct = outbounds.singleWhere((dynamic out) => out['tag'] == 'direct');
       outbounds.remove(direct);
       outbounds.insert(0, direct);
     }
     return result;
   }
 
-  /// Go отбрасывает UDP/443 в tun2socks до xray, а выключенный UDP — правилом
-  /// socks-in → blackhole (кроме порта 53). Здесь то же делает правило TUN → blackhole сразу после
-  /// DNS-правил: порт 53 уже ушёл в dns-out, а DNS-модуль ядра (`dns-module`)
-  /// и сам транспорт к серверу (QUIC Hysteria2, UDP Shadowsocks) не трогаются.
-  /// Blackhole `none` молча гасит UDP-поток (без ICMP «порт недоступен»,
-  /// которым отвечает Go) до 60 с тишины. xray-rust 0.8.1 разбирает `udp`
-  /// у SOCKS, но UDP ASSOCIATE принимает всё равно, поэтому выключенный UDP
-  /// закрывает правилом и SOCKS; QUIC, как и в Go, блокируется только в TUN.
+  /// Go drops UDP/443 in tun2socks before xray, and disabled UDP — with a
+  /// socks-in → blackhole rule (except port 53). Here a TUN → blackhole rule right after
+  /// the DNS rules does the same: port 53 has already gone to dns-out, and the core's DNS module (`dns-module`)
+  /// and the transport to the server itself (QUIC Hysteria2, UDP Shadowsocks) aren't touched.
+  /// Blackhole `none` silently kills the UDP flow (without the ICMP "port unreachable"
+  /// Go answers with) until 60 s of silence. xray-rust 0.8.1 parses `udp`
+  /// for SOCKS but accepts UDP ASSOCIATE anyway, so disabled UDP
+  /// also closes SOCKS with a rule; QUIC, as in Go, is blocked only in TUN.
   /// Returns whether a rule was added.
   static bool _blockTunUdp(List<dynamic> rules, VpnEngineOptions options) {
     if (options.enableUdp && !options.blockQuic) return false;
-    final at =
-        rules.lastIndexWhere((dynamic r) => r['outboundTag'] == 'dns-out') + 1;
+    final at = rules.lastIndexWhere((dynamic r) => r['outboundTag'] == 'dns-out') + 1;
     if (at == 0) throw StateError('DNS rule not found');
     rules.insert(at, <String, dynamic>{
       'type': 'field',
@@ -524,8 +452,7 @@ class RustConfigBuilder {
   }
 
   static bool _isXhttpH3(VpnConfig config) =>
-      (config.transport == VpnTransport.xhttp ||
-          config.transport == VpnTransport.splithttp) &&
+      (config.transport == VpnTransport.xhttp || config.transport == VpnTransport.splithttp) &&
       config.security == VpnSecurity.tls &&
       (config.alpn ?? '').split(',').map((s) => s.trim()).join(',') == 'h3';
 
@@ -534,8 +461,8 @@ class RustConfigBuilder {
     return (parts.first, parts.last);
   }
 
-  /// xray-rust 0.9.0 знает port hopping только как `quicParams.udpHop`
-  /// (Xray-core v26.7.28), а Go-билдер пишет UDP-маску `udphop` (v26.9.9+).
+  /// xray-rust 0.9.0 knows port hopping only as `quicParams.udpHop`
+  /// (Xray-core v26.7.28), while the Go builder writes the `udphop` UDP mask (v26.9.9+).
   static void _legacyUdpHop(Map<String, dynamic> stream) {
     final mask = stream['finalmask'] as Map?;
     final udp = [...?mask?['udp'] as List?];
@@ -555,47 +482,32 @@ class RustConfigBuilder {
   /// and `tlshello` leaves a first write that is not a TLS handshake record
   /// (Shadowsocks, VMess without TLS) untouched. Invalid settings are not
   /// applied in either build; the settings screen says so.
-  static Map<String, dynamic>? fragmentMask(
-    VpnConfig config,
-    FragmentSettings f,
-  ) {
+  static Map<String, dynamic>? fragmentMask(VpnConfig config, FragmentSettings f) {
     if (!f.enabled || !f.isValid) return null;
     if (config.protocol == VpnProtocol.hysteria2 || _isXhttpH3(config)) {
       return null;
     }
     if (f.packets.trim() != 'tlshello') {
-      throw const FormatException(
-        'Rust-ядро режет только TLS ClientHello: в поле «Пакеты» фрагментации укажи tlshello.',
-      );
+      throw FormatException(L10n.current.rustFragmentPackets);
     }
     if (config.security == VpnSecurity.none) return null;
     final length = _range(f.length);
     final delay = _range(f.interval);
     if (length.$2 > 16384) {
-      throw const FormatException(
-        'Длина куска фрагментации в Rust-ядре — от 1 до 16384 байт.',
-      );
+      throw FormatException(L10n.current.rustFragmentLength);
     }
     if (delay.$2 > 1000) {
-      throw const FormatException(
-        'Пауза фрагментации в Rust-ядре — не больше 1000 мс.',
-      );
+      throw FormatException(L10n.current.rustFragmentDelay);
     }
     if (config.xhttpExtra?['downloadSettings'] != null) {
-      throw const FormatException(
-        'Фрагментацию ClientHello Rust-ядро не применяет к xHTTP с отдельным downloadSettings. Фрагментация — общая настройка: выключи её в настройках сети, чтобы подключиться к этому профилю.',
-      );
+      throw FormatException(L10n.current.rustFragmentXhttp);
     }
-    final settings = <String, dynamic>{
-      'packets': 'tlshello',
-      'length': f.length.trim(),
-      'delay': f.interval.trim(),
-    };
-    // xray-rust рвёт соединение, если план нарезки превышает 4096 кусков или
-    // 10 с пауз; у Go таких пределов нет. maxSplit ограничивает число кусков
-    // так, чтобы даже 16-КиБ ClientHello из кусков минимальной длины уложился,
-    // а последний кусок забрал остаток. Обычный ClientHello (~2 КиБ) при
-    // разумных настройках до предела не доходит и режется как в Go.
+    final settings = <String, dynamic>{'packets': 'tlshello', 'length': f.length.trim(), 'delay': f.interval.trim()};
+    // xray-rust drops the connection if the split plan exceeds 4096 chunks or
+    // 10 s of pauses; Go has no such limits. maxSplit caps the number of chunks
+    // so that even a 16 KiB ClientHello of minimum-length chunks fits,
+    // and the last chunk takes the remainder. A normal ClientHello (~2 KiB) with
+    // reasonable settings never reaches the limit and is split as in Go.
     final worst = (16384 + length.$1 - 1) ~/ length.$1;
     final cap = delay.$2 == 0 ? 4096 : min(4096, 10000 ~/ delay.$2);
     if (worst > cap) settings['maxSplit'] = cap;
@@ -611,17 +523,13 @@ class RustConfigBuilder {
     if (!n.enabled || !n.isValid) return null;
     if (config.protocol != VpnProtocol.hysteria2 && !_isXhttpH3(config)) {
       if (config.protocol == VpnProtocol.shadowsocks) {
-        throw const FormatException(
-          'Шумы перед UDP Shadowsocks Rust-ядро не отправляет (только для Hysteria2 и xHTTP поверх HTTP/3). Шумы — общая настройка: выключи их в настройках сети, чтобы подключиться к этому профилю.',
-        );
+        throw FormatException(L10n.current.rustNoiseSs);
       }
       return null;
     }
     final delay = n.delay.trim();
     if (_range(delay).$2 > 1000) {
-      throw const FormatException(
-        'Пауза шума в Rust-ядре — не больше 1000 мс.',
-      );
+      throw FormatException(L10n.current.rustNoiseDelay);
     }
     final packet = n.packet.trim();
     final int bytes;
@@ -631,26 +539,19 @@ class RustConfigBuilder {
       case NoiseType.str:
         bytes = utf8.encode(packet).length;
       case NoiseType.hex:
-        if (packet.length.isOdd ||
-            !RegExp(r'^[0-9a-fA-F]+$').hasMatch(packet)) {
-          throw const FormatException(
-            'Шум HEX должен состоять из пар шестнадцатеричных цифр.',
-          );
+        if (packet.length.isOdd || !RegExp(r'^[0-9a-fA-F]+$').hasMatch(packet)) {
+          throw FormatException(L10n.current.rustNoiseHex);
         }
         bytes = packet.length ~/ 2;
       case NoiseType.base64:
         final decoded = _strictBase64(packet);
         if (decoded == null) {
-          throw const FormatException(
-            'Шум BASE64 должен быть стандартным base64 с паддингом.',
-          );
+          throw FormatException(L10n.current.rustNoiseBase64);
         }
         bytes = decoded.length;
     }
     if (bytes > 4096) {
-      throw const FormatException(
-        'Пакет шума в Rust-ядре — не больше 4096 байт.',
-      );
+      throw FormatException(L10n.current.rustNoisePacket);
     }
     return {
       'type': 'noise',
@@ -665,23 +566,19 @@ class RustConfigBuilder {
     };
   }
 
-  /// Go отвечает на рекламные домены пустым NOERROR: DNS-сервер
-  /// `rcode://success` со списком domains. xray-rust такой сервер не принимает,
-  /// то же делает правило Return у DNS-outbound, через который идут DNS-запросы
-  /// приложений (и с FakeDNS, и в режиме «напрямую»). Домены — те же, что у Go.
+  /// Go answers ad domains with an empty NOERROR: a DNS server
+  /// `rcode://success` with a domains list. xray-rust doesn't accept such a server,
+  /// so a Return rule on the DNS outbound that carries app DNS queries does the same
+  /// (both with FakeDNS and in "direct" mode). The domains are the same as Go's.
   static void _blockAdsInDnsOutbound(Map<String, dynamic> result) {
     final servers = (result['dns'] as Map)['servers'] as List<dynamic>;
-    final adServer = servers.singleWhere(
-      (dynamic s) => s is Map && s['address'] == 'rcode://success',
-    );
+    final adServer = servers.singleWhere((dynamic s) => s is Map && s['address'] == 'rcode://success');
     servers.remove(adServer);
     final outbounds = result['outbounds'] as List<dynamic>;
-    final dnsOut = outbounds.indexWhere(
-      (dynamic out) => out['protocol'] == 'dns',
-    );
-    // Go пишет dns-out литералом Map<String, String> — собираем заново.
+    final dnsOut = outbounds.indexWhere((dynamic out) => out['protocol'] == 'dns');
+    // Go writes dns-out as a Map<String, String> literal — rebuild it.
     outbounds[dnsOut] = <String, dynamic>{
-      ...outbounds[dnsOut] as Map,
+      ...(outbounds[dnsOut] as Map).cast<String, dynamic>(),
       'settings': {
         'rules': [
           {'action': 'return', 'rCode': 0, 'domain': adServer['domains']},
@@ -693,8 +590,7 @@ class RustConfigBuilder {
   /// xray-rust reads a DoT server's port only from its `tls://` URL and ignores
   /// the object's `port`, so a custom DoT port would silently become 853.
   /// A plain server keeps `port`, but its IPv6 literal must be unbracketed.
-  static final _dotAuthorityWithPort =
-      RegExp(r'^tls://(\[[^\]]*\]|[^:\[\]]+):\d+$');
+  static final _dotAuthorityWithPort = RegExp(r'^tls://(\[[^\]]*\]|[^:\[\]]+):\d+$');
 
   static void _adaptDnsServers(Map<String, dynamic> dns) {
     for (final dynamic server in dns['servers'] as List<dynamic>) {
@@ -702,8 +598,8 @@ class RustConfigBuilder {
       final address = server['address'] as String;
       if (address.startsWith('tls://') && server['port'] is int) {
         final port = server.remove('port');
-        // DnsServerConfig оставляет `]:port` у IPv6 в скобках; второй порт
-        // xray-rust отвергает, поэтому порт из URL сохраняем как есть.
+        // DnsServerConfig keeps `]:port` for bracketed IPv6; xray-rust rejects
+        // a second port, so the port from the URL is kept as is.
         if (!_dotAuthorityWithPort.hasMatch(address)) {
           server['address'] = '$address:$port';
         }
@@ -713,8 +609,7 @@ class RustConfigBuilder {
     }
   }
 
-  static String buildJson(VpnConfig config, VpnEngineOptions options) =>
-      jsonEncode(build(config, options));
+  static String buildJson(VpnConfig config, VpnEngineOptions options) => jsonEncode(build(config, options));
 
   /// Candidate check for switchConfig (`XrayEngine.measureOutbound`): the
   /// profile's proxy outbound, exactly as [build] writes it for the VPN, in a
@@ -725,14 +620,11 @@ class RustConfigBuilder {
   /// an ephemeral port and never collides with the VPN's SOCKS port. Android pins the server name
   /// into `dns.hosts` before the start, as for the VPN. Throws
   /// [FormatException] where [build] does.
-  static Map<String, dynamic> buildProbe(
-    VpnConfig config,
-    VpnEngineOptions options,
-  ) {
+  static Map<String, dynamic> buildProbe(VpnConfig config, VpnEngineOptions options) {
     final outbounds = build(config, options)['outbounds'] as List<dynamic>;
     final proxy = outbounds.singleWhere((dynamic o) => o['tag'] == 'proxy');
-    // Пароль одноразовый: probeOutboundUrl идёт мимо inbound, а без него любое
-    // приложение, нашедшее порт, вышло бы через кандидата и узнало его IP.
+    // A one-time password: probeOutboundUrl bypasses the inbound, and without it any
+    // app that found the port could exit through the candidate and learn its IP.
     final rnd = Random.secure();
     String token() => [for (var i = 0; i < 16; i++) rnd.nextInt(256).toRadixString(16).padLeft(2, '0')].join();
     return {
@@ -756,6 +648,5 @@ class RustConfigBuilder {
     };
   }
 
-  static String buildProbeJson(VpnConfig config, VpnEngineOptions options) =>
-      jsonEncode(buildProbe(config, options));
+  static String buildProbeJson(VpnConfig config, VpnEngineOptions options) => jsonEncode(buildProbe(config, options));
 }

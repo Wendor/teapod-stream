@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- allowBackup=false на Android 12+ не запрещает перенос на новое устройство (D2D):
-     filesDir (xray_config.json с кредами сервера) и SharedPreferences уехали бы целиком. -->
+<!-- allowBackup=false on Android 12+ doesn't prevent transfer to a new device (D2D):
+     filesDir (xray_config.json with server credentials) and SharedPreferences would move over entirely. -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="root" path="." />

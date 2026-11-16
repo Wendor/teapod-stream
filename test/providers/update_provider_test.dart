@@ -17,12 +17,12 @@ const _channel = MethodChannel(AppConstants.methodChannel);
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 
 Map<String, Object?> _release(String tag) => {
-      'tag_name': 'v$tag',
-      'body': 'notes',
-      'assets': [
-        {'name': 'teapod-arm64-v8a-$tag.apk', 'browser_download_url': 'https://dl/app.apk', 'size': 6},
-      ],
-    };
+  'tag_name': 'v$tag',
+  'body': 'notes',
+  'assets': [
+    {'name': 'teapod-arm64-v8a-$tag.apk', 'browser_download_url': 'https://dl/app.apk', 'size': 6},
+  ],
+};
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -44,16 +44,26 @@ void main() {
     support = Directory.systemTemp.createTempSync('support');
     server = await LocalServer.start();
     PackageInfo.setMockInitialValues(
-        appName: 'a', packageName: 'p', version: '1.7.3', buildNumber: '1', buildSignature: '');
+      appName: 'a',
+      packageName: 'p',
+      version: '1.7.3',
+      buildNumber: '1',
+      buildSignature: '',
+    );
     messenger.setMockMethodCallHandler(_pathChannel, (call) async => support.path);
-    messenger.setMockMethodCallHandler(_channel, (call) async => switch (call.method) {
-          'getAbi' => abi,
-          'installApk' => onInstall?.call(call),
-          'getState' => {'state': 'disconnected'},
-          _ => null,
-        });
-    messenger.setMockStreamHandler(const EventChannel('${AppConstants.methodChannel}/events'),
-        MockStreamHandler.inline(onListen: (_, _) {}));
+    messenger.setMockMethodCallHandler(
+      _channel,
+      (call) async => switch (call.method) {
+        'getAbi' => abi,
+        'installApk' => onInstall?.call(call),
+        'getState' => {'state': 'disconnected'},
+        _ => null,
+      },
+    );
+    messenger.setMockStreamHandler(
+      const EventChannel('${AppConstants.methodChannel}/events'),
+      MockStreamHandler.inline(onListen: (_, _) {}),
+    );
     SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
     FlutterSecureStorage.setMockInitialValues({});
     c = ProviderContainer();
@@ -96,7 +106,7 @@ void main() {
     test('missing release data is an error', () async {
       server.serve('{}', status: 500);
       await redirected(() => n().checkForUpdate());
-      expect((st() as UpdateError).message, 'Не удалось получить данные о релизе');
+      expect((st() as UpdateError).message, "Couldn't get release info");
     });
   });
 
@@ -146,8 +156,8 @@ void main() {
     });
 
     test('cancel returns to available with resumable bytes', () async {
-      // Данные идут медленно (крупными чанками — мелкие сервер буферизует):
-      // отмена async* срабатывает на следующем чанке.
+      // Data arrives slowly (in large chunks — the server buffers small ones):
+      // the async* cancellation fires on the next chunk.
       const chunk = 64 * 1024;
       server.handler = (r) async {
         r.response.contentLength = chunk * 50;
@@ -159,7 +169,7 @@ void main() {
           }
           await r.response.close();
         } on HttpException {
-          // Клиент отменил загрузку и закрыл соединение.
+          // The client cancelled the download and closed the connection.
         }
       };
       await redirected(() async {

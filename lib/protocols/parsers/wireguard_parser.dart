@@ -2,22 +2,23 @@ import 'package:uuid/uuid.dart';
 
 import '../../core/models/protocol_settings.dart';
 import '../../core/models/vpn_config.dart';
+import '../../l10n/l10n.dart';
 
-/// WireGuard: ссылки `wireguard://` / `wg://` и текст wg-quick `.conf` (один peer).
+/// WireGuard: `wireguard://` / `wg://` links and wg-quick `.conf` text (one peer).
 abstract final class WireGuardParser {
   static final _confHeader = RegExp(r'^\s*\[Interface\]\s*$', multiLine: true, caseSensitive: false);
 
   static bool isConf(String text) => _confHeader.hasMatch(text);
 
-  /// `.conf` → профиль; [FormatException] с причиной, если разобрать нельзя.
-  /// `DNS` и ключи wg-quick (`PostUp`, `Table`, …) игнорируются.
+  /// `.conf` → profile; [FormatException] with the reason if it can't be parsed.
+  /// `DNS` and wg-quick keys (`PostUp`, `Table`, …) are ignored.
   static VpnConfig parseConf(String text, {String? name}) {
     final sections = _sections(text);
     final interfaces = sections.where((s) => s.name == 'interface').toList();
     final peers = sections.where((s) => s.name == 'peer').toList();
-    if (interfaces.length != 1) throw const FormatException('Нужна одна секция [Interface].');
-    if (peers.isEmpty) throw const FormatException('Нет секции [Peer].');
-    if (peers.length > 1) throw FormatException('Поддерживается один [Peer]; в конфиге: ${peers.length}.');
+    if (interfaces.length != 1) throw FormatException(L10n.current.wgOneInterface);
+    if (peers.isEmpty) throw FormatException(L10n.current.wgNoPeer);
+    if (peers.length > 1) throw FormatException(L10n.current.wgOnePeer(peers.length));
     final iface = interfaces.single.values;
     final peer = peers.single.values;
     final (host, port) = _endpoint(_required(peer, 'endpoint', 'Endpoint'));
@@ -35,7 +36,7 @@ abstract final class WireGuardParser {
     return config.copyWith(rawUri: toUri(config));
   }
 
-  /// `wireguard://<privateKey>@host:port?publickey=…&address=…#name`; null — не разобрать.
+  /// `wireguard://<privateKey>@host:port?publickey=…&address=…#name`; null — can't parse.
   static VpnConfig? parseUri(String uri) {
     try {
       final parsed = Uri.parse(uri);
@@ -64,7 +65,7 @@ abstract final class WireGuardParser {
     }
   }
 
-  /// Ссылка `wireguard://` для профиля (экспорт, дедупликация, `rawUri` из `.conf`).
+  /// `wireguard://` link for the profile (export, deduplication, `rawUri` from `.conf`).
   static String toUri(VpnConfig config) {
     final wg = config.protocolSettings! as WireGuardSettings;
     final host = config.address.contains(':') ? '[${config.address}]' : config.address;
@@ -89,26 +90,33 @@ abstract final class WireGuardParser {
         '#${Uri.encodeComponent(config.name)}';
   }
 
-  static VpnConfig _config(String host, int port, WireGuardSettings settings, String name, String? rawUri) =>
-      VpnConfig(
-        id: const Uuid().v4(),
-        name: name,
-        protocol: VpnProtocol.wireguard,
-        address: host,
-        port: port,
-        uuid: '',
-        security: VpnSecurity.none,
-        transport: VpnTransport.tcp,
-        createdAt: DateTime.now(),
-        rawUri: rawUri,
-        protocolSettings: settings,
-      );
+  static VpnConfig _config(String host, int port, WireGuardSettings settings, String name, String? rawUri) => VpnConfig(
+    id: const Uuid().v4(),
+    name: name,
+    protocol: VpnProtocol.wireguard,
+    address: host,
+    port: port,
+    uuid: '',
+    security: VpnSecurity.none,
+    transport: VpnTransport.tcp,
+    createdAt: DateTime.now(),
+    rawUri: rawUri,
+    protocolSettings: settings,
+  );
 
-  /// Ключи AmneziaWG: в `.conf` — как в amneziawg-go (`Jc`, `HeaderProtectionKey`…), в ссылке —
-  /// те же в нижнем регистре; значение — ключ JSON `AmneziaParams`.
+  /// AmneziaWG keys: in `.conf` — as in amneziawg-go (`Jc`, `HeaderProtectionKey`…), in a link —
+  /// the same in lowercase; the value is the `AmneziaParams` JSON key.
   static const _amneziaInts = ['jc', 'jmin', 'jmax', 's1', 's2', 's3', 's4'];
   static const _amneziaStrings = {
-    'h1': 'h1', 'h2': 'h2', 'h3': 'h3', 'h4': 'h4', 'i1': 'i1', 'i2': 'i2', 'i3': 'i3', 'i4': 'i4', 'i5': 'i5',
+    'h1': 'h1',
+    'h2': 'h2',
+    'h3': 'h3',
+    'h4': 'h4',
+    'i1': 'i1',
+    'i2': 'i2',
+    'i3': 'i3',
+    'i4': 'i4',
+    'i5': 'i5',
     'headerprotectionkey': 'header_protection_key',
     'contentpaddingaddition': 'content_padding_addition',
     'rekeyaftertime': 'rekey_after_time',
@@ -119,7 +127,7 @@ abstract final class WireGuardParser {
   };
   static const _amneziaFlags = {'randomtrailers': 'random_trailers', 'disablecookies': 'disable_cookies'};
 
-  /// null — в конфиге нет ни одного параметра AmneziaWG (обычный WireGuard).
+  /// null — the config has no AmneziaWG parameters (plain WireGuard).
   static AmneziaParams? _amnezia(Map<String, String> values) {
     final json = <String, dynamic>{
       for (final key in _amneziaInts) key: ?int.tryParse(values[key] ?? ''),
@@ -133,7 +141,7 @@ abstract final class WireGuardParser {
   static List<({String name, Map<String, String> values})> _sections(String text) {
     final sections = <({String name, Map<String, String> values})>[];
     for (final raw in text.split(RegExp(r'\r?\n'))) {
-      // Как wg-quick: всё после `#` — комментарий.
+      // As in wg-quick: everything after `#` is a comment.
       final hash = raw.indexOf('#');
       final line = (hash < 0 ? raw : raw.substring(0, hash)).trim();
       if (line.isEmpty || line.startsWith('#') || line.startsWith(';')) continue;
@@ -146,26 +154,25 @@ abstract final class WireGuardParser {
       final key = line.substring(0, eq).trim().toLowerCase();
       final value = line.substring(eq + 1).trim();
       final values = sections.last.values;
-      // Повторяющиеся Address/AllowedIPs wg-quick накапливает.
+      // wg-quick accumulates repeated Address/AllowedIPs.
       values[key] = _repeatable.contains(key) && values.containsKey(key) ? '${values[key]},$value' : value;
     }
     return sections;
   }
 
   static String _required(Map<String, String> values, String key, String label) =>
-      _nonEmpty(values[key]) ?? (throw FormatException('В конфиге нет $label.'));
+      _nonEmpty(values[key]) ?? (throw FormatException(L10n.current.wgMissingKey(label)));
 
   static String? _nonEmpty(String? v) => (v == null || v.trim().isEmpty) ? null : v.trim();
 
   static const _repeatable = {'address', 'allowedips'};
 
-  static List<String> _list(String? v) =>
-      (v ?? '').split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+  static List<String> _list(String? v) => (v ?? '').split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
 
-  /// Адрес без маски (допустим в wg-quick) — один хост: /32 или /128.
+  /// An address without a mask (allowed in wg-quick) is a single host: /32 or /128.
   static List<String> _prefixes(String? v) => [
-        for (final p in _list(v)) p.contains('/') ? p : (p.contains(':') ? '$p/128' : '$p/32'),
-      ];
+    for (final p in _list(v)) p.contains('/') ? p : (p.contains(':') ? '$p/128' : '$p/32'),
+  ];
 
   static List<String> _allowedIps(String? v) {
     final ips = _prefixes(v);
@@ -177,21 +184,21 @@ abstract final class WireGuardParser {
     return parts.length == 3 && parts.every((p) => p != null) ? parts.cast<int>() : null;
   }
 
-  /// AmneziaWG допускает диапазон `22-30` — берётся нижняя граница.
+  /// AmneziaWG allows a `22-30` range — the lower bound is taken.
   static int? _keepalive(String? v) => int.tryParse((v ?? '').split('-').first.trim());
 
-  /// `host:port` или `[v6]:port`.
+  /// `host:port` or `[v6]:port`.
   static (String, int) _endpoint(String value) {
     final match = RegExp(r'^\[(.+)\]:(\d+)$').firstMatch(value) ?? RegExp(r'^([^:]+):(\d+)$').firstMatch(value);
-    if (match == null) throw FormatException('Неверный Endpoint: $value');
+    if (match == null) throw FormatException(L10n.current.wgInvalidEndpoint(value));
     return (match.group(1)!, int.parse(match.group(2)!));
   }
 
-  /// Значения query без превращения `+` в пробел (ключи в base64).
+  /// Query values without turning `+` into a space (keys are base64).
   static Map<String, String> _query(String query) => {
-        for (final part in query.split('&').where((p) => p.contains('=')))
-          part.substring(0, part.indexOf('=')).toLowerCase(): Uri.decodeComponent(part.substring(part.indexOf('=') + 1)),
-      };
+    for (final part in query.split('&').where((p) => p.contains('=')))
+      part.substring(0, part.indexOf('=')).toLowerCase(): Uri.decodeComponent(part.substring(part.indexOf('=') + 1)),
+  };
 
   static String _encodeList(String value) => value.split(',').map(Uri.encodeComponent).join(',');
 }

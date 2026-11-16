@@ -69,7 +69,7 @@
                       android:value="VPN proxy for secure internet access using xray-core" />
         </service>
 
-        <!-- Quick Settings плитка для управления VPN из шторки -->
+        <!-- Quick Settings tile to control the VPN from the shade -->
         <service
             android:name=".VpnTileService"
             android:exported="true"
@@ -84,7 +84,7 @@
                 android:value="true" />
         </service>
 
-        <!-- Auto-start on device boot (when "Запуск при загрузке" is enabled in settings) -->
+        <!-- Auto-start on device boot (when "Start on boot" is enabled in settings) -->
         <receiver
             android:name=".BootReceiver"
             android:exported="false">

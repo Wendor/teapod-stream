@@ -29,13 +29,17 @@ void main() {
   });
 
   test('import + list exposes configs without secrets', () async {
-    final imp = await agent.handle({'id': '1', 'op': 'import', 'uris': [_vless, _hy2, 'garbage://x']});
+    final imp = await agent.handle({
+      'id': '1',
+      'op': 'import',
+      'uris': [_vless, _hy2, 'garbage://x'],
+    });
     expect(imp['ok'], isTrue);
     expect((imp['data'] as Map)['imported'], 2);
     expect((imp['data'] as Map)['failed'], ['garbage']);
 
     final list = await agent.handle({'id': '2', 'op': 'list'});
-    final rows = (list['data'] as List).cast<Map>();
+    final rows = (list['data'] as List).cast<Map<String, dynamic>>();
     expect(rows.map((r) => r['name']), containsAll(['V1', 'H1']));
     final v1 = rows.firstWhere((r) => r['name'] == 'V1');
     expect(v1['host'], 'v.example');
@@ -46,7 +50,11 @@ void main() {
   });
 
   test('connect refuses a core that cannot run the profile', () async {
-    await agent.handle({'id': '1', 'op': 'import', 'uris': [_ssh]});
+    await agent.handle({
+      'id': '1',
+      'op': 'import',
+      'uris': [_ssh],
+    });
     final id = ((await agent.handle({'id': '2', 'op': 'list'}))['data'] as List).first['id'];
     final r = await agent.handle({'id': '3', 'op': 'connect', 'configId': id, 'core': 'go'});
     expect(r['ok'], isFalse);
@@ -54,8 +62,12 @@ void main() {
   });
 
   test('connect pins the core, activates the profile and calls native connect', () async {
-    await agent.handle({'id': '1', 'op': 'import', 'uris': [_vless, _hy2]});
-    final rows = ((await agent.handle({'id': '2', 'op': 'list'}))['data'] as List).cast<Map>();
+    await agent.handle({
+      'id': '1',
+      'op': 'import',
+      'uris': [_vless, _hy2],
+    });
+    final rows = ((await agent.handle({'id': '2', 'op': 'list'}))['data'] as List).cast<Map<String, dynamic>>();
     final id = rows.firstWhere((r) => r['name'] == 'H1')['id'] as String;
     final r = await agent.handle({'id': '3', 'op': 'connect', 'configId': id, 'core': 'box'});
     expect(r['ok'], isTrue, reason: '$r');
@@ -67,8 +79,17 @@ void main() {
   });
 
   test('reset clears configs unless keepConfigs and applies settings', () async {
-    await agent.handle({'id': '1', 'op': 'import', 'uris': [_vless]});
-    await agent.handle({'id': '2', 'op': 'reset', 'keepConfigs': true, 'settings': {'mtu': 1280}});
+    await agent.handle({
+      'id': '1',
+      'op': 'import',
+      'uris': [_vless],
+    });
+    await agent.handle({
+      'id': '2',
+      'op': 'reset',
+      'keepConfigs': true,
+      'settings': {'mtu': 1280},
+    });
     expect(container.read(configProvider).value!.configs, hasLength(1));
     expect(container.read(settingsProvider).value!.mtu, 1280);
     expect(container.read(settingsProvider).value!.logsEnabled, isTrue);
@@ -79,8 +100,20 @@ void main() {
   });
 
   test('settings patch deep-merges into current settings', () async {
-    await agent.handle({'id': '1', 'op': 'settings', 'patch': {'routing': {'bypassLocal': true}}});
-    await agent.handle({'id': '2', 'op': 'settings', 'patch': {'routing': {'sitesEnabled': true}}});
+    await agent.handle({
+      'id': '1',
+      'op': 'settings',
+      'patch': {
+        'routing': {'bypassLocal': true},
+      },
+    });
+    await agent.handle({
+      'id': '2',
+      'op': 'settings',
+      'patch': {
+        'routing': {'sitesEnabled': true},
+      },
+    });
     final r = container.read(settingsProvider).value!.routing;
     expect(r.bypassLocal, isTrue);
     expect(r.sitesEnabled, isTrue);

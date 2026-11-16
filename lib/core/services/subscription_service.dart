@@ -12,11 +12,7 @@ class UntrustedCertificateException implements Exception {
   final String subject;
   final String issuer;
 
-  const UntrustedCertificateException({
-    required this.host,
-    required this.subject,
-    required this.issuer,
-  });
+  const UntrustedCertificateException({required this.host, required this.subject, required this.issuer});
 
   @override
   String toString() => 'UntrustedCertificateException: $host — $subject (issued by $issuer)';
@@ -33,7 +29,7 @@ class SubscriptionFetchResult {
   final String? announceUrl;
   final HwidStatus? hwidStatus;
 
-  /// DER (base64) принятого недоверенного сертификата: сохраняется в подписке как пин.
+  /// DER (base64) of an accepted untrusted certificate: stored in the subscription as a pin.
   final String? acceptedCertDer;
 
   const SubscriptionFetchResult({
@@ -55,11 +51,7 @@ class HwidStatus {
   final bool notSupported;
   final bool maxDevicesReached;
 
-  const HwidStatus({
-    required this.isActive,
-    required this.notSupported,
-    required this.maxDevicesReached,
-  });
+  const HwidStatus({required this.isActive, required this.notSupported, required this.maxDevicesReached});
 }
 
 class HwidDeviceInfo {
@@ -67,17 +59,9 @@ class HwidDeviceInfo {
   final String deviceModel;
   final int osVersion;
 
-  const HwidDeviceInfo({
-    required this.deviceId,
-    required this.deviceModel,
-    required this.osVersion,
-  });
+  const HwidDeviceInfo({required this.deviceId, required this.deviceModel, required this.osVersion});
 
-  Map<String, dynamic> toJson() => {
-    'deviceId': deviceId,
-    'deviceModel': deviceModel,
-    'osVersion': osVersion,
-  };
+  Map<String, dynamic> toJson() => {'deviceId': deviceId, 'deviceModel': deviceModel, 'osVersion': osVersion};
 }
 
 class SubscriptionService {
@@ -89,7 +73,7 @@ class SubscriptionService {
   /// untrusted certificate, throws [UntrustedCertificateException] with
   /// certificate details so the caller can decide whether to retry.
   /// If [allowSelfSigned] is true, certificate validation is skipped.
-  /// [pinnedCertDer] — ранее принятый сертификат: только он проходит без проверки.
+  /// [pinnedCertDer] — a previously accepted certificate: only it passes without verification.
   /// If [hwidEnabled] is true, HWID headers are sent to support device limits.
   /// If [userAgent] is non-empty, it overrides the default User-Agent.
   Future<SubscriptionFetchResult> fetchSubscription(
@@ -99,11 +83,17 @@ class SubscriptionService {
     HwidDeviceInfo? hwid,
     String? userAgent,
     TunnelSocks? socks,
-  }) =>
-      TunnelSocks.orDirect(
-          socks,
-          (s) => _fetch(url,
-              allowSelfSigned: allowSelfSigned, pinnedCertDer: pinnedCertDer, hwid: hwid, userAgent: userAgent, socks: s));
+  }) => TunnelSocks.orDirect(
+    socks,
+    (s) => _fetch(
+      url,
+      allowSelfSigned: allowSelfSigned,
+      pinnedCertDer: pinnedCertDer,
+      hwid: hwid,
+      userAgent: userAgent,
+      socks: s,
+    ),
+  );
 
   Future<SubscriptionFetchResult> _fetch(
     String url, {
@@ -125,11 +115,7 @@ class SubscriptionService {
         acceptedCert = der;
         return true;
       }
-      certError = UntrustedCertificateException(
-        host: host,
-        subject: cert.subject,
-        issuer: cert.issuer,
-      );
+      certError = UntrustedCertificateException(host: host, subject: cert.subject, issuer: cert.issuer);
       return false;
     }
 
@@ -150,16 +136,15 @@ class SubscriptionService {
         request.headers.set('X-Ver-Os', hwid.osVersion.toString());
       }
 
-      final response =
-          await request.close().timeout(const Duration(seconds: 15));
+      final response = await request.close().timeout(const Duration(seconds: 15));
 
       if (response.statusCode != 200) {
         throw Exception('Failed to fetch subscription: ${response.statusCode}');
       }
 
       responseHeaders = response.headers;
-      // Тайм-аут простоя и лимит размера: медленный или огромный ответ не должен
-      // висеть вечно или съесть память.
+      // Idle timeout and size limit: a slow or huge response must not
+      // hang forever or eat memory.
       final bytes = BytesBuilder(copy: false);
       await for (final chunk in response.timeout(const Duration(seconds: 15))) {
         bytes.add(chunk);
@@ -170,7 +155,7 @@ class SubscriptionService {
       if (certError != null) throw certError!;
       rethrow;
     } finally {
-      // Без force соединение с непрочитанным телом (не-200, таймаут) живёт вечно.
+      // Without force a connection with an unread body (non-200, timeout) lives forever.
       httpClient.close(force: true);
     }
 
@@ -213,18 +198,20 @@ class SubscriptionService {
               break;
             }
           }
-          configs.add(VpnConfig(
-            id: 'xray_${DateTime.now().millisecondsSinceEpoch}_${configs.length}',
-            name: remarks,
-            protocol: VpnProtocol.vless,
-            address: address.isEmpty ? 'managed' : address,
-            port: port > 0 ? port : 443,
-            uuid: '',
-            security: VpnSecurity.none,
-            transport: VpnTransport.tcp,
-            createdAt: DateTime.now(),
-            rawXrayConfig: rawJson,
-          ));
+          configs.add(
+            VpnConfig(
+              id: 'xray_${DateTime.now().millisecondsSinceEpoch}_${configs.length}',
+              name: remarks,
+              protocol: VpnProtocol.vless,
+              address: address.isEmpty ? 'managed' : address,
+              port: port > 0 ? port : 443,
+              uuid: '',
+              security: VpnSecurity.none,
+              transport: VpnTransport.tcp,
+              createdAt: DateTime.now(),
+              rawXrayConfig: rawJson,
+            ),
+          );
         }
         if (configs.isNotEmpty) {
           return SubscriptionFetchResult(
@@ -287,12 +274,21 @@ class SubscriptionService {
     );
   }
 
-  static List<String> _splitLines(String s) =>
-      s.split(RegExp(r'\r?\n')).where((l) => l.trim().isNotEmpty).toList();
+  static List<String> _splitLines(String s) => s.split(RegExp(r'\r?\n')).where((l) => l.trim().isNotEmpty).toList();
 
   static const _uriSchemes = [
-    'vless://', 'vmess://', 'trojan://', 'ss://', 'hy2://', 'hysteria2://',
-    'wireguard://', 'wg://', 'ssh://', 'naive+https://', 'naive+quic://', 'vpn://',
+    'vless://',
+    'vmess://',
+    'trojan://',
+    'ss://',
+    'hy2://',
+    'hysteria2://',
+    'wireguard://',
+    'wg://',
+    'ssh://',
+    'naive+https://',
+    'naive+quic://',
+    'vpn://',
   ];
 
   static bool _isKnownUri(String line) {

@@ -11,7 +11,7 @@ import '../../../tool/itest/src/matrix.dart';
 import '../../../tool/itest/src/probes.dart';
 import '../../../tool/itest/src/report.dart';
 
-/// Агент-заглушка: отвечает ok на каждую команду, на connect шлёт `connected`.
+/// Stub agent: answers ok to every command, sends `connected` on connect.
 class ScriptedShell implements Shell {
   final StreamController<String> logcat;
   final ops = <String>[];
@@ -43,7 +43,15 @@ void main() {
     final shell = ScriptedShell(logcat);
     final agent = AgentClient(shell, logcat.stream);
     final ctx = CaseCtx(agent, Probes(shell), const Baseline({}, null, null), DeviceGuard(shell), null);
-    final mc = MatrixCase('opt/x/boom', 'cfg', 'cfg', 'go', const {}, (_) => throw const FormatException('bad json'), true);
+    final mc = MatrixCase(
+      'opt/x/boom',
+      'cfg',
+      'cfg',
+      'go',
+      const {},
+      (_) => throw const FormatException('bad json'),
+      true,
+    );
 
     final r = await runCase(mc, ctx, RunDir(tmp), shell, logcat.stream);
 
@@ -57,10 +65,26 @@ void main() {
     addTearDown(() => tmp.deleteSync(recursive: true));
     final logcat = StreamController<String>.broadcast();
     final shell = ScriptedShell(logcat);
-    final ctx = CaseCtx(AgentClient(shell, logcat.stream), Probes(shell), const Baseline({}, null, null),
-        DeviceGuard(shell), null);
-    final mc = MatrixCase('opt/x/route-sites-only', 'cfg', 'cfg', 'rust',
-        const {'routing': {'sites': [echoHostPlaceholder]}}, (_) async => (v: Verdict.pass, note: ''), true);
+    final ctx = CaseCtx(
+      AgentClient(shell, logcat.stream),
+      Probes(shell),
+      const Baseline({}, null, null),
+      DeviceGuard(shell),
+      null,
+    );
+    final mc = MatrixCase(
+      'opt/x/route-sites-only',
+      'cfg',
+      'cfg',
+      'rust',
+      const {
+        'routing': {
+          'sites': [echoHostPlaceholder],
+        },
+      },
+      (_) async => (v: Verdict.pass, note: ''),
+      true,
+    );
 
     final r = await runCase(mc, ctx, RunDir(tmp), shell, logcat.stream);
 

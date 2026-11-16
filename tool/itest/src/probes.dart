@@ -3,9 +3,9 @@ import 'dart:io';
 
 import 'adb.dart';
 
-/// Echo-сервисы, отдающие голый IP клиента.
-/// Сеть (например, роутер с маршрутизацией) может сама заворачивать часть из них
-/// в туннель — такие отсеивает [measureBaseline].
+/// Echo services returning the client's bare IP.
+/// The network (e.g. a router with routing) may itself route some of them
+/// into a tunnel — [measureBaseline] filters those out.
 const echoMain = [
   'https://ifconfig.co/ip',
   'https://ipinfo.io/ip',
@@ -14,8 +14,8 @@ const echoMain = [
   'https://ident.me',
 ];
 
-/// Echo с российским доменом и IP — для правил `domain:ru` и `geoip:ru`. Отдаёт
-/// HTML: берётся первый публичный IPv4 (API Яндекса в домашней сети отвечал 127.0.0.1).
+/// Echo with a Russian domain and IP — for `domain:ru` and `geoip:ru` rules. Returns
+/// HTML: the first public IPv4 is taken (the Yandex API answered 127.0.0.1 on the home network).
 const echoRu = 'https://ip.nic.ru';
 const _htmlEcho = {echoRu};
 
@@ -23,27 +23,31 @@ enum Verdict { pass, fail, skip, zombie }
 
 typedef Outcome = ({Verdict v, String note});
 
-/// Резолвер по edns.ip-api.com; [geo] — страна и провайдер.
+/// Resolver via edns.ip-api.com; [geo] — country and provider.
 typedef Resolver = ({String ip, String geo});
 
-/// Пробы трафика из `adb shell` (uid shell идёт через TUN как обычное приложение).
+/// Traffic probes from `adb shell` (the shell uid goes through TUN like a regular app).
 class Probes {
   final Shell shell;
   Probes(this.shell);
 
-  /// Журнал кейса: сюда пишется сырой ответ проваленной пробы.
+  /// Case log: the raw answer of a failed probe is written here.
   void Function(String)? log;
 
-  Future<String> _curl(String args, Duration timeout) async =>
-      (await shell.run(['shell', 'curl -s -m ${timeout.inSeconds} $args'], timeout: timeout + const Duration(seconds: 5)))
-          .out
-          .trim();
+  Future<String> _curl(String args, Duration timeout) async => (await shell.run([
+    'shell',
+    'curl -s -m ${timeout.inSeconds} $args',
+  ], timeout: timeout + const Duration(seconds: 5))).out.trim();
 
-  /// IP клиента по echo-сервису; пустой ответ повторяется [retries] раз через 2 с —
-  /// одиночный сбой echo-сервиса (лимит запросов, таймаут) не должен ронять кейс.
-  Future<String?> ip(String url,
-      {Duration timeout = const Duration(seconds: 10), String extra = '', int retries = 1}) async {
-    for (var i = 0;; i++) {
+  /// Client IP via an echo service; an empty answer is retried [retries] times every 2 s —
+  /// a single echo service failure (rate limit, timeout) must not fail the case.
+  Future<String?> ip(
+    String url, {
+    Duration timeout = const Duration(seconds: 10),
+    String extra = '',
+    int retries = 1,
+  }) async {
+    for (var i = 0; ; i++) {
       final out = await _curl('$extra -w "\\n%{http_code}" $url'.trim(), timeout);
       final nl = out.lastIndexOf('\n');
       final ip = _parseIp(url, (nl < 0 ? out : out.substring(0, nl)).trim());
@@ -57,23 +61,22 @@ class Probes {
 
   String? _parseIp(String url, String out) {
     if (_htmlEcho.contains(url)) {
-      return RegExp(r'\b(?:\d{1,3}\.){3}\d{1,3}\b')
-          .allMatches(out)
-          .map((m) => m[0]!)
-          .where((ip) => _public(InternetAddress.tryParse(ip)))
-          .firstOrNull;
+      return RegExp(
+        r'\b(?:\d{1,3}\.){3}\d{1,3}\b',
+      ).allMatches(out).map((m) => m[0]!).where((ip) => _public(InternetAddress.tryParse(ip))).firstOrNull;
     }
     final v = out.replaceAll('"', '');
     final a = InternetAddress.tryParse(v);
     return _public(a) ? v : null;
   }
 
-  /// Рекурсивный резолвер, через который ушёл DNS-запрос: IP и провайдер.
+  /// The recursive resolver the DNS query went through: IP and provider.
   Future<Resolver?> dnsResolver() async {
     try {
-      // Редирект на случайный поддомен — запрос к резолверу без кеша.
-      final j = jsonDecode(await _curl('-L http://edns.ip-api.com/json', const Duration(seconds: 10)))
-          as Map<String, dynamic>;
+      // Redirect to a random subdomain — a query to the resolver without cache.
+      final j =
+          jsonDecode(await _curl('-L http://edns.ip-api.com/json', const Duration(seconds: 10)))
+              as Map<String, dynamic>;
       final dns = j['dns'] as Map?;
       final ip = dns?['ip'] as String?;
       return ip == null ? null : (ip: ip, geo: dns?['geo'] as String? ?? '');
@@ -82,7 +85,7 @@ class Probes {
     }
   }
 
-  /// Есть HTTP-ответ; `null` — проба не выполнилась (нет кода статуса).
+  /// There is an HTTP response; `null` — the probe didn't run (no status code).
   Future<bool?> reachable(String url) async {
     final code = await _curl('-o /dev/null -w %{http_code} $url', const Duration(seconds: 10));
     if (code == '000') return false;
@@ -103,38 +106,43 @@ bool _public(InternetAddress? a) {
 }
 
 class Baseline {
-  /// Прямой IP по каждому echo-сервису (null — сервис недоступен). Сеть может
-  /// сама заворачивать часть сервисов в свой туннель — они видят его выход.
+  /// Direct IP per echo service (null — the service is unavailable). The network may
+  /// route some services into its own tunnel — they see its exit.
   final Map<String, String?> direct;
   final String? directRuIp;
   final Resolver? dnsResolver;
 
-  /// Ответил ли 1.1.1.1 на ping без VPN (контроль для icmp-off); null — не мерили.
+  /// Whether 1.1.1.1 answered ping without VPN (control for icmp-off); null — not measured.
   final bool? ping;
 
   const Baseline(this.direct, this.directRuIp, this.dnsResolver, {this.ping});
 
   Map<String, Object?> toJson() => {
-        'direct': direct,
-        'directRuIp': directRuIp,
-        'dnsResolver': dnsResolver == null ? null : {'ip': dnsResolver!.ip, 'geo': dnsResolver!.geo},
-        'ping': ping,
-      };
+    'direct': direct,
+    'directRuIp': directRuIp,
+    'dnsResolver': dnsResolver == null ? null : {'ip': dnsResolver!.ip, 'geo': dnsResolver!.geo},
+    'ping': ping,
+  };
 }
 
-/// Без VPN: прямой IP по каждому сервису, IP до российского echo и резолвер.
+/// Without VPN: direct IP per service, IP to the Russian echo, and the resolver.
 Future<Baseline> measureBaseline(Probes p) async {
   final ips = await p.ips(echoMain);
-  return Baseline({for (var i = 0; i < echoMain.length; i++) echoMain[i]: ips[i]},
-      await p.ip(echoRu), await p.dnsResolver(),
-      ping: await p.ping('1.1.1.1'));
+  return Baseline(
+    {for (var i = 0; i < echoMain.length; i++) echoMain[i]: ips[i]},
+    await p.ip(echoRu),
+    await p.dnsResolver(),
+    ping: await p.ping('1.1.1.1'),
+  );
 }
 
-/// Сервисы, по которым туннель с выходом [egress] отличим от прямого пути.
-List<String> informative(Map<String, String?> baseline, String? egress) =>
-    [for (final e in baseline.entries) if (e.value != null && e.value != egress) e.key];
+/// Services through which a tunnel with exit [egress] is distinguishable from the direct path.
+List<String> informative(Map<String, String?> baseline, String? egress) => [
+  for (final e in baseline.entries)
+    if (e.value != null && e.value != egress) e.key,
+];
 
-/// Ожидание «через туннель» по ответам сервисов ([observed]: url → IP).
+/// "Through the tunnel" expectation from service answers ([observed]: url → IP).
 Outcome classifyTunnel({
   required Map<String, String?> baseline,
   required Map<String, String?> observed,
@@ -145,8 +153,8 @@ Outcome classifyTunnel({
   if (baseline.values.every((v) => v == null)) return (v: Verdict.skip, note: 'echo');
   final seen = observed.values.nonNulls.toSet();
   if (seen.isEmpty) return (v: Verdict.fail, note: 'no traffic');
-  // Сервер в сети устройства (выход = IP провайдера, [ispIp] — по RU-echo, который
-  // сеть не заворачивает): по IP туннель неотличим от прямого пути.
+  // The server is in the device's network (exit = ISP IP, [ispIp] — via the RU echo, which
+  // the network doesn't reroute): by IP the tunnel is indistinguishable from the direct path.
   if (egress != null && egress == ispIp && !strictEgress) {
     return (v: Verdict.pass, note: 'traffic ok; server in device network, leak undetectable');
   }
@@ -168,7 +176,7 @@ Outcome classifyTunnel({
       : (v: Verdict.pass, note: 'via ${seen.join(',')}');
 }
 
-/// Ожидание «напрямую» для одного сервиса.
+/// "Direct" expectation for one service.
 Outcome classifyDirect({required String? baseline, required String? observed, String? egress}) {
   if (baseline == null) return (v: Verdict.skip, note: 'echo');
   if (observed == null) return (v: Verdict.fail, note: 'no traffic');
@@ -178,8 +186,8 @@ Outcome classifyDirect({required String? baseline, required String? observed, St
       : (v: Verdict.pass, note: 'direct');
 }
 
-/// DNS через прокси не должен уходить к провайдеру из baseline. Сравнивается
-/// провайдер (geo), а не IP: у провайдера anycast-пул резолверов.
+/// DNS through the proxy must not go to the provider from the baseline. The provider
+/// (geo) is compared, not the IP: providers have an anycast pool of resolvers.
 Outcome classifyDns({required Resolver? baseline, required Resolver? observed, required bool proxy}) {
   if (observed == null) return (v: Verdict.fail, note: 'dns resolve failed');
   final sameGeo = observed.geo.isNotEmpty && observed.geo == baseline?.geo;

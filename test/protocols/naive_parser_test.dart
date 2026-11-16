@@ -10,8 +10,10 @@ NaiveSettings _naive(VpnConfig c) => c.protocolSettings! as NaiveSettings;
 
 void main() {
   test('naive+https link with extra headers', () {
-    final c = NaiveParser.parseUri('naive+https://user:pa%40ss@n.example.com:8443'
-        '?extra-headers=X-A%3A%201%0D%0AX-B%3A2#My%20Naive')!;
+    final c = NaiveParser.parseUri(
+      'naive+https://user:pa%40ss@n.example.com:8443'
+      '?extra-headers=X-A%3A%201%0D%0AX-B%3A2#My%20Naive',
+    )!;
     expect(c.protocol, VpnProtocol.naive);
     expect([c.address, c.port, c.name], ['n.example.com', 8443, 'My Naive']);
     final n = _naive(c);
@@ -31,11 +33,19 @@ void main() {
 
   test('sing-box outbound', () {
     const opts = VpnEngineOptions(socksPort: 1, httpPort: 0, socksUser: '', socksPassword: '');
-    expect(SingBoxOutbound.build(NaiveParser.parseUri('naive+https://u:p@n.example.com?extra-headers=X-A%3A1')!, opts), {
-      'type': 'naive', 'tag': 'proxy', 'server': 'n.example.com', 'server_port': 443,
-      'username': 'u', 'password': 'p', 'extra_headers': {'X-A': '1'},
-      'tls': {'enabled': true, 'server_name': 'n.example.com'},
-    });
+    expect(
+      SingBoxOutbound.build(NaiveParser.parseUri('naive+https://u:p@n.example.com?extra-headers=X-A%3A1')!, opts),
+      {
+        'type': 'naive',
+        'tag': 'proxy',
+        'server': 'n.example.com',
+        'server_port': 443,
+        'username': 'u',
+        'password': 'p',
+        'extra_headers': {'X-A': '1'},
+        'tls': {'enabled': true, 'server_name': 'n.example.com'},
+      },
+    );
     expect(SingBoxOutbound.build(NaiveParser.parseUri('naive+quic://u:p@n.example.com')!, opts)['quic'], isTrue);
   });
 }

@@ -52,9 +52,7 @@ final profiles = <String, VpnConfig>{
   'vmess-ws-tls': parse(
     'vmess://${base64.encode(utf8.encode(jsonEncode({'add': 'vmess.example', 'port': '443', 'id': uuid, 'aid': '0', 'net': 'ws', 'tls': 'tls', 'sni': 'cover.example'})))}',
   ),
-  'ss2022': parse(
-    'ss://2022-blake3-aes-256-gcm:${Uri.encodeComponent(key32)}@ss.example:8388#s',
-  ),
+  'ss2022': parse('ss://2022-blake3-aes-256-gcm:${Uri.encodeComponent(key32)}@ss.example:8388#s'),
   'hy2-salamander-hop': parse(
     'hy2://s3cret@hy.example:20000/?sni=cover.example&obfs=salamander'
     '&obfs-password=mask-pass&mport=20000-20010#h',
@@ -62,10 +60,7 @@ final profiles = <String, VpnConfig>{
 };
 
 Map<String, dynamic> proxyOf(Map<String, dynamic> json) =>
-    (json['outbounds'] as List).singleWhere(
-          (dynamic o) => o['tag'] == 'proxy',
-        )
-        as Map<String, dynamic>;
+    (json['outbounds'] as List).singleWhere((dynamic o) => o['tag'] == 'proxy') as Map<String, dynamic>;
 
 void main() {
   test('the probe carries exactly the VPN proxy outbound', () {
@@ -89,10 +84,7 @@ void main() {
         if (profile.key == 'ss2022' && variant.key == 'noise') continue;
         final reason = '${profile.key}/${variant.key}';
         final vpn = RustConfigBuilder.build(profile.value, variant.value);
-        final probe = RustConfigBuilder.buildProbe(
-          profile.value,
-          variant.value,
-        );
+        final probe = RustConfigBuilder.buildProbe(profile.value, variant.value);
         expect(probe.keys.toSet(), {'inbounds', 'outbounds', 'dns'}, reason: reason);
         expect(probe['outbounds'], [proxyOf(vpn)], reason: reason);
         expect(probe['dns'], {'hosts': <String, dynamic>{}}, reason: reason);
@@ -108,8 +100,7 @@ void main() {
         expect(account['user'], matches(RegExp(r'^[0-9a-f]{32}$')), reason: reason);
         expect(account['pass'], matches(RegExp(r'^[0-9a-f]{32}$')), reason: reason);
         // Encodes without non-JSON values, as the method channel needs.
-        final encoded = jsonDecode(
-            RustConfigBuilder.buildProbeJson(profile.value, variant.value)) as Map;
+        final encoded = jsonDecode(RustConfigBuilder.buildProbeJson(profile.value, variant.value)) as Map;
         expect(encoded['outbounds'], probe['outbounds'], reason: reason);
         expect(encoded['inbounds'][0]['settings']['auth'], 'password', reason: reason);
       }
@@ -118,16 +109,10 @@ void main() {
 
   test('the probe keeps FinalMask, pins and Hysteria hopping', () {
     final hy2 = proxyOf(
-      RustConfigBuilder.buildProbe(
-        profiles['hy2-salamander-hop']!,
-        options(noise: const NoiseSettings(enabled: true)),
-      ),
+      RustConfigBuilder.buildProbe(profiles['hy2-salamander-hop']!, options(noise: const NoiseSettings(enabled: true))),
     );
     final mask = hy2['streamSettings']['finalmask'] as Map;
-    expect((mask['udp'] as List).map((dynamic m) => m['type']), [
-      'salamander',
-      'noise',
-    ]);
+    expect((mask['udp'] as List).map((dynamic m) => m['type']), ['salamander', 'noise']);
     expect(mask['quicParams']['udpHop']['ports'], isNotEmpty);
 
     final vless = proxyOf(
@@ -137,10 +122,7 @@ void main() {
       ),
     );
     expect(vless['settings']['vnext'][0]['users'][0]['flow'], 'xtls-rprx-vision');
-    expect(
-      (vless['streamSettings']['finalmask']['tcp'] as List).single['type'],
-      'fragment',
-    );
+    expect((vless['streamSettings']['finalmask']['tcp'] as List).single['type'], 'fragment');
   });
 
   test('a profile or option the VPN would refuse is refused for the probe too', () {
@@ -152,18 +134,12 @@ void main() {
       throwsFormatException,
     );
     expect(
-      () => RustConfigBuilder.buildProbe(
-        profiles['ss2022']!,
-        options(noise: const NoiseSettings(enabled: true)),
-      ),
+      () => RustConfigBuilder.buildProbe(profiles['ss2022']!, options(noise: const NoiseSettings(enabled: true))),
       throwsFormatException,
     );
     final kcpVmess = parse(
       'vmess://${base64.encode(utf8.encode(jsonEncode({'add': 'vmess.example', 'port': '443', 'id': uuid, 'aid': '0', 'net': 'kcp', 'tls': 'tls'})))}',
     );
-    expect(
-      () => RustConfigBuilder.buildProbe(kcpVmess, options()),
-      throwsFormatException,
-    );
+    expect(() => RustConfigBuilder.buildProbe(kcpVmess, options()), throwsFormatException);
   });
 }

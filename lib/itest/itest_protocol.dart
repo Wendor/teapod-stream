@@ -3,23 +3,22 @@ import 'dart:convert';
 import '../core/cores/core_resolver.dart';
 import '../core/models/core_kind.dart';
 
-/// Сборка с агентом интеграционных тестов (`./build.sh itest`).
+/// Build with the integration test agent (`./build.sh itest`).
 const bool kItest = bool.fromEnvironment('ITEST');
 
-/// Строка-маркер в logcat, которую читает раннер `tool/itest`.
+/// Marker line in logcat read by the `tool/itest` runner.
 String itestMarker(Map<String, Object?> payload) => 'TEAPOD_ITEST ${jsonEncode(payload)}';
 
-/// Вложенные Map сливаются, остальные значения (в т.ч. списки) заменяются.
+/// Nested Maps are merged, other values (including lists) are replaced.
 Map<String, dynamic> deepMerge(Map<String, dynamic> base, Map<String, dynamic> patch) => {
-      ...base,
-      for (final e in patch.entries)
-        e.key: e.value is Map && base[e.key] is Map
-            ? deepMerge(Map<String, dynamic>.from(base[e.key] as Map),
-                Map<String, dynamic>.from(e.value as Map))
-            : e.value,
-    };
+  ...base,
+  for (final e in patch.entries)
+    e.key: e.value is Map && base[e.key] is Map
+        ? deepMerge(Map<String, dynamic>.from(base[e.key] as Map), Map<String, dynamic>.from(e.value as Map))
+        : e.value,
+};
 
-/// null — профиль запустится именно ядром [wanted]; иначе причина.
+/// null — the profile will start exactly on core [wanted]; otherwise the reason.
 String? pickCoreError(CoreResolution r, CoreKind wanted) {
   if (r.backend?.kind == wanted && r.pinned) return null;
   final reason = r.verdicts.where((v) => v.kind == wanted).firstOrNull?.reason;

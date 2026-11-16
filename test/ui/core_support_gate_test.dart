@@ -8,26 +8,32 @@ import 'package:teapodstream/core/services/settings_service.dart';
 import 'package:teapodstream/protocols/xray/xray_rust_backend.dart';
 import 'package:teapodstream/providers/core_provider.dart';
 import 'package:teapodstream/ui/widgets/core_support_gate.dart';
+import 'package:teapodstream/l10n/app_localizations.dart';
 
 final _raw = VpnConfig.fromJson({
   ...VpnConfig(
-    id: 'r', name: 'r', protocol: VpnProtocol.vless, address: '1.2.3.4', port: 443,
-    uuid: '11111111-2222-4333-8444-555555555555', security: VpnSecurity.tls,
-    transport: VpnTransport.tcp, createdAt: DateTime(2026),
+    id: 'r',
+    name: 'r',
+    protocol: VpnProtocol.vless,
+    address: '1.2.3.4',
+    port: 443,
+    uuid: '11111111-2222-4333-8444-555555555555',
+    security: VpnSecurity.tls,
+    transport: VpnTransport.tcp,
+    createdAt: DateTime(2026),
   ).toJson(),
   'rawXrayConfig': '{"outbounds":[]}',
 });
 
 Widget _host(Set<CoreKind> available) => ProviderScope(
-      overrides: [
-        coreResolverProvider.overrideWithValue(CoreResolver(const AppSettings(), available, coreBackendFor)),
-      ],
-      child: MaterialApp(
-        home: Scaffold(
-          body: CoreSupportGate(config: _raw, child: const Text('row')),
-        ),
-      ),
-    );
+  overrides: [coreResolverProvider.overrideWithValue(CoreResolver(const AppSettings(), available, coreBackendFor))],
+  child: MaterialApp(
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    home: Scaffold(
+      body: CoreSupportGate(config: _raw, child: const Text('row')),
+    ),
+  ),
+);
 
 void main() {
   testWidgets('profile no core can run is dimmed with the reason', (tester) async {

@@ -10,7 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:teapodstream/core/constants/app_constants.dart';
 import 'package:teapodstream/providers/ip_info_provider.dart';
 
-/// Минимальный SOCKS5 (user/pass) сервер: после CONNECT сам отвечает на HTTP-запрос.
+/// Minimal SOCKS5 (user/pass) server: after CONNECT it answers the HTTP request itself.
 class _Socks5 {
   final ServerSocket _server;
   final String httpBody;
@@ -67,12 +67,16 @@ class _Socks5 {
     final port = await take(2);
     targets.add('$host:${port[0] << 8 | port[1]}');
     s.add([5, 0, 0, 1, 0, 0, 0, 0, 0, 0]);
-    // Ждём конец HTTP-заголовков и отвечаем.
+    // Wait for the end of the HTTP headers and answer.
     while (!latin1.decode(buf).contains('\r\n\r\n')) {
       await Future<void>.delayed(const Duration(milliseconds: 5));
     }
-    s.add(utf8.encode('HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n'
-        'Content-Length: ${utf8.encode(httpBody).length}\r\nConnection: close\r\n\r\n$httpBody'));
+    s.add(
+      utf8.encode(
+        'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n'
+        'Content-Length: ${utf8.encode(httpBody).length}\r\nConnection: close\r\n\r\n$httpBody',
+      ),
+    );
     await s.flush();
     await s.close();
   }
@@ -85,13 +89,17 @@ void main() {
   late ProviderContainer c;
 
   setUp(() {
-    // Биндинг подменяет HttpClient заглушкой (400) — нужен настоящий.
+    // The binding replaces HttpClient with a stub (400) — a real one is needed.
     HttpOverrides.global = null;
     nativeState = {'state': 'disconnected'};
-    messenger.setMockMethodCallHandler(const MethodChannel(AppConstants.methodChannel),
-        (call) async => call.method == 'getState' ? nativeState : null);
-    messenger.setMockStreamHandler(const EventChannel('${AppConstants.methodChannel}/events'),
-        MockStreamHandler.inline(onListen: (_, _) {}));
+    messenger.setMockMethodCallHandler(
+      const MethodChannel(AppConstants.methodChannel),
+      (call) async => call.method == 'getState' ? nativeState : null,
+    );
+    messenger.setMockStreamHandler(
+      const EventChannel('${AppConstants.methodChannel}/events'),
+      MockStreamHandler.inline(onListen: (_, _) {}),
+    );
     SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
     FlutterSecureStorage.setMockInitialValues({});
     c = ProviderContainer();
@@ -106,7 +114,8 @@ void main() {
 
   test('connected VPN asks ip-api.com through the authenticated SOCKS proxy', () async {
     final socks = await _Socks5.start(
-        jsonEncode({'status': 'success', 'query': '203.0.113.7', 'country': 'Netherlands', 'countryCode': 'NL'}));
+      jsonEncode({'status': 'success', 'query': '203.0.113.7', 'country': 'Netherlands', 'countryCode': 'NL'}),
+    );
     addTearDown(socks.close);
     nativeState = {'state': 'connected', 'socksPort': socks.port, 'socksUser': 'su', 'socksPassword': 'sp'};
     final info = await read();

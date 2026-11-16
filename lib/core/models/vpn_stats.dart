@@ -2,10 +2,7 @@ class SpeedPoint {
   final int uploadSpeed;
   final int downloadSpeed;
 
-  const SpeedPoint({
-    this.uploadSpeed = 0,
-    this.downloadSpeed = 0,
-  });
+  const SpeedPoint({this.uploadSpeed = 0, this.downloadSpeed = 0});
 
   factory SpeedPoint.fromMap(Map<String, dynamic> map) {
     return SpeedPoint(

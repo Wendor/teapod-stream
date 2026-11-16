@@ -61,11 +61,8 @@ class VlessParser {
     try {
       final withoutScheme = uri.substring('vless://'.length);
       final hashIdx = withoutScheme.indexOf('#');
-      final name = hashIdx >= 0
-          ? _decodeName(withoutScheme.substring(hashIdx + 1))
-          : 'VLESS Server';
-      final main =
-          hashIdx >= 0 ? withoutScheme.substring(0, hashIdx) : withoutScheme;
+      final name = hashIdx >= 0 ? _decodeName(withoutScheme.substring(hashIdx + 1)) : 'VLESS Server';
+      final main = hashIdx >= 0 ? withoutScheme.substring(0, hashIdx) : withoutScheme;
 
       final atIdx = main.lastIndexOf('@');
       if (atIdx < 0) return null;
@@ -107,10 +104,9 @@ class VlessParser {
         flow: params['flow'],
         encryption: params['encryption'] ?? 'none',
         xhttpMode: params['mode'],
-        xhttpExtra: _parseExtra(params['extra']) ??
-            (params['x_padding_bytes'] == null
-                ? null
-                : {'xPaddingBytes': params['x_padding_bytes']}),
+        xhttpExtra:
+            _parseExtra(params['extra']) ??
+            (params['x_padding_bytes'] == null ? null : {'xPaddingBytes': params['x_padding_bytes']}),
         finalmask: _parseExtra(params['fm']),
         alpn: params['alpn'],
         ech: params['ech'],
@@ -166,16 +162,13 @@ class VlessParser {
     try {
       final withoutScheme = uri.substring('trojan://'.length);
       final hashIdx = withoutScheme.indexOf('#');
-      final name = hashIdx >= 0
-          ? _decodeName(withoutScheme.substring(hashIdx + 1))
-          : 'Trojan Server';
-      final main =
-          hashIdx >= 0 ? withoutScheme.substring(0, hashIdx) : withoutScheme;
+      final name = hashIdx >= 0 ? _decodeName(withoutScheme.substring(hashIdx + 1)) : 'Trojan Server';
+      final main = hashIdx >= 0 ? withoutScheme.substring(0, hashIdx) : withoutScheme;
 
       final atIdx = main.lastIndexOf('@');
       if (atIdx < 0) return null;
-      // Пароль в ссылке percent-кодирован (схема trojan-gfw, v2rayN/v2rayNG
-      // декодируют его); битый % оставляет строку как есть.
+      // The password in the link is percent-encoded (trojan-gfw scheme; v2rayN/v2rayNG
+      // decode it); a broken % leaves the string as is.
       final password = _decodeComponentOrRaw(main.substring(0, atIdx));
       final hostPart = main.substring(atIdx + 1);
 
@@ -185,10 +178,10 @@ class VlessParser {
 
       final (host, port) = _parseHostPort(hostPort, 443);
       final params = Uri.splitQueryString(queryStr);
-      // Trojan по умолчанию TLS, но ссылка может задать reality или none —
-      // раньше они молча превращались в TLS, а pbk/sid, pinSHA256, alpn и ech
-      // терялись. allowInsecure по-прежнему не читается: без пина сертификат
-      // проверяется, как и раньше.
+      // Trojan defaults to TLS, but the link may set reality or none —
+      // previously they silently turned into TLS, and pbk/sid, pinSHA256, alpn and ech
+      // were lost. allowInsecure is still not read: without a pin the certificate
+      // is verified as before.
       final security = switch (params['security']?.trim().toLowerCase()) {
         'reality' => VpnSecurity.reality,
         'none' => VpnSecurity.none,
@@ -232,11 +225,8 @@ class VlessParser {
     try {
       final withoutScheme = uri.substring('ss://'.length);
       final hashIdx = withoutScheme.indexOf('#');
-      final name = hashIdx >= 0
-          ? _decodeName(withoutScheme.substring(hashIdx + 1))
-          : 'Shadowsocks Server';
-      final main =
-          hashIdx >= 0 ? withoutScheme.substring(0, hashIdx) : withoutScheme;
+      final name = hashIdx >= 0 ? _decodeName(withoutScheme.substring(hashIdx + 1)) : 'Shadowsocks Server';
+      final main = hashIdx >= 0 ? withoutScheme.substring(0, hashIdx) : withoutScheme;
 
       String method, password, host;
       int port;
@@ -256,9 +246,9 @@ class VlessParser {
             : hostPortRaw;
         if (qIdx >= 0) queryStr = hostPart.substring(qIdx + 1);
 
-        // SIP002: userinfo — base64url(method:password) или, для SS2022,
-        // percent-encoded `method:password`. Раньше %2B/%3D/%3A ключа
-        // оставались в пароле как есть.
+        // SIP002: userinfo — base64url(method:password) or, for SS2022,
+        // percent-encoded `method:password`. Previously the key's %2B/%3D/%3A
+        // stayed in the password as is.
         final plainUserInfo = _decodeComponentOrRaw(userInfo);
         String decoded;
         try {
@@ -272,8 +262,7 @@ class VlessParser {
         password = decoded.substring(colonIdx + 1);
         (host, port) = _parseHostPort(hostPortClean, 8388);
       } else {
-        final decoded =
-            utf8.decode(base64Decode(_padBase64(main)));
+        final decoded = utf8.decode(base64Decode(_padBase64(main)));
         final atIdx = decoded.lastIndexOf('@');
         if (atIdx < 0) return null;
         final userInfo = decoded.substring(0, atIdx);
@@ -296,9 +285,7 @@ class VlessParser {
           if (param.substring(0, eqIdx) == 'prefix') {
             final prefixBytes = _decodePercentBytes(param.substring(eqIdx + 1));
             if (prefixBytes.isNotEmpty) {
-              ssPrefix = prefixBytes
-                  .map((b) => b.toRadixString(16).padLeft(2, '0'))
-                  .join();
+              ssPrefix = prefixBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
             }
             break;
           }
@@ -332,11 +319,8 @@ class VlessParser {
       final scheme = uri.startsWith('hysteria2://') ? 'hysteria2://' : 'hy2://';
       final withoutScheme = uri.substring(scheme.length);
       final hashIdx = withoutScheme.indexOf('#');
-      final name = hashIdx >= 0
-          ? _decodeName(withoutScheme.substring(hashIdx + 1))
-          : 'Hysteria2 Server';
-      final main =
-          hashIdx >= 0 ? withoutScheme.substring(0, hashIdx) : withoutScheme;
+      final name = hashIdx >= 0 ? _decodeName(withoutScheme.substring(hashIdx + 1)) : 'Hysteria2 Server';
+      final main = hashIdx >= 0 ? withoutScheme.substring(0, hashIdx) : withoutScheme;
 
       final atIdx = main.lastIndexOf('@');
       if (atIdx < 0) return null;
@@ -346,15 +330,15 @@ class VlessParser {
       final qIdx = hostPart.indexOf('?');
       var hostPort = qIdx >= 0 ? hostPart.substring(0, qIdx) : hostPart;
       final queryStr = qIdx >= 0 ? hostPart.substring(qIdx + 1) : '';
-      // Официальный формат ссылки — `host:port/?…`: путь в порт не входит.
+      // The official link format is `host:port/?…`: the path isn't part of the port.
       final slashIdx = hostPort.indexOf('/');
       if (slashIdx >= 0) hostPort = hostPort.substring(0, slashIdx);
 
       final (host, portSpec) = _splitHostPortSpec(hostPort);
       final params = Uri.splitQueryString(queryStr);
-      // Port hopping: диапазон/список вместо порта (`20000-30000`,
-      // `443,5000-6000`) или `mport` из v2rayN. Нераспознанный порт — ошибка
-      // импорта, а не тихие 443: с чужим портом профиль просто не подключится.
+      // Port hopping: a range/list instead of a port (`20000-30000`,
+      // `443,5000-6000`) or `mport` from v2rayN. An unrecognized port is an import
+      // error, not a silent 443: with a wrong port the profile simply won't connect.
       final ports = _parsePortSpec(portSpec, 443);
       if (ports == null) return null;
       final port = ports.$1;
@@ -362,19 +346,15 @@ class VlessParser {
       final mport = params['mport']?.trim() ?? '';
       if (hopPorts == null && mport.isNotEmpty) {
         final hop = _parsePortSpec(mport, port);
-        // Нераспознанный mport (`20000:30000` из sing-box, мусор) ссылку не
-        // ломает: основной порт валиден, подключаемся к нему без hopping.
-        if (hop != null &&
-            hop.$1 >= 1 &&
-            hop.$1 <= 65535 &&
-            (hop.$2 != null || hop.$1 != port)) {
+        // An unrecognized mport (`20000:30000` from sing-box, garbage) doesn't break
+        // the link: the main port is valid, we connect to it without hopping.
+        if (hop != null && hop.$1 >= 1 && hop.$1 <= 65535 && (hop.$2 != null || hop.$1 != port)) {
           hopPorts = hop.$2 ?? '${hop.$1}';
         }
       }
 
       final obfs = params['obfs'];
-      final obfsPassword =
-          obfs == 'salamander' ? params['obfs-password'] : null;
+      final obfsPassword = obfs == 'salamander' ? params['obfs-password'] : null;
       final allowInsecure = _parseInsecure(params);
       final pinSHA256 = params['pinSHA256'];
 
@@ -420,9 +400,7 @@ class VlessParser {
       final closeBracket = hostPort.indexOf(']');
       final host = hostPort.substring(1, closeBracket);
       final rest = hostPort.substring(closeBracket + 1);
-      final port = rest.startsWith(':')
-          ? int.tryParse(rest.substring(1)) ?? defaultPort
-          : defaultPort;
+      final port = rest.startsWith(':') ? int.tryParse(rest.substring(1)) ?? defaultPort : defaultPort;
       return (host, port);
     }
     final colonIdx = hostPort.lastIndexOf(':');
@@ -432,15 +410,12 @@ class VlessParser {
     return (host, port);
   }
 
-  /// Хост и сырая строка порта; IPv6 — в квадратных скобках.
+  /// Host and the raw port string; IPv6 — in square brackets.
   static (String, String) _splitHostPortSpec(String hostPort) {
     if (hostPort.startsWith('[')) {
       final closeBracket = hostPort.indexOf(']');
       final rest = hostPort.substring(closeBracket + 1);
-      return (
-        hostPort.substring(1, closeBracket),
-        rest.startsWith(':') ? rest.substring(1) : '',
-      );
+      return (hostPort.substring(1, closeBracket), rest.startsWith(':') ? rest.substring(1) : '');
     }
     final colonIdx = hostPort.lastIndexOf(':');
     if (colonIdx < 0) return (hostPort, '');
@@ -449,14 +424,14 @@ class VlessParser {
 
   static final _portRange = RegExp(r'^(\d{1,5})(?:-(\d{1,5}))?$');
 
-  /// Порт Hysteria2: одно число или список портов/диапазонов для port
-  /// hopping. Возвращает первый порт и нормализованный список (null, если
-  /// порт один); null — строка не разобрана. Пустая строка — [defaultPort].
+  /// Hysteria2 port: a single number or a list of ports/ranges for port
+  /// hopping. Returns the first port and the normalized list (null if
+  /// there's one port); null — the string didn't parse. An empty string — [defaultPort].
   static (int, String?)? _parsePortSpec(String spec, int defaultPort) {
     final trimmed = spec.replaceAll(' ', '');
     if (trimmed.isEmpty) return (defaultPort, null);
     final single = int.tryParse(trimmed);
-    // Границы одиночного порта проверяет VpnConfig.validate().
+    // Single-port bounds are checked by VpnConfig.validate().
     if (single != null) return (single, null);
     final parts = trimmed.split(',');
     int? first;
@@ -505,9 +480,9 @@ class VlessParser {
     }
   }
 
-  /// Query-параметры исходной ссылки профиля, включая base64-тело SIP002
-  /// `ss://BASE64#name`. Пусто, если ссылки нет или она нечитаема. Нужны
-  /// билдерам для полей, которых нет в [VpnConfig] (headerType, obfs, plugin).
+  /// Query parameters of the profile's original link, including the base64 body of SIP002
+  /// `ss://BASE64#name`. Empty if there's no link or it's unreadable. Needed by
+  /// builders for fields [VpnConfig] doesn't have (headerType, obfs, plugin).
   static Map<String, String> linkParams(VpnConfig config) {
     final raw = config.rawUri;
     if (raw == null) return const {};
@@ -529,14 +504,12 @@ class VlessParser {
     }
   }
 
-  /// JSON-тело `vmess://BASE64(JSON)`, из которого прочитан профиль.
+  /// JSON body of `vmess://BASE64(JSON)` the profile was read from.
   static Map<String, dynamic> vmessJson(VpnConfig config) {
     final raw = config.rawUri;
     if (raw == null || !raw.startsWith('vmess://')) return const {};
     try {
-      final json = jsonDecode(
-        utf8.decode(base64Decode(_padBase64(raw.substring('vmess://'.length)))),
-      );
+      final json = jsonDecode(utf8.decode(base64Decode(_padBase64(raw.substring('vmess://'.length)))));
       return json is Map<String, dynamic> ? json : const {};
     } catch (_) {
       return const {};

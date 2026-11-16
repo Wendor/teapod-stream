@@ -691,6 +691,22 @@ func handleUDPForwarder(ctx context.Context, req *udp.ForwarderRequest, hook *En
 	pipeUDP(gonetConn, assoc, dstIP, int(dstPort), mtu)
 }
 
+// udpActivity is the time of a UDP flow's last forwarded datagram. It is kept as an
+// offset from a time.Now() base, so deadlines keep the monotonic clock and a wall-clock
+// change (NTP, the user setting the time) doesn't stretch or cut the idle timeout.
+type udpActivity struct {
+	base time.Time
+	last atomic.Int64 // time.Duration since base
+}
+
+func newUDPActivity() *udpActivity { return &udpActivity{base: time.Now()} }
+
+func (a *udpActivity) touch() { a.last.Store(int64(time.Since(a.base))) }
+
+func (a *udpActivity) deadline() time.Time {
+	return a.base.Add(time.Duration(a.last.Load()) + udpIdleTimeout)
+}
+
 func pipeUDP(gonetConn net.Conn, assoc *UDPAssociation, dstIP net.IP, dstPort int, mtu int) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -720,17 +736,14 @@ func pipeUDP(gonetConn net.Conn, assoc *UDPAssociation, dstIP net.IP, dstPort in
 		io.Copy(io.Discard, assoc.ctrl)
 	}()
 
-	// Last forwarded datagram in either direction (Unix ms). Each reader's deadline runs
-	// from it, so a one-directional flow isn't closed by the silent direction; datagrams
-	// dropped below (foreign source, bad header) don't count, so spam can't keep a dead
-	// flow alive.
-	var lastActMs atomic.Int64
-	lastActMs.Store(time.Now().UnixMilli())
-	idleDeadline := func() time.Time { return time.UnixMilli(lastActMs.Load()).Add(udpIdleTimeout) }
+	// Last forwarded datagram in either direction. Each reader's deadline runs from it, so
+	// a one-directional flow isn't closed by the silent direction; datagrams dropped below
+	// (foreign source, bad header) don't count, so spam can't keep a dead flow alive.
+	act := newUDPActivity()
 	// stillActive: the read timed out, but the other direction moved meanwhile.
 	stillActive := func(err error) bool {
 		var ne net.Error
-		return errors.As(err, &ne) && ne.Timeout() && time.Now().Before(idleDeadline())
+		return errors.As(err, &ne) && ne.Timeout() && time.Now().Before(act.deadline())
 	}
 
 	var wg sync.WaitGroup
@@ -742,7 +755,7 @@ func pipeUDP(gonetConn net.Conn, assoc *UDPAssociation, dstIP net.IP, dstPort in
 		defer shutdown()
 		buf := make([]byte, mtu)
 		for {
-			gonetConn.SetReadDeadline(idleDeadline())
+			gonetConn.SetReadDeadline(act.deadline())
 			n, err := gonetConn.Read(buf)
 			if err != nil {
 				if stillActive(err) {
@@ -754,7 +767,7 @@ func pipeUDP(gonetConn net.Conn, assoc *UDPAssociation, dstIP net.IP, dstPort in
 			if _, err := assoc.UDPConn.WriteToUDP(datagram, assoc.RelayAddr); err != nil {
 				return
 			}
-			lastActMs.Store(time.Now().UnixMilli())
+			act.touch()
 		}
 	}()
 
@@ -764,7 +777,7 @@ func pipeUDP(gonetConn net.Conn, assoc *UDPAssociation, dstIP net.IP, dstPort in
 		defer shutdown()
 		buf := make([]byte, mtu+22)
 		for {
-			assoc.UDPConn.SetReadDeadline(idleDeadline())
+			assoc.UDPConn.SetReadDeadline(act.deadline())
 			n, from, err := assoc.UDPConn.ReadFromUDP(buf)
 			if err != nil {
 				if stillActive(err) {
@@ -788,7 +801,7 @@ func pipeUDP(gonetConn net.Conn, assoc *UDPAssociation, dstIP net.IP, dstPort in
 			if _, err := gonetConn.Write(payload); err != nil {
 				return
 			}
-			lastActMs.Store(time.Now().UnixMilli())
+			act.touch()
 		}
 	}()
 

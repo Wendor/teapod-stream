@@ -2,6 +2,7 @@ package tun2socks
 
 import (
 	"net"
+	"strings"
 	"testing"
 	"time"
 )
@@ -107,5 +108,19 @@ func TestPipeUDPDroppedDatagramsDontExtendFlow(t *testing.T) {
 	case <-f.done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("spoofed datagrams kept an idle flow alive")
+	}
+}
+
+// The idle deadline must carry the monotonic clock: a deadline from wall time alone moves
+// with every clock change, and a step back would keep an idle flow alive.
+func TestUDPActivityDeadlineIsMonotonic(t *testing.T) {
+	act := newUDPActivity()
+	act.touch()
+	d := act.deadline()
+	if !strings.Contains(d.String(), "m=") {
+		t.Fatalf("deadline %v has no monotonic reading", d)
+	}
+	if left := time.Until(d); left <= 0 || left > udpIdleTimeout {
+		t.Fatalf("deadline in %v; want within (0, %v]", left, udpIdleTimeout)
 	}
 }

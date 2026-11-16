@@ -209,6 +209,9 @@ func TestReleasingConnReleasesOnHangup(t *testing.T) {
 				}
 				wq.Notify(tc.notify)
 			}
+			if calls != 1 || inner.closed {
+				t.Fatalf("after the hangup: release called %d times, endpoint closed %v; want 1, false", calls, inner.closed)
+			}
 			c.Close()
 			if calls != 1 {
 				t.Fatalf("release called %d times; want 1", calls)

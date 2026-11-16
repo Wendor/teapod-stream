@@ -52,6 +52,8 @@ active connection table).
   Requests itself (the time is to the TUN, not to the host — as xray-rust does); otherwise they are dropped.
 - **gVisor tuning:** TIME_WAIT off and global reuse (addresses are virtual; TIME_WAIT piled up over hours), linger
   1 s, gVisor → TUN channel 4096 (256 overflowed under bursts and dropped ACKs).
+- **Stop before start:** the wrapper runs `Engine.Start` in a goroutine, so `Stop` may come first; it still closes
+  the fd copy and the stack, and the late `Start` returns without starting workers.
 - Forwarder goroutines aren't in the engine wait group: `Stop()` cancels pending SOCKS dials but established flows end
   by idle timeout or with the stack.
 

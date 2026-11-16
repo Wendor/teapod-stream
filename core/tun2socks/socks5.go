@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"time"
 )
 
@@ -36,7 +37,7 @@ func NewSOCKS5Client(host string, port int, username, password string) *SOCKS5Cl
 // once the connection is established the context is not watched.
 func (s *SOCKS5Client) DialTCP(ctx context.Context, dstIP string, dstPort int) (net.Conn, error) {
 	d := net.Dialer{Timeout: dialTimeout}
-	conn, err := d.DialContext(ctx, "tcp", fmt.Sprintf("%s:%d", s.host, s.port))
+	conn, err := d.DialContext(ctx, "tcp", net.JoinHostPort(s.host, strconv.Itoa(s.port)))
 	if err != nil {
 		return nil, fmt.Errorf("socks5: dial proxy: %w", err)
 	}
@@ -93,7 +94,7 @@ func (a *UDPAssociation) Close() error {
 // ctx cancels the initial TCP dial; once established the context is not watched.
 func (s *SOCKS5Client) UDPAssociate(ctx context.Context) (*UDPAssociation, error) {
 	d := net.Dialer{Timeout: dialTimeout}
-	conn, err := d.DialContext(ctx, "tcp", fmt.Sprintf("%s:%d", s.host, s.port))
+	conn, err := d.DialContext(ctx, "tcp", net.JoinHostPort(s.host, strconv.Itoa(s.port)))
 	if err != nil {
 		return nil, fmt.Errorf("socks5: dial proxy for UDP ASSOCIATE: %w", err)
 	}
@@ -108,22 +109,25 @@ func (s *SOCKS5Client) UDPAssociate(ctx context.Context) (*UDPAssociation, error
 		return nil, fmt.Errorf("socks5: handshake for UDP: %w", err)
 	}
 
-	// 1. Bind local UDP port on loopback
-	localAddr := &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0}
-	udpConn, err := net.ListenUDP("udp", localAddr)
+	// 1. Bind a local UDP port on the address the control connection uses, so the
+	// socket has the proxy's address family (IPv4 or IPv6).
+	local := conn.LocalAddr().(*net.TCPAddr)
+	localIP := local.IP
+	udpConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: localIP, Zone: local.Zone})
 	if err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("socks5: failed to bind local udp: %w", err)
 	}
 	boundPort := udpConn.LocalAddr().(*net.UDPAddr).Port
 
-	// 2. Send UDP ASSOCIATE with the specific bound port
-	req := []byte{
-		0x05, 0x03, 0x00, // VER=5, CMD=UDP ASSOCIATE, RSV
-		0x01,             // ATYP: IPv4
-		127, 0, 0, 1,     // BND.ADDR: 127.0.0.1
-		byte(boundPort >> 8), byte(boundPort), // BND.PORT: our allocated port
+	// 2. Send UDP ASSOCIATE with the bound address and port
+	req := []byte{0x05, 0x03, 0x00} // VER=5, CMD=UDP ASSOCIATE, RSV
+	if v4 := localIP.To4(); v4 != nil {
+		req = append(append(req, 0x01), v4...) // ATYP: IPv4, BND.ADDR
+	} else {
+		req = append(append(req, 0x04), localIP.To16()...) // ATYP: IPv6, BND.ADDR
 	}
+	req = append(req, byte(boundPort>>8), byte(boundPort)) // BND.PORT: our allocated port
 	if _, err := conn.Write(req); err != nil {
 		udpConn.Close()
 		conn.Close()
@@ -137,11 +141,21 @@ func (s *SOCKS5Client) UDPAssociate(ctx context.Context) (*UDPAssociation, error
 		return nil, fmt.Errorf("socks5: UDP ASSOCIATE response: %w", err)
 	}
 
-	udpAddr, err := net.ResolveUDPAddr("udp", relayAddr)
+	// A relay given as a host name resolves in the local socket's family.
+	network := "udp4"
+	if localIP.To4() == nil {
+		network = "udp6"
+	}
+	udpAddr, err := net.ResolveUDPAddr(network, relayAddr)
 	if err != nil {
 		udpConn.Close()
 		conn.Close()
 		return nil, fmt.Errorf("socks5: resolve relay addr %q: %w", relayAddr, err)
+	}
+	if (udpAddr.IP.To4() != nil) != (localIP.To4() != nil) {
+		udpConn.Close()
+		conn.Close()
+		return nil, fmt.Errorf("socks5: relay %s has another address family than the local socket %s", udpAddr, udpConn.LocalAddr())
 	}
 
 	// The control TCP connection must stay open for the lifetime of the UDP relay.
@@ -357,5 +371,5 @@ func readSocksAddress(conn net.Conn) (string, error) {
 		return "", fmt.Errorf("read bind port: %w", err)
 	}
 	port := binary.BigEndian.Uint16(portBuf)
-	return fmt.Sprintf("%s:%d", host, port), nil
+	return net.JoinHostPort(host, strconv.Itoa(int(port))), nil
 }

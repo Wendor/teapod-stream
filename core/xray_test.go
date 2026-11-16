@@ -47,16 +47,21 @@ func startOnBusyPort(t *testing.T, busyPort int) (int, bool) {
 		inst.Close()
 		t.Fatal("start succeeded on a busy port")
 	}
-	msg := err.Error()
 	switch {
-	case strings.Contains(msg, fmt.Sprintf("127.0.0.1:%d", busyPort)):
+	case portInUse(err, busyPort):
 		return free, true
-	case strings.Contains(msg, fmt.Sprintf("127.0.0.1:%d", free)) && strings.Contains(msg, "address already in use"):
+	case portInUse(err, free):
 		return free, false
 	default:
 		t.Fatalf("unexpected start error: %v", err)
 		return 0, false
 	}
+}
+
+// portInUse reports whether err is the failure to bind 127.0.0.1:port because the
+// address is in use; the whole endpoint is matched, so port 5000 doesn't match 50000.
+func portInUse(err error, port int) bool {
+	return strings.Contains(err.Error(), fmt.Sprintf("listen tcp 127.0.0.1:%d: bind: address already in use", port))
 }
 
 // A failed start must close the instance: the features that started before the

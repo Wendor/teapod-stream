@@ -7,8 +7,8 @@ doesn't need Android (`ConnectionParams`, `PrefixTcpProxy`, `TunOwnerPolicy`, `S
 ```bash
 flutter test                                       # all Dart tests (~20 s)
 flutter test --coverage                            # + coverage/lcov.info (not committed)
-cd android && ./gradlew :app:testDebugUnitTest     # JVM tests (needs the AAR: ./build.sh binaries)
-cd core && ./build.sh prepare && go test ./...    # Go tests of the engines (host)
+(cd android && ./gradlew :app:testDebugUnitTest)   # JVM tests (needs the AAR: ./build.sh binaries)
+(cd core && ./build.sh prepare && go test ./...)  # Go tests of the engines and tun2socks (host)
 ```
 
 A fix comes with a test that fails without it; a logic change comes with tests of the new behaviour.
@@ -48,7 +48,8 @@ A fix comes with a test that fails without it; a logic change comes with tests o
 - **HTTP progress:** `dart:io` buffers small chunks until the response ends — use ~64 KB chunks to observe progress.
 - **Kotlin:** `unitTests.isReturnDefaultValues = true` — stubs like `android.util.Log` don't throw.
 
-Not covered by unit tests: `QrScanScreen` (camera), `main.dart`, `XrayVpnService`, `MainActivity`, the cores.
+Not covered by unit tests: `QrScanScreen` (camera), `main.dart`, `XrayVpnService`, `MainActivity`, and the cores running
+on Android with a real TUN (the Go engines have host unit tests; on-device behaviour needs the integration tests).
 
 ## Integration tests on a device (`tool/itest/`)
 

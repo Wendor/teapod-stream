@@ -10,8 +10,8 @@ On push to `master` and on pull requests (not on every branch push: with an open
 | Job | Steps |
 |---|---|
 | `dart` | `flutter gen-l10n` + `git diff --exit-code lib/l10n` (generated files match the ARB), `dart format --set-exit-if-changed lib test tool`, `flutter analyze`, `flutter test` |
-| `kotlin` | JDK 21 → teapod-core AAR (the action above; built only when `core/` changed) → `flutter build apk --debug --config-only` → `./gradlew :app:testDebugUnitTest` |
-| `core` | `core/build.sh prepare` (patched xray-core), `go vet ./...`, `go test ./...` in `core/` |
+| `kotlin` | JDK 21 → teapod-core AAR (the action above; built only on a cache miss, i.e. the first run for a `core/` tree) → `flutter build apk --debug --config-only` → `./gradlew :app:testDebugUnitTest` |
+| `core` | `core/build.sh prepare` (patched xray-core), `go vet ./...`, `go test ./...` in `core/`, plus the tests the xray-core patches add |
 
 `assets/binaries/` is created empty: it is declared in pubspec, tests don't need geodata.
 
@@ -23,7 +23,7 @@ Skipped for drafts.
 
 - title `area: what changed`;
 - the template's `## Why`, `## What changed`, `## Testing`, `## Risks` present and no placeholders left;
-- `.github/`, `build.sh`, `android/app/libs/` or the `version:` line of `pubspec.yaml` changed → problem;
+- `.github/`, `build.sh`, `core/build.sh`, `android/app/libs/` or the `version:` line of `pubspec.yaml` changed → problem;
 - more than 500 changed lines (without `lib/l10n/`, `pubspec.lock`, `test/fixtures/`) → warning.
 
 Problems fail the check for contributors and are warnings for owners/members/collaborators.
@@ -45,8 +45,8 @@ Order: version from `pubspec.yaml` → signing key → JDK, NDK → teapod-core 
 `teapod-core-<core/ hash>.aar`, which `./build.sh binaries` downloads elsewhere) → obfuscation symbols as artifact
 `symbols-<version>`.
 
-`build.sh` takes `JAVA_HOME` / `ANDROID_HOME` from the environment (Homebrew paths by default); the NDK is always
-`$ANDROID_HOME/ndk/28.2.13676358`.
+`build.sh` takes `JAVA_HOME` / `ANDROID_HOME` from the environment (Homebrew paths by default). `core/build.sh` uses
+`$ANDROID_HOME/ndk/$NDK_VERSION` (default 28.2.13676358; the workflows pass the same `NDK_VERSION`).
 
 ## Signing
 

@@ -1,7 +1,6 @@
 # teapod-tun2socks
 
-**Directory:** `core/tun2socks/` — package `github.com/Wendor/teapod-core/tun2socks`, formerly the separate
-teapod-tun2socks repository (its standalone Kotlin wrapper and AAR build were dropped).
+**Directory:** `core/tun2socks/` — package `github.com/Wendor/teapod-core/tun2socks`.
 
 A TUN → SOCKS5 gateway on gVisor's userspace TCP/IP stack, with a per-flow owner check.
 

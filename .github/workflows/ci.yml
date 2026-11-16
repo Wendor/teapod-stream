@@ -95,3 +95,6 @@ jobs:
       - run: ./build.sh prepare
       - run: go vet ./...
       - run: go test ./...
+      # Tests the xray-core patches add, in the patched tree
+      - run: go test ./transport/internet/splithttp/ ./transport/internet/tls/ ./transport/internet/hysteria/
+        working-directory: core/.xray-core

@@ -1,6 +1,6 @@
 # teapod-core
 
-**Directory:** `core/` — a Go module (`github.com/Wendor/teapod-core`), formerly the separate teapod-core repository.
+**Directory:** `core/` — a Go module (`github.com/Wendor/teapod-core`).
 
 A gomobile AAR with all native engines. `core/build.sh build` produces `core/outputs/teapod-core.aar` (fat:
 arm64-v8a + x86_64) and per-ABI AARs.

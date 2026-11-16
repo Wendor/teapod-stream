@@ -6,8 +6,8 @@ description: >-
 
 inputs:
   ndk-version:
-    description: Android NDK version (the one core/build.sh uses)
-    default: 28.2.13676358
+    description: Android NDK version; passed to core/build.sh as NDK_VERSION, so both use the same one
+    required: true
 
 outputs:
   key:

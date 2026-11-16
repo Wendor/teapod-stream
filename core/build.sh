@@ -7,7 +7,9 @@ cd "$SCRIPT_DIR"
 
 # ── Tools (homebrew by default; on CI ANDROID_HOME and go come from the environment) ──
 export ANDROID_HOME="${ANDROID_HOME:-/opt/homebrew/share/android-commandlinetools}"
-export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/28.2.13676358"
+# Single source of the NDK version for the build and CI (.github/actions/teapod-core installs this one)
+NDK_VERSION="${NDK_VERSION:-28.2.13676358}"
+export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$NDK_VERSION"
 export PATH="/opt/homebrew/bin:$HOME/go/bin:$ANDROID_HOME/platform-tools:$PATH"
 
 GO_BIN="go"

@@ -57,12 +57,16 @@ Teapodcore.startXray(configJson, object : XrayCallback {
 
 // 4. Start TUN-to-SOCKS bridge
 val tunFd = vpnBuilder.establish()
+// gomobile generates a Java API: Kotlin can't use named arguments here.
 val error = Teapodcore.startTun2Socks(
     tunFd.fd.toLong(),
-    socksPort    = 10808L,
-    socksUser    = "",
-    socksPass    = "",
-    validator    = null   // null = allow all
+    1500L,   // mtu, as in VpnService.Builder.setMtu()
+    10808L,  // SOCKS5 port of the core
+    "",      // SOCKS5 user
+    "",      // SOCKS5 password
+    true,    // allowICMP: answer ping locally
+    false,   // blockQuic: reject UDP/443 with ICMP Port Unreachable
+    null     // validator: null = allow all
 )
 
 // 5. Stop
@@ -77,7 +81,7 @@ Pass a `TunValidator` to `startTun2Socks` to filter connections by UID (requires
 ```kotlin
 val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
-Teapodcore.startTun2Socks(fd, port, "", "", object : TunValidator {
+Teapodcore.startTun2Socks(fd, mtu, port, "", "", true, false, object : TunValidator {
     override fun onValidate(srcIP: String, srcPort: Long,
                             dstIP: String, dstPort: Long, protocol: Long): Boolean {
         val uid = cm.getConnectionOwnerUid(
@@ -104,7 +108,7 @@ Teapodcore.startTun2Socks(fd, port, "", "", object : TunValidator {
 | `queryXrayStats(tag, direction)` | Read and reset traffic counter for an outbound tag |
 | `measureXrayDelay(url)` | Latency test through the running instance (ms) |
 | `measureOutboundDelay(config, url)` | Latency test with a temporary instance |
-| `startTun2Socks(fd, port, user, pass, validator)` | Start TUN bridge |
+| `startTun2Socks(fd, mtu, port, user, pass, allowICMP, blockQuic, validator)` | Start TUN bridge |
 | `stopTun2Socks()` | Stop TUN bridge |
 | `isTunRunning()` | Whether the TUN bridge is active |
 | `getTunUploadBytes()` | Bytes sent from device to internet |

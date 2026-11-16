@@ -41,7 +41,8 @@ RustCore:          TUN fd → xray-rust → server
 
 - `StartXray` stops the previous instance first; the start goroutine checks it is still the current instance, so a
   concurrent `StopXray` can't leave an orphan holding the SOCKS port.
-- Delay measurement: `http.Transport` over `core.Dial`, 2 attempts with keep-alive, `CloseIdleConnections` on exit
+- Delay measurement: `http.Transport` over `core.Dial`, 2 attempts with keep-alive (an attempt counts only when the
+  whole body was read), `CloseIdleConnections` on exit
   (an idle connection keeps the outbound session and the server connection alive). Temporary instances don't register
   the global log handler — otherwise the main instance stopped logging.
 - The console log writer writes to stdout only without a `LogListener` (no duplicate logcat lines).

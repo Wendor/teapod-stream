@@ -140,6 +140,10 @@ cd android && ./gradlew :app:testDebugUnitTest    # JVM-тесты Kotlin
 dart run tool/itest/main.dart --help              # интеграционные тесты на устройстве
 ```
 
+## Участие в разработке
+
+Pull request'ы приветствуются — сначала прочитайте [CONTRIBUTING.md](CONTRIBUTING.md) (написанные с ИИ тоже: [AGENTS.md](AGENTS.md)). Как устроено приложение: [wiki](wiki/index.md).
+
 ## Поддерживаемые архитектуры
 
 - `arm64-v8a`

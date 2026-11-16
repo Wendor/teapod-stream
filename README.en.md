@@ -140,6 +140,10 @@ cd android && ./gradlew :app:testDebugUnitTest    # JVM tests for Kotlin
 dart run tool/itest/main.dart --help              # on-device integration tests
 ```
 
+## Contributing
+
+Pull requests are welcome — read [CONTRIBUTING.md](CONTRIBUTING.md) first (AI-assisted ones too: [AGENTS.md](AGENTS.md)). How the app works inside: [wiki](wiki/index.md).
+
 ## Supported architectures
 
 - `arm64-v8a`

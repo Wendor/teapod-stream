@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+reviews:
+  profile: chill
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    - "!lib/l10n/app_localizations*.dart"
+    - "!pubspec.lock"
+  path_instructions:
+    - path: "android/**/*.kt"
+      instructions: >-
+        VpnService, kill switch, reconnect and split tunneling: look for traffic leaving the tunnel, the real IP
+        being exposed, and state left inconsistent between the service, the notification, the tile and Flutter.
+    - path: "lib/**/*.dart"
+      instructions: >-
+        User-visible strings must come from ARB (context.l10n / L10n.current), never literals. Persisted models
+        must stay backward-compatible. An option or protocol must be handled or refused by every core backend.
+    - path: "wiki/**"
+      instructions: The wiki describes the current state only; flag history, dates and statements the diff makes untrue.
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - AGENTS.md
+      - CONTRIBUTING.md

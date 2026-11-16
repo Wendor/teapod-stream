@@ -1,0 +1,58 @@
+name: Bug
+description: Something doesn't work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Never paste server addresses, subscription links, UUIDs or keys — mask them (`vless://***@***:443`).
+        Security problems: use private vulnerability reporting, not an issue.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens
+      description: What you did, what you expected, what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Import a VLESS + Reality config
+        2. Connect on Wi-Fi, switch to mobile data
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      placeholder: 1.8.0
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and Android version
+      placeholder: Pixel 8, Android 15
+    validations:
+      required: true
+  - type: dropdown
+    id: core
+    attributes:
+      label: Core
+      options: [xray-core (Go), xray-rust, sing-box, not sure]
+    validations:
+      required: true
+  - type: input
+    id: protocol
+    attributes:
+      label: Protocol and transport
+      placeholder: VLESS + Reality over xHTTP
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Logs screen (home or Settings) → share. Mask addresses and keys before pasting.
+      render: text

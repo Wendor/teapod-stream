@@ -12,8 +12,12 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  FLUTTER_VERSION: 3.41.6
+  NDK_VERSION: 28.2.13676358
+
 jobs:
-  test:
+  dart:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -21,12 +25,74 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: 3.41.6
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
       # The directory is declared in pubspec; tests don't need geodata
       - run: mkdir -p assets/binaries
       - run: flutter pub get
+
+      - name: Generated localizations match the ARB files
+        run: |
+          flutter gen-l10n
+          git diff --exit-code -- lib/l10n || { echo "::error::Run 'flutter gen-l10n' and commit lib/l10n"; exit 1; }
+
+      - name: Format
+        run: |
+          git ls-files '*.dart' | grep -v '^lib/l10n/app_localizations' \
+            | xargs dart format --output=none --set-exit-if-changed \
+            || { echo "::error::Run 'dart format' (see AGENTS.md → Commands)"; exit 1; }
+
       - run: flutter analyze
       - run: flutter test
+
+  kotlin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      # Strictly the pubspec version, as build.sh binaries; a branch bumped before its core release has none yet
+      - name: teapod-core AAR
+        id: aar
+        run: |
+          v=$(awk '/^version:/{split($2,a,"+"); print a[1]; exit}' pubspec.yaml)
+          mkdir -p android/app/libs assets/binaries
+          if curl -fsSL "https://github.com/Wendor/teapod-core/releases/download/v$v/teapod-core-$v.aar" \
+              -o android/app/libs/teapod-core.aar; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::teapod-core v$v is not released yet — Kotlin tests skipped"
+          fi
+
+      - uses: actions/setup-java@v6
+        if: steps.aar.outputs.ok
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+          cache-dependency-path: |
+            android/*.gradle.kts
+            android/app/build.gradle.kts
+            android/gradle/wrapper/gradle-wrapper.properties
+
+      - name: Android NDK
+        if: steps.aar.outputs.ok
+        run: |
+          [ -d "$ANDROID_HOME/ndk/$NDK_VERSION" ] \
+            || "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" > /dev/null
+
+      - uses: subosito/flutter-action@v2
+        if: steps.aar.outputs.ok
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Kotlin JVM tests
+        if: steps.aar.outputs.ok
+        run: |
+          flutter pub get
+          flutter build apk --debug --config-only
+          cd android && ./gradlew :app:testDebugUnitTest

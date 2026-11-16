@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sagernet/gvisor/pkg/waiter"
 	"golang.org/x/sys/unix"
 )
 
@@ -174,5 +175,47 @@ func TestReleasingConnPassesHalfClose(t *testing.T) {
 	cw.CloseWrite()
 	if !inner.closedWrite || inner.closed || released {
 		t.Fatalf("closedWrite %v, closed %v, released %v; want true, false, false", inner.closedWrite, inner.closed, released)
+	}
+}
+
+type readiness waiter.EventMask
+
+func (r readiness) Readiness(mask waiter.EventMask) waiter.EventMask {
+	return waiter.EventMask(r) & mask
+}
+
+// An app reset while the SOCKS dial is pending removes the endpoint without a Close; the
+// decision must go with it, or a new SYN on the 5-tuple skips the validator.
+func TestReleasingConnReleasesOnHangup(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		before readiness
+		notify waiter.EventMask
+	}{
+		{"reset later", 0, waiter.EventHUp},
+		{"error later", 0, waiter.EventErr},
+		{"already reset", readiness(waiter.EventHUp), 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var wq waiter.Queue
+			calls := 0
+			inner := &halfCloseConn{}
+			c := &releasingConn{Conn: inner, release: func() { calls++ }}
+			c.releaseOnHangup(&wq, tc.before)
+			if tc.notify != 0 {
+				wq.Notify(waiter.ReadableEvents)
+				if calls != 0 {
+					t.Fatal("released on a readable event")
+				}
+				wq.Notify(tc.notify)
+			}
+			c.Close()
+			if calls != 1 {
+				t.Fatalf("release called %d times; want 1", calls)
+			}
+			if inner.closed != true {
+				t.Fatal("Close didn't close the endpoint")
+			}
+		})
 	}
 }

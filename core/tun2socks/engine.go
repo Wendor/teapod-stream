@@ -116,6 +116,20 @@ func (c *releasingConn) Close() error {
 	return c.Conn.Close()
 }
 
+// releaseOnHangup releases the decision as soon as the endpoint hangs up (the app resets or
+// closes it), not only when Close runs: a reset during the SOCKS dial removes the endpoint
+// at once, and the next SYN on that 5-tuple must reach the validator.
+func (c *releasingConn) releaseOnHangup(wq *waiter.Queue, ep interface {
+	Readiness(waiter.EventMask) waiter.EventMask
+}) {
+	const hangup = waiter.EventHUp | waiter.EventErr
+	entry := waiter.NewFunctionEntry(hangup, func(waiter.EventMask) { c.once.Do(c.release) })
+	wq.EventRegister(&entry)
+	if ep.Readiness(hangup) != 0 {
+		c.once.Do(c.release)
+	}
+}
+
 // CloseWrite passes a half-close on, so pipeConnections keeps the other direction open.
 // The flow is still alive, so the decision stays.
 func (c *releasingConn) CloseWrite() error {
@@ -642,6 +656,7 @@ func handleTCPForwarder(ctx context.Context, req *tcp.ForwarderRequest, hook *En
 	app := &releasingConn{Conn: gonetConn, release: func() {
 		hook.Invalidate(srcIP, srcPort, dstIP, dstPort, uint8(ProtocolTCP))
 	}}
+	app.releaseOnHangup(&wq, ep)
 
 	dialStart := time.Now()
 	proxyConn, dialErr := NewSOCKS5Client(socksHost, socksPort, socksUser, socksPass).

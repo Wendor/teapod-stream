@@ -111,8 +111,9 @@ func (s *SOCKS5Client) UDPAssociate(ctx context.Context) (*UDPAssociation, error
 
 	// 1. Bind a local UDP port on the address the control connection uses, so the
 	// socket has the proxy's address family (IPv4 or IPv6).
-	localIP := conn.LocalAddr().(*net.TCPAddr).IP
-	udpConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: localIP, Port: 0})
+	local := conn.LocalAddr().(*net.TCPAddr)
+	localIP := local.IP
+	udpConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: localIP, Zone: local.Zone})
 	if err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("socks5: failed to bind local udp: %w", err)
@@ -140,7 +141,12 @@ func (s *SOCKS5Client) UDPAssociate(ctx context.Context) (*UDPAssociation, error
 		return nil, fmt.Errorf("socks5: UDP ASSOCIATE response: %w", err)
 	}
 
-	udpAddr, err := net.ResolveUDPAddr("udp", relayAddr)
+	// A relay given as a host name resolves in the local socket's family.
+	network := "udp4"
+	if localIP.To4() == nil {
+		network = "udp6"
+	}
+	udpAddr, err := net.ResolveUDPAddr(network, relayAddr)
 	if err != nil {
 		udpConn.Close()
 		conn.Close()

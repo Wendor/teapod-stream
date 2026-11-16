@@ -58,9 +58,9 @@ func TestDialTCPToIPv6Proxy(t *testing.T) {
 	conn.Close()
 }
 
-// udpAssociateServer accepts one UDP ASSOCIATE and replies with relay as BND.ADDR.
-// It returns the address the client sent in the request.
-func udpAssociateServer(t *testing.T, ln net.Listener, relay *net.UDPAddr) <-chan net.IP {
+// udpAssociateServer accepts one UDP ASSOCIATE and replies with relay as BND.ADDR, or
+// with host and relay's port when host is set. It returns the address the client sent.
+func udpAssociateServer(t *testing.T, ln net.Listener, relay *net.UDPAddr, host string) <-chan net.IP {
 	t.Helper()
 	got := make(chan net.IP, 1)
 	go func() {
@@ -83,7 +83,9 @@ func udpAssociateServer(t *testing.T, ln net.Listener, relay *net.UDPAddr) <-cha
 		got <- net.IP(addr)
 		reply := []byte{0x05, 0x00, 0x00, 0x01}
 		ip := relay.IP.To4()
-		if ip == nil {
+		if host != "" {
+			reply[3], ip = 0x03, append([]byte{byte(len(host))}, host...)
+		} else if ip == nil {
 			reply[3], ip = 0x04, relay.IP.To16()
 		}
 		reply = append(append(reply, ip...), byte(relay.Port>>8), byte(relay.Port))
@@ -105,7 +107,7 @@ func TestUDPAssociateThroughIPv6Relay(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer relay.Close()
-	sent := udpAssociateServer(t, ln, relay.LocalAddr().(*net.UDPAddr))
+	sent := udpAssociateServer(t, ln, relay.LocalAddr().(*net.UDPAddr), "")
 
 	assoc, err := NewSOCKS5Client("::1", ln.Addr().(*net.TCPAddr).Port, "", "").UDPAssociate(context.Background())
 	if err != nil {
@@ -134,11 +136,39 @@ func TestUDPAssociateRejectsRelayOfOtherFamily(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer ln.Close()
-	udpAssociateServer(t, ln, &net.UDPAddr{IP: net.IPv6loopback, Port: 5000})
+	udpAssociateServer(t, ln, &net.UDPAddr{IP: net.IPv6loopback, Port: 5000}, "")
 
 	assoc, err := NewSOCKS5Client("127.0.0.1", ln.Addr().(*net.TCPAddr).Port, "", "").UDPAssociate(context.Background())
 	if err == nil {
 		assoc.Close()
 		t.Fatal("UDPAssociate accepted an IPv6 relay for an IPv4 socket")
+	}
+}
+
+// A relay host name with IPv4 and IPv6 addresses resolves in the proxy's family, not to
+// the IPv4 address the plain "udp" network picks first.
+func TestUDPAssociateResolvesRelayNameInProxyFamily(t *testing.T) {
+	var v4, v6 bool
+	ips, _ := net.LookupIP("localhost")
+	for _, ip := range ips {
+		v4, v6 = v4 || ip.To4() != nil, v6 || ip.To4() == nil
+	}
+	if !v4 || !v6 {
+		t.Skipf("localhost resolves to %v; need IPv4 and IPv6", ips)
+	}
+	ln, err := net.Listen("tcp", "[::1]:0")
+	if err != nil {
+		t.Skipf("no IPv6 loopback: %v", err)
+	}
+	defer ln.Close()
+	udpAssociateServer(t, ln, &net.UDPAddr{Port: 5000}, "localhost")
+
+	assoc, err := NewSOCKS5Client("::1", ln.Addr().(*net.TCPAddr).Port, "", "").UDPAssociate(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer assoc.Close()
+	if !assoc.RelayAddr.IP.Equal(net.IPv6loopback) {
+		t.Fatalf("relay %v; want [::1]:5000", assoc.RelayAddr)
 	}
 }

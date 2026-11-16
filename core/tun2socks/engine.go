@@ -79,6 +79,8 @@ type Engine struct {
 	hook           *EngineHook
 	mtu            int
 	running        atomic.Bool
+	lifeMu         sync.Mutex // orders Start and Stop
+	stopped        bool       // Stop ran: Start must not start workers
 	stopCh         chan struct{}
 	wg             sync.WaitGroup
 	tunFile        *os.File
@@ -104,6 +106,43 @@ type Engine struct {
 
 // trackedConn is a proxied TCP connection with per-direction activity timestamps
 // (Unix ms) used for connection-level idle accounting and zombie detection.
+// releasingConn calls release before it closes the connection. Closing a gVisor endpoint
+// lets a new flow with the same 5-tuple in at once; dropping the flow's allowed decision
+// first makes that flow call the validator again.
+type releasingConn struct {
+	net.Conn
+	once    sync.Once
+	release func()
+}
+
+func (c *releasingConn) Close() error {
+	c.once.Do(c.release)
+	return c.Conn.Close()
+}
+
+// releaseOnHangup releases the decision as soon as the endpoint hangs up (the app resets or
+// closes it), not only when Close runs: a reset during the SOCKS dial removes the endpoint
+// at once, and the next SYN on that 5-tuple must reach the validator.
+func (c *releasingConn) releaseOnHangup(wq *waiter.Queue, ep interface {
+	Readiness(waiter.EventMask) waiter.EventMask
+}) {
+	const hangup = waiter.EventHUp | waiter.EventErr
+	entry := waiter.NewFunctionEntry(hangup, func(waiter.EventMask) { c.once.Do(c.release) })
+	wq.EventRegister(&entry)
+	if ep.Readiness(hangup) != 0 {
+		c.once.Do(c.release)
+	}
+}
+
+// CloseWrite passes a half-close on, so pipeConnections keeps the other direction open.
+// The flow is still alive, so the decision stays.
+func (c *releasingConn) CloseWrite() error {
+	if cw, ok := c.Conn.(interface{ CloseWrite() error }); ok {
+		return cw.CloseWrite()
+	}
+	return errors.ErrUnsupported
+}
+
 type trackedConn struct {
 	app      net.Conn // gVisor side
 	proxy    net.Conn // SOCKS side
@@ -244,7 +283,15 @@ func NewEngine(tunFD int, mtu int, socksHost string, socksPort int, socksUser, s
 }
 
 func (e *Engine) Start() error {
+	// The wrapper runs Start in a goroutine: Stop can come first. Workers are added under
+	// lifeMu, so Stop either prevents them or waits for them.
+	e.lifeMu.Lock()
+	if e.stopped {
+		e.lifeMu.Unlock()
+		return fmt.Errorf("engine stopped before start")
+	}
 	if !e.running.CompareAndSwap(false, true) {
+		e.lifeMu.Unlock()
 		return fmt.Errorf("engine already running")
 	}
 	log.Printf("%s engine started", e.logPrefix)
@@ -260,6 +307,7 @@ func (e *Engine) Start() error {
 		defer e.wg.Done()
 		e.tunWriteLoop(e.ctx)
 	}()
+	e.lifeMu.Unlock()
 
 	<-e.stopCh
 	log.Printf("%s engine stopped", e.logPrefix)
@@ -427,10 +475,17 @@ func (e *Engine) tunWriteLoop(ctx context.Context) {
 	}
 }
 
+// Stop releases the engine whether or not Start ran: the TUN fd copy and the stack are
+// created by NewEngine.
 func (e *Engine) Stop() {
-	if !e.running.CompareAndSwap(true, false) {
+	e.lifeMu.Lock()
+	if e.stopped {
+		e.lifeMu.Unlock()
 		return
 	}
+	e.stopped = true
+	e.running.Store(false)
+	e.lifeMu.Unlock()
 	e.cancel() // unblock any in-flight SOCKS5 DialContext in forwarder goroutines
 	close(e.stopCh)
 	e.tunFile.Close()
@@ -615,6 +670,13 @@ func handleTCPForwarder(ctx context.Context, req *tcp.ForwarderRequest, hook *En
 		gonetConn.Close()
 		return
 	}
+	// An allowed decision lives as long as its flow: the key has no app identity, and another
+	// app reusing the same 5-tuple within the TTL would get it without a validator call.
+	// Denials stay cached, so a blocked app's retries don't call the validator every time.
+	app := &releasingConn{Conn: gonetConn, release: func() {
+		hook.Invalidate(srcIP, srcPort, dstIP, dstPort, uint8(ProtocolTCP))
+	}}
+	app.releaseOnHangup(&wq, ep)
 
 	dialStart := time.Now()
 	proxyConn, dialErr := NewSOCKS5Client(socksHost, socksPort, socksUser, socksPass).
@@ -622,13 +684,13 @@ func handleTCPForwarder(ctx context.Context, req *tcp.ForwarderRequest, hook *En
 	if dialErr != nil {
 		e.socksDialFails.Add(1)
 		log.Printf("[teapod-tun2socks] SOCKS5 dial %s:%d failed after %dms: %v", dstIP, dstPort, time.Since(dialStart).Milliseconds(), dialErr)
-		gonetConn.Close()
+		app.Close()
 		return
 	}
 
 	nowMs := time.Now().UnixMilli()
 	tc := &trackedConn{
-		app:       gonetConn,
+		app:       app,
 		proxy:     proxyConn,
 		dst:       fmt.Sprintf("%s:%d", dstIP, dstPort),
 		createdMs: nowMs,
@@ -673,22 +735,26 @@ func handleUDPForwarder(ctx context.Context, req *udp.ForwarderRequest, hook *En
 		gonetConn.Close()
 		return
 	}
+	// The allowed decision ends with the flow (see handleTCPForwarder).
+	conn := &releasingConn{Conn: gonetConn, release: func() {
+		hook.Invalidate(srcIP, id.RemotePort, dstIP, dstPort, uint8(ProtocolUDP))
+	}}
 
 	socks := NewSOCKS5Client(socksHost, socksPort, socksUser, socksPass)
 	assoc, err := socks.UDPAssociate(ctx)
 	if err != nil {
 		e.socksDialFails.Add(1)
 		log.Printf("[teapod-tun2socks] UDP ASSOCIATE failed for %s:%d: %v", dstIP, dstPort, err)
-		gonetConn.Close()
+		conn.Close()
 		return
 	}
 
 	connID := e.connsSeq.Add(1)
-	e.trackUDPConn(connID, gonetConn)
+	e.trackUDPConn(connID, conn)
 	defer e.untrackUDPConn(connID)
 	// Run the relay inline: handleUDPForwarder is already its own goroutine, and
 	// keeping it on the stack ties the reserved slot's lifetime to the live flow.
-	pipeUDP(gonetConn, assoc, dstIP, int(dstPort), mtu)
+	pipeUDP(conn, assoc, dstIP, int(dstPort), mtu)
 }
 
 // udpActivity is the time of a UDP flow's last forwarded datagram. It is kept as an

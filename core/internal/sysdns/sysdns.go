@@ -7,7 +7,7 @@ import (
 	"context"
 	"errors"
 	"net"
-	"strings"
+	"net/netip"
 
 	"github.com/miekg/dns"
 	"github.com/sagernet/sing-box/adapter"
@@ -29,13 +29,13 @@ var _ adapter.DNSTransport = (*Transport)(nil)
 
 type Transport struct {
 	boxdns.TransportAdapter
-	resolver *net.Resolver
+	lookup func(ctx context.Context, network, host string) ([]netip.Addr, error)
 }
 
 func New(tag string, options option.LocalDNSServerOptions) *Transport {
 	return &Transport{
 		TransportAdapter: boxdns.NewTransportAdapterWithLocalOptions(C.DNSTypeLocal, tag, options),
-		resolver:         net.DefaultResolver,
+		lookup:           net.DefaultResolver.LookupNetIP,
 	}
 }
 
@@ -60,7 +60,9 @@ func (t *Transport) Exchange(ctx context.Context, message *dns.Msg) (*dns.Msg, e
 	default:
 		return nil, errors.New("sysdns: only A/AAAA queries are supported")
 	}
-	addresses, err := t.resolver.LookupNetIP(ctx, network, strings.TrimSuffix(question.Name, "."))
+	// The name stays absolute (terminal dot): without it the resolver may append a search domain
+	// and answer the question with the address of another name.
+	addresses, err := t.lookup(ctx, network, question.Name)
 	var dnsErr *net.DNSError
 	if errors.As(err, &dnsErr) && dnsErr.IsNotFound {
 		return boxdns.FixedResponse(message.Id, question, nil, C.DefaultDNSTTL), nil

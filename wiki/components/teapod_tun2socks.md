@@ -39,7 +39,10 @@ active connection table).
   nothing works" state the heartbeat can't see.
 - **UDP validation** runs in the flow goroutine, not in the packet path, so a cache miss doesn't stall the whole TUN.
   The cache key is the full 5-tuple: a key by source port only let an excluded app bound to `tun0` reuse a port that
-  an allowed app had just used, and get into the tunnel.
+  an allowed app had just used, and get into the tunnel. For the same reason an allowed decision is dropped when its
+  flow ends (TCP and UDP), before the endpoint closes and lets a new flow on that 5-tuple in, or as soon as the app
+  resets a TCP connection (even while the SOCKS dial is pending); denials stay for the TTL, so a blocked app's
+  retries don't call the validator each time.
 - **Idle and zombie TCP:** activity tracked per direction; closed when both sides are silent ≥ 5 min, or after 2 min
   of "request sent, upstream silent" (a lost close after a server reset). Read deadlines in 30 s steps, no sweepers.
 - **Half-close:** EOF in one direction becomes `CloseWrite` on the other side; the reverse direction keeps working.
@@ -54,6 +57,8 @@ active connection table).
   Requests itself (the time is to the TUN, not to the host — as xray-rust does); otherwise they are dropped.
 - **gVisor tuning:** TIME_WAIT off and global reuse (addresses are virtual; TIME_WAIT piled up over hours), linger
   1 s, gVisor → TUN channel 4096 (256 overflowed under bursts and dropped ACKs).
+- **Stop before start:** the wrapper runs `Engine.Start` in a goroutine, so `Stop` may come first; it still closes
+  the fd copy and the stack, and the late `Start` returns without starting workers.
 - Forwarder goroutines aren't in the engine wait group: `Stop()` cancels pending SOCKS dials but established flows end
   by idle timeout or with the stack.
 

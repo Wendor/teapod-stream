@@ -63,6 +63,7 @@ Thumbs.db
 !.claude/
 .claude/*
 !.claude/skills/
+.claude/skills/approve-pr/
 CLAUDE.local.md
 wiki/.obsidian/
 wiki/research/
@@ -76,3 +77,4 @@ docs/superpowers/
 runs/
 tool/itest/secrets.json
 .superpowers/
+*.pem

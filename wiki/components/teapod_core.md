@@ -41,20 +41,23 @@ RustCore:          TUN fd → xray-rust → server
 
 - `StartXray` stops the previous instance first; the start goroutine checks it is still the current instance, so a
   concurrent `StopXray` can't leave an orphan holding the SOCKS port.
-- Delay measurement: `http.Transport` over `core.Dial`, 2 attempts with keep-alive, `CloseIdleConnections` on exit
+- Delay measurement: `http.Transport` over `core.Dial`, 2 attempts with keep-alive (an attempt counts only when the
+  whole body was read), `CloseIdleConnections` on exit
   (an idle connection keeps the outbound session and the server connection alive). Temporary instances don't register
   the global log handler — otherwise the main instance stopped logging.
 - The console log writer writes to stdout only without a `LogListener` (no duplicate logcat lines).
 - sing-box: platform interface stub with protected sockets (`auto_detect_interface` forced); connection owner lookup
   off (behind tun2socks the source is always 127.0.0.1); `cache.db` in `dataDir` (cwd on Android is read-only `/`);
-  the `local` DNS transport uses the system resolver (`internal/sysdns`, Android has no `/etc/resolv.conf`); version
+  the `local` DNS transport uses the system resolver (`internal/sysdns`, Android has no `/etc/resolv.conf`; the name
+  stays absolute, so no search domain is appended); version
   injected by `build.sh` via `-ldflags`.
 - Geo for sing-box (`internal/geoconv`): sing-box 1.12+ can't read `.dat`; before start, local rule-sets tagged
   `geoip-<code>` / `geosite-<code>` are built into `<dataDir>/box-rules/*.srs` from the `.dat` files and cached by the
   source's size and mtime.
 - AmneziaWG (`internal/awg`): endpoint `type: awg` = sing-box WireGuard options + `amnezia`; adapted from sing-box's
   WireGuard transport onto `amneziawg-go/v3`; one peer, outbound only; the bind doesn't touch bytes 1–3 (AWG header).
-  After reconfiguration it wakes the TUN reader so the first packet gets the padding.
+  After reconfiguration it wakes the TUN reader so the first packet gets the padding; a wake pending when `Read` takes a
+  packet is served first, and the packet waits for the next `Read`.
 - Build tags: `with_gvisor,with_quic,with_wireguard,with_utls,with_naive_outbound,badlinkname,tfogo_checklinkname0`.
   Naive links Cronet statically (`CGO_LDFLAGS_ALLOW='-l:libcronet\.a'` for Go 1.27.4+). gomobile needs
   `-checklinkname=0`.

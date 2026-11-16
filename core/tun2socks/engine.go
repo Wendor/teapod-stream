@@ -77,6 +77,8 @@ type Engine struct {
 	hook           *EngineHook
 	mtu            int
 	running        atomic.Bool
+	lifeMu         sync.Mutex // orders Start and Stop
+	stopped        bool       // Stop ran: Start must not start workers
 	stopCh         chan struct{}
 	wg             sync.WaitGroup
 	tunFile        *os.File
@@ -242,7 +244,15 @@ func NewEngine(tunFD int, mtu int, socksHost string, socksPort int, socksUser, s
 }
 
 func (e *Engine) Start() error {
+	// The wrapper runs Start in a goroutine: Stop can come first. Workers are added under
+	// lifeMu, so Stop either prevents them or waits for them.
+	e.lifeMu.Lock()
+	if e.stopped {
+		e.lifeMu.Unlock()
+		return fmt.Errorf("engine stopped before start")
+	}
 	if !e.running.CompareAndSwap(false, true) {
+		e.lifeMu.Unlock()
 		return fmt.Errorf("engine already running")
 	}
 	log.Printf("%s engine started", e.logPrefix)
@@ -258,6 +268,7 @@ func (e *Engine) Start() error {
 		defer e.wg.Done()
 		e.tunWriteLoop(e.ctx)
 	}()
+	e.lifeMu.Unlock()
 
 	<-e.stopCh
 	log.Printf("%s engine stopped", e.logPrefix)
@@ -425,10 +436,17 @@ func (e *Engine) tunWriteLoop(ctx context.Context) {
 	}
 }
 
+// Stop releases the engine whether or not Start ran: the TUN fd copy and the stack are
+// created by NewEngine.
 func (e *Engine) Stop() {
-	if !e.running.CompareAndSwap(true, false) {
+	e.lifeMu.Lock()
+	if e.stopped {
+		e.lifeMu.Unlock()
 		return
 	}
+	e.stopped = true
+	e.running.Store(false)
+	e.lifeMu.Unlock()
 	e.cancel() // unblock any in-flight SOCKS5 DialContext in forwarder goroutines
 	close(e.stopCh)
 	e.tunFile.Close()

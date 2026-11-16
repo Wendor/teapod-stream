@@ -30,8 +30,11 @@ Problems fail the check for contributors and are warnings for owners/members/col
 
 ## Branch protection (`master`)
 
-Required checks `dart`, `kotlin` and `core`, one approving review from a code owner (`.github/CODEOWNERS`), no force pushes or
-deletion; admins can bypass. Add `rules` to the required checks once `pr.yml` is on `master`.
+Required checks `dart`, `kotlin`, `core` and `rules`; one approving review from anyone with write access (the maintainer
+or the `wendor-ai-reviewer` GitHub App) that covers the latest push — a push that changes the diff dismisses earlier
+approvals, and the author of the last push can't approve it; no force pushes or deletion; the rules apply to admins
+too. `.github/CODEOWNERS` asks for the maintainer's review on every change, and GitHub requests it automatically, but
+branch protection doesn't enforce it: an approval from the `wendor-ai-reviewer` app is enough to merge.
 
 CodeRabbit (`.coderabbit.yaml`) reviews every non-draft PR; its guidelines are `AGENTS.md` and `CONTRIBUTING.md`.
 

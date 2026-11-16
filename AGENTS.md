@@ -43,7 +43,7 @@ xray-rust, sing-box) shipped in the `teapod-core` AAR. The knowledge base is [`w
 ./build.sh run             # debug build on a connected device
 
 # Checks — the same as CI (.github/workflows/ci.yml); all must pass before a PR
-dart format --output=none --set-exit-if-changed $(git ls-files '*.dart' | grep -v '^lib/l10n/app_localizations')
+dart format --output=none --set-exit-if-changed lib test tool
 flutter analyze
 flutter test
 cd android && ./gradlew :app:testDebugUnitTest      # Kotlin JVM tests; needs the AAR

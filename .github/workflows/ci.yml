@@ -40,9 +40,8 @@ jobs:
 
       - name: Format
         run: |
-          git ls-files '*.dart' | grep -v '^lib/l10n/app_localizations' \
-            | xargs dart format --output=none --set-exit-if-changed \
-            || { echo "::error::Run 'dart format' (see AGENTS.md → Commands)"; exit 1; }
+          dart format --output=none --set-exit-if-changed lib test tool \
+            || { echo "::error::Run 'dart format lib test tool'"; exit 1; }
 
       - run: flutter analyze
       - run: flutter test

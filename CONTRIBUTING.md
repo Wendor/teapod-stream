@@ -39,7 +39,7 @@ How the app is built inside: [`wiki/index.md`](wiki/index.md).
 8. **Checks pass.** Run them locally before pushing:
 
    ```bash
-   dart format --output=none --set-exit-if-changed $(git ls-files '*.dart' | grep -v '^lib/l10n/app_localizations')
+   dart format --output=none --set-exit-if-changed lib test tool
    flutter analyze
    flutter test
    cd android && ./gradlew :app:testDebugUnitTest

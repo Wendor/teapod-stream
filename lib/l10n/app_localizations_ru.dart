@@ -86,8 +86,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get homeDownload => 'Загрузка';
 
   @override
-  String get homeCoreEnableHint =>
-      'включите ядро в настройках или смените конфиг';
+  String get homeCoreEnableHint => 'включите ядро в настройках или смените конфиг';
 
   @override
   String get homeCorePinned => 'закреплено';
@@ -97,8 +96,7 @@ class AppLocalizationsRu extends AppLocalizations {
       'режим «Только» по доменам и DNS-настройки не применяются · роутинг управляется сервером';
 
   @override
-  String get homeManagedDns =>
-      'DNS-настройки не применяются · роутинг управляется сервером';
+  String get homeManagedDns => 'DNS-настройки не применяются · роутинг управляется сервером';
 
   @override
   String get homeTrafficLive => 'ТРАФИК — LIVE';
@@ -337,8 +335,7 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String get routingModeGlobalHint =>
-      'весь трафик через VPN · правила выключены';
+  String get routingModeGlobalHint => 'весь трафик через VPN · правила выключены';
 
   @override
   String routingModeBypassHint(int count) {
@@ -367,12 +364,10 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String get routingGeoMissingHint =>
-      'Загрузите geo-базы (раздел geo.data ниже)';
+  String get routingGeoMissingHint => 'Загрузите geo-базы (раздел geo.data ниже)';
 
   @override
-  String get routingSniffHint =>
-      'Требует снифинг (переключатель «Снифинг» выше)';
+  String get routingSniffHint => 'Требует снифинг (переключатель «Снифинг» выше)';
 
   @override
   String get routingTagline => 'МАРШРУТИЗАЦИЯ · SPLIT-TUNNEL';
@@ -393,8 +388,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get routingSniffing => 'Снифинг';
 
   @override
-  String get routingSniffingHint =>
-      'Определять домен из TLS SNI · нужен для domain.suffix и geosite';
+  String get routingSniffingHint => 'Определять домен из TLS SNI · нужен для domain.suffix и geosite';
 
   @override
   String get routingAddSuffix => 'суффикс';
@@ -412,8 +406,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get routingRuServices => 'Российские сервисы';
 
   @override
-  String get routingRuServicesHint =>
-      'Яндекс, VK, Сбер, Ozon, Авито и др. → выбранный outbound';
+  String get routingRuServicesHint => 'Яндекс, VK, Сбер, Ozon, Авито и др. → выбранный outbound';
 
   @override
   String get routingKillSwitchHint => 'Блокировать трафик при обрыве VPN';
@@ -579,8 +572,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsStartOnBoot => 'Запуск при загрузке';
 
   @override
-  String get settingsStartOnBootHint =>
-      'Подключаться автоматически при перезагрузке устройства';
+  String get settingsStartOnBootHint => 'Подключаться автоматически при перезагрузке устройства';
 
   @override
   String get settingsAutomation => 'Автоматизация';
@@ -593,8 +585,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsNotification => 'Уведомление';
 
   @override
-  String get settingsNotificationHint =>
-      'Скорость и кнопка отключения в шторке';
+  String get settingsNotificationHint => 'Скорость и кнопка отключения в шторке';
 
   @override
   String get settingsSubscriptions => 'Подписки';
@@ -629,8 +620,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsCores => 'Ядра';
 
   @override
-  String get settingsCoresHint =>
-      'Профиль запускает первое ядро сверху, которое его поддерживает';
+  String get settingsCoresHint => 'Профиль запускает первое ядро сверху, которое его поддерживает';
 
   @override
   String settingsCoreMoveUp(String core) {
@@ -723,8 +713,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get networkRandomPort => 'Случайный порт';
 
   @override
-  String get networkRandomPortHint =>
-      'Случайный SOCKS порт при каждом подключении';
+  String get networkRandomPortHint => 'Случайный SOCKS порт при каждом подключении';
 
   @override
   String get networkSocksPort => 'SOCKS5 порт';
@@ -733,8 +722,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get networkRandomCreds => 'Случайные учётные данные';
 
   @override
-  String get networkRandomCredsHint =>
-      'Генерировать случайный логин/пароль SOCKS';
+  String get networkRandomCredsHint => 'Генерировать случайный логин/пароль SOCKS';
 
   @override
   String get networkSocksLogin => 'Логин SOCKS';
@@ -766,8 +754,7 @@ class AppLocalizationsRu extends AppLocalizations {
       'TUN отвечает на UDP 443 ICMP-ом «порт недоступен»: браузер мгновенно падает на TCP вместо ожидания QUIC-таймаута (~55с). Трафик из устройства не уходит.';
 
   @override
-  String get networkFingerprintHint =>
-      'uTLS-маскировка ClientHello (TLS/REALITY)';
+  String get networkFingerprintHint => 'uTLS-маскировка ClientHello (TLS/REALITY)';
 
   @override
   String get networkIpv6 => 'IPv6 в туннеле';
@@ -810,8 +797,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get networkNoiseType => 'Тип пакета';
 
   @override
-  String get networkNoiseTypeHint =>
-      'RAND — случайные байты; STR / HEX / BASE64 — заданный вручную';
+  String get networkNoiseTypeHint => 'RAND — случайные байты; STR / HEX / BASE64 — заданный вручную';
 
   @override
   String get networkNoiseLength => 'Длина, байт';
@@ -823,8 +809,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get networkNoiseContent => 'содержимое';
 
   @override
-  String get networkNoiseInvalidRand =>
-      'Длина должна быть диапазоном вида 50-100, пауза — 10-20. Шумы не применяются.';
+  String get networkNoiseInvalidRand => 'Длина должна быть диапазоном вида 50-100, пауза — 10-20. Шумы не применяются.';
 
   @override
   String get networkNoiseInvalidPacket =>
@@ -844,8 +829,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get networkMuxQuic => 'QUIC (UDP/443) через mux';
 
   @override
-  String get networkMuxQuicHint =>
-      'reject — отбрасывать, allow — пускать через mux, skip — мимо mux';
+  String get networkMuxQuicHint => 'reject — отбрасывать, allow — пускать через mux, skip — мимо mux';
 
   @override
   String get networkProbeType => 'Тип проверки';
@@ -858,8 +842,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get networkProbeTarget => 'Адрес проверки';
 
   @override
-  String get networkProbeTargetHint =>
-      'Куда стучится проба. CUSTOM — свой URL ниже';
+  String get networkProbeTargetHint => 'Куда стучится проба. CUSTOM — свой URL ниже';
 
   @override
   String get networkFailureThreshold => 'Провалов до реакции';
@@ -900,8 +883,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get profileImportTitle => 'Импорт профиля';
 
   @override
-  String get profilesImportHint =>
-      'Вставьте ссылку (teapod://...) или JSON профиля';
+  String get profilesImportHint => 'Вставьте ссылку (teapod://...) или JSON профиля';
 
   @override
   String get profilesSwitchAfterImport => 'Переключиться после импорта';
@@ -1143,8 +1125,7 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String get reconnectBanner =>
-      'настройки изменены · применятся после переподключения';
+  String get reconnectBanner => 'настройки изменены · применятся после переподключения';
 
   @override
   String get reconnectButton => 'ПЕРЕПОДКЛЮЧИТЬ';
@@ -1213,43 +1194,35 @@ class AppLocalizationsRu extends AppLocalizations {
   String get deeplinkFetchButton => 'Загрузить';
 
   @override
-  String get rustNoRawJson =>
-      'Импорт полного JSON в ядре xray-rust пока недоступен.';
+  String get rustNoRawJson => 'Импорт полного JSON в ядре xray-rust пока недоступен.';
 
   @override
   String get rustNoFinalmask =>
       'Параметр fm (finalmask) из ссылки ядро xray-rust не применяет. Фрагментацию и шумы задай в настройках сети.';
 
   @override
-  String get rustVlessEncryption =>
-      'Ядро xray-rust пока принимает VLESS с encryption=none.';
+  String get rustVlessEncryption => 'Ядро xray-rust пока принимает VLESS с encryption=none.';
 
   @override
-  String get rustVlessUuid =>
-      'UUID VLESS должен быть настоящим UUID: Rust-ядро не принимает произвольные строки.';
+  String get rustVlessUuid => 'UUID VLESS должен быть настоящим UUID: Rust-ядро не принимает произвольные строки.';
 
   @override
-  String get rustVlessSecurity =>
-      'Для VLESS в ядре xray-rust выбери TLS или Reality.';
+  String get rustVlessSecurity => 'Для VLESS в ядре xray-rust выбери TLS или Reality.';
 
   @override
   String get rustVlessFlow => 'Неизвестный VLESS flow.';
 
   @override
-  String get rustVision =>
-      'Vision с encryption=none поддерживается только поверх TCP/RAW с TLS или Reality.';
+  String get rustVision => 'Vision с encryption=none поддерживается только поверх TCP/RAW с TLS или Reality.';
 
   @override
-  String get rustTrojanPassword =>
-      'Пароль Trojan должен быть непустым и не длиннее 4096 байт.';
+  String get rustTrojanPassword => 'Пароль Trojan должен быть непустым и не длиннее 4096 байт.';
 
   @override
-  String get rustTrojanSecurity =>
-      'Trojan в ядре xray-rust работает только с TLS или Reality.';
+  String get rustTrojanSecurity => 'Trojan в ядре xray-rust работает только с TLS или Reality.';
 
   @override
-  String get rustVmessId =>
-      'id VMess должен быть настоящим UUID: Rust-ядро не принимает произвольные строки.';
+  String get rustVmessId => 'id VMess должен быть настоящим UUID: Rust-ядро не принимает произвольные строки.';
 
   @override
   String rustVmessSecurity(String security) {
@@ -1267,16 +1240,13 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String get rustSsPlugin =>
-      'Плагины Shadowsocks (SIP003, plugin=…) ядро xray-rust не поддерживает.';
+  String get rustSsPlugin => 'Плагины Shadowsocks (SIP003, plugin=…) ядро xray-rust не поддерживает.';
 
   @override
-  String get rustSsPrefix =>
-      'Префикс Outline (prefix=…) для Shadowsocks ядро xray-rust не поддерживает.';
+  String get rustSsPrefix => 'Префикс Outline (prefix=…) для Shadowsocks ядро xray-rust не поддерживает.';
 
   @override
-  String get rustTransport =>
-      'Транспорт не поддерживается. Доступны TCP/RAW, WebSocket, HTTPUpgrade, gRPC и xHTTP.';
+  String get rustTransport => 'Транспорт не поддерживается. Доступны TCP/RAW, WebSocket, HTTPUpgrade, gRPC и xHTTP.';
 
   @override
   String rustTcpHeader(String header) {
@@ -1284,8 +1254,7 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String get rustReality =>
-      'Reality поддерживается с TCP/RAW, gRPC и xHTTP. Для WebSocket/HTTPUpgrade нужен TLS.';
+  String get rustReality => 'Reality поддерживается с TCP/RAW, gRPC и xHTTP. Для WebSocket/HTTPUpgrade нужен TLS.';
 
   @override
   String get rustEch => 'ECH пока недоступен в ядре xray-rust.';
@@ -1315,16 +1284,13 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String get rustSalamanderNoPassword =>
-      'Для Salamander (obfs=salamander) нужен obfs-password.';
+  String get rustSalamanderNoPassword => 'Для Salamander (obfs=salamander) нужен obfs-password.';
 
   @override
-  String get rustSalamanderPassword =>
-      'Пароль Salamander (obfs-password) должен содержать от 4 до 4096 байт.';
+  String get rustSalamanderPassword => 'Пароль Salamander (obfs-password) должен содержать от 4 до 4096 байт.';
 
   @override
-  String get rustPortHopping =>
-      'Список портов для port hopping слишком длинный: Rust-ядро принимает до 65535 портов.';
+  String get rustPortHopping => 'Список портов для port hopping слишком длинный: Rust-ядро принимает до 65535 портов.';
 
   @override
   String get rustHy2Password =>
@@ -1334,16 +1300,13 @@ class AppLocalizationsRu extends AppLocalizations {
   String get rustTunOnly => 'В ядре xray-rust доступен только режим VPN (TUN).';
 
   @override
-  String get rustMux =>
-      'Mux недоступен в ядре xray-rust: выключи его в настройках сети.';
+  String get rustMux => 'Mux недоступен в ядре xray-rust: выключи его в настройках сети.';
 
   @override
-  String get rustMtu =>
-      'Ядро xray-rust работает с MTU 1500: верни это значение в настройках сети.';
+  String get rustMtu => 'Ядро xray-rust работает с MTU 1500: верни это значение в настройках сети.';
 
   @override
-  String get rustSniffing =>
-      'Включи определение доменов для GeoSite и доменных правил.';
+  String get rustSniffing => 'Включи определение доменов для GeoSite и доменных правил.';
 
   @override
   String get rustAdBlockLimit =>
@@ -1354,12 +1317,10 @@ class AppLocalizationsRu extends AppLocalizations {
       'Rust-ядро режет только TLS ClientHello: в поле «Пакеты» фрагментации укажи tlshello.';
 
   @override
-  String get rustFragmentLength =>
-      'Длина куска фрагментации в Rust-ядре — от 1 до 16384 байт.';
+  String get rustFragmentLength => 'Длина куска фрагментации в Rust-ядре — от 1 до 16384 байт.';
 
   @override
-  String get rustFragmentDelay =>
-      'Пауза фрагментации в Rust-ядре — не больше 1000 мс.';
+  String get rustFragmentDelay => 'Пауза фрагментации в Rust-ядре — не больше 1000 мс.';
 
   @override
   String get rustFragmentXhttp =>
@@ -1373,12 +1334,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get rustNoiseDelay => 'Пауза шума в Rust-ядре — не больше 1000 мс.';
 
   @override
-  String get rustNoiseHex =>
-      'Шум HEX должен состоять из пар шестнадцатеричных цифр.';
+  String get rustNoiseHex => 'Шум HEX должен состоять из пар шестнадцатеричных цифр.';
 
   @override
-  String get rustNoiseBase64 =>
-      'Шум BASE64 должен быть стандартным base64 с паддингом.';
+  String get rustNoiseBase64 => 'Шум BASE64 должен быть стандартным base64 с паддингом.';
 
   @override
   String get rustNoisePacket => 'Пакет шума в Rust-ядре — не больше 4096 байт.';
@@ -1450,20 +1409,16 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String get singboxNoNoise =>
-      'Шумы недоступны в ядре sing-box и не применяются.';
+  String get singboxNoNoise => 'Шумы недоступны в ядре sing-box и не применяются.';
 
   @override
-  String get singboxNoMux =>
-      'Mux Xray несовместим с ядром sing-box и не применяется.';
+  String get singboxNoMux => 'Mux Xray несовместим с ядром sing-box и не применяется.';
 
   @override
-  String get singboxNoObservatory =>
-      'Observatory и управляемые JSON-конфиги Xray недоступны в ядре sing-box.';
+  String get singboxNoObservatory => 'Observatory и управляемые JSON-конфиги Xray недоступны в ядре sing-box.';
 
   @override
-  String get singboxNoRawConfig =>
-      'Полный JSON-конфиг Xray недоступен в ядре sing-box.';
+  String get singboxNoRawConfig => 'Полный JSON-конфиг Xray недоступен в ядре sing-box.';
 
   @override
   String get singboxNoPqv =>
@@ -1478,16 +1433,14 @@ class AppLocalizationsRu extends AppLocalizations {
   String get singboxNoXhttp => 'Транспорт XHTTP недоступен в ядре sing-box.';
 
   @override
-  String get singboxNoXrayExtra =>
-      'Расширенные настройки Xray (finalmask/extra) недоступны в ядре sing-box.';
+  String get singboxNoXrayExtra => 'Расширенные настройки Xray (finalmask/extra) недоступны в ядре sing-box.';
 
   @override
   String get singboxNoCertPin =>
       'Pin сертификата не поддерживается ядром sing-box: оно проверяет только хеш открытого ключа.';
 
   @override
-  String get singboxNoVlessEncryption =>
-      'VLESS Encryption недоступен в ядре sing-box.';
+  String get singboxNoVlessEncryption => 'VLESS Encryption недоступен в ядре sing-box.';
 
   @override
   String singboxFlow(String flow) {
@@ -1495,8 +1448,7 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String get singboxNoSsPlugins =>
-      'Плагины Shadowsocks недоступны в ядре sing-box.';
+  String get singboxNoSsPlugins => 'Плагины Shadowsocks недоступны в ядре sing-box.';
 
   @override
   String singboxSsMethod(String method) {
@@ -1507,36 +1459,28 @@ class AppLocalizationsRu extends AppLocalizations {
   String get singboxAwgReserved => 'AmneziaWG не поддерживает reserved.';
 
   @override
-  String get singboxAwgHeaders =>
-      'AmneziaWG: защита заголовков требует S1–S4 не меньше 12.';
+  String get singboxAwgHeaders => 'AmneziaWG: защита заголовков требует S1–S4 не меньше 12.';
 
   @override
-  String get singboxNoTcpHttp =>
-      'TCP с HTTP-обфускацией недоступен в ядре sing-box.';
+  String get singboxNoTcpHttp => 'TCP с HTTP-обфускацией недоступен в ядре sing-box.';
 
   @override
-  String get rustNoProxyOnly =>
-      'Режим «только прокси» недоступен в ядре xray-rust: оно работает только через TUN.';
+  String get rustNoProxyOnly => 'Режим «только прокси» недоступен в ядре xray-rust: оно работает только через TUN.';
 
   @override
-  String get rustIcmpLocal =>
-      'ICMP обрабатывается ядром xray-rust локально; настройка не применяется.';
+  String get rustIcmpLocal => 'ICMP обрабатывается ядром xray-rust локально; настройка не применяется.';
 
   @override
-  String get rustMtuIgnored =>
-      'Ядро xray-rust работает с MTU 1500; другое значение не применяется.';
+  String get rustMtuIgnored => 'Ядро xray-rust работает с MTU 1500; другое значение не применяется.';
 
   @override
-  String get rustMuxIgnored =>
-      'Mux недоступен в ядре xray-rust и не применяется.';
+  String get rustMuxIgnored => 'Mux недоступен в ядре xray-rust и не применяется.';
 
   @override
-  String get rustNoObservatory =>
-      'Observatory и управляемые JSON-конфиги недоступны в ядре xray-rust.';
+  String get rustNoObservatory => 'Observatory и управляемые JSON-конфиги недоступны в ядре xray-rust.';
 
   @override
-  String get rustNoRawConfig =>
-      'Полный JSON-конфиг недоступен в ядре xray-rust.';
+  String get rustNoRawConfig => 'Полный JSON-конфиг недоступен в ядре xray-rust.';
 
   @override
   String get rustSniffingForced =>
@@ -1557,16 +1501,14 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String get xrayNoH2Quic =>
-      'Транспорты HTTP/2 и QUIC удалены из Xray-core: сервер нужно перевести на xHTTP.';
+  String get xrayNoH2Quic => 'Транспорты HTTP/2 и QUIC удалены из Xray-core: сервер нужно перевести на xHTTP.';
 
   @override
   String get xrayInsecure =>
       'Xray-core больше не поддерживает allowInsecure: укажи pinSHA256 сертификата сервера или используй действительный сертификат.';
 
   @override
-  String get xrayPinFormat =>
-      'pinSHA256 должен быть SHA-256 сертификата: 64 hex-символа или base64 от 32 байт.';
+  String get xrayPinFormat => 'pinSHA256 должен быть SHA-256 сертификата: 64 hex-символа или base64 от 32 байт.';
 
   @override
   String xrayRawJsonParse(String error) {

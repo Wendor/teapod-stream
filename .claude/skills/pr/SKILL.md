@@ -15,7 +15,7 @@ Rules: [CONTRIBUTING.md](../../../CONTRIBUTING.md). Template: [.github/pull_requ
    unless that is the task.
 3. Run every check and read the output — don't assume:
    ```bash
-   dart format --output=none --set-exit-if-changed $(git ls-files '*.dart' | grep -v '^lib/l10n/app_localizations')
+   dart format --output=none --set-exit-if-changed lib test tool
    flutter analyze && flutter test
    (cd android && ./gradlew :app:testDebugUnitTest)
    ```

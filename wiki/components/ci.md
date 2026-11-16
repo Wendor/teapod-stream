@@ -9,7 +9,7 @@ On push to `master` and on pull requests (not on every branch push: with an open
 
 | Job | Steps |
 |---|---|
-| `dart` | `flutter gen-l10n` + `git diff --exit-code lib/l10n` (generated files match the ARB), `dart format --set-exit-if-changed` (tracked `.dart` without generated l10n), `flutter analyze`, `flutter test` |
+| `dart` | `flutter gen-l10n` + `git diff --exit-code lib/l10n` (generated files match the ARB), `dart format --set-exit-if-changed lib test tool`, `flutter analyze`, `flutter test` |
 | `kotlin` | downloads `teapod-core-<pubspec version>.aar` from the `Wendor/teapod-core` release; if it isn't released yet (a branch right after a bump) the job is skipped with a warning. Then JDK 21, NDK, `flutter build apk --debug --config-only`, `./gradlew :app:testDebugUnitTest` |
 
 `assets/binaries/` is created empty: it is declared in pubspec, tests don't need geodata.

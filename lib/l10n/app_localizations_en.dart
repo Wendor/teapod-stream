@@ -86,8 +86,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homeDownload => 'Download';
 
   @override
-  String get homeCoreEnableHint =>
-      'enable a core in settings or switch the config';
+  String get homeCoreEnableHint => 'enable a core in settings or switch the config';
 
   @override
   String get homeCorePinned => 'pinned';
@@ -97,8 +96,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'domain \"Only\" mode and DNS settings don\'t apply · routing is controlled by the server';
 
   @override
-  String get homeManagedDns =>
-      'DNS settings don\'t apply · routing is controlled by the server';
+  String get homeManagedDns => 'DNS settings don\'t apply · routing is controlled by the server';
 
   @override
   String get homeTrafficLive => 'TRAFFIC — LIVE';
@@ -285,12 +283,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String configsCount(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count configs',
-      one: '$count config',
-    );
+    String _temp0 = intl.Intl.pluralLogic(count, locale: localeName, other: '$count configs', one: '$count config');
     return '$_temp0';
   }
 
@@ -339,33 +332,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String routingModeBypassHint(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count rules',
-      one: '$count rule',
-    );
+    String _temp0 = intl.Intl.pluralLogic(count, locale: localeName, other: '$count rules', one: '$count rule');
     return '$_temp0 · matched go direct, the rest through VPN';
   }
 
   @override
   String routingModeOnlyHint(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count rules',
-      one: '$count rule',
-    );
+    String _temp0 = intl.Intl.pluralLogic(count, locale: localeName, other: '$count rules', one: '$count rule');
     return '$_temp0 · only matched through VPN';
   }
 
   @override
-  String get routingGeoMissingHint =>
-      'Download the geo databases (geo.data section below)';
+  String get routingGeoMissingHint => 'Download the geo databases (geo.data section below)';
 
   @override
-  String get routingSniffHint =>
-      'Requires sniffing (the \"Sniffing\" switch above)';
+  String get routingSniffHint => 'Requires sniffing (the \"Sniffing\" switch above)';
 
   @override
   String get routingTagline => 'ROUTING · SPLIT-TUNNEL';
@@ -386,8 +367,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get routingSniffing => 'Sniffing';
 
   @override
-  String get routingSniffingHint =>
-      'Detect the domain from TLS SNI · needed for domain.suffix and geosite';
+  String get routingSniffingHint => 'Detect the domain from TLS SNI · needed for domain.suffix and geosite';
 
   @override
   String get routingAddSuffix => 'suffix';
@@ -405,8 +385,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get routingRuServices => 'Russian services';
 
   @override
-  String get routingRuServicesHint =>
-      'Yandex, VK, Sber, Ozon, Avito, etc. → selected outbound';
+  String get routingRuServicesHint => 'Yandex, VK, Sber, Ozon, Avito, etc. → selected outbound';
 
   @override
   String get routingKillSwitchHint => 'Block traffic when the VPN drops';
@@ -572,8 +551,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsStartOnBoot => 'Start on boot';
 
   @override
-  String get settingsStartOnBootHint =>
-      'Connect automatically after the device reboots';
+  String get settingsStartOnBootHint => 'Connect automatically after the device reboots';
 
   @override
   String get settingsAutomation => 'Automation';
@@ -586,8 +564,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsNotification => 'Notification';
 
   @override
-  String get settingsNotificationHint =>
-      'Speed and a disconnect button in the shade';
+  String get settingsNotificationHint => 'Speed and a disconnect button in the shade';
 
   @override
   String get settingsSubscriptions => 'Subscriptions';
@@ -622,8 +599,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsCores => 'Cores';
 
   @override
-  String get settingsCoresHint =>
-      'A profile runs on the topmost core that supports it';
+  String get settingsCoresHint => 'A profile runs on the topmost core that supports it';
 
   @override
   String settingsCoreMoveUp(String core) {
@@ -757,8 +733,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'TUN answers UDP 443 with an ICMP \"port unreachable\": the browser instantly falls back to TCP instead of waiting for the QUIC timeout (~55s). No traffic leaves the device.';
 
   @override
-  String get networkFingerprintHint =>
-      'uTLS ClientHello camouflage (TLS/REALITY)';
+  String get networkFingerprintHint => 'uTLS ClientHello camouflage (TLS/REALITY)';
 
   @override
   String get networkIpv6 => 'IPv6 in tunnel';
@@ -801,8 +776,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get networkNoiseType => 'Packet type';
 
   @override
-  String get networkNoiseTypeHint =>
-      'RAND — random bytes; STR / HEX / BASE64 — set manually';
+  String get networkNoiseTypeHint => 'RAND — random bytes; STR / HEX / BASE64 — set manually';
 
   @override
   String get networkNoiseLength => 'Length, bytes';
@@ -814,12 +788,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get networkNoiseContent => 'content';
 
   @override
-  String get networkNoiseInvalidRand =>
-      'Length must be a range like 50-100, pause — 10-20. Noise is not applied.';
+  String get networkNoiseInvalidRand => 'Length must be a range like 50-100, pause — 10-20. Noise is not applied.';
 
   @override
-  String get networkNoiseInvalidPacket =>
-      'Packet must not be empty, pause — a range like 10-20. Noise is not applied.';
+  String get networkNoiseInvalidPacket => 'Packet must not be empty, pause — a range like 10-20. Noise is not applied.';
 
   @override
   String get networkMuxHint =>
@@ -835,8 +807,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get networkMuxQuic => 'QUIC (UDP/443) via mux';
 
   @override
-  String get networkMuxQuicHint =>
-      'reject — drop, allow — pass through mux, skip — bypass mux';
+  String get networkMuxQuicHint => 'reject — drop, allow — pass through mux, skip — bypass mux';
 
   @override
   String get networkProbeType => 'Probe type';
@@ -849,8 +820,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get networkProbeTarget => 'Probe target';
 
   @override
-  String get networkProbeTargetHint =>
-      'Where the probe goes. CUSTOM — your own URL below';
+  String get networkProbeTargetHint => 'Where the probe goes. CUSTOM — your own URL below';
 
   @override
   String get networkFailureThreshold => 'Failures before action';
@@ -891,8 +861,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileImportTitle => 'Import profile';
 
   @override
-  String get profilesImportHint =>
-      'Paste a link (teapod://...) or profile JSON';
+  String get profilesImportHint => 'Paste a link (teapod://...) or profile JSON';
 
   @override
   String get profilesSwitchAfterImport => 'Switch after import';
@@ -1132,8 +1101,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get reconnectBanner =>
-      'settings changed · will apply after reconnecting';
+  String get reconnectBanner => 'settings changed · will apply after reconnecting';
 
   @override
   String get reconnectButton => 'RECONNECT';
@@ -1200,43 +1168,35 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deeplinkFetchButton => 'Load';
 
   @override
-  String get rustNoRawJson =>
-      'Full JSON import isn\'t available in the xray-rust core yet.';
+  String get rustNoRawJson => 'Full JSON import isn\'t available in the xray-rust core yet.';
 
   @override
   String get rustNoFinalmask =>
       'The xray-rust core doesn\'t apply the link\'s fm (finalmask) parameter. Set fragmentation and noise in network settings.';
 
   @override
-  String get rustVlessEncryption =>
-      'The xray-rust core only accepts VLESS with encryption=none so far.';
+  String get rustVlessEncryption => 'The xray-rust core only accepts VLESS with encryption=none so far.';
 
   @override
-  String get rustVlessUuid =>
-      'The VLESS UUID must be a real UUID: the Rust core doesn\'t accept arbitrary strings.';
+  String get rustVlessUuid => 'The VLESS UUID must be a real UUID: the Rust core doesn\'t accept arbitrary strings.';
 
   @override
-  String get rustVlessSecurity =>
-      'For VLESS in the xray-rust core choose TLS or Reality.';
+  String get rustVlessSecurity => 'For VLESS in the xray-rust core choose TLS or Reality.';
 
   @override
   String get rustVlessFlow => 'Unknown VLESS flow.';
 
   @override
-  String get rustVision =>
-      'Vision with encryption=none is supported only over TCP/RAW with TLS or Reality.';
+  String get rustVision => 'Vision with encryption=none is supported only over TCP/RAW with TLS or Reality.';
 
   @override
-  String get rustTrojanPassword =>
-      'The Trojan password must be non-empty and at most 4096 bytes.';
+  String get rustTrojanPassword => 'The Trojan password must be non-empty and at most 4096 bytes.';
 
   @override
-  String get rustTrojanSecurity =>
-      'Trojan in the xray-rust core works only with TLS or Reality.';
+  String get rustTrojanSecurity => 'Trojan in the xray-rust core works only with TLS or Reality.';
 
   @override
-  String get rustVmessId =>
-      'The VMess id must be a real UUID: the Rust core doesn\'t accept arbitrary strings.';
+  String get rustVmessId => 'The VMess id must be a real UUID: the Rust core doesn\'t accept arbitrary strings.';
 
   @override
   String rustVmessSecurity(String security) {
@@ -1254,16 +1214,13 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get rustSsPlugin =>
-      'The xray-rust core doesn\'t support Shadowsocks plugins (SIP003, plugin=…).';
+  String get rustSsPlugin => 'The xray-rust core doesn\'t support Shadowsocks plugins (SIP003, plugin=…).';
 
   @override
-  String get rustSsPrefix =>
-      'The xray-rust core doesn\'t support the Outline prefix (prefix=…) for Shadowsocks.';
+  String get rustSsPrefix => 'The xray-rust core doesn\'t support the Outline prefix (prefix=…) for Shadowsocks.';
 
   @override
-  String get rustTransport =>
-      'Transport not supported. Available: TCP/RAW, WebSocket, HTTPUpgrade, gRPC and xHTTP.';
+  String get rustTransport => 'Transport not supported. Available: TCP/RAW, WebSocket, HTTPUpgrade, gRPC and xHTTP.';
 
   @override
   String rustTcpHeader(String header) {
@@ -1271,8 +1228,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get rustReality =>
-      'Reality is supported with TCP/RAW, gRPC and xHTTP. WebSocket/HTTPUpgrade need TLS.';
+  String get rustReality => 'Reality is supported with TCP/RAW, gRPC and xHTTP. WebSocket/HTTPUpgrade need TLS.';
 
   @override
   String get rustEch => 'ECH isn\'t available in the xray-rust core yet.';
@@ -1302,36 +1258,29 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get rustSalamanderNoPassword =>
-      'Salamander (obfs=salamander) needs obfs-password.';
+  String get rustSalamanderNoPassword => 'Salamander (obfs=salamander) needs obfs-password.';
 
   @override
-  String get rustSalamanderPassword =>
-      'The Salamander password (obfs-password) must be 4 to 4096 bytes.';
+  String get rustSalamanderPassword => 'The Salamander password (obfs-password) must be 4 to 4096 bytes.';
 
   @override
-  String get rustPortHopping =>
-      'The port hopping list is too long: the Rust core accepts up to 65535 ports.';
+  String get rustPortHopping => 'The port hopping list is too long: the Rust core accepts up to 65535 ports.';
 
   @override
   String get rustHy2Password =>
       'The Hysteria2 password must be non-empty, at most 4096 bytes and without control characters.';
 
   @override
-  String get rustTunOnly =>
-      'Only VPN (TUN) mode is available in the xray-rust core.';
+  String get rustTunOnly => 'Only VPN (TUN) mode is available in the xray-rust core.';
 
   @override
-  String get rustMux =>
-      'Mux isn\'t available in the xray-rust core: turn it off in network settings.';
+  String get rustMux => 'Mux isn\'t available in the xray-rust core: turn it off in network settings.';
 
   @override
-  String get rustMtu =>
-      'The xray-rust core works with MTU 1500: restore that value in network settings.';
+  String get rustMtu => 'The xray-rust core works with MTU 1500: restore that value in network settings.';
 
   @override
-  String get rustSniffing =>
-      'Enable domain sniffing for GeoSite and domain rules.';
+  String get rustSniffing => 'Enable domain sniffing for GeoSite and domain rules.';
 
   @override
   String get rustAdBlockLimit =>
@@ -1342,12 +1291,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'The Rust core splits only the TLS ClientHello: set tlshello in the fragmentation \"Packets\" field.';
 
   @override
-  String get rustFragmentLength =>
-      'Fragment chunk length in the Rust core is 1 to 16384 bytes.';
+  String get rustFragmentLength => 'Fragment chunk length in the Rust core is 1 to 16384 bytes.';
 
   @override
-  String get rustFragmentDelay =>
-      'Fragmentation pause in the Rust core is at most 1000 ms.';
+  String get rustFragmentDelay => 'Fragmentation pause in the Rust core is at most 1000 ms.';
 
   @override
   String get rustFragmentXhttp =>
@@ -1358,8 +1305,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'The Rust core doesn\'t send noise before Shadowsocks UDP (only for Hysteria2 and xHTTP over HTTP/3). Noise is a global setting: turn it off in network settings to connect to this profile.';
 
   @override
-  String get rustNoiseDelay =>
-      'Noise pause in the Rust core is at most 1000 ms.';
+  String get rustNoiseDelay => 'Noise pause in the Rust core is at most 1000 ms.';
 
   @override
   String get rustNoiseHex => 'HEX noise must consist of pairs of hex digits.';
@@ -1368,8 +1314,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get rustNoiseBase64 => 'BASE64 noise must be standard padded base64.';
 
   @override
-  String get rustNoisePacket =>
-      'A noise packet in the Rust core is at most 4096 bytes.';
+  String get rustNoisePacket => 'A noise packet in the Rust core is at most 4096 bytes.';
 
   @override
   String coreSingBoxOnly(String protocol) {
@@ -1438,20 +1383,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get singboxNoNoise =>
-      'Noise isn\'t available in the sing-box core and is not applied.';
+  String get singboxNoNoise => 'Noise isn\'t available in the sing-box core and is not applied.';
 
   @override
-  String get singboxNoMux =>
-      'Xray Mux is incompatible with the sing-box core and is not applied.';
+  String get singboxNoMux => 'Xray Mux is incompatible with the sing-box core and is not applied.';
 
   @override
   String get singboxNoObservatory =>
       'Observatory and managed Xray JSON configs aren\'t available in the sing-box core.';
 
   @override
-  String get singboxNoRawConfig =>
-      'A full Xray JSON config isn\'t available in the sing-box core.';
+  String get singboxNoRawConfig => 'A full Xray JSON config isn\'t available in the sing-box core.';
 
   @override
   String get singboxNoPqv =>
@@ -1463,20 +1405,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get singboxNoXhttp =>
-      'The XHTTP transport isn\'t available in the sing-box core.';
+  String get singboxNoXhttp => 'The XHTTP transport isn\'t available in the sing-box core.';
 
   @override
-  String get singboxNoXrayExtra =>
-      'Advanced Xray settings (finalmask/extra) aren\'t available in the sing-box core.';
+  String get singboxNoXrayExtra => 'Advanced Xray settings (finalmask/extra) aren\'t available in the sing-box core.';
 
   @override
   String get singboxNoCertPin =>
       'The sing-box core doesn\'t support certificate pinning: it checks only the public key hash.';
 
   @override
-  String get singboxNoVlessEncryption =>
-      'VLESS Encryption isn\'t available in the sing-box core.';
+  String get singboxNoVlessEncryption => 'VLESS Encryption isn\'t available in the sing-box core.';
 
   @override
   String singboxFlow(String flow) {
@@ -1484,8 +1423,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get singboxNoSsPlugins =>
-      'Shadowsocks plugins aren\'t available in the sing-box core.';
+  String get singboxNoSsPlugins => 'Shadowsocks plugins aren\'t available in the sing-box core.';
 
   @override
   String singboxSsMethod(String method) {
@@ -1496,36 +1434,29 @@ class AppLocalizationsEn extends AppLocalizations {
   String get singboxAwgReserved => 'AmneziaWG doesn\'t support reserved.';
 
   @override
-  String get singboxAwgHeaders =>
-      'AmneziaWG: header protection requires S1–S4 of at least 12.';
+  String get singboxAwgHeaders => 'AmneziaWG: header protection requires S1–S4 of at least 12.';
 
   @override
-  String get singboxNoTcpHttp =>
-      'TCP with HTTP obfuscation isn\'t available in the sing-box core.';
+  String get singboxNoTcpHttp => 'TCP with HTTP obfuscation isn\'t available in the sing-box core.';
 
   @override
   String get rustNoProxyOnly =>
       '\"Proxy only\" mode isn\'t available in the xray-rust core: it works only through TUN.';
 
   @override
-  String get rustIcmpLocal =>
-      'ICMP is handled locally by the xray-rust core; the setting is not applied.';
+  String get rustIcmpLocal => 'ICMP is handled locally by the xray-rust core; the setting is not applied.';
 
   @override
-  String get rustMtuIgnored =>
-      'The xray-rust core works with MTU 1500; another value is not applied.';
+  String get rustMtuIgnored => 'The xray-rust core works with MTU 1500; another value is not applied.';
 
   @override
-  String get rustMuxIgnored =>
-      'Mux isn\'t available in the xray-rust core and is not applied.';
+  String get rustMuxIgnored => 'Mux isn\'t available in the xray-rust core and is not applied.';
 
   @override
-  String get rustNoObservatory =>
-      'Observatory and managed JSON configs aren\'t available in the xray-rust core.';
+  String get rustNoObservatory => 'Observatory and managed JSON configs aren\'t available in the xray-rust core.';
 
   @override
-  String get rustNoRawConfig =>
-      'A full JSON config isn\'t available in the xray-rust core.';
+  String get rustNoRawConfig => 'A full JSON config isn\'t available in the xray-rust core.';
 
   @override
   String get rustSniffingForced =>
@@ -1554,8 +1485,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Xray-core no longer supports allowInsecure: set the server certificate\'s pinSHA256 or use a valid certificate.';
 
   @override
-  String get xrayPinFormat =>
-      'pinSHA256 must be the certificate\'s SHA-256: 64 hex characters or base64 of 32 bytes.';
+  String get xrayPinFormat => 'pinSHA256 must be the certificate\'s SHA-256: 64 hex characters or base64 of 32 bytes.';
 
   @override
   String xrayRawJsonParse(String error) {

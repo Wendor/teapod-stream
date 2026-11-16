@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"testing"
+	"time"
 )
 
 // An IPv6 bind address must come back as "[addr]:port": UDPAssociate resolves it.
@@ -55,4 +56,89 @@ func TestDialTCPToIPv6Proxy(t *testing.T) {
 		t.Fatalf("DialTCP via [::1]:%d: %v", port, err)
 	}
 	conn.Close()
+}
+
+// udpAssociateServer accepts one UDP ASSOCIATE and replies with relay as BND.ADDR.
+// It returns the address the client sent in the request.
+func udpAssociateServer(t *testing.T, ln net.Listener, relay *net.UDPAddr) <-chan net.IP {
+	t.Helper()
+	got := make(chan net.IP, 1)
+	go func() {
+		c, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		buf := make([]byte, 3)
+		io.ReadFull(c, buf) // greeting: no auth
+		c.Write([]byte{0x05, 0x00})
+		head := make([]byte, 4)
+		io.ReadFull(c, head)
+		addr := make([]byte, 4)
+		if head[3] == 0x04 {
+			addr = make([]byte, 16)
+		}
+		io.ReadFull(c, addr)
+		io.ReadFull(c, make([]byte, 2))
+		got <- net.IP(addr)
+		reply := []byte{0x05, 0x00, 0x00, 0x01}
+		ip := relay.IP.To4()
+		if ip == nil {
+			reply[3], ip = 0x04, relay.IP.To16()
+		}
+		reply = append(append(reply, ip...), byte(relay.Port>>8), byte(relay.Port))
+		c.Write(reply)
+		io.Copy(io.Discard, c) // keep the control connection open
+	}()
+	return got
+}
+
+// A proxy on IPv6 gets an IPv6 local socket, so datagrams reach its IPv6 relay.
+func TestUDPAssociateThroughIPv6Relay(t *testing.T) {
+	ln, err := net.Listen("tcp", "[::1]:0")
+	if err != nil {
+		t.Skipf("no IPv6 loopback: %v", err)
+	}
+	defer ln.Close()
+	relay, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv6loopback})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer relay.Close()
+	sent := udpAssociateServer(t, ln, relay.LocalAddr().(*net.UDPAddr))
+
+	assoc, err := NewSOCKS5Client("::1", ln.Addr().(*net.TCPAddr).Port, "", "").UDPAssociate(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer assoc.Close()
+	if ip := <-sent; !ip.Equal(net.IPv6loopback) {
+		t.Fatalf("ASSOCIATE sent BND.ADDR %s; want ::1", ip)
+	}
+	if _, err := assoc.UDPConn.WriteToUDP([]byte("ping"), assoc.RelayAddr); err != nil {
+		t.Fatalf("send to relay %s: %v", assoc.RelayAddr, err)
+	}
+	relay.SetReadDeadline(time.Now().Add(2 * time.Second))
+	buf := make([]byte, 16)
+	n, _, err := relay.ReadFromUDP(buf)
+	if err != nil || string(buf[:n]) != "ping" {
+		t.Fatalf("relay got %q, %v; want ping", buf[:n], err)
+	}
+}
+
+// A relay of another family than the proxy can't be reached from the local socket:
+// UDPAssociate refuses it instead of failing every datagram later.
+func TestUDPAssociateRejectsRelayOfOtherFamily(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	udpAssociateServer(t, ln, &net.UDPAddr{IP: net.IPv6loopback, Port: 5000})
+
+	assoc, err := NewSOCKS5Client("127.0.0.1", ln.Addr().(*net.TCPAddr).Port, "", "").UDPAssociate(context.Background())
+	if err == nil {
+		assoc.Close()
+		t.Fatal("UDPAssociate accepted an IPv6 relay for an IPv4 socket")
+	}
 }

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/Wendor/teapod-tun2socks"
+	. "github.com/Wendor/teapod-core/tun2socks"
 )
 
 // ── ConnectionKey ─────────────────────────────────────────────────────────────

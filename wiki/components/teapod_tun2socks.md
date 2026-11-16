@@ -1,8 +1,7 @@
 # teapod-tun2socks
 
-**Repository:** [Wendor/teapod-tun2socks](https://github.com/Wendor/teapod-tun2socks), checked out next to this one.
-A standalone library with its own users; this app consumes its Go module through teapod-core
-(`replace => ../teapod-tun2socks/go`). Decoupling plan: issue #164.
+**Directory:** `core/tun2socks/` — package `github.com/Wendor/teapod-core/tun2socks`, formerly the separate
+teapod-tun2socks repository (its standalone Kotlin wrapper and AAR build were dropped).
 
 A TUN → SOCKS5 gateway on gVisor's userspace TCP/IP stack, with a per-flow owner check.
 
@@ -11,7 +10,7 @@ TUN fd → tunReadLoop ─┬─ ICMP echo / QUIC reject (answered locally)
                       └─ gVisor netstack → TCP/UDP forwarder → EngineHook.Validate (UID) → SOCKS5 → core
 ```
 
-| File (`go/`) | Role |
+| File | Role |
 |---|---|
 | `teapod_tun2socks.go` | gomobile entry `TeapodTun2socks` |
 | `engine.go` | netstack, TUN reader/writer, forwarders, connection trackers |
@@ -19,9 +18,6 @@ TUN fd → tunReadLoop ─┬─ ICMP echo / QUIC reject (answered locally)
 | `icmp_reject.go` | ICMP Port Unreachable (QUIC block) and local Echo Reply |
 | `connection.go` | `ConnectionKey`, LRU cache |
 | `socks5.go` | SOCKS5 CONNECT + UDP ASSOCIATE client |
-
-`kotlin/` holds a standalone Kotlin wrapper (`TeapodVpnManager`, `UidResolver`) for other users of the library; this app
-doesn't use it.
 
 ## API
 
@@ -60,11 +56,10 @@ active connection table).
 - Forwarder goroutines aren't in the engine wait group: `Stop()` cancels pending SOCKS dials but established flows end
   by idle timeout or with the stack.
 
-## Build and tests
+## Tests
 
 ```bash
-./build.sh                                        # AAR
-cd go && GOOS=linux GOARCH=amd64 go test ./...    # unit tests (engine hook, ICMP, half-close, SOCKS5)
+cd core && ./build.sh prepare && go test ./tun2socks/    # engine hook, ICMP, half-close, SOCKS5
 ```
 
 ## Related

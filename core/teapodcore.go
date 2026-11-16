@@ -32,7 +32,7 @@ import (
 	"github.com/xtls/xray-core/transport/internet"
 	mobasset "golang.org/x/mobile/asset"
 
-	tun2socks "github.com/Wendor/teapod-tun2socks"
+	tun2socks "github.com/Wendor/teapod-core/tun2socks"
 )
 
 // --- INTERFACES (gomobile-visible) ---

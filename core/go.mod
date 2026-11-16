@@ -3,7 +3,6 @@ module github.com/Wendor/teapod-core
 go 1.27
 
 require (
-	github.com/Wendor/teapod-tun2socks v0.0.0
 	github.com/amnezia-vpn/amneziawg-go/v3 v3.1.20260828
 	github.com/miekg/dns v1.1.73
 	github.com/sagernet/gvisor v0.0.0-20250811-sing-box-mod.1
@@ -13,6 +12,7 @@ require (
 	github.com/xtls/xray-core v1.260327.1-0.20261031132019-a4a3dff5b20c
 	golang.org/x/crypto v0.58.0
 	golang.org/x/mobile v0.0.0-20260410095206-2cfb76559b7b
+	golang.org/x/sys v0.49.0
 	google.golang.org/protobuf v1.36.12
 )
 
@@ -186,7 +186,6 @@ require (
 	golang.org/x/net v0.61.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
-	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/term v0.47.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
@@ -203,7 +202,6 @@ require (
 )
 
 replace (
-	github.com/Wendor/teapod-tun2socks => ../teapod-tun2socks/go
 	golang.org/x/net => golang.org/x/net v0.61.0
 	golang.org/x/sys => golang.org/x/sys v0.49.0
 	google.golang.org/grpc => google.golang.org/grpc v1.84.0

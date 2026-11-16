@@ -1,6 +1,6 @@
 # teapod-core
 
-Android VPN library that combines [xray-core](https://github.com/XTLS/Xray-core) and [teapod-tun2socks](https://github.com/Wendor/teapod-tun2socks) into a single AAR compiled via [gomobile](https://pkg.go.dev/golang.org/x/mobile/cmd/gomobile).
+Android VPN library that combines [xray-core](https://github.com/XTLS/Xray-core) and teapod-tun2socks (`tun2socks/`) into a single AAR compiled via [gomobile](https://pkg.go.dev/golang.org/x/mobile/cmd/gomobile).
 
 ## Cores
 
@@ -133,12 +133,8 @@ The AAR's identity is the git tree hash of `core/` (`git rev-parse --short=12 HE
 and every app release carries it as `teapod-core-<hash>.aar`, which `../build.sh binaries` downloads instead of
 building when the sources match.
 
-teapod-tun2socks is a separate module, required by tag (`github.com/Wendor/teapod-tun2socks/go`). To change both
-together, clone it next to this repository and add an untracked workspace:
-
-```bash
-go work init . && go work edit -replace=github.com/Wendor/teapod-tun2socks/go=../../teapod-tun2socks/go
-```
+`tun2socks/` is the TUN → SOCKS5 gateway (package `github.com/Wendor/teapod-core/tun2socks`), formerly the separate
+teapod-tun2socks repository.
 
 ## License
 

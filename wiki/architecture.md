@@ -13,7 +13,7 @@ TeapodStream is an Android VPN client: a Flutter UI, a Kotlin `VpnService`, and 
 │ Android (Kotlin)                                             │
 │  MainActivity → XrayVpnService → VpnCore (Go / Box / Rust)   │
 ├──────────────────────────────────────────────────────────────┤
-│ teapod-core AAR                                              │
+│ teapod-core AAR (core/)                                      │
 │  xray-core (Go) · sing-box (Go) · teapod-tun2socks · xray-rust│
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -126,5 +126,4 @@ tool/itest/                   on-device integration test runner
 - Min SDK 29 (Android 10). ABIs: arm64-v8a, x86_64.
 - `teapod-core.aar` is not in git: it is built from `core/` and identified by the `core/` tree hash
   ([teapod_core](components/teapod_core.md)). The app version (`./build.sh bump X.Y.Z`) is independent of it.
-- teapod-tun2socks is a separate library with its own `go/vX.Y.Z` tags.
 - Loyalsoldier geodata has no `geosite:ru` — Russian domains use `domain:ru`.

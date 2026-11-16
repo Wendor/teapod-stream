@@ -1,17 +1,22 @@
 # teapod-core
 
-**Repository:** [Wendor/teapod-core](https://github.com/Wendor/teapod-core), checked out next to this one
-(`../teapod-core`). Plan to move it into this repository: issue #164.
+**Directory:** `core/` — a Go module (`github.com/Wendor/teapod-core`), formerly the separate teapod-core repository.
 
-A gomobile AAR with all native engines. `./build.sh build` produces `outputs/teapod-core-<version>.aar` (fat:
-arm64-v8a + x86_64) and per-ABI AARs; the version is the one in this repo's `pubspec.yaml`. `./build.sh binaries` here
-copies or downloads exactly that version into `android/app/libs/teapod-core.aar`.
+A gomobile AAR with all native engines. `core/build.sh build` produces `core/outputs/teapod-core.aar` (fat:
+arm64-v8a + x86_64) and per-ABI AARs.
+
+**Identity = the `core/` tree hash** (`git rev-parse --short=12 HEAD:core`), not the app version:
+- `./build.sh binaries` takes `core/outputs/teapod-core-<hash>.aar`, else downloads that asset from an app release
+  with the same `core/`, else builds (`./build.sh core`; Go, gomobile, NDK — `core/README.md`); uncommitted changes
+  in `core/` always build locally;
+- CI restores it from the Actions cache by the hash (`.github/actions/teapod-core`) and builds only on a miss;
+- every app release attaches the AAR it was built with.
 
 | Part | Source |
 |---|---|
 | xray-core (Go) | `github.com/xtls/xray-core`, patched (below) |
 | sing-box (Go) | upstream v1.14.4 + AmneziaWG endpoint, `sysdns`, geo conversion (`internal/`) |
-| teapod-tun2socks (Go) | `replace => ../teapod-tun2socks/go` ([teapod_tun2socks](teapod_tun2socks.md)) |
+| tun2socks (Go) | `core/tun2socks/` ([teapod_tun2socks](teapod_tun2socks.md)) |
 | xray-rust | prebuilt [xray-rust-mobile](https://github.com/aimalygin/xray-rust-mobile) AAR 0.9.0 (SHA-256 pinned), merged into the fat AAR |
 
 ```
@@ -53,11 +58,12 @@ RustCore:          TUN fd → xray-rust → server
 - Build tags: `with_gvisor,with_quic,with_wireguard,with_utls,with_naive_outbound,badlinkname,tfogo_checklinkname0`.
   Naive links Cronet statically (`CGO_LDFLAGS_ALLOW='-l:libcronet\.a'` for Go 1.27.4+). gomobile needs
   `-checklinkname=0`.
-- `replace github.com/sagernet/gvisor` pins the version sing-box is tested with (MVS would otherwise pick tun2socks's).
+- `replace github.com/sagernet/gvisor` pins the gVisor version sing-box is tested with.
 
 ## xray-core patches (`patches/xray-core/`)
 
-`build.sh` copies the module into `.xray-core/` and applies them; `go build` needs that directory.
+`core/build.sh` (also `./build.sh prepare` alone) copies the module into `.xray-core/` and applies them; `go build`,
+`go vet` and `go test` need that directory.
 
 | Patch | Problem it fixes |
 |---|---|

@@ -54,7 +54,7 @@ VPN-клиент для Android на ядрах Xray-core, sing-box и xray-rust
 ```
 
 - **[core/](core/)** — AAR teapod-core с ядрами: xray-core, sing-box, xray-rust и teapod-tun2socks
-- **[teapod-tun2socks](https://github.com/Wendor/teapod-tun2socks)** — мост между TUN-интерфейсом и SOCKS5 ядра (gVisor netstack)
+- **[core/tun2socks/](core/tun2socks/)** — мост между TUN-интерфейсом и SOCKS5 ядра (gVisor netstack)
 - **Android VpnService** — управление TUN-интерфейсом на уровне ОС
 - **Flutter** — UI и настройки (Riverpod), локализация через `gen_l10n` (`lib/l10n/*.arb`)
 
@@ -155,4 +155,4 @@ Pull request'ы приветствуются — сначала прочитай
 - [Xray-core](https://github.com/XTLS/Xray-core) — MPL-2.0
 - [sing-box](https://github.com/SagerNet/sing-box) — GPL-3.0-or-later
 - [amneziawg-go](https://github.com/amnezia-vpn/amneziawg-go) — MIT
-- [teapod-tun2socks](https://github.com/Wendor/teapod-tun2socks) — MIT
+- [teapod-tun2socks](core/tun2socks/LICENSE) — MIT

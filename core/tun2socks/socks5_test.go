@@ -7,7 +7,7 @@ import (
 	"net"
 	"testing"
 
-	. "github.com/Wendor/teapod-tun2socks"
+	. "github.com/Wendor/teapod-core/tun2socks"
 )
 
 // ── EncodeUDPDatagram / DecodeUDPDatagram ─────────────────────────────────────

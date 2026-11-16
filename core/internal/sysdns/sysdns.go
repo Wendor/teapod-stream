@@ -68,6 +68,11 @@ func (t *Transport) Exchange(ctx context.Context, message *dns.Msg) (*dns.Msg, e
 	if err != nil {
 		return nil, err
 	}
+	// The resolver may return IPv4 as IPv4-mapped IPv6 (::ffff:a.b.c.d); FixedResponse puts only
+	// Is4() addresses into A records, so unmapped they would vanish from the answer.
+	for i := range addresses {
+		addresses[i] = addresses[i].Unmap()
+	}
 	return boxdns.FixedResponse(message.Id, question, addresses, C.DefaultDNSTTL), nil
 }
 

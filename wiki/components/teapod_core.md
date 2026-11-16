@@ -40,7 +40,8 @@ RustCore:          TUN fd → xray-rust → server
 ## Behaviour worth knowing
 
 - `StartXray` stops the previous instance first; the start goroutine checks it is still the current instance, so a
-  concurrent `StopXray` can't leave an orphan holding the SOCKS port.
+  concurrent `StopXray` can't leave an orphan holding the SOCKS port. A failed start closes the instance: xray starts
+  features in order without rollback, so the inbounds already listening would keep the port.
 - Delay measurement: `http.Transport` over `core.Dial`, 2 attempts with keep-alive (an attempt counts only when the
   whole body was read), `CloseIdleConnections` on exit
   (an idle connection keeps the outbound session and the server connection alive). Temporary instances don't register

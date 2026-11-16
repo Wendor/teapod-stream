@@ -1,6 +1,6 @@
 ---
 name: review-pr
-description: Use when reviewing a pull request to teapodstream — the one review checklist (rules, CI, CodeRabbit, wiki, architecture, bugs) used by people, agents and the approve-pr bot.
+description: Use when reviewing a pull request to teapodstream — the review checklist (rules, CI, CodeRabbit, wiki, architecture, bugs).
 ---
 
 # Reviewing a pull request
@@ -104,4 +104,4 @@ leak traffic outside the tunnel or expose the real IP.
   or wiki update. List each with `file:line` and what to do, in English.
 - **Pending:** section 2 or 3 stopped the review.
 
-Post to GitHub only when the person you work for asks; the `approve-pr` skill posts the verdict as the reviewer bot.
+Post to GitHub only when the person you work for asks.

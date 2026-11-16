@@ -42,12 +42,16 @@ type stackDevice struct {
 	packetOutbound chan *buf.Buffer
 	done           chan struct{}
 	wake           chan struct{}
-	closeOnce      sync.Once
-	dispatcher     stack.NetworkDispatcher
-	inet4Address   netip.Addr
-	inet6Address   netip.Addr
-	icmpForwarder  *tun.ICMPForwarder
-	udpForwarder   *tun.UDPForwarder
+	// A packet taken while a wake was pending, returned by the next Read
+	// (only the single TUN reader goroutine touches these).
+	heldPacket    *stack.PacketBuffer
+	heldBuffer    *buf.Buffer
+	closeOnce     sync.Once
+	dispatcher    stack.NetworkDispatcher
+	inet4Address  netip.Addr
+	inet6Address  netip.Addr
+	icmpForwarder *tun.ICMPForwarder
+	udpForwarder  *tun.UDPForwarder
 }
 
 func newStackDevice(mtu uint32, address []netip.Prefix) (*stackDevice, error) {
@@ -187,30 +191,43 @@ func (w *stackDevice) Read(bufs [][]byte, sizes []int, offset int) (count int, e
 		return 0, nil
 	default:
 	}
-	select {
-	case packet, ok := <-w.outbound:
-		if !ok {
+	if w.heldPacket == nil && w.heldBuffer == nil {
+		select {
+		case packet, ok := <-w.outbound:
+			if !ok {
+				return 0, os.ErrClosed
+			}
+			w.heldPacket = packet
+		case packet := <-w.packetOutbound:
+			w.heldBuffer = packet
+		case <-w.wake:
+			return 0, nil
+		case <-w.done:
 			return 0, os.ErrClosed
 		}
+		// A wake that came while this Read waited goes first too; the packet is kept for
+		// the next Read, which runs with the new offset.
+		select {
+		case <-w.wake:
+			return 0, nil
+		default:
+		}
+	}
+	if packet := w.heldPacket; packet != nil {
+		w.heldPacket = nil
 		defer packet.DecRef()
 		var copyN int
-		/*rangeIterate(packet.Data().AsRange(), func(view *buffer.View) {
-			copyN += copy(bufs[0][offset+copyN:], view.AsSlice())
-		})*/
 		for _, view := range packet.AsSlices() {
 			copyN += copy(bufs[0][offset+copyN:], view)
 		}
 		sizes[0] = copyN
 		return 1, nil
-	case packet := <-w.packetOutbound:
-		defer packet.Release()
-		sizes[0] = copy(bufs[0][offset:], packet.Bytes())
-		return 1, nil
-	case <-w.wake:
-		return 0, nil
-	case <-w.done:
-		return 0, os.ErrClosed
 	}
+	packet := w.heldBuffer
+	w.heldBuffer = nil
+	defer packet.Release()
+	sizes[0] = copy(bufs[0][offset:], packet.Bytes())
+	return 1, nil
 }
 
 // Reconfigured wakes Read: the amneziawg-go TUN reader starts in NewDevice and blocks

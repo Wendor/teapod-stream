@@ -54,8 +54,8 @@ RustCore:          TUN fd → xray-rust → server
   source's size and mtime.
 - AmneziaWG (`internal/awg`): endpoint `type: awg` = sing-box WireGuard options + `amnezia`; adapted from sing-box's
   WireGuard transport onto `amneziawg-go/v3`; one peer, outbound only; the bind doesn't touch bytes 1–3 (AWG header).
-  After reconfiguration it wakes the TUN reader so the first packet gets the padding; a pending wake is served before
-  any queued packet.
+  After reconfiguration it wakes the TUN reader so the first packet gets the padding; a wake pending when `Read` takes a
+  packet is served first, and the packet waits for the next `Read`.
 - Build tags: `with_gvisor,with_quic,with_wireguard,with_utls,with_naive_outbound,badlinkname,tfogo_checklinkname0`.
   Naive links Cronet statically (`CGO_LDFLAGS_ALLOW='-l:libcronet\.a'` for Go 1.27.4+). gomobile needs
   `-checklinkname=0`.

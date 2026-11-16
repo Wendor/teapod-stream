@@ -60,6 +60,9 @@ flutter gen-l10n           # after editing lib/l10n/*.arb; commit the regenerate
   `values/strings.xml` + `values-ru/strings.xml` via `appString()` ([localization](wiki/components/localization.md)).
 - **Commits:** `area: what changed`, lowercase area as in `git log` (`vpn`, `xray`, `singbox`, `ui`, `l10n`, `itest`,
   `ci`, `wiki`, `build`, …). The PR title follows the same form.
+- **Say it's you.** Every commit you make carries a trailer naming the agent, e.g.
+  `Co-Authored-By: Claude <noreply@anthropic.com>`; every PR or issue description, comment and review reply you post
+  ends with the same line. People must see which text came from an agent.
 
 ## Things agents trip on
 

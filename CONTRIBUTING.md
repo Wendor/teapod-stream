@@ -55,7 +55,8 @@ AI tools are welcome. The rules don't change:
 
 - **You own every line.** You have read the whole diff, you understand it and you can answer review questions
   without asking the AI again.
-- **Say so:** tick the *AI was used* box in the PR template.
+- **Say so:** tick the *AI was used* box in the PR template. Commits an agent wrote carry a trailer naming it
+  (`Co-Authored-By: <agent> <email>`), and comments an agent posts end with the same line.
 - **The description is about the change, not the process.** Short, specific, verified — no generated essays,
   no claims you haven't checked ("tested on a device" means you did).
 - Point your agent at [AGENTS.md](AGENTS.md); Claude Code reads it through `CLAUDE.md`.

@@ -30,6 +30,8 @@ Rules: [CONTRIBUTING.md](../../../CONTRIBUTING.md). Template: [.github/pull_requ
   **Not tested** and ask the person you work for to run it — never claim a device test you didn't see.
 - **Risks:** connection, kill switch, reconnect, stored data migration; "None" only after checking.
 - Tick a box only when it is true. Keep the *AI was used* box.
+- End the description and every comment or review reply you post with `Co-Authored-By: <agent> <email>`;
+  commits you make carry it as a trailer.
 - No placeholders left (`<…>`): the `PR rules` workflow fails on them.
 
 ## Open and update

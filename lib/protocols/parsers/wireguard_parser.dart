@@ -90,26 +90,33 @@ abstract final class WireGuardParser {
         '#${Uri.encodeComponent(config.name)}';
   }
 
-  static VpnConfig _config(String host, int port, WireGuardSettings settings, String name, String? rawUri) =>
-      VpnConfig(
-        id: const Uuid().v4(),
-        name: name,
-        protocol: VpnProtocol.wireguard,
-        address: host,
-        port: port,
-        uuid: '',
-        security: VpnSecurity.none,
-        transport: VpnTransport.tcp,
-        createdAt: DateTime.now(),
-        rawUri: rawUri,
-        protocolSettings: settings,
-      );
+  static VpnConfig _config(String host, int port, WireGuardSettings settings, String name, String? rawUri) => VpnConfig(
+    id: const Uuid().v4(),
+    name: name,
+    protocol: VpnProtocol.wireguard,
+    address: host,
+    port: port,
+    uuid: '',
+    security: VpnSecurity.none,
+    transport: VpnTransport.tcp,
+    createdAt: DateTime.now(),
+    rawUri: rawUri,
+    protocolSettings: settings,
+  );
 
   /// AmneziaWG keys: in `.conf` — as in amneziawg-go (`Jc`, `HeaderProtectionKey`…), in a link —
   /// the same in lowercase; the value is the `AmneziaParams` JSON key.
   static const _amneziaInts = ['jc', 'jmin', 'jmax', 's1', 's2', 's3', 's4'];
   static const _amneziaStrings = {
-    'h1': 'h1', 'h2': 'h2', 'h3': 'h3', 'h4': 'h4', 'i1': 'i1', 'i2': 'i2', 'i3': 'i3', 'i4': 'i4', 'i5': 'i5',
+    'h1': 'h1',
+    'h2': 'h2',
+    'h3': 'h3',
+    'h4': 'h4',
+    'i1': 'i1',
+    'i2': 'i2',
+    'i3': 'i3',
+    'i4': 'i4',
+    'i5': 'i5',
     'headerprotectionkey': 'header_protection_key',
     'contentpaddingaddition': 'content_padding_addition',
     'rekeyaftertime': 'rekey_after_time',
@@ -160,13 +167,12 @@ abstract final class WireGuardParser {
 
   static const _repeatable = {'address', 'allowedips'};
 
-  static List<String> _list(String? v) =>
-      (v ?? '').split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+  static List<String> _list(String? v) => (v ?? '').split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
 
   /// An address without a mask (allowed in wg-quick) is a single host: /32 or /128.
   static List<String> _prefixes(String? v) => [
-        for (final p in _list(v)) p.contains('/') ? p : (p.contains(':') ? '$p/128' : '$p/32'),
-      ];
+    for (final p in _list(v)) p.contains('/') ? p : (p.contains(':') ? '$p/128' : '$p/32'),
+  ];
 
   static List<String> _allowedIps(String? v) {
     final ips = _prefixes(v);
@@ -190,9 +196,9 @@ abstract final class WireGuardParser {
 
   /// Query values without turning `+` into a space (keys are base64).
   static Map<String, String> _query(String query) => {
-        for (final part in query.split('&').where((p) => p.contains('=')))
-          part.substring(0, part.indexOf('=')).toLowerCase(): Uri.decodeComponent(part.substring(part.indexOf('=') + 1)),
-      };
+    for (final part in query.split('&').where((p) => p.contains('=')))
+      part.substring(0, part.indexOf('=')).toLowerCase(): Uri.decodeComponent(part.substring(part.indexOf('=') + 1)),
+  };
 
   static String _encodeList(String value) => value.split(',').map(Uri.encodeComponent).join(',');
 }

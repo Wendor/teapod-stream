@@ -30,11 +30,7 @@ enum CoreKind {
   /// are appended in default order. [first] (the core from versions before
   /// priorities) goes first if there's no order yet.
   static List<CoreKind> parseOrder(Iterable<String>? names, {String? first}) {
-    final order = <CoreKind>{
-      if (names == null) ?tryName(first),
-      ...?names?.map(tryName).nonNulls,
-      ...defaultOrder,
-    };
+    final order = <CoreKind>{if (names == null) ?tryName(first), ...?names?.map(tryName).nonNulls, ...defaultOrder};
     return List.unmodifiable(order);
   }
 }

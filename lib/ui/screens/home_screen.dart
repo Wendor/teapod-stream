@@ -25,38 +25,30 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final vpnState       = ref.watch(vpnProvider);
+    final vpnState = ref.watch(vpnProvider);
     final effectiveConfig = ref.watch(effectiveConfigProvider);
-    final version        = ref.watch(appVersionProvider).maybeWhen(data: (v) => v, orElse: () => 'v?');
+    final version = ref.watch(appVersionProvider).maybeWhen(data: (v) => v, orElse: () => 'v?');
     final t = Theme.of(context).extension<TeapodTokens>()!;
-    final core = effectiveConfig == null
-        ? null
-        : ref.watch(coreResolverProvider).resolve(effectiveConfig);
+    final core = effectiveConfig == null ? null : ref.watch(coreResolverProvider).resolve(effectiveConfig);
     final unsupported = core?.reason;
     // A profile no core supports can't be connected; disconnecting is still allowed.
-    final canToggle = effectiveConfig != null &&
-        (unsupported == null || vpnState.isConnected || vpnState.isBusy);
-    final pingMs    = effectiveConfig?.latencyMs;
+    final canToggle = effectiveConfig != null && (unsupported == null || vpnState.isConnected || vpnState.isBusy);
+    final pingMs = effectiveConfig?.latencyMs;
 
-    final isConn  = vpnState.isConnected;
-    final isBusy  = vpnState.isBusy;
+    final isConn = vpnState.isConnected;
+    final isBusy = vpnState.isBusy;
     final stateCode = isConn ? '01' : (isBusy ? '02' : '00');
 
-    final protoLabel = effectiveConfig != null
-        ? effectiveConfig.protoTag
-        : '—';
-    final serverHint = effectiveConfig != null
-        ? '${effectiveConfig.address}:${effectiveConfig.port}'
-        : '—';
+    final protoLabel = effectiveConfig != null ? effectiveConfig.protoTag : '—';
+    final serverHint = effectiveConfig != null ? '${effectiveConfig.address}:${effectiveConfig.port}' : '—';
 
     final history = vpnState.stats.speedHistory;
 
     final isManaged = effectiveConfig?.rawXrayConfig != null;
     final routingDirection = ref.watch(
-      settingsProvider.select((s) => s.maybeWhen(
-        data: (d) => d.routing.direction,
-        orElse: () => RoutingDirection.global,
-      )),
+      settingsProvider.select(
+        (s) => s.maybeWhen(data: (d) => d.routing.direction, orElse: () => RoutingDirection.global),
+      ),
     );
 
     return Scaffold(
@@ -89,16 +81,13 @@ class HomeScreen extends ConsumerWidget {
                 t: t,
                 stats: vpnState.stats,
                 serverName: effectiveConfig?.name ?? '—',
-                serverHint: effectiveConfig != null
-                    ? '$protoLabel · $serverHint'
-                    : context.l10n.homeNoConfig,
+                serverHint: effectiveConfig != null ? '$protoLabel · $serverHint' : context.l10n.homeNoConfig,
                 isConnected: isConn,
                 pingMs: pingMs,
                 history: history,
                 onServerTap: () => showServerPicker(context, ref),
               ),
-              if (isManaged)
-                _ManagedWarning(t: t, direction: routingDirection),
+              if (isManaged) _ManagedWarning(t: t, direction: routingDirection),
             ],
           ),
         ),
@@ -125,12 +114,10 @@ class _HeaderStrip extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text('teapod.stream // $version',
-              style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+          Text('teapod.stream // $version', style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
           Row(
             children: [
-              Text('sys.state [$stateCode]',
-                  style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+              Text('sys.state [$stateCode]', style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
               const SizedBox(width: 12),
               Semantics(
                 label: context.l10n.homeLogs,
@@ -138,8 +125,7 @@ class _HeaderStrip extends StatelessWidget {
                 child: GestureDetector(
                   onTap: () => Navigator.push(
                     context,
-                    MaterialPageRoute(
-                        builder: (_) => const LogsScreen(breadcrumbParent: 'home')),
+                    MaterialPageRoute<void>(builder: (_) => const LogsScreen(breadcrumbParent: 'home')),
                   ),
                   child: Container(
                     width: 28,
@@ -216,11 +202,7 @@ class _HeroPanel extends StatelessWidget {
                   onTap: canToggle ? onToggle : onDisabledTap,
                 ),
                 const SizedBox(height: 16),
-                _StateInfo(
-                  t: t,
-                  vpnState: vpnState,
-                  pingMs: pingMs,
-                ),
+                _StateInfo(t: t, vpnState: vpnState, pingMs: pingMs),
                 ?coreLine,
               ],
             ),
@@ -238,30 +220,26 @@ class _StateInfo extends ConsumerWidget {
   final VpnState2 vpnState;
   final int? pingMs;
 
-  const _StateInfo({
-    required this.t,
-    required this.vpnState,
-    this.pingMs,
-  });
+  const _StateInfo({required this.t, required this.vpnState, this.pingMs});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isConn          = vpnState.isConnected;
-    final isConnecting    = vpnState.isConnecting;
+    final isConn = vpnState.isConnected;
+    final isConnecting = vpnState.isConnecting;
     final isDisconnecting = vpnState.isDisconnecting;
-    final isBlocked       = vpnState.isBlocked;
-    final isError         = vpnState.isError;
-    final error           = vpnState.error;
-    final ipAsync         = ref.watch(ipInfoProvider);
-    final hasConfig       = ref.watch(effectiveConfigProvider) != null;
+    final isBlocked = vpnState.isBlocked;
+    final isError = vpnState.isError;
+    final error = vpnState.error;
+    final ipAsync = ref.watch(ipInfoProvider);
+    final hasConfig = ref.watch(effectiveConfigProvider) != null;
 
     final stateWord = isBlocked
         ? 'BLOCKED'
         : isConn
-            ? 'ONLINE'
-            : isError
-                ? 'FAILED'
-                : (isConnecting ? 'HANDSHAKE' : (isDisconnecting ? 'SHUTDOWN' : 'OFFLINE'));
+        ? 'ONLINE'
+        : isError
+        ? 'FAILED'
+        : (isConnecting ? 'HANDSHAKE' : (isDisconnecting ? 'SHUTDOWN' : 'OFFLINE'));
     final stateColor = isBlocked || isError ? t.danger : (isConn ? t.accent : t.textDim);
 
     final l = context.l10n;
@@ -272,7 +250,7 @@ class _StateInfo extends ConsumerWidget {
       subtitle = '${error ?? l.homeConnectError}\n${l.homeTapToRetry}';
     } else if (isConn) {
       final ipStr = ipAsync.maybeWhen(data: (d) => d?.ip, orElse: () => null) ?? '—';
-      final cc    = ipAsync.maybeWhen(data: (d) => d?.countryCode.toLowerCase(), orElse: () => null) ?? '—';
+      final cc = ipAsync.maybeWhen(data: (d) => d?.countryCode.toLowerCase(), orElse: () => null) ?? '—';
       subtitle = pingMs != null ? '${pingMs}ms · $cc · $ipStr' : '$cc · $ipStr';
     } else if (isConnecting) {
       subtitle = l.homeConnecting;
@@ -289,16 +267,16 @@ class _StateInfo extends ConsumerWidget {
       children: [
         Text(
           stateWord,
-          style: AppTheme.sans(
-            size: 28, weight: FontWeight.w500,
-            color: stateColor, letterSpacing: -1, height: 1),
+          style: AppTheme.sans(size: 28, weight: FontWeight.w500, color: stateColor, letterSpacing: -1, height: 1),
         ),
         const SizedBox(height: 6),
-        Text(subtitle,
-            textAlign: TextAlign.center,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5)),
+        Text(
+          subtitle,
+          textAlign: TextAlign.center,
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+          style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5),
+        ),
         if (isBlocked) ...[
           const SizedBox(height: 10),
           GestureDetector(
@@ -306,8 +284,7 @@ class _StateInfo extends ConsumerWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
               decoration: BoxDecoration(border: Border.all(color: t.danger)),
-              child: Text(l.homeDisconnectButton,
-                  style: AppTheme.mono(size: 9, color: t.danger, letterSpacing: 1.5)),
+              child: Text(l.homeDisconnectButton, style: AppTheme.mono(size: 9, color: t.danger, letterSpacing: 1.5)),
             ),
           ),
         ],
@@ -347,10 +324,7 @@ class _PowerCoreState extends State<_PowerCore> with SingleTickerProviderStateMi
   @override
   void initState() {
     super.initState();
-    _spin = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1100),
-    )..repeat();
+    _spin = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))..repeat();
   }
 
   @override
@@ -361,19 +335,19 @@ class _PowerCoreState extends State<_PowerCore> with SingleTickerProviderStateMi
 
   @override
   Widget build(BuildContext context) {
-    final t       = widget.t;
-    final conn    = widget.isConnected;
-    final busy    = widget.isBusy;
+    final t = widget.t;
+    final conn = widget.isConnected;
+    final busy = widget.isBusy;
     final blocked = widget.isBlocked;
     final actionLabel = !widget.enabled
         ? widget.disabledLabel
         : blocked
-            ? context.l10n.homeActionReconnect
-            : conn
-                ? context.l10n.homeActionDisconnect
-                : (busy ? context.l10n.homeActionWait : context.l10n.homeActionConnect);
+        ? context.l10n.homeActionReconnect
+        : conn
+        ? context.l10n.homeActionDisconnect
+        : (busy ? context.l10n.homeActionWait : context.l10n.homeActionConnect);
 
-    const coreSize  = 220.0;
+    const coreSize = 220.0;
     const outerSize = coreSize + 32.0;
     const innerSize = coreSize - 44.0;
 
@@ -381,79 +355,70 @@ class _PowerCoreState extends State<_PowerCore> with SingleTickerProviderStateMi
       label: actionLabel,
       button: true,
       child: GestureDetector(
-      onTap: widget.onTap,
-      child: SizedBox(
-        width: outerSize,
-        height: outerSize,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            // Outermost faint ring
-            Container(
-              width: outerSize,
-              height: outerSize,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: blocked ? t.danger : (conn ? t.accentSoft : t.line),
-                  width: 1,
+        onTap: widget.onTap,
+        child: SizedBox(
+          width: outerSize,
+          height: outerSize,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Outermost faint ring
+              Container(
+                width: outerSize,
+                height: outerSize,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: blocked ? t.danger : (conn ? t.accentSoft : t.line), width: 1),
                 ),
               ),
-            ),
-            // Spinning arc when connecting/disconnecting
-            if (busy)
-              SizedBox(
-                width: coreSize + 10,
-                height: coreSize + 10,
-                child: RotationTransition(
-                  turns: _spin,
-                  child: CustomPaint(painter: _SpinArcPainter(t.accent)),
-                ),
-              ),
-            // Main ring
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              width: coreSize,
-              height: coreSize,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                    color: blocked ? t.danger : (conn ? t.accent : t.line), width: 1),
-                boxShadow: conn
-                    ? [BoxShadow(color: t.accentSoft, blurRadius: 60, spreadRadius: 4)]
-                    : null,
-              ),
-            ),
-            // Inner disk
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              width: innerSize,
-              height: innerSize,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: conn ? t.accent : t.bgElev,
-                border: Border.all(color: conn ? t.accent : t.line, width: 1),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _PowerIcon(color: conn ? t.bg : t.text, size: 40),
-                  const SizedBox(height: 6),
-                  Text(
-                    actionLabel.toUpperCase(),
-                    style: AppTheme.mono(
-                      size: 9,
-                      color: conn ? t.bg : t.textDim,
-                      letterSpacing: 2,
-                    ),
+              // Spinning arc when connecting/disconnecting
+              if (busy)
+                SizedBox(
+                  width: coreSize + 10,
+                  height: coreSize + 10,
+                  child: RotationTransition(
+                    turns: _spin,
+                    child: CustomPaint(painter: _SpinArcPainter(t.accent)),
                   ),
-                ],
+                ),
+              // Main ring
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                width: coreSize,
+                height: coreSize,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: blocked ? t.danger : (conn ? t.accent : t.line), width: 1),
+                  boxShadow: conn ? [BoxShadow(color: t.accentSoft, blurRadius: 60, spreadRadius: 4)] : null,
+                ),
               ),
-            ),
-          ],
+              // Inner disk
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                width: innerSize,
+                height: innerSize,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: conn ? t.accent : t.bgElev,
+                  border: Border.all(color: conn ? t.accent : t.line, width: 1),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _PowerIcon(color: conn ? t.bg : t.text, size: 40),
+                    const SizedBox(height: 6),
+                    Text(
+                      actionLabel.toUpperCase(),
+                      style: AppTheme.mono(size: 9, color: conn ? t.bg : t.textDim, letterSpacing: 2),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-    ));
+    );
   }
 }
 
@@ -468,13 +433,7 @@ class _SpinArcPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5
       ..strokeCap = StrokeCap.round;
-    canvas.drawArc(
-      Rect.fromLTWH(0, 0, size.width, size.height),
-      -math.pi / 2,
-      math.pi * 1.5,
-      false,
-      paint,
-    );
+    canvas.drawArc(Rect.fromLTWH(0, 0, size.width, size.height), -math.pi / 2, math.pi * 1.5, false, paint);
   }
 
   @override
@@ -489,8 +448,7 @@ class _PowerIcon extends StatelessWidget {
   const _PowerIcon({required this.color, required this.size});
 
   @override
-  Widget build(BuildContext context) =>
-      CustomPaint(size: Size(size, size), painter: _PowerPainter(color));
+  Widget build(BuildContext context) => CustomPaint(size: Size(size, size), painter: _PowerPainter(color));
 }
 
 class _PowerPainter extends CustomPainter {
@@ -534,10 +492,26 @@ class _CornerTicks extends StatelessWidget {
       child: IgnorePointer(
         child: Stack(
           children: [
-            Positioned(top: 6, left: 6,   child: _Tick(color: t.textMuted, corner: _TickCorner.tl)),
-            Positioned(top: 6, right: 6,  child: _Tick(color: t.textMuted, corner: _TickCorner.tr)),
-            Positioned(bottom: 6, left: 6,  child: _Tick(color: t.textMuted, corner: _TickCorner.bl)),
-            Positioned(bottom: 6, right: 6, child: _Tick(color: t.textMuted, corner: _TickCorner.br)),
+            Positioned(
+              top: 6,
+              left: 6,
+              child: _Tick(color: t.textMuted, corner: _TickCorner.tl),
+            ),
+            Positioned(
+              top: 6,
+              right: 6,
+              child: _Tick(color: t.textMuted, corner: _TickCorner.tr),
+            ),
+            Positioned(
+              bottom: 6,
+              left: 6,
+              child: _Tick(color: t.textMuted, corner: _TickCorner.bl),
+            ),
+            Positioned(
+              bottom: 6,
+              right: 6,
+              child: _Tick(color: t.textMuted, corner: _TickCorner.br),
+            ),
           ],
         ),
       ),
@@ -554,8 +528,7 @@ class _Tick extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(width: 8, height: 8,
-        child: CustomPaint(painter: _TickPainter(color, corner)));
+    return SizedBox(width: 8, height: 8, child: CustomPaint(painter: _TickPainter(color, corner)));
   }
 }
 
@@ -566,7 +539,10 @@ class _TickPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final p = Paint()..color = color..strokeWidth = 1..style = PaintingStyle.stroke;
+    final p = Paint()
+      ..color = color
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
     final w = size.width;
     final h = size.height;
     switch (corner) {
@@ -588,7 +564,6 @@ class _TickPainter extends CustomPainter {
   @override
   bool shouldRepaint(_TickPainter old) => old.color != color;
 }
-
 
 // ── Metrics grid ──────────────────────────────────────────────────
 
@@ -629,12 +604,10 @@ class _MetricsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final upSpeed   = isConnected ? stats.uploadSpeedBps   : 0;
+    final upSpeed = isConnected ? stats.uploadSpeedBps : 0;
     final downSpeed = isConnected ? stats.downloadSpeedBps : 0;
 
-    final sparkSamples = history
-        .map((s) => s.downloadSpeed / (1024.0 * 1024.0))
-        .toList();
+    final sparkSamples = history.map((s) => s.downloadSpeed / (1024.0 * 1024.0)).toList();
     final peakDown = sparkSamples.fold<double>(0, (m, v) => v > m ? v : m);
 
     final pingStr = pingMs != null ? '$pingMs' : '—';
@@ -701,12 +674,7 @@ class _MetricsGrid extends StatelessWidget {
             ],
           ),
         ),
-        _SparklineRow(
-          t: t,
-          stats: stats,
-          samples: sparkSamples,
-          peakMbps: peakDown,
-        ),
+        _SparklineRow(t: t, stats: stats, samples: sparkSamples, peakMbps: peakDown),
       ],
     );
   }
@@ -742,7 +710,10 @@ class _CoreLine extends StatelessWidget {
                 TextSpan(
                   text: '[core] ',
                   style: AppTheme.mono(
-                      size: 10, color: kind == null ? AppColors.accentOrange : t.accent, letterSpacing: 0.5),
+                    size: 10,
+                    color: kind == null ? AppColors.accentOrange : t.accent,
+                    letterSpacing: 0.5,
+                  ),
                 ),
                 TextSpan(
                   text: kind == null
@@ -767,9 +738,7 @@ class _ManagedWarning extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isOnlySelected = direction == RoutingDirection.onlySelected;
-    final detail = isOnlySelected
-        ? context.l10n.homeManagedOnlySelected
-        : context.l10n.homeManagedDns;
+    final detail = isOnlySelected ? context.l10n.homeManagedOnlySelected : context.l10n.homeManagedDns;
 
     return Container(
       width: double.infinity,
@@ -825,26 +794,19 @@ class _MetricCell extends StatelessWidget {
       clipBehavior: Clip.hardEdge,
       decoration: BoxDecoration(
         border: Border(
-          top:   BorderSide(color: t.line, width: 1),
+          top: BorderSide(color: t.line, width: 1),
           right: borderRight ? BorderSide(color: t.line, width: 1) : BorderSide.none,
         ),
       ),
       child: Column(
-        crossAxisAlignment:
-            alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
-            label.toUpperCase(),
-            style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1),
-          ),
+          Text(label.toUpperCase(), style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
           const SizedBox(height: 3),
           Row(
-            mainAxisAlignment:
-                alignRight ? MainAxisAlignment.end : MainAxisAlignment.start,
-            crossAxisAlignment: compactValue
-                ? CrossAxisAlignment.center
-                : CrossAxisAlignment.baseline,
+            mainAxisAlignment: alignRight ? MainAxisAlignment.end : MainAxisAlignment.start,
+            crossAxisAlignment: compactValue ? CrossAxisAlignment.center : CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
               Flexible(
@@ -852,31 +814,25 @@ class _MetricCell extends StatelessWidget {
                   value,
                   overflow: TextOverflow.ellipsis,
                   style: compactValue
-                      ? AppTheme.sans(
-                          size: 15, weight: FontWeight.w500,
-                          color: t.text, letterSpacing: -0.3)
-                      : AppTheme.mono(
-                          size: 20, weight: FontWeight.w500,
-                          color: t.text, letterSpacing: -0.5),
+                      ? AppTheme.sans(size: 15, weight: FontWeight.w500, color: t.text, letterSpacing: -0.3)
+                      : AppTheme.mono(size: 20, weight: FontWeight.w500, color: t.text, letterSpacing: -0.5),
                 ),
               ),
               if (unit != null) ...[
                 const SizedBox(width: 4),
-                Text(unit!,
-                    style: AppTheme.mono(size: 9, color: t.textDim)),
+                Text(unit!, style: AppTheme.mono(size: 9, color: t.textDim)),
               ],
-              if (chevron) ...[
-                const SizedBox(width: 6),
-                Text('›', style: AppTheme.mono(size: 14, color: t.textDim)),
-              ],
+              if (chevron) ...[const SizedBox(width: 6), Text('›', style: AppTheme.mono(size: 14, color: t.textDim))],
             ],
           ),
           if (hint != null) ...[
             const SizedBox(height: 2),
-            Text(hint!,
-                maxLines: 1,
-                style: AppTheme.mono(size: 9, color: t.textMuted),
-                overflow: TextOverflow.ellipsis),
+            Text(
+              hint!,
+              maxLines: 1,
+              style: AppTheme.mono(size: 9, color: t.textMuted),
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
         ],
       ),
@@ -892,21 +848,14 @@ class _SparklineRow extends StatelessWidget {
   final List<double> samples;
   final double peakMbps;
 
-  const _SparklineRow({
-    required this.t,
-    required this.stats,
-    required this.samples,
-    required this.peakMbps,
-  });
+  const _SparklineRow({required this.t, required this.stats, required this.samples, required this.peakMbps});
 
   @override
   Widget build(BuildContext context) {
-    final upTotal   = VpnStats.formatBytes(stats.uploadBytes);
+    final upTotal = VpnStats.formatBytes(stats.uploadBytes);
     final downTotal = VpnStats.formatBytes(stats.downloadBytes);
-    final duration  = VpnStats.formatDuration(stats.connectedDuration);
-    final peakStr   = peakMbps >= 0.01
-        ? '${peakMbps.toStringAsFixed(1)}M'
-        : '0.0M';
+    final duration = VpnStats.formatDuration(stats.connectedDuration);
+    final peakStr = peakMbps >= 0.01 ? '${peakMbps.toStringAsFixed(1)}M' : '0.0M';
 
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 10),
@@ -920,34 +869,26 @@ class _SparklineRow extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(context.l10n.homeTrafficLive,
-                  style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
-              Text(context.l10n.homePeak(peakStr),
-                  style: AppTheme.mono(size: 10, color: t.textDim)),
+              Text(context.l10n.homeTrafficLive, style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+              Text(context.l10n.homePeak(peakStr), style: AppTheme.mono(size: 10, color: t.textDim)),
             ],
           ),
           const SizedBox(height: 6),
-          LiveSparkline(
-            samples: samples.isEmpty ? List.filled(80, 0.0) : samples,
-            color: t.accent,
-          ),
+          LiveSparkline(samples: samples.isEmpty ? List.filled(80, 0.0) : samples, color: t.accent),
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('↑ $upTotal',
-                  style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+              Text('↑ $upTotal', style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _ClockIcon(color: t.textMuted, size: 10),
                   const SizedBox(width: 5),
-                  Text(duration,
-                      style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+                  Text(duration, style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
                 ],
               ),
-              Text('↓ $downTotal',
-                  style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+              Text('↓ $downTotal', style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
             ],
           ),
         ],
@@ -964,8 +905,7 @@ class _ClockIcon extends StatelessWidget {
   const _ClockIcon({required this.color, required this.size});
 
   @override
-  Widget build(BuildContext context) =>
-      CustomPaint(size: Size(size, size), painter: _ClockPainter(color));
+  Widget build(BuildContext context) => CustomPaint(size: Size(size, size), painter: _ClockPainter(color));
 }
 
 class _ClockPainter extends CustomPainter {

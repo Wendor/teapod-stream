@@ -129,7 +129,8 @@ void main() {
       await unmount(tester, c);
 
       await setUpScreenTest(
-          settings: const AppSettings(routing: RoutingSettings(direction: RoutingDirection.bypass)));
+        settings: const AppSettings(routing: RoutingSettings(direction: RoutingDirection.bypass)),
+      );
       c = await pumpScreen(tester, const RoutingScreen());
       await _tapRow(tester, 'Local networks');
       expect(_settings(c).routing.bypassLocal, isTrue);

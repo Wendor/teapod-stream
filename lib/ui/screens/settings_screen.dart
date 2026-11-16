@@ -47,14 +47,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _loadBinaryVersions() async {
     try {
       const channel = MethodChannel(AppConstants.methodChannel);
-      final result = await channel.invokeMethod<Map>('getBinaryVersions');
+      final result = await channel.invokeMethod<Map<Object?, Object?>>('getBinaryVersions');
       if (result != null && mounted) {
         setState(() {
           _coreVersions = result.map((k, v) => MapEntry('$k', '$v'));
         });
       }
     } catch (_) {
-      if (mounted) setState(() { _coreVersions = const {}; });
+      if (mounted) {
+        setState(() {
+          _coreVersions = const {};
+        });
+      }
     }
   }
 
@@ -67,9 +71,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final profileReadonly = profileState?.isReadonly ?? false;
     final locked = profileReadonly;
     final updateState = ref.watch(updateProvider);
-    final hasUpdate = updateState is UpdateAvailable ||
-        updateState is UpdateDownloading ||
-        updateState is UpdateDownloaded;
+    final hasUpdate =
+        updateState is UpdateAvailable || updateState is UpdateDownloading || updateState is UpdateDownloaded;
 
     return Scaffold(
       body: SafeArea(
@@ -85,11 +88,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             const ReconnectBanner(),
             Expanded(
               child: settingsAsync.when(
-                loading: () => Center(
-                    child: CircularProgressIndicator(color: t.accent, strokeWidth: 1.5)),
+                loading: () => Center(child: CircularProgressIndicator(color: t.accent, strokeWidth: 1.5)),
                 error: (e, _) => Center(
-                    child: Text(context.l10n.commonErrorWith('$e'),
-                        style: AppTheme.mono(size: 12, color: t.danger))),
+                  child: Text(context.l10n.commonErrorWith('$e'), style: AppTheme.mono(size: 12, color: t.danger)),
+                ),
                 data: (settings) => _SettingsBody(
                   settings: settings,
                   isProfileReadonly: profileReadonly,
@@ -118,14 +120,17 @@ class _SetHeaderStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.line))),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: t.line)),
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text('teapod.stream // config',
-              style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
-          Text('sys.state [${locked ? 'locked' : 'open'}]',
-              style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+          Text('teapod.stream // config', style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+          Text(
+            'sys.state [${locked ? 'locked' : 'open'}]',
+            style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1),
+          ),
         ],
       ),
     );
@@ -155,7 +160,9 @@ class _SetHeroPanel extends StatelessWidget {
     final borderColor = locked ? _gold : t.line;
 
     return Container(
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.line))),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: t.line)),
+      ),
       child: Stack(
         children: [
           SetCornerTicks(t: t, color: locked ? _gold : t.textMuted),
@@ -168,18 +175,24 @@ class _SetHeroPanel extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(context.l10n.settingsTagline,
-                          style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1.5)),
+                      Text(
+                        context.l10n.settingsTagline,
+                        style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1.5),
+                      ),
                       const SizedBox(height: 8),
-                      Text(locked ? 'LOCKED' : 'CONFIG',
-                          style: AppTheme.sans(
-                              size: 30, weight: FontWeight.w500,
-                              color: wordColor, letterSpacing: -1, height: 1)),
+                      Text(
+                        locked ? 'LOCKED' : 'CONFIG',
+                        style: AppTheme.sans(
+                          size: 30,
+                          weight: FontWeight.w500,
+                          color: wordColor,
+                          letterSpacing: -1,
+                          height: 1,
+                        ),
+                      ),
                       const SizedBox(height: 6),
                       Text(
-                        locked
-                            ? context.l10n.settingsProfileLocked
-                            : context.l10n.settingsProfileAutosave(profileName),
+                        locked ? context.l10n.settingsProfileLocked : context.l10n.settingsProfileAutosave(profileName),
                         style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5),
                       ),
                     ],
@@ -190,16 +203,12 @@ class _SetHeroPanel extends StatelessWidget {
                 Container(
                   width: 54,
                   height: 54,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: borderColor),
-                  ),
+                  decoration: BoxDecoration(border: Border.all(color: borderColor)),
                   child: Stack(
                     children: [
                       if (locked) ...[
-                        Positioned(top: -1, left: -1,
-                            child: _LockCorner(color: _gold, isTop: true)),
-                        Positioned(bottom: -1, right: -1,
-                            child: _LockCorner(color: _gold, isTop: false)),
+                        Positioned(top: -1, left: -1, child: _LockCorner(color: _gold, isTop: true)),
+                        Positioned(bottom: -1, right: -1, child: _LockCorner(color: _gold, isTop: false)),
                       ],
                       Center(
                         child: Column(
@@ -207,9 +216,10 @@ class _SetHeroPanel extends StatelessWidget {
                           children: [
                             _LockIcon(color: lockColor, open: !locked),
                             const SizedBox(height: 2),
-                            Text(locked ? 'ro' : 'rw',
-                                style: AppTheme.mono(
-                                    size: 8, color: lockColor, letterSpacing: 1)),
+                            Text(
+                              locked ? 'ro' : 'rw',
+                              style: AppTheme.mono(size: 8, color: lockColor, letterSpacing: 1),
+                            ),
                           ],
                         ),
                       ),
@@ -244,7 +254,10 @@ class _LockCornerPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final p = Paint()..color = color..strokeWidth = 2..style = PaintingStyle.stroke;
+    final p = Paint()
+      ..color = color
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
     if (isTop) {
       canvas.drawLine(Offset.zero, Offset(size.width, 0), p);
       canvas.drawLine(Offset.zero, Offset(0, size.height), p);
@@ -264,8 +277,7 @@ class _LockIcon extends StatelessWidget {
   const _LockIcon({required this.color, required this.open});
 
   @override
-  Widget build(BuildContext context) =>
-      CustomPaint(size: const Size(20, 20), painter: _LockPainter(color, open));
+  Widget build(BuildContext context) => CustomPaint(size: const Size(20, 20), painter: _LockPainter(color, open));
 }
 
 class _LockPainter extends CustomPainter {
@@ -315,6 +327,7 @@ class _SettingsBody extends StatelessWidget {
   final bool isProfileReadonly;
   final bool hasUpdate;
   final String version;
+
   /// Core versions by `CoreKind.versionKey`; null — not loaded yet.
   final Map<String, String>? coreVersions;
   final void Function(AppSettings) onUpdate;
@@ -338,140 +351,139 @@ class _SettingsBody extends StatelessWidget {
     return Stack(
       children: [
         ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          // Update available — tile at the top so it isn't lost at the end of the list
-          if (hasUpdate)
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
-              decoration: BoxDecoration(
-                color: t.accentFade,
-                border: Border(bottom: BorderSide(color: t.accent)),
+          padding: EdgeInsets.zero,
+          children: [
+            // Update available — tile at the top so it isn't lost at the end of the list
+            if (hasUpdate)
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+                decoration: BoxDecoration(
+                  color: t.accentFade,
+                  border: Border(bottom: BorderSide(color: t.accent)),
+                ),
+                child: const _UpdateTile(),
               ),
-              child: const _UpdateTile(),
+
+            // ── 0x10 DIAGNOSTICS ──────────────────────────────────
+            SetSectionHeader(t: t, addr: '0x10', label: 'diagnostics'),
+            SetRowChev(
+              t: t,
+              title: l.settingsLogs,
+              hint: l.settingsLogsHint,
+              last: true,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(builder: (_) => const LogsScreen(breadcrumbParent: 'settings')),
+              ),
             ),
 
-          // ── 0x10 DIAGNOSTICS ──────────────────────────────────
-          SetSectionHeader(t: t, addr: '0x10', label: 'diagnostics'),
-          SetRowChev(
-            t: t,
-            title: l.settingsLogs,
-            hint: l.settingsLogsHint,
-            last: true,
-            onTap: () => Navigator.push(context, MaterialPageRoute(
-                builder: (_) => const LogsScreen(breadcrumbParent: 'settings'))),
-          ),
+            // ── 0x20 APPEARANCE ───────────────────────────────────
+            SetSectionHeader(t: t, addr: '0x20', label: 'appearance'),
+            _AppearanceRows(t: t),
 
-          // ── 0x20 APPEARANCE ───────────────────────────────────
-          SetSectionHeader(t: t, addr: '0x20', label: 'appearance'),
-          _AppearanceRows(t: t),
-
-          // ── 0x30 CONNECTION ───────────────────────────────────
-          SetSectionHeader(t: t, addr: '0x30', label: 'connection'),
-          SetRowToggle(
-            t: t,
-            title: l.settingsAutoConnect,
-            hint: l.settingsAutoConnectHint,
-            value: s.autoConnect,
-            locked: locked,
-            onChange: (v) => onUpdate(s.copyWith(autoConnect: v)),
-          ),
-          SetRowToggle(
-            t: t,
-            title: l.settingsStartOnBoot,
-            hint: l.settingsStartOnBootHint,
-            value: s.autoStartOnBoot,
-            locked: locked,
-            onChange: (v) => onUpdate(s.copyWith(autoStartOnBoot: v)),
-          ),
-          SetRowToggle(
-            t: t,
-            title: l.settingsAutomation,
-            hint: l.settingsAutomationHint,
-            value: s.automationEnabled,
-            locked: locked,
-            onChange: (v) => onUpdate(s.copyWith(automationEnabled: v)),
-          ),
-          SetRowToggle(
-            t: t,
-            title: l.settingsNotification,
-            hint: l.settingsNotificationHint,
-            value: s.showNotification,
-            locked: locked,
-            onChange: (v) => onUpdate(s.copyWith(showNotification: v)),
-          ),
-          SetRowChev(
-            t: t,
-            title: l.settingsSubscriptions,
-            hint: s.subAutoRefresh
-                ? l.settingsSubAutoRefreshOn(s.subAutoRefreshHours)
-                : l.settingsSubAutoRefreshOff,
-            last: true,
-            onTap: () => Navigator.push(context, MaterialPageRoute(
-                builder: (_) =>
-                    const SubscriptionSettingsScreen(breadcrumbParent: 'settings'))),
-          ),
-
-          // ── 0x40 NETWORK ──────────────────────────────────────
-          SetSectionHeader(t: t, addr: '0x40', label: 'network'),
-          _CoreOrderList(t: t, settings: s, versions: coreVersions, locked: locked, onUpdate: onUpdate),
-          SetRowChev(
-            t: t,
-            title: l.settingsNetwork,
-            hint: 'SOCKS ${s.randomPort ? 'random' : s.socksPort} · MTU ${s.mtu}'
-                '${s.proxyOnly ? ' · ${l.settingsProxyOnlyShort}' : ''}',
-            onTap: () => Navigator.push(context, MaterialPageRoute(
-                builder: (_) => const NetworkSettingsScreen())),
-          ),
-          SetRowChev(
-            t: t,
-            title: 'DNS',
-            hint: '${s.dnsMode == DnsMode.proxy ? l.dnsViaVpn : l.dnsDirect} · ${_dnsLabel(s)}',
-            last: true,
-            onTap: () => Navigator.push(
-                context, MaterialPageRoute(builder: (_) => const DnsSettingsScreen())),
-          ),
-
-          // ── 0x50 SYSTEM ───────────────────────────────────────
-          SetSectionHeader(t: t, addr: '0x50', label: 'system'),
-          _ProfilesRow(t: t),
-          SetInlineField(
-            t: t,
-            label: l.settingsUpdateChannel,
-            child: const _UpdateChannelSegment(),
-          ),
-          // Update tile (complex) — shown at the top when an update is available
-          if (!hasUpdate)
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
-              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.line))),
-              child: const _UpdateTile(),
+            // ── 0x30 CONNECTION ───────────────────────────────────
+            SetSectionHeader(t: t, addr: '0x30', label: 'connection'),
+            SetRowToggle(
+              t: t,
+              title: l.settingsAutoConnect,
+              hint: l.settingsAutoConnectHint,
+              value: s.autoConnect,
+              locked: locked,
+              onChange: (v) => onUpdate(s.copyWith(autoConnect: v)),
+            ),
+            SetRowToggle(
+              t: t,
+              title: l.settingsStartOnBoot,
+              hint: l.settingsStartOnBootHint,
+              value: s.autoStartOnBoot,
+              locked: locked,
+              onChange: (v) => onUpdate(s.copyWith(autoStartOnBoot: v)),
+            ),
+            SetRowToggle(
+              t: t,
+              title: l.settingsAutomation,
+              hint: l.settingsAutomationHint,
+              value: s.automationEnabled,
+              locked: locked,
+              onChange: (v) => onUpdate(s.copyWith(automationEnabled: v)),
+            ),
+            SetRowToggle(
+              t: t,
+              title: l.settingsNotification,
+              hint: l.settingsNotificationHint,
+              value: s.showNotification,
+              locked: locked,
+              onChange: (v) => onUpdate(s.copyWith(showNotification: v)),
+            ),
+            SetRowChev(
+              t: t,
+              title: l.settingsSubscriptions,
+              hint: s.subAutoRefresh ? l.settingsSubAutoRefreshOn(s.subAutoRefreshHours) : l.settingsSubAutoRefreshOff,
+              last: true,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(builder: (_) => const SubscriptionSettingsScreen(breadcrumbParent: 'settings')),
+              ),
             ),
 
-          // ── 0x60 ABOUT ────────────────────────────────────────
-          SetSectionHeader(t: t, addr: '0x60', label: 'about'),
-          _KVRow(t: t, k: 'version',    v: version.isEmpty ? '...' : version),
-          _KVRowTap(
-            t: t,
-            k: 'licenses',
-            v: 'open-source',
-            onTap: () => showLicensePage(context: context, applicationName: 'TeapodStream'),
-          ),
-          _KVRowTap(
-            t: t,
-            k: 'source',
-            v: 'github.com/Wendor/teapod-stream',
-            onTap: () => launchUrl(Uri.parse('https://github.com/Wendor/teapod-stream'),
-                    mode: LaunchMode.externalApplication)
-                .ignore(),
-          ),
-          const SizedBox(height: 32),
-        ],
-      ),
+            // ── 0x40 NETWORK ──────────────────────────────────────
+            SetSectionHeader(t: t, addr: '0x40', label: 'network'),
+            _CoreOrderList(t: t, settings: s, versions: coreVersions, locked: locked, onUpdate: onUpdate),
+            SetRowChev(
+              t: t,
+              title: l.settingsNetwork,
+              hint:
+                  'SOCKS ${s.randomPort ? 'random' : s.socksPort} · MTU ${s.mtu}'
+                  '${s.proxyOnly ? ' · ${l.settingsProxyOnlyShort}' : ''}',
+              onTap: () =>
+                  Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const NetworkSettingsScreen())),
+            ),
+            SetRowChev(
+              t: t,
+              title: 'DNS',
+              hint: '${s.dnsMode == DnsMode.proxy ? l.dnsViaVpn : l.dnsDirect} · ${_dnsLabel(s)}',
+              last: true,
+              onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const DnsSettingsScreen())),
+            ),
+
+            // ── 0x50 SYSTEM ───────────────────────────────────────
+            SetSectionHeader(t: t, addr: '0x50', label: 'system'),
+            _ProfilesRow(t: t),
+            SetInlineField(t: t, label: l.settingsUpdateChannel, child: const _UpdateChannelSegment()),
+            // Update tile (complex) — shown at the top when an update is available
+            if (!hasUpdate)
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: t.line)),
+                ),
+                child: const _UpdateTile(),
+              ),
+
+            // ── 0x60 ABOUT ────────────────────────────────────────
+            SetSectionHeader(t: t, addr: '0x60', label: 'about'),
+            _KVRow(t: t, k: 'version', v: version.isEmpty ? '...' : version),
+            _KVRowTap(
+              t: t,
+              k: 'licenses',
+              v: 'open-source',
+              onTap: () => showLicensePage(context: context, applicationName: 'TeapodStream'),
+            ),
+            _KVRowTap(
+              t: t,
+              k: 'source',
+              v: 'github.com/Wendor/teapod-stream',
+              onTap: () => launchUrl(
+                Uri.parse('https://github.com/Wendor/teapod-stream'),
+                mode: LaunchMode.externalApplication,
+              ).ignore(),
+            ),
+            const SizedBox(height: 32),
+          ],
+        ),
       ],
     );
   }
-
 }
 
 // ── Row: KV ───────────────────────────────────────────────────────
@@ -486,12 +498,13 @@ class _KVRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.lineSoft))),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: t.lineSoft)),
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(k.toUpperCase(),
-              style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+          Text(k.toUpperCase(), style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
           Text(v, style: AppTheme.mono(size: 11, color: t.text)),
         ],
       ),
@@ -512,12 +525,13 @@ class _KVRowTap extends StatelessWidget {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
-        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.lineSoft))),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: t.lineSoft)),
+        ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(k.toUpperCase(),
-                style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+            Text(k.toUpperCase(), style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
             Row(
               children: [
                 Text(v, style: AppTheme.mono(size: 11, color: t.accent)),
@@ -582,8 +596,11 @@ class _CoreOrderListState extends ConsumerState<_CoreOrderList> {
           ..showSnackBar(SnackBar(content: Text(context.l10n.settingsCoreLastEnabled)));
         return;
       }
-      widget.onUpdate(settings.copyWith(
-          disabledCores: on ? ({...settings.disabledCores}..remove(k)) : {...settings.disabledCores, k}));
+      widget.onUpdate(
+        settings.copyWith(
+          disabledCores: on ? ({...settings.disabledCores}..remove(k)) : {...settings.disabledCores, k},
+        ),
+      );
     }
 
     void moveUp(int i) {
@@ -607,8 +624,10 @@ class _CoreOrderListState extends ConsumerState<_CoreOrderList> {
             children: [
               Text(context.l10n.settingsCores, style: AppTheme.sans(size: 14, color: t.text)),
               const SizedBox(height: 3),
-              Text(context.l10n.settingsCoresHint,
-                  style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5)),
+              Text(
+                context.l10n.settingsCoresHint,
+                style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5),
+              ),
             ],
           ),
         ),
@@ -644,14 +663,17 @@ class _CoreOrderListState extends ConsumerState<_CoreOrderList> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(k.displayName,
-                          style: AppTheme.sans(size: 14, color: usable.contains(k) ? t.text : t.textMuted)),
+                      Text(
+                        k.displayName,
+                        style: AppTheme.sans(size: 14, color: usable.contains(k) ? t.text : t.textMuted),
+                      ),
                       const SizedBox(height: 2),
                       Text(
-                          !available.contains(k)
-                              ? context.l10n.settingsCoreUnavailable
-                              : (widget.versions?[k.versionKey] ?? '...'),
-                          style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5)),
+                        !available.contains(k)
+                            ? context.l10n.settingsCoreUnavailable
+                            : (widget.versions?[k.versionKey] ?? '...'),
+                        style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5),
+                      ),
                     ],
                   ),
                 ),
@@ -702,9 +724,9 @@ class _AppearanceRows extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
-    final accent    = ref.watch(accentProvider);
-    final settings  = ref.watch(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
-    final locale    = ref.watch(localeProvider);
+    final accent = ref.watch(accentProvider);
+    final settings = ref.watch(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
+    final locale = ref.watch(localeProvider);
     final l = context.l10n;
 
     return Column(
@@ -712,20 +734,28 @@ class _AppearanceRows extends ConsumerWidget {
         // Theme
         Container(
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
-          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.lineSoft))),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: t.lineSoft)),
+          ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(l.settingsTheme, style: AppTheme.sans(size: 14, color: t.text)),
               SetSegSquare(
                 t: t,
-                value: themeMode == ThemeMode.dark ? 'dark'
-                    : themeMode == ThemeMode.light ? 'light' : 'system',
+                value: themeMode == ThemeMode.dark
+                    ? 'dark'
+                    : themeMode == ThemeMode.light
+                    ? 'light'
+                    : 'system',
                 opts: [('dark', l.settingsThemeDark), ('light', l.settingsThemeLight), ('system', l.settingsSystem)],
                 locked: false,
                 onChanged: (v) {
-                  final m = v == 'dark' ? ThemeMode.dark
-                      : v == 'light' ? ThemeMode.light : ThemeMode.system;
+                  final m = v == 'dark'
+                      ? ThemeMode.dark
+                      : v == 'light'
+                      ? ThemeMode.light
+                      : ThemeMode.system;
                   ref.read(themeModeProvider.notifier).set(m);
                 },
               ),
@@ -735,7 +765,9 @@ class _AppearanceRows extends ConsumerWidget {
         // Language
         Container(
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
-          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.lineSoft))),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: t.lineSoft)),
+          ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -745,8 +777,7 @@ class _AppearanceRows extends ConsumerWidget {
                 value: locale?.languageCode ?? 'system',
                 opts: [('system', l.settingsSystem), ('en', 'EN'), ('ru', 'RU')],
                 locked: false,
-                onChanged: (v) =>
-                    ref.read(localeProvider.notifier).set(v == 'system' ? null : Locale(v)),
+                onChanged: (v) => ref.read(localeProvider.notifier).set(v == 'system' ? null : Locale(v)),
               ),
             ],
           ),
@@ -754,7 +785,9 @@ class _AppearanceRows extends ConsumerWidget {
         // Font scale
         Container(
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
-          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.lineSoft))),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: t.lineSoft)),
+          ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -776,12 +809,13 @@ class _AppearanceRows extends ConsumerWidget {
         // Accent
         Container(
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
-          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.line))),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: t.line)),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(l.settingsAccentColor,
-                  style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+              Text(l.settingsAccentColor, style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
               const SizedBox(height: 10),
               Wrap(
                 spacing: 8,
@@ -795,14 +829,9 @@ class _AppearanceRows extends ConsumerWidget {
                       height: 38,
                       decoration: BoxDecoration(
                         color: c,
-                        border: Border.all(
-                          color: selected ? t.text : Colors.transparent,
-                          width: 1.5,
-                        ),
+                        border: Border.all(color: selected ? t.text : Colors.transparent, width: 1.5),
                       ),
-                      child: selected
-                          ? Center(child: Container(width: 10, height: 10, color: t.bg))
-                          : null,
+                      child: selected ? Center(child: Container(width: 10, height: 10, color: t.bg)) : null,
                     ),
                   );
                 }).toList(),
@@ -832,84 +861,83 @@ class _UpdateTile extends ConsumerWidget {
     final l = context.l10n;
     return switch (updateState) {
       UpdateIdle() => _UpdateRow(
-          t: t,
-          label: l.updateTitle,
-          action: _SqBtn(
-            t: t, label: l.updateCheck,
-            onTap: () => ref.read(updateProvider.notifier).checkForUpdate(),
-          ),
-        ),
+        t: t,
+        label: l.updateTitle,
+        action: _SqBtn(t: t, label: l.updateCheck, onTap: () => ref.read(updateProvider.notifier).checkForUpdate()),
+      ),
       UpdateChecking() => _UpdateRow(
-          t: t,
-          label: l.updateChecking,
-          labelColor: t.textDim,
-          action: SizedBox(
-            width: 16, height: 16,
-            child: CircularProgressIndicator(strokeWidth: 1.5, color: t.accent),
-          ),
-        ),
-      UpdateUpToDate(:final info) =>
-        _UpdateVersionTile(info: info, isUpdate: false),
-      UpdateAvailable(:final info, :final resumableBytes) =>
-        _UpdateVersionTile(info: info, isUpdate: true, resumableBytes: resumableBytes),
-      UpdateDownloading(:final info, :final downloaded, :final total) =>
-        Container(
-          padding: const EdgeInsets.fromLTRB(0, 10, 0, 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(l.updateDownloading(info.version),
-                      style: AppTheme.sans(size: 14, color: t.text)),
-                  GestureDetector(
-                    onTap: () => ref.read(updateProvider.notifier).cancelDownload(),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(border: Border.all(color: t.line)),
-                      child: Text(l.commonCancelUpper,
-                          style: AppTheme.mono(size: 10, color: t.textDim, letterSpacing: 1)),
+        t: t,
+        label: l.updateChecking,
+        labelColor: t.textDim,
+        action: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 1.5, color: t.accent)),
+      ),
+      UpdateUpToDate(:final info) => _UpdateVersionTile(info: info, isUpdate: false),
+      UpdateAvailable(:final info, :final resumableBytes) => _UpdateVersionTile(
+        info: info,
+        isUpdate: true,
+        resumableBytes: resumableBytes,
+      ),
+      UpdateDownloading(:final info, :final downloaded, :final total) => Container(
+        padding: const EdgeInsets.fromLTRB(0, 10, 0, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(l.updateDownloading(info.version), style: AppTheme.sans(size: 14, color: t.text)),
+                GestureDetector(
+                  onTap: () => ref.read(updateProvider.notifier).cancelDownload(),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(border: Border.all(color: t.line)),
+                    child: Text(
+                      l.commonCancelUpper,
+                      style: AppTheme.mono(size: 10, color: t.textDim, letterSpacing: 1),
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              LinearProgressIndicator(
-                value: total > 0 ? downloaded / total : null,
-                backgroundColor: t.line,
-                color: t.accent,
-                minHeight: 2,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                total > 0
-                    ? '${(downloaded / 1024 / 1024).toStringAsFixed(1)} / ${(total / 1024 / 1024).toStringAsFixed(1)} ${l.unitMb}'
-                    : '${(downloaded / 1024 / 1024).toStringAsFixed(1)} ${l.unitMb}',
-                style: AppTheme.mono(size: 10, color: t.textDim),
-              ),
-            ],
-          ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            LinearProgressIndicator(
+              value: total > 0 ? downloaded / total : null,
+              backgroundColor: t.line,
+              color: t.accent,
+              minHeight: 2,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              total > 0
+                  ? '${(downloaded / 1024 / 1024).toStringAsFixed(1)} / ${(total / 1024 / 1024).toStringAsFixed(1)} ${l.unitMb}'
+                  : '${(downloaded / 1024 / 1024).toStringAsFixed(1)} ${l.unitMb}',
+              style: AppTheme.mono(size: 10, color: t.textDim),
+            ),
+          ],
         ),
+      ),
       UpdateDownloaded(:final info, :final filePath) => _UpdateRow(
+        t: t,
+        label: l.updateReadyToInstall(info.version),
+        action: _SqBtn(
           t: t,
-          label: l.updateReadyToInstall(info.version),
-          action: _SqBtn(
-            t: t, label: l.updateInstall, filled: true,
-            onTap: () => ref.read(updateProvider.notifier).installApk(filePath),
-          ),
+          label: l.updateInstall,
+          filled: true,
+          onTap: () => ref.read(updateProvider.notifier).installApk(filePath),
         ),
+      ),
       UpdateError(:final message, :final retryInfo) => _UpdateRow(
+        t: t,
+        label: message,
+        labelColor: t.danger,
+        action: _SqBtn(
           t: t,
-          label: message,
-          labelColor: t.danger,
-          action: _SqBtn(
-            t: t, label: l.commonRetryUpper,
-            onTap: retryInfo != null
-                ? () => ref.read(updateProvider.notifier).startDownload(retryInfo)
-                : () => ref.read(updateProvider.notifier).checkForUpdate(),
-          ),
+          label: l.commonRetryUpper,
+          onTap: retryInfo != null
+              ? () => ref.read(updateProvider.notifier).startDownload(retryInfo)
+              : () => ref.read(updateProvider.notifier).checkForUpdate(),
         ),
+      ),
     };
   }
 }
@@ -929,8 +957,7 @@ class _UpdateRow extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Expanded(
-            child: Text(label,
-                style: AppTheme.sans(size: 14, color: labelColor ?? t.text)),
+            child: Text(label, style: AppTheme.sans(size: 14, color: labelColor ?? t.text)),
           ),
           const SizedBox(width: 12),
           action,
@@ -955,11 +982,7 @@ class _SqBtn extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         color: filled ? t.accent : null,
         decoration: filled ? null : BoxDecoration(border: Border.all(color: t.line)),
-        child: Text(label,
-            style: AppTheme.mono(
-                size: 10,
-                color: filled ? t.bg : t.accent,
-                letterSpacing: 1)),
+        child: Text(label, style: AppTheme.mono(size: 10, color: filled ? t.bg : t.accent, letterSpacing: 1)),
       ),
     );
   }
@@ -969,11 +992,7 @@ class _UpdateVersionTile extends ConsumerWidget {
   final UpdateInfo info;
   final bool isUpdate;
   final int resumableBytes;
-  const _UpdateVersionTile({
-    required this.info,
-    required this.isUpdate,
-    this.resumableBytes = 0,
-  });
+  const _UpdateVersionTile({required this.info, required this.isUpdate, this.resumableBytes = 0});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -988,10 +1007,7 @@ class _UpdateVersionTile extends ConsumerWidget {
       ),
       child: Text(
         'v${info.version}',
-        style: AppTheme.mono(
-            size: 10,
-            color: isUpdate ? t.accent : t.textMuted,
-            letterSpacing: 0.5),
+        style: AppTheme.mono(size: 10, color: isUpdate ? t.accent : t.textMuted, letterSpacing: 0.5),
       ),
     );
 
@@ -1012,8 +1028,7 @@ class _UpdateVersionTile extends ConsumerWidget {
               badge,
               const SizedBox(width: 10),
               Expanded(
-                child: Text(label,
-                    style: AppTheme.sans(size: 14, color: isUpdate ? t.text : t.textDim)),
+                child: Text(label, style: AppTheme.sans(size: 14, color: isUpdate ? t.text : t.textDim)),
               ),
               const SizedBox(width: 12),
               _SqBtn(t: t, label: btnLabel, filled: isUpdate, onTap: onTap),
@@ -1021,15 +1036,11 @@ class _UpdateVersionTile extends ConsumerWidget {
           ),
           if (hasChangelog) ...[
             const SizedBox(height: 10),
-            SelectableText(
-              info.changelog!,
-              style: AppTheme.mono(size: 11, color: t.textDim, height: 1.5),
-            ),
+            SelectableText(info.changelog!, style: AppTheme.mono(size: 11, color: t.textDim, height: 1.5)),
           ],
         ],
       ),
     );
-
   }
 }
 
@@ -1048,12 +1059,12 @@ class _ProfilesRow extends ConsumerWidget {
         : '${profile.name}${profile.readonly ? ' · ${context.l10n.profileReadonly}' : ''}';
 
     return GestureDetector(
-      onTap: () => Navigator.push(
-          context, MaterialPageRoute(builder: (_) => const ProfilesScreen())),
+      onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const ProfilesScreen())),
       child: Container(
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
         decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: t.line))),
+          border: Border(bottom: BorderSide(color: t.line)),
+        ),
         child: Row(
           children: [
             Expanded(
@@ -1062,10 +1073,11 @@ class _ProfilesRow extends ConsumerWidget {
                 children: [
                   Text(context.l10n.settingsProfiles, style: AppTheme.sans(size: 14, color: t.text)),
                   const SizedBox(height: 3),
-                  Text(hint,
-                      style: AppTheme.mono(
-                          size: 10, color: t.textMuted, letterSpacing: 0.5),
-                      overflow: TextOverflow.ellipsis),
+                  Text(
+                    hint,
+                    style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
             ),
@@ -1083,7 +1095,9 @@ class _ProfilesRow extends ConsumerWidget {
 String _dnsLabel(AppSettings settings) {
   if (settings.dnsPreset == 'custom') return settings.customDnsAddress;
   return DnsServerConfig.presets.firstWhere(
-    (p) => p['value'] == settings.dnsPreset,
-    orElse: () => {'label': settings.dnsPreset},
-  )['label'] ?? settings.dnsPreset;
+            (p) => p['value'] == settings.dnsPreset,
+            orElse: () => {'label': settings.dnsPreset},
+          )['label']
+          as String? ??
+      settings.dnsPreset;
 }

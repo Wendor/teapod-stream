@@ -23,27 +23,24 @@ class ProfileBundle {
   });
 
   Map<String, dynamic> toJson() => {
-        'version': version,
-        'exportedAt': exportedAt.toIso8601String(),
-        'profile': profile.toJson(),
-        if (configs != null) 'configs': configs!.map((c) => c.toJson()).toList(),
-        if (subscriptions != null)
-          'subscriptions': subscriptions!.map((s) => s.toJson()).toList(),
-        if (sourceUrl != null) 'sourceUrl': sourceUrl,
-      };
+    'version': version,
+    'exportedAt': exportedAt.toIso8601String(),
+    'profile': profile.toJson(),
+    if (configs != null) 'configs': configs!.map((c) => c.toJson()).toList(),
+    if (subscriptions != null) 'subscriptions': subscriptions!.map((s) => s.toJson()).toList(),
+    if (sourceUrl != null) 'sourceUrl': sourceUrl,
+  };
 
   factory ProfileBundle.fromJson(Map<String, dynamic> json) => ProfileBundle(
-        version: json['version'] as int? ?? 1,
-        exportedAt: DateTime.parse(json['exportedAt'] as String),
-        profile: Profile.fromJson(json['profile'] as Map<String, dynamic>),
-        configs: (json['configs'] as List<dynamic>?)
-            ?.map((e) => VpnConfig.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        subscriptions: (json['subscriptions'] as List<dynamic>?)
-            ?.map((e) => Subscription.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        sourceUrl: json['sourceUrl'] as String?,
-      );
+    version: json['version'] as int? ?? 1,
+    exportedAt: DateTime.parse(json['exportedAt'] as String),
+    profile: Profile.fromJson(json['profile'] as Map<String, dynamic>),
+    configs: (json['configs'] as List<dynamic>?)?.map((e) => VpnConfig.fromJson(e as Map<String, dynamic>)).toList(),
+    subscriptions: (json['subscriptions'] as List<dynamic>?)
+        ?.map((e) => Subscription.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    sourceUrl: json['sourceUrl'] as String?,
+  );
 
   String toBase64() {
     final bytes = utf8.encode(jsonEncode(toJson()));
@@ -58,6 +55,5 @@ class ProfileBundle {
 
   String toDeeplink() => 'teapod://import/profile?data=${toBase64()}';
 
-  bool get hasConnections =>
-      (configs?.isNotEmpty ?? false) || (subscriptions?.isNotEmpty ?? false);
+  bool get hasConnections => (configs?.isNotEmpty ?? false) || (subscriptions?.isNotEmpty ?? false);
 }

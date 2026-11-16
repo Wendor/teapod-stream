@@ -25,8 +25,10 @@ class ReconnectBanner extends ConsumerWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(context.l10n.reconnectBanner,
-                style: AppTheme.mono(size: 10, color: t.text, letterSpacing: 0.5)),
+            child: Text(
+              context.l10n.reconnectBanner,
+              style: AppTheme.mono(size: 10, color: t.text, letterSpacing: 0.5),
+            ),
           ),
           const SizedBox(width: 12),
           Semantics(
@@ -37,8 +39,7 @@ class ReconnectBanner extends ConsumerWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 color: t.accent,
-                child: Text(context.l10n.reconnectButton,
-                    style: AppTheme.mono(size: 9, color: t.bg, letterSpacing: 1)),
+                child: Text(context.l10n.reconnectButton, style: AppTheme.mono(size: 9, color: t.bg, letterSpacing: 1)),
               ),
             ),
           ),

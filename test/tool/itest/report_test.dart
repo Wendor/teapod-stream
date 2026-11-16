@@ -17,8 +17,24 @@ void main() {
     final r = RunReport(RunDir(tmp))
       ..meta = {'app': '1.7.4', 'device': 'A065'}
       ..baseline = const Baseline({'u': '9.9.9.9'}, null, null);
-    r.add(const CaseResult('base/sing-box/oslo-awg', Verdict.pass, 'via 1.2.3.4', Duration(seconds: 12), 'cases/base/sing-box/oslo-awg'));
-    r.add(const CaseResult('opt/xray-core/split-only-shell', Verdict.fail, 'no traffic', Duration(seconds: 30), 'cases/opt/xray-core/split-only-shell'));
+    r.add(
+      const CaseResult(
+        'base/sing-box/oslo-awg',
+        Verdict.pass,
+        'via 1.2.3.4',
+        Duration(seconds: 12),
+        'cases/base/sing-box/oslo-awg',
+      ),
+    );
+    r.add(
+      const CaseResult(
+        'opt/xray-core/split-only-shell',
+        Verdict.fail,
+        'no traffic',
+        Duration(seconds: 30),
+        'cases/opt/xray-core/split-only-shell',
+      ),
+    );
     r.addFault('sing-box', FaultResult(Fault.offline1m, Verdict.zombie, null, 'connected without traffic for 200s'));
     return r;
   }
@@ -27,7 +43,10 @@ void main() {
     final md = sample().render();
     expect(md, contains('| id | verdict | note | took |'));
     expect(md, contains('[opt/xray-core/split-only-shell](cases/opt/xray-core/split-only-shell/)'));
-    expect(md, contains("dart run tool/itest/main.dart --skip-install --phase matrix --case 'opt/xray-core/split-only-shell'"));
+    expect(
+      md,
+      contains("dart run tool/itest/main.dart --skip-install --phase matrix --case 'opt/xray-core/split-only-shell'"),
+    );
     expect(md, contains('ZOMBIE'));
     expect(md, contains('--phase soak --core sing-box --fault offline-1m'));
   });
@@ -57,7 +76,7 @@ void main() {
     expect(m, isNot(contains('ef')));
     expect(m, isNot(contains('OK')));
     expect(m, isNot(contains('p\\"w')));
-    expect(jsonDecode(m), isA<Map>());
+    expect(jsonDecode(m), isA<Map<String, dynamic>>());
   });
 
   test('report.json stays valid JSON after masking', () {
@@ -66,7 +85,7 @@ void main() {
       ..note('import vless://uuid@h:1?pbk=KEY');
     r.write();
     final j = jsonDecode(File('${tmp.path}/report.json').readAsStringSync());
-    expect(j, isA<Map>());
+    expect(j, isA<Map<String, dynamic>>());
     expect(jsonEncode(j), isNot(contains('TOKEN')));
     expect(jsonEncode(j), isNot(contains('abc')));
   });
@@ -85,8 +104,10 @@ void main() {
   });
 
   test('maskSecrets hides credentials in URIs and UUIDs', () {
-    final m = maskSecrets('vless://0c5e1a2b-1111-2222-3333-444455556666@host:443?pbk=abcKEY&sid=77&type=tcp#n '
-        'hysteria2://topsecret@h:1 ssh://u:pw@s:22');
+    final m = maskSecrets(
+      'vless://0c5e1a2b-1111-2222-3333-444455556666@host:443?pbk=abcKEY&sid=77&type=tcp#n '
+      'hysteria2://topsecret@h:1 ssh://u:pw@s:22',
+    );
     expect(m, isNot(contains('0c5e')));
     expect(m, isNot(contains('abcKEY')));
     expect(m, isNot(contains('topsecret')));

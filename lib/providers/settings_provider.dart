@@ -10,8 +10,9 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
 
   Future<void> save(AppSettings settings) async {
     // Wait for the profile to load: otherwise readonly isn't checked and the profile snapshot won't update.
-    final profileState = await ref.read(profileProvider.future).then<ProfileState?>((p) => p,
-        onError: (Object _) => null);
+    final profileState = await ref
+        .read(profileProvider.future)
+        .then<ProfileState?>((p) => p, onError: (Object _) => null);
     if (profileState?.isReadonly == true) return;
 
     await _service.save(settings);
@@ -30,10 +31,7 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
         newExcluded.length == current.excludedPackages.length) {
       return;
     }
-    await save(current.copyWith(
-      includedPackages: newIncluded,
-      excludedPackages: newExcluded,
-    ));
+    await save(current.copyWith(includedPackages: newIncluded, excludedPackages: newExcluded));
   }
 
   Future<void> toggleExcludedPackage(String package) async {
@@ -49,5 +47,4 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
   }
 }
 
-final settingsProvider =
-    AsyncNotifierProvider<SettingsNotifier, AppSettings>(SettingsNotifier.new);
+final settingsProvider = AsyncNotifierProvider<SettingsNotifier, AppSettings>(SettingsNotifier.new);

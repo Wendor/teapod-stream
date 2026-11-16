@@ -12,11 +12,7 @@ class UntrustedCertificateException implements Exception {
   final String subject;
   final String issuer;
 
-  const UntrustedCertificateException({
-    required this.host,
-    required this.subject,
-    required this.issuer,
-  });
+  const UntrustedCertificateException({required this.host, required this.subject, required this.issuer});
 
   @override
   String toString() => 'UntrustedCertificateException: $host — $subject (issued by $issuer)';
@@ -55,11 +51,7 @@ class HwidStatus {
   final bool notSupported;
   final bool maxDevicesReached;
 
-  const HwidStatus({
-    required this.isActive,
-    required this.notSupported,
-    required this.maxDevicesReached,
-  });
+  const HwidStatus({required this.isActive, required this.notSupported, required this.maxDevicesReached});
 }
 
 class HwidDeviceInfo {
@@ -67,17 +59,9 @@ class HwidDeviceInfo {
   final String deviceModel;
   final int osVersion;
 
-  const HwidDeviceInfo({
-    required this.deviceId,
-    required this.deviceModel,
-    required this.osVersion,
-  });
+  const HwidDeviceInfo({required this.deviceId, required this.deviceModel, required this.osVersion});
 
-  Map<String, dynamic> toJson() => {
-    'deviceId': deviceId,
-    'deviceModel': deviceModel,
-    'osVersion': osVersion,
-  };
+  Map<String, dynamic> toJson() => {'deviceId': deviceId, 'deviceModel': deviceModel, 'osVersion': osVersion};
 }
 
 class SubscriptionService {
@@ -99,11 +83,17 @@ class SubscriptionService {
     HwidDeviceInfo? hwid,
     String? userAgent,
     TunnelSocks? socks,
-  }) =>
-      TunnelSocks.orDirect(
-          socks,
-          (s) => _fetch(url,
-              allowSelfSigned: allowSelfSigned, pinnedCertDer: pinnedCertDer, hwid: hwid, userAgent: userAgent, socks: s));
+  }) => TunnelSocks.orDirect(
+    socks,
+    (s) => _fetch(
+      url,
+      allowSelfSigned: allowSelfSigned,
+      pinnedCertDer: pinnedCertDer,
+      hwid: hwid,
+      userAgent: userAgent,
+      socks: s,
+    ),
+  );
 
   Future<SubscriptionFetchResult> _fetch(
     String url, {
@@ -125,11 +115,7 @@ class SubscriptionService {
         acceptedCert = der;
         return true;
       }
-      certError = UntrustedCertificateException(
-        host: host,
-        subject: cert.subject,
-        issuer: cert.issuer,
-      );
+      certError = UntrustedCertificateException(host: host, subject: cert.subject, issuer: cert.issuer);
       return false;
     }
 
@@ -150,8 +136,7 @@ class SubscriptionService {
         request.headers.set('X-Ver-Os', hwid.osVersion.toString());
       }
 
-      final response =
-          await request.close().timeout(const Duration(seconds: 15));
+      final response = await request.close().timeout(const Duration(seconds: 15));
 
       if (response.statusCode != 200) {
         throw Exception('Failed to fetch subscription: ${response.statusCode}');
@@ -213,18 +198,20 @@ class SubscriptionService {
               break;
             }
           }
-          configs.add(VpnConfig(
-            id: 'xray_${DateTime.now().millisecondsSinceEpoch}_${configs.length}',
-            name: remarks,
-            protocol: VpnProtocol.vless,
-            address: address.isEmpty ? 'managed' : address,
-            port: port > 0 ? port : 443,
-            uuid: '',
-            security: VpnSecurity.none,
-            transport: VpnTransport.tcp,
-            createdAt: DateTime.now(),
-            rawXrayConfig: rawJson,
-          ));
+          configs.add(
+            VpnConfig(
+              id: 'xray_${DateTime.now().millisecondsSinceEpoch}_${configs.length}',
+              name: remarks,
+              protocol: VpnProtocol.vless,
+              address: address.isEmpty ? 'managed' : address,
+              port: port > 0 ? port : 443,
+              uuid: '',
+              security: VpnSecurity.none,
+              transport: VpnTransport.tcp,
+              createdAt: DateTime.now(),
+              rawXrayConfig: rawJson,
+            ),
+          );
         }
         if (configs.isNotEmpty) {
           return SubscriptionFetchResult(
@@ -287,12 +274,21 @@ class SubscriptionService {
     );
   }
 
-  static List<String> _splitLines(String s) =>
-      s.split(RegExp(r'\r?\n')).where((l) => l.trim().isNotEmpty).toList();
+  static List<String> _splitLines(String s) => s.split(RegExp(r'\r?\n')).where((l) => l.trim().isNotEmpty).toList();
 
   static const _uriSchemes = [
-    'vless://', 'vmess://', 'trojan://', 'ss://', 'hy2://', 'hysteria2://',
-    'wireguard://', 'wg://', 'ssh://', 'naive+https://', 'naive+quic://', 'vpn://',
+    'vless://',
+    'vmess://',
+    'trojan://',
+    'ss://',
+    'hy2://',
+    'hysteria2://',
+    'wireguard://',
+    'wg://',
+    'ssh://',
+    'naive+https://',
+    'naive+quic://',
+    'vpn://',
   ];
 
   static bool _isKnownUri(String line) {

@@ -35,12 +35,12 @@ const _settings = AppSettings(
   socksPassword: 'sp',
 );
 
-const _visionRaw = '{"outbounds":[{"tag":"proxy","protocol":"vless","settings":{"vnext":[{"address":'
+const _visionRaw =
+    '{"outbounds":[{"tag":"proxy","protocol":"vless","settings":{"vnext":[{"address":'
     '"r.example","port":443,"users":[{"id":"11111111-2222-4333-8444-555555555555",'
     '"encryption":"none","flow":"xtls-rprx-vision"}]}]}}]}';
 
-VpnConfig _cfg(String id,
-        {String? subId, String password = 'p', DateTime? pingedAt, String? rawXray, String? host}) =>
+VpnConfig _cfg(String id, {String? subId, String password = 'p', DateTime? pingedAt, String? rawXray, String? host}) =>
     VpnConfig(
       id: id,
       name: 'n$id',
@@ -58,17 +58,17 @@ VpnConfig _cfg(String id,
     );
 
 VpnConfig _vision(String id) => VpnConfig(
-      id: id,
-      name: id,
-      protocol: VpnProtocol.vless,
-      address: 'v.example',
-      port: 443,
-      uuid: '11111111-2222-4333-8444-555555555555',
-      security: VpnSecurity.tls,
-      transport: VpnTransport.tcp,
-      flow: 'xtls-rprx-vision',
-      createdAt: DateTime(2026),
-    );
+  id: id,
+  name: id,
+  protocol: VpnProtocol.vless,
+  address: 'v.example',
+  port: 443,
+  uuid: '11111111-2222-4333-8444-555555555555',
+  security: VpnSecurity.tls,
+  transport: VpnTransport.tcp,
+  flow: 'xtls-rprx-vision',
+  createdAt: DateTime(2026),
+);
 
 /// Native side state and a call log.
 class _Native {
@@ -134,8 +134,7 @@ void main() {
     native = _Native();
     messenger.setMockMethodCallHandler(_method, (call) async => native.handle(call));
     messenger.setMockMethodCallHandler(_permissions, (call) async => <int, int>{17: 1});
-    messenger.setMockStreamHandler(
-        _events, MockStreamHandler.inline(onListen: (_, sink) => native.sink = sink));
+    messenger.setMockStreamHandler(_events, MockStreamHandler.inline(onListen: (_, sink) => native.sink = sink));
   });
 
   /// No await: inside fakeAsync it completes via flushMicrotasks.
@@ -166,8 +165,7 @@ void main() {
   }
 
   Future<void> connected({List<VpnConfig>? configs, AppSettings settings = _settings}) async {
-    await boot(configs: configs ?? [_cfg('a')], activeId: (configs ?? [_cfg('a')]).first.id,
-        settings: settings);
+    await boot(configs: configs ?? [_cfg('a')], activeId: (configs ?? [_cfg('a')]).first.id, settings: settings);
     await n().connect();
     emit({'type': 'state', 'value': 'connected', 'socksPort': 2080, 'socksUser': 'su', 'socksPassword': 'sp'});
     await _settle();
@@ -210,7 +208,10 @@ void main() {
     });
 
     test('invalid config fails validation', () async {
-      await boot(configs: [_cfg('a', password: '')], activeId: 'a');
+      await boot(
+        configs: [_cfg('a', password: '')],
+        activeId: 'a',
+      );
       await n().connect();
       expect(st().error, 'Empty password');
       expect(native.named('connect'), isEmpty);
@@ -261,23 +262,35 @@ void main() {
 
     test('split tunnelling options follow the mode', () async {
       final split = _settings.copyWith(
-          splitTunnelingEnabled: true,
-          vpnMode: VpnMode.allExcept,
-          excludedPackages: {'ex'},
-          includedPackages: {'in'});
+        splitTunnelingEnabled: true,
+        vpnMode: VpnMode.allExcept,
+        excludedPackages: {'ex'},
+        includedPackages: {'in'},
+      );
       await boot(configs: [_cfg('a')], activeId: 'a', settings: split);
       await n().connect();
-      List<Object?> split3(Map<Object?, Object?> a) =>
-          [a['vpnMode'], a['excludedPackages'], a['includedPackages']];
-      expect(split3(native.lastConnect()), ['allExcept', ['ex'], []]);
+      List<Object?> split3(Map<Object?, Object?> a) => [a['vpnMode'], a['excludedPackages'], a['includedPackages']];
+      expect(split3(native.lastConnect()), [
+        'allExcept',
+        ['ex'],
+        <String>[],
+      ]);
 
-      await boot(configs: [_cfg('a')], activeId: 'a', settings: split.copyWith(vpnMode: VpnMode.onlySelected));
+      await boot(
+        configs: [_cfg('a')],
+        activeId: 'a',
+        settings: split.copyWith(vpnMode: VpnMode.onlySelected),
+      );
       await n().connect();
-      expect(split3(native.lastConnect()), ['onlySelected', [], ['in']]);
+      expect(split3(native.lastConnect()), [
+        'onlySelected',
+        <String>[],
+        ['in'],
+      ]);
 
       await boot(configs: [_cfg('a')], activeId: 'a', settings: split.copyWith(splitTunnelingEnabled: false));
       await n().connect();
-      expect(split3(native.lastConnect()), ['allExcept', [], []]);
+      expect(split3(native.lastConnect()), ['allExcept', <String>[], <String>[]]);
     });
 
     test('vision flow forces QUIC blocking, also inside raw configs', () async {
@@ -285,7 +298,10 @@ void main() {
       await n().connect();
       expect(native.lastConnect()['blockQuic'], isTrue);
 
-      await boot(configs: [_cfg('r', rawXray: _visionRaw)], activeId: 'r');
+      await boot(
+        configs: [_cfg('r', rawXray: _visionRaw)],
+        activeId: 'r',
+      );
       await n().connect();
       expect(native.lastConnect()['blockQuic'], isTrue);
     });
@@ -299,34 +315,51 @@ void main() {
     });
 
     test('the first core by priority that can run the profile is used', () async {
-      await boot(configs: [_cfg('a')], activeId: 'a',
-          settings: _settings.copyWith(coreOrder: [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox]));
+      await boot(
+        configs: [_cfg('a')],
+        activeId: 'a',
+        settings: _settings.copyWith(coreOrder: [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox]),
+      );
       await n().connect();
       expect(native.lastConnect()['engine'], 'rust');
 
       // Rust can't do proxy-only — the profile goes to the next core.
-      await boot(configs: [_cfg('a')], activeId: 'a',
-          settings: _settings.copyWith(coreOrder: [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox], proxyOnly: true));
+      await boot(
+        configs: [_cfg('a')],
+        activeId: 'a',
+        settings: _settings.copyWith(
+          coreOrder: [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox],
+          proxyOnly: true,
+        ),
+      );
       await n().connect();
       expect(native.lastConnect()['engine'], 'go');
 
-      await boot(configs: [_cfg('r', rawXray: _visionRaw)], activeId: 'r',
-          settings: _settings.copyWith(coreOrder: [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox]));
+      await boot(
+        configs: [_cfg('r', rawXray: _visionRaw)],
+        activeId: 'r',
+        settings: _settings.copyWith(coreOrder: [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox]),
+      );
       native.calls.clear();
       await n().connect();
       expect(native.lastConnect()['engine'], 'go');
     });
 
     test('a profile pinned to a core runs on it', () async {
-      await boot(configs: [_cfg('a').copyWith(core: CoreKind.singBox)], activeId: 'a');
+      await boot(
+        configs: [_cfg('a').copyWith(core: CoreKind.singBox)],
+        activeId: 'a',
+      );
       await n().connect();
       expect(native.lastConnect()['engine'], 'box');
     });
 
     test('no enabled core can run the profile — refused before native', () async {
-      await boot(configs: [_cfg('a')], activeId: 'a',
-          settings: _settings.copyWith(
-              proxyOnly: true, disabledCores: {CoreKind.xrayGo, CoreKind.singBox}));
+      await boot(
+        configs: [_cfg('a')],
+        activeId: 'a',
+        settings: _settings.copyWith(proxyOnly: true, disabledCores: {CoreKind.xrayGo, CoreKind.singBox}),
+      );
       await n().connect();
       expect(st().error, const XrayRustBackend().unavailableReason(CoreFeature.proxyOnly));
       expect(native.named('connect'), isEmpty);
@@ -350,7 +383,12 @@ void main() {
     });
 
     test('invalid config keeps the old session', () async {
-      await connected(configs: [_cfg('a'), _cfg('bad', password: '')]);
+      await connected(
+        configs: [
+          _cfg('a'),
+          _cfg('bad', password: ''),
+        ],
+      );
       await c.read(configProvider.notifier).setActiveConfig('bad');
       await n().reconnectWithNewConfig();
       expect(st().isConnected, isTrue);
@@ -434,8 +472,15 @@ void main() {
       expect(n().runsConfig(a), isTrue);
       expect(n().runsConfig(a.copyWith(rawUri: 'trojan://edited')), isFalse);
       emit({'type': 'state', 'value': 'error', 'error': 'bad config'});
-      emit({'type': 'statsHistory', 'full': true, 'epoch': 1, 'seq': 1,
-          'history': [{'uploadSpeed': 1, 'downloadSpeed': 1}]});
+      emit({
+        'type': 'statsHistory',
+        'full': true,
+        'epoch': 1,
+        'seq': 1,
+        'history': [
+          {'uploadSpeed': 1, 'downloadSpeed': 1},
+        ],
+      });
       await _settle();
       expect(st().error, 'bad config');
       expect(st().stats.speedHistory, isEmpty);
@@ -458,29 +503,58 @@ void main() {
       native.sink!.success('not a map');
       await _settle();
       final tail = logs().reversed.take(2).toList().reversed.toList();
-      expect(tail.map((e) => (e.level, e.message, e.source)),
-          [(LogLevel.warning, 'w', 'xray'), (LogLevel.info, 'i', 'xray')]);
+      expect(tail.map((e) => (e.level, e.message, e.source)), [
+        (LogLevel.warning, 'w', 'xray'),
+        (LogLevel.info, 'i', 'xray'),
+      ]);
     });
 
     test('speed history: full replaces, delta appends only when it continues', () async {
       await connected();
       Map<String, Object?> pts(int n) => {'uploadSpeed': n, 'downloadSpeed': n};
-      emit({'type': 'statsHistory', 'full': true, 'epoch': 1, 'seq': 3, 'history': [pts(1), pts(2), pts(3)]});
+      emit({
+        'type': 'statsHistory',
+        'full': true,
+        'epoch': 1,
+        'seq': 3,
+        'history': [pts(1), pts(2), pts(3)],
+      });
       await _settle();
       expect(st().stats.speedHistory.map((p) => p.uploadSpeed), [1, 2, 3]);
 
-      emit({'type': 'statsHistory', 'epoch': 1, 'from': 3, 'seq': 4, 'history': [pts(4)]});
+      emit({
+        'type': 'statsHistory',
+        'epoch': 1,
+        'from': 3,
+        'seq': 4,
+        'history': [pts(4)],
+      });
       await _settle();
       expect(st().stats.speedHistory.map((p) => p.uploadSpeed), [1, 2, 3, 4]);
 
       // A late response doesn't duplicate points and resets the epoch.
-      emit({'type': 'statsHistory', 'epoch': 1, 'from': 3, 'seq': 4, 'history': [pts(4)]});
-      emit({'type': 'statsHistory', 'epoch': 1, 'from': 4, 'seq': 5, 'history': [pts(5)]});
+      emit({
+        'type': 'statsHistory',
+        'epoch': 1,
+        'from': 3,
+        'seq': 4,
+        'history': [pts(4)],
+      });
+      emit({
+        'type': 'statsHistory',
+        'epoch': 1,
+        'from': 4,
+        'seq': 5,
+        'history': [pts(5)],
+      });
       await _settle();
       expect(st().stats.speedHistory, hasLength(4));
 
       emit({
-        'type': 'statsHistory', 'full': true, 'epoch': 2, 'seq': 400,
+        'type': 'statsHistory',
+        'full': true,
+        'epoch': 2,
+        'seq': 400,
         'history': [for (var i = 0; i < 400; i++) pts(i)],
       });
       await _settle();
@@ -497,12 +571,7 @@ void main() {
       socksPassword: 'sp',
       heartbeat: HeartbeatSettings(failAction: HeartbeatFailAction.switchConfig),
     );
-    final subConfigs = [
-      _cfg('a', subId: 's'),
-      _cfg('b', subId: 's'),
-      _cfg('c', subId: 's'),
-      _cfg('d', subId: 'other'),
-    ];
+    final subConfigs = [_cfg('a', subId: 's'), _cfg('b', subId: 's'), _cfg('c', subId: 's'), _cfg('d', subId: 'other')];
 
     test('switches to the fastest live config of the same subscription', () async {
       native.outboundMs = {'hb.example': 200, 'hc.example': 80, 'hd.example': 1};
@@ -525,8 +594,11 @@ void main() {
         activeId: 'a',
         pins: [PinnedRef.of(subConfigs[3])],
         settings: switchOn.copyWith(
-            heartbeat: const HeartbeatSettings(
-                failAction: HeartbeatFailAction.switchConfig, switchSource: SwitchSource.pinned)),
+          heartbeat: const HeartbeatSettings(
+            failAction: HeartbeatFailAction.switchConfig,
+            switchSource: SwitchSource.pinned,
+          ),
+        ),
       );
       await n().connect();
       emit({'type': 'state', 'value': 'connected', 'socksPort': 1});
@@ -557,12 +629,14 @@ void main() {
   group('ping', () {
     test('pings each endpoint once and stores the result', () async {
       native.pingMs = {'ha.example': 30, 'shared.example': 40};
-      await boot(configs: [
-        _cfg('a'),
-        _cfg('b'),
-        _cfg('raw', host: 'shared.example', rawXray: _visionRaw),
-        _cfg('plain', host: 'shared.example'),
-      ]);
+      await boot(
+        configs: [
+          _cfg('a'),
+          _cfg('b'),
+          _cfg('raw', host: 'shared.example', rawXray: _visionRaw),
+          _cfg('plain', host: 'shared.example'),
+        ],
+      );
       await n().pingAllConfigs();
       final pinged = native.named('ping').map((m) => (m.arguments as Map)['address']).toList();
       expect(pinged, unorderedEquals(['ha.example', 'hb.example', 'shared.example']));
@@ -575,7 +649,12 @@ void main() {
     });
 
     test('stale ping skips recently pinged configs', () async {
-      await boot(configs: [_cfg('fresh', pingedAt: DateTime.now()), _cfg('old')]);
+      await boot(
+        configs: [
+          _cfg('fresh', pingedAt: DateTime.now()),
+          _cfg('old'),
+        ],
+      );
       await n().pingStaleConfigs();
       expect(native.named('ping').map((m) => (m.arguments as Map)['address']), ['hold.example']);
       native.calls.clear();
@@ -588,7 +667,8 @@ void main() {
   group('core switch', () {
     test('connected session on an unsupported config is disconnected', () async {
       await connected(configs: [_cfg('r', rawXray: _visionRaw)]);
-      await c.read(settingsProvider.notifier)
+      await c
+          .read(settingsProvider.notifier)
           .save(_settings.copyWith(disabledCores: {CoreKind.xrayGo, CoreKind.singBox}));
       await _settle();
       expect(native.named('disconnect'), hasLength(1));
@@ -597,18 +677,26 @@ void main() {
 
     test('idle switch saves or clears the quick-connect config', () async {
       await boot(configs: [_cfg('a')], activeId: 'a');
-      await c.read(settingsProvider.notifier).save(_settings.copyWith(coreOrder: [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox]));
+      await c
+          .read(settingsProvider.notifier)
+          .save(_settings.copyWith(coreOrder: [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox]));
       await _settle();
       expect((native.named('saveQuickConnect').single.arguments as Map)['engine'], 'rust');
 
       // Rust doesn't take a raw config — the active profile's core doesn't change.
       native.calls.clear();
-      await boot(configs: [_cfg('r', rawXray: _visionRaw)], activeId: 'r');
-      await c.read(settingsProvider.notifier).save(_settings.copyWith(coreOrder: [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox]));
+      await boot(
+        configs: [_cfg('r', rawXray: _visionRaw)],
+        activeId: 'r',
+      );
+      await c
+          .read(settingsProvider.notifier)
+          .save(_settings.copyWith(coreOrder: [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox]));
       await _settle();
       expect(native.named('saveQuickConnect'), isEmpty);
       expect(native.named('clearQuickConnect'), isEmpty);
-      await c.read(settingsProvider.notifier)
+      await c
+          .read(settingsProvider.notifier)
           .save(_settings.copyWith(disabledCores: {CoreKind.xrayGo, CoreKind.singBox}));
       await _settle();
       expect(native.named('clearQuickConnect'), hasLength(1));
@@ -616,7 +704,8 @@ void main() {
 
     test('idle switch to sing-box saves a sing-box config or clears an unsupported one', () async {
       await boot(configs: [_cfg('a')], activeId: 'a');
-      await c.read(settingsProvider.notifier)
+      await c
+          .read(settingsProvider.notifier)
           .save(_settings.copyWith(coreOrder: [CoreKind.singBox, CoreKind.xrayGo, CoreKind.xrayRust]));
       await _settle();
       final args = native.named('saveQuickConnect').single.arguments as Map;
@@ -624,8 +713,12 @@ void main() {
       final json = jsonDecode(args['xrayConfig'] as String) as Map<String, dynamic>;
       expect(((json['inbounds'] as List).first as Map)['type'], 'mixed');
 
-      await boot(configs: [_cfg('r', rawXray: _visionRaw)], activeId: 'r');
-      await c.read(settingsProvider.notifier)
+      await boot(
+        configs: [_cfg('r', rawXray: _visionRaw)],
+        activeId: 'r',
+      );
+      await c
+          .read(settingsProvider.notifier)
           .save(_settings.copyWith(disabledCores: {CoreKind.xrayGo, CoreKind.xrayRust}));
       await _settle();
       expect(native.named('clearQuickConnect'), hasLength(1));

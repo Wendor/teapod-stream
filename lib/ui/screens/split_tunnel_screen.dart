@@ -26,22 +26,17 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
   bool _ghostsCleaned = false;
 
   void _togglePackage(String pkg, bool isOnlySelected) {
-    final settings = ref.read(settingsProvider).maybeWhen(
-      data: (d) => d,
-      orElse: () => null,
-    );
+    final settings = ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
     if (settings == null) return;
 
     if (isOnlySelected) {
       final newIncluded = Set<String>.from(settings.includedPackages);
       newIncluded.contains(pkg) ? newIncluded.remove(pkg) : newIncluded.add(pkg);
-      saveSettings(context, ref, 
-            settings.copyWith(includedPackages: newIncluded));
+      saveSettings(context, ref, settings.copyWith(includedPackages: newIncluded));
     } else {
       final newExcluded = Set<String>.from(settings.excludedPackages);
       newExcluded.contains(pkg) ? newExcluded.remove(pkg) : newExcluded.add(pkg);
-      saveSettings(context, ref, 
-            settings.copyWith(excludedPackages: newExcluded));
+      saveSettings(context, ref, settings.copyWith(excludedPackages: newExcluded));
     }
   }
 
@@ -50,12 +45,8 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: t.bgElev,
-        title: Text(context.l10n.splitTethering,
-            style: AppTheme.sans(size: 16, color: t.text)),
-        content: Text(
-          context.l10n.splitTetheringWarning,
-          style: AppTheme.sans(size: 13, color: t.textDim),
-        ),
+        title: Text(context.l10n.splitTethering, style: AppTheme.sans(size: 16, color: t.text)),
+        content: Text(context.l10n.splitTetheringWarning, style: AppTheme.sans(size: 13, color: t.textDim)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -75,14 +66,9 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
   Widget build(BuildContext context) {
     final t = Theme.of(context).extension<TeapodTokens>()!;
     final appsAsync = ref.watch(installedAppsProvider);
-    final settings = ref.watch(settingsProvider).maybeWhen(
-      data: (d) => d,
-      orElse: () => null,
-    );
+    final settings = ref.watch(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
     final isOnlySelected = settings?.vpnMode == VpnMode.onlySelected;
-    final packages = isOnlySelected
-        ? (settings?.includedPackages ?? {})
-        : (settings?.excludedPackages ?? {});
+    final packages = isOnlySelected ? (settings?.includedPackages ?? {}) : (settings?.excludedPackages ?? {});
 
     final modeLabel = isOnlySelected ? 'ONLY' : 'EXCEPT';
     final countStr = packages.length.toString().padLeft(2, '0');
@@ -94,14 +80,14 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
             // ── Header strip ──────────────────────────────────────
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.line))),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: t.line)),
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('teapod.stream // apps',
-                      style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
-                  Text('sel[$countStr]',
-                      style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+                  Text('teapod.stream // apps', style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+                  Text('sel[$countStr]', style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
                 ],
               ),
             ),
@@ -120,17 +106,14 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
               trailing: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(border: Border.all(color: t.accent)),
-                child: Text(modeLabel,
-                    style: AppTheme.mono(size: 11, color: t.accent, letterSpacing: 1)),
+                child: Text(modeLabel, style: AppTheme.mono(size: 11, color: t.accent, letterSpacing: 1)),
               ),
             ),
             // ── Master toggle ─────────────────────────────────────
             SetRowToggle(
               t: t,
               title: context.l10n.routingSplitTunnel,
-              hint: settings?.splitTunnelingEnabled == true
-                  ? context.l10n.splitEnabled
-                  : context.l10n.splitDisabled,
+              hint: settings?.splitTunnelingEnabled == true ? context.l10n.splitEnabled : context.l10n.splitDisabled,
               value: settings?.splitTunnelingEnabled ?? false,
               onChange: (v) {
                 if (settings != null) {
@@ -141,8 +124,9 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
             // ── Mode selector ─────────────────────────────────────
             Container(
               padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
-              decoration:
-                  BoxDecoration(border: Border(bottom: BorderSide(color: t.lineSoft))),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: t.lineSoft)),
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -159,28 +143,23 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
                           GestureDetector(
                             onTap: () {
                               if (settings != null) {
-                                saveSettings(context, ref, 
-                                      settings.copyWith(vpnMode: mode));
+                                saveSettings(context, ref, settings.copyWith(vpnMode: mode));
                               }
                             },
                             child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               decoration: BoxDecoration(
-                                color: settings?.vpnMode == mode
-                                    ? t.accentSoft
-                                    : Colors.transparent,
-                                border: mode == VpnMode.onlySelected
-                                    ? Border(right: BorderSide(color: t.line))
-                                    : null,
+                                color: settings?.vpnMode == mode ? t.accentSoft : Colors.transparent,
+                                border: mode == VpnMode.onlySelected ? Border(right: BorderSide(color: t.line)) : null,
                               ),
-                              child: Text(lab,
-                                  style: AppTheme.mono(
-                                      size: 11,
-                                      color: settings?.vpnMode == mode
-                                          ? t.accent
-                                          : t.textDim,
-                                      letterSpacing: 0.5)),
+                              child: Text(
+                                lab,
+                                style: AppTheme.mono(
+                                  size: 11,
+                                  color: settings?.vpnMode == mode ? t.accent : t.textDim,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
                             ),
                           ),
                         ],
@@ -190,9 +169,7 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
                 ],
               ),
             ),
-            if (settings != null &&
-                settings.splitTunnelingEnabled &&
-                settings.vpnMode == VpnMode.allExcept) ...[
+            if (settings != null && settings.splitTunnelingEnabled && settings.vpnMode == VpnMode.allExcept) ...[
               SetRowToggle(
                 t: t,
                 title: context.l10n.splitTethering,
@@ -218,8 +195,9 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
             // ── Search ────────────────────────────────────────────
             Container(
               padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
-              decoration:
-                  BoxDecoration(border: Border(bottom: BorderSide(color: t.lineSoft))),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: t.lineSoft)),
+              ),
               child: Container(
                 decoration: BoxDecoration(border: Border.all(color: t.line)),
                 child: TextField(
@@ -229,8 +207,7 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
                     hintText: context.l10n.splitSearchHint,
                     hintStyle: AppTheme.mono(size: 11, color: t.textMuted),
                     prefixIcon: Icon(Icons.search_rounded, size: 16, color: t.textMuted),
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     isDense: true,
                     border: InputBorder.none,
                   ),
@@ -242,13 +219,13 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
               onTap: () => setState(() => _hideSystemApps = !_hideSystemApps),
               child: Container(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-                decoration:
-                    BoxDecoration(border: Border(bottom: BorderSide(color: t.line))),
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: t.line)),
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(context.l10n.splitHideSystem,
-                        style: AppTheme.sans(size: 13, color: t.text)),
+                    Text(context.l10n.splitHideSystem, style: AppTheme.sans(size: 13, color: t.text)),
                     _SquareCheckbox(t: t, value: _hideSystemApps),
                   ],
                 ),
@@ -257,28 +234,27 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
             // ── App list ──────────────────────────────────────────
             Expanded(
               child: appsAsync.when(
-                loading: () =>
-                    Center(child: CircularProgressIndicator(color: t.accent, strokeWidth: 1.5)),
+                loading: () => Center(child: CircularProgressIndicator(color: t.accent, strokeWidth: 1.5)),
                 error: (e, _) => Center(
-                  child: Text(context.l10n.commonErrorWith('$e'),
-                      style: AppTheme.mono(size: 12, color: t.danger)),
+                  child: Text(context.l10n.commonErrorWith('$e'), style: AppTheme.mono(size: 12, color: t.danger)),
                 ),
                 data: (apps) {
                   if (!_ghostsCleaned) {
                     _ghostsCleaned = true;
                     WidgetsBinding.instance.addPostFrameCallback((_) {
-                      ref.read(settingsProvider.notifier).cleanGhostPackages(
-                          apps.map((a) => a.packageName).toSet());
+                      ref.read(settingsProvider.notifier).cleanGhostPackages(apps.map((a) => a.packageName).toSet());
                     });
                   }
 
                   var filtered = _search.isEmpty
                       ? apps
                       : apps
-                          .where((a) =>
-                              a.appName.toLowerCase().contains(_search) ||
-                              a.packageName.toLowerCase().contains(_search))
-                          .toList();
+                            .where(
+                              (a) =>
+                                  a.appName.toLowerCase().contains(_search) ||
+                                  a.packageName.toLowerCase().contains(_search),
+                            )
+                            .toList();
 
                   if (_hideSystemApps) {
                     filtered = filtered.where((a) => !a.isSystem).toList();
@@ -293,9 +269,10 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
 
                   if (filtered.isEmpty) {
                     return Center(
-                      child: Text('[ ${context.l10n.splitNoApps} ]',
-                          style: AppTheme.mono(
-                              size: 12, color: t.textMuted, letterSpacing: 1)),
+                      child: Text(
+                        '[ ${context.l10n.splitNoApps} ]',
+                        style: AppTheme.mono(size: 12, color: t.textMuted, letterSpacing: 1),
+                      ),
                     );
                   }
 
@@ -350,31 +327,35 @@ class _AppRow extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
         decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: t.lineSoft))),
+          border: Border(bottom: BorderSide(color: t.lineSoft)),
+        ),
         child: Row(
           children: [
             // Square checkbox
             Container(
-              width: 18, height: 18,
+              width: 18,
+              height: 18,
               decoration: BoxDecoration(
                 border: Border.all(color: isSelected ? t.accent : t.line),
                 color: isSelected ? t.accent : Colors.transparent,
               ),
-              child: isSelected
-                  ? Icon(Icons.check, size: 12, color: t.bg)
-                  : null,
+              child: isSelected ? Icon(Icons.check, size: 12, color: t.bg) : null,
             ),
             const SizedBox(width: 14),
             // App icon
             SizedBox(
-              width: 36, height: 36,
+              width: 36,
+              height: 36,
               child: iconAsync.when(
                 loading: () => _FallbackIcon(t: t, isSelected: isSelected),
                 error: (_, _) => _FallbackIcon(t: t, isSelected: isSelected),
                 data: (Uint8List? bytes) => bytes != null
-                    ? Image.memory(bytes, width: 36, height: 36,
-                        errorBuilder: (_, _, _) =>
-                            _FallbackIcon(t: t, isSelected: isSelected))
+                    ? Image.memory(
+                        bytes,
+                        width: 36,
+                        height: 36,
+                        errorBuilder: (_, _, _) => _FallbackIcon(t: t, isSelected: isSelected),
+                      )
                     : _FallbackIcon(t: t, isSelected: isSelected),
               ),
             ),
@@ -384,17 +365,21 @@ class _AppRow extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(app.appName,
-                      style: AppTheme.sans(
-                          size: 13,
-                          color: isSelected ? t.text : t.textDim,
-                          weight: isSelected ? FontWeight.w500 : FontWeight.normal),
-                      overflow: TextOverflow.ellipsis),
+                  Text(
+                    app.appName,
+                    style: AppTheme.sans(
+                      size: 13,
+                      color: isSelected ? t.text : t.textDim,
+                      weight: isSelected ? FontWeight.w500 : FontWeight.normal,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   const SizedBox(height: 2),
-                  Text(app.packageName,
-                      style: AppTheme.mono(
-                          size: 10, color: t.textMuted, letterSpacing: 0.3),
-                      overflow: TextOverflow.ellipsis),
+                  Text(
+                    app.packageName,
+                    style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.3),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
             ),
@@ -414,8 +399,7 @@ class _FallbackIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       color: isSelected ? t.accentSoft : t.bgSunken,
-      child: Icon(Icons.apps_rounded,
-          size: 18, color: isSelected ? t.accent : t.textMuted),
+      child: Icon(Icons.apps_rounded, size: 18, color: isSelected ? t.accent : t.textMuted),
     );
   }
 }
@@ -430,7 +414,8 @@ class _SquareCheckbox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 18, height: 18,
+      width: 18,
+      height: 18,
       decoration: BoxDecoration(
         border: Border.all(color: value ? t.accent : t.line),
         color: value ? t.accent : Colors.transparent,
@@ -439,4 +424,3 @@ class _SquareCheckbox extends StatelessWidget {
     );
   }
 }
-

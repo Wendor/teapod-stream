@@ -57,7 +57,7 @@ abstract final class SshParser {
 
   /// Query values without turning `+` into a space (keys are base64).
   static Map<String, String> _query(String query) => {
-        for (final part in query.split('&').where((p) => p.contains('=')))
-          part.substring(0, part.indexOf('=')).toLowerCase(): Uri.decodeComponent(part.substring(part.indexOf('=') + 1)),
-      };
+    for (final part in query.split('&').where((p) => p.contains('=')))
+      part.substring(0, part.indexOf('=')).toLowerCase(): Uri.decodeComponent(part.substring(part.indexOf('=') + 1)),
+  };
 }

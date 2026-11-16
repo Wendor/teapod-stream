@@ -1,4 +1,5 @@
 import '../../l10n/l10n.dart';
+
 enum RoutingDirection { global, bypass, onlySelected }
 
 class RoutingSettings {
@@ -45,21 +46,20 @@ class RoutingSettings {
     bool? sitesEnabled,
     List<String>? sites,
     bool? ruServicesEnabled,
-  }) =>
-      RoutingSettings(
-        direction: direction ?? this.direction,
-        bypassLocal: bypassLocal ?? this.bypassLocal,
-        geoEnabled: geoEnabled ?? this.geoEnabled,
-        geoCodes: geoCodes ?? this.geoCodes,
-        domainEnabled: domainEnabled ?? this.domainEnabled,
-        domainZones: domainZones ?? this.domainZones,
-        geositeEnabled: geositeEnabled ?? this.geositeEnabled,
-        geositeCodes: geositeCodes ?? this.geositeCodes,
-        adBlockEnabled: adBlockEnabled ?? this.adBlockEnabled,
-        sitesEnabled: sitesEnabled ?? this.sitesEnabled,
-        sites: sites ?? this.sites,
-        ruServicesEnabled: ruServicesEnabled ?? this.ruServicesEnabled,
-      );
+  }) => RoutingSettings(
+    direction: direction ?? this.direction,
+    bypassLocal: bypassLocal ?? this.bypassLocal,
+    geoEnabled: geoEnabled ?? this.geoEnabled,
+    geoCodes: geoCodes ?? this.geoCodes,
+    domainEnabled: domainEnabled ?? this.domainEnabled,
+    domainZones: domainZones ?? this.domainZones,
+    geositeEnabled: geositeEnabled ?? this.geositeEnabled,
+    geositeCodes: geositeCodes ?? this.geositeCodes,
+    adBlockEnabled: adBlockEnabled ?? this.adBlockEnabled,
+    sitesEnabled: sitesEnabled ?? this.sitesEnabled,
+    sites: sites ?? this.sites,
+    ruServicesEnabled: ruServicesEnabled ?? this.ruServicesEnabled,
+  );
 
   Map<String, dynamic> toJson() => {
     'direction': direction.name,
@@ -101,14 +101,16 @@ class RoutingSettings {
       parts.add(geoCodes.take(2).join(', ') + (geoCodes.length > 2 ? '…' : ''));
     }
     if (domainEnabled && domainZones.isNotEmpty) {
-      parts.add(domainZones
-              .take(2)
-              .map((z) {
-                if (z == 'xn--p1ai') return '.рф';
-                return z.split('.').length > 2 ? z : '.$z';
-              })
-              .join(', ') +
-          (domainZones.length > 2 ? '…' : ''));
+      parts.add(
+        domainZones
+                .take(2)
+                .map((z) {
+                  if (z == 'xn--p1ai') return '.рф';
+                  return z.split('.').length > 2 ? z : '.$z';
+                })
+                .join(', ') +
+            (domainZones.length > 2 ? '…' : ''),
+      );
     }
     if (geositeEnabled && geositeCodes.isNotEmpty) {
       parts.add('geosite:${geositeCodes.length}');
@@ -118,7 +120,9 @@ class RoutingSettings {
     if (bypassLocal) parts.add('LAN');
     if (adBlockEnabled) parts.add('Ads✗');
     if (direction == RoutingDirection.global) return parts.join(', ');
-    final prefix = direction == RoutingDirection.bypass ? L10n.current.routingSummaryBypass : L10n.current.routingSummaryOnly;
+    final prefix = direction == RoutingDirection.bypass
+        ? L10n.current.routingSummaryBypass
+        : L10n.current.routingSummaryOnly;
     return parts.isEmpty ? prefix : '$prefix: ${parts.join(', ')}';
   }
 }

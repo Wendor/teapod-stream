@@ -110,33 +110,36 @@ class UpdateNotifier extends Notifier<UpdateState> {
     final path = await _apkPath(info.version, abi);
     _currentApkPath = path;
 
-    state = UpdateDownloading(info,
-        downloaded: File(path).existsSync() ? File(path).lengthSync() : 0,
-        total: info.totalBytes ?? -1);
+    state = UpdateDownloading(
+      info,
+      downloaded: File(path).existsSync() ? File(path).lengthSync() : 0,
+      total: info.totalBytes ?? -1,
+    );
 
     // Like the release check — through the tunnel if it is up (#150).
     final socks = ref.read(vpnProvider).tunnelSocks;
-    _dlSub = _service.downloadApk(
-      info.downloadUrl,
-      path,
-      socksPort: socks?.port,
-      socksUser: socks?.user,
-      socksPassword: socks?.password,
-    ).listen(
-      (progress) {
-        if (progress.done) {
-          state = UpdateDownloaded(info, path);
-          _dlSub = null;
-        } else {
-          state = UpdateDownloading(info,
-              downloaded: progress.downloaded, total: progress.total);
-        }
-      },
-      onError: (e) {
-        state = UpdateError(L10n.current.updateDownloadError('$e'), retryInfo: info);
-        _dlSub = null;
-      },
-    );
+    _dlSub = _service
+        .downloadApk(
+          info.downloadUrl,
+          path,
+          socksPort: socks?.port,
+          socksUser: socks?.user,
+          socksPassword: socks?.password,
+        )
+        .listen(
+          (progress) {
+            if (progress.done) {
+              state = UpdateDownloaded(info, path);
+              _dlSub = null;
+            } else {
+              state = UpdateDownloading(info, downloaded: progress.downloaded, total: progress.total);
+            }
+          },
+          onError: (Object e) {
+            state = UpdateError(L10n.current.updateDownloadError('$e'), retryInfo: info);
+            _dlSub = null;
+          },
+        );
   }
 
   Future<void> cancelDownload() async {
@@ -145,8 +148,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
     final cur = state;
     if (cur is UpdateDownloading) {
       final path = _currentApkPath;
-      final resumable =
-          path != null && File(path).existsSync() ? File(path).lengthSync() : 0;
+      final resumable = path != null && File(path).existsSync() ? File(path).lengthSync() : 0;
       state = UpdateAvailable(cur.info, resumableBytes: resumable);
     }
   }
@@ -189,5 +191,4 @@ class UpdateNotifier extends Notifier<UpdateState> {
   }
 }
 
-final updateProvider =
-    NotifierProvider<UpdateNotifier, UpdateState>(UpdateNotifier.new);
+final updateProvider = NotifierProvider<UpdateNotifier, UpdateState>(UpdateNotifier.new);

@@ -22,14 +22,14 @@ class RunDir {
 
   /// Case directory; different ids that match after normalization get a suffix.
   Directory caseDir(String id) => _caseDirs[id] ??= () {
-        final base = '${root.path}/cases/${id.replaceAll(RegExp(r'[^\w.\-/]'), '_').replaceAll('..', '_')}';
-        final taken = _caseDirs.values.map((d) => d.path).toSet();
-        var path = base;
-        for (var i = 2; taken.contains(path); i++) {
-          path = '$base-$i';
-        }
-        return Directory(path)..createSync(recursive: true);
-      }();
+    final base = '${root.path}/cases/${id.replaceAll(RegExp(r'[^\w.\-/]'), '_').replaceAll('..', '_')}';
+    final taken = _caseDirs.values.map((d) => d.path).toSet();
+    var path = base;
+    for (var i = 2; taken.contains(path); i++) {
+      path = '$base-$i';
+    }
+    return Directory(path)..createSync(recursive: true);
+  }();
 
   Directory soakDir(String core) => Directory('${root.path}/soak/$core')..createSync(recursive: true);
 
@@ -42,16 +42,17 @@ class RunDir {
 String maskSecrets(String s) => s
     .replaceAllMapped(RegExp(r'([a-z][a-z0-9+.\-]*://)[^@\s/"]+@', caseSensitive: false), (m) => '${m[1]}***@')
     .replaceAllMapped(
-        // Value up to the URL separator; JSON escaping (\" and \\) is part of the value.
-        RegExp(r'\b(pbk|sid|pqv|password|publickey|privatekey|key|token|auth)=(?:\\.|[^&\s#"\\])+',
-            caseSensitive: false),
-        (m) => '${m[1]}=***')
+      // Value up to the URL separator; JSON escaping (\" and \\) is part of the value.
+      RegExp(r'\b(pbk|sid|pqv|password|publickey|privatekey|key|token|auth)=(?:\\.|[^&\s#"\\])+', caseSensitive: false),
+      (m) => '${m[1]}=***',
+    )
     .replaceAll(RegExp(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', caseSensitive: false), '***')
     .replaceAllMapped(RegExp(r'(/sub/)(?:\\.|[^\s/?#"\\])+'), (m) => '${m[1]}***')
     // Agent JSON markers (e.g. `connected` carries socksPassword).
     .replaceAllMapped(
-        RegExp(r'"(\w*(?:password|pass|token|key|auth|user))"\s*:\s*"(?:\\.|[^"\\])*"', caseSensitive: false),
-        (m) => '"${m[1]}":"***"');
+      RegExp(r'"(\w*(?:password|pass|token|key|auth|user))"\s*:\s*"(?:\\.|[^"\\])*"', caseSensitive: false),
+      (m) => '"${m[1]}":"***"',
+    );
 
 /// Run report; written after every result so an interrupted run
 /// leaves an up-to-date `report.md`.
@@ -86,14 +87,22 @@ class RunReport {
 
   void write() {
     run.file('report.md').writeAsStringSync(render());
-    run.file('report.json').writeAsStringSync(maskSecrets(jsonEncode({
-      'meta': meta,
-      'baseline': baseline?.toJson(),
-      'error': error,
-      'notes': notes,
-      'cases': [for (final c in cases) c.toJson()],
-      'soak': [for (final f in faults) {'core': f.core, ...f.r.toJson()}],
-    })));
+    run
+        .file('report.json')
+        .writeAsStringSync(
+          maskSecrets(
+            jsonEncode({
+              'meta': meta,
+              'baseline': baseline?.toJson(),
+              'error': error,
+              'notes': notes,
+              'cases': [for (final c in cases) c.toJson()],
+              'soak': [
+                for (final f in faults) {'core': f.core, ...f.r.toJson()},
+              ],
+            }),
+          ),
+        );
   }
 
   String render() {
@@ -110,15 +119,19 @@ class RunReport {
     if (cases.isNotEmpty) {
       b.writeln('\n## Matrix\n\n| id | verdict | note | took |\n|---|---|---|---|');
       for (final c in cases) {
-        b.writeln('| [${c.id}](${c.dir}/) | ${c.verdict.name.toUpperCase()} | ${c.note.replaceAll('|', '/')} '
-            '| ${c.took.inSeconds}s |');
+        b.writeln(
+          '| [${c.id}](${c.dir}/) | ${c.verdict.name.toUpperCase()} | ${c.note.replaceAll('|', '/')} '
+          '| ${c.took.inSeconds}s |',
+        );
       }
     }
     if (faults.isNotEmpty) {
       b.writeln('\n## Soak\n\n| time | core | fault | verdict | recovery | note |\n|---|---|---|---|---|---|');
       for (final (:core, :r) in faults) {
-        b.writeln('| ${r.at.toIso8601String().substring(11, 19)} | $core | ${r.fault.cli} '
-            '| ${r.verdict.name.toUpperCase()} | ${r.recovery == null ? '—' : '${r.recovery!.inSeconds}s'} | ${r.note} |');
+        b.writeln(
+          '| ${r.at.toIso8601String().substring(11, 19)} | $core | ${r.fault.cli} '
+          '| ${r.verdict.name.toUpperCase()} | ${r.recovery == null ? '—' : '${r.recovery!.inSeconds}s'} | ${r.note} |',
+        );
       }
       b.writeln('\nProbe timeline: `soak/<core>/timeline.jsonl`, failure snapshots: `soak/<core>/fault-*`.');
     }
@@ -127,11 +140,15 @@ class RunReport {
     if (failed.isNotEmpty || badFaults.isNotEmpty) {
       b.writeln('\n## Rerun failures\n\n```bash');
       for (final c in failed) {
-        b.writeln("dart run tool/itest/main.dart --skip-install --phase matrix --case '${c.id.replaceAll("'", r"'\''")}'");
+        b.writeln(
+          "dart run tool/itest/main.dart --skip-install --phase matrix --case '${c.id.replaceAll("'", r"'\''")}'",
+        );
       }
       for (final f in badFaults.map((f) => '${f.core}|${f.r.fault.cli}').toSet()) {
         final [core, fault] = f.split('|');
-        b.writeln('dart run tool/itest/main.dart --skip-install --phase soak --core $core --fault $fault --repeat 3 --duration 2h');
+        b.writeln(
+          'dart run tool/itest/main.dart --skip-install --phase soak --core $core --fault $fault --repeat 3 --duration 2h',
+        );
       }
       b.writeln('```');
     }

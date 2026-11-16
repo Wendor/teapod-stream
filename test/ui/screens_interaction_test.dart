@@ -22,11 +22,11 @@ class _Launcher extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        body: TextButton(
-          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => screen)),
-          child: const Text('open'),
-        ),
-      );
+    body: TextButton(
+      onPressed: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => screen)),
+      child: const Text('open'),
+    ),
+  );
 }
 
 Future<ProviderContainer> _open(WidgetTester tester, Widget screen) async {
@@ -56,7 +56,10 @@ void main() {
 
   testWidgets('configs screen lists standalone configs and subscriptions', (tester) async {
     await setUpScreenTest(
-      configs: [testConfig('1'), testConfig('2', subId: 's')],
+      configs: [
+        testConfig('1'),
+        testConfig('2', subId: 's'),
+      ],
       subscriptions: [sub],
       activeId: '1',
     );
@@ -106,9 +109,10 @@ void main() {
       await setUpScreenTest();
       final c = await _open(tester, const AddConfigScreen());
       await tester.enterText(
-          find.byType(TextField),
-          'teapod://import/connections?data='
-          'eyJ2ZXJzaW9uIjoxLCJleHBvcnRlZEF0IjoiMjAyNi0wMS0wMVQwMDowMDowMC4wMDAiLCJjb25maWdzIjpbInRyb2phbjovL3B3QGEuZXhhbXBsZTo0NDMjQSJdLCJzdWJzY3JpcHRpb25zIjpbXX0');
+        find.byType(TextField),
+        'teapod://import/connections?data='
+        'eyJ2ZXJzaW9uIjoxLCJleHBvcnRlZEF0IjoiMjAyNi0wMS0wMVQwMDowMDowMC4wMDAiLCJjb25maWdzIjpbInRyb2phbjovL3B3QGEuZXhhbXBsZTo0NDMjQSJdLCJzdWJzY3JpcHRpb25zIjpbXX0',
+      );
       await tester.tap(find.text('ADD'));
       await settle(tester);
       expect(c.read(configProvider).value!.configs.single.address, 'a.example');
@@ -148,7 +152,9 @@ void main() {
       {'packageName': 'a.app', 'appName': 'Alpha'},
     ];
     final c = await pumpScreen(tester, const SplitTunnelScreen());
-    final ys = [for (final n in ['Alpha', 'eBay', 'Zoom']) tester.getTopLeft(find.text(n)).dy];
+    final ys = [
+      for (final n in ['Alpha', 'eBay', 'Zoom']) tester.getTopLeft(find.text(n)).dy,
+    ];
     expect(ys, orderedEquals([...ys]..sort()), reason: 'sorted ignoring case');
     await unmount(tester, c);
   });

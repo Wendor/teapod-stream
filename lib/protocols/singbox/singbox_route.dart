@@ -55,7 +55,10 @@ abstract final class SingBoxRoute {
         };
     }
     return {
-      'servers': [main, {'type': 'local', 'tag': _localDns}],
+      'servers': [
+        main,
+        {'type': 'local', 'tag': _localDns},
+      ],
       if (o.routing.adBlockEnabled)
         'rules': [
           {'rule_set': _adBlockTags, 'action': 'predefined', 'rcode': 'NOERROR'},
@@ -73,7 +76,10 @@ abstract final class SingBoxRoute {
   static Map<String, dynamic> _host(String host, DnsServerConfig server) {
     final ip = server.fallbackIp;
     if (server.domain != null && ip != null && ip.isNotEmpty) {
-      return {'server': ip, 'tls': {'enabled': true, 'server_name': server.domain}};
+      return {
+        'server': ip,
+        'tls': {'enabled': true, 'server_name': server.domain},
+      };
     }
     return {'server': host};
   }
@@ -90,16 +96,26 @@ abstract final class SingBoxRoute {
     ];
     return {
       'rules': [
-        if (o.sniffingEnabled) {'inbound': [inboundTag], 'action': 'sniff'},
-        {'port': [53], 'action': 'hijack-dns'},
-        if (!o.enableUdp) {'network': ['udp'], 'action': 'reject'},
+        if (o.sniffingEnabled)
+          {
+            'inbound': [inboundTag],
+            'action': 'sniff',
+          },
+        {
+          'port': [53],
+          'action': 'hijack-dns',
+        },
+        if (!o.enableUdp)
+          {
+            'network': ['udp'],
+            'action': 'reject',
+          },
         ..._userRules(routing),
         if (routing.direction == RoutingDirection.onlySelected) ..._probeRules(o),
       ],
       if (ruleSets.isNotEmpty)
         'rule_set': [
-          for (final tag in ruleSets.toSet())
-            {'type': 'local', 'tag': tag, 'format': 'binary', 'path': '$tag.srs'},
+          for (final tag in ruleSets.toSet()) {'type': 'local', 'tag': tag, 'format': 'binary', 'path': '$tag.srs'},
         ],
       'final': routing.direction == RoutingDirection.onlySelected ? directTag : SingBoxOutbound.tag,
       'default_domain_resolver': _localDns,
@@ -124,9 +140,15 @@ abstract final class SingBoxRoute {
 
   /// `domain:x` → domain_suffix, `full:x` → domain.
   static Map<String, dynamic> _xrayDomains(List<String> rules) => {
-        'domain': [for (final r in rules) if (r.startsWith('full:')) r.substring(5)],
-        'domain_suffix': [for (final r in rules) if (r.startsWith('domain:')) r.substring(7)],
-      };
+    'domain': [
+      for (final r in rules)
+        if (r.startsWith('full:')) r.substring(5),
+    ],
+    'domain_suffix': [
+      for (final r in rules)
+        if (r.startsWith('domain:')) r.substring(7),
+    ],
+  };
 
   /// In "selected only" mode diagnostics and the probe always go through the proxy.
   static List<Map<String, dynamic>> _probeRules(VpnEngineOptions o) {
@@ -137,7 +159,11 @@ abstract final class SingBoxRoute {
         'domain': ['cp.cloudflare.com', 'ip-api.com', if (host.isNotEmpty && !isIp) host],
         'outbound': SingBoxOutbound.tag,
       },
-      if (isIp) {'ip_cidr': [host], 'outbound': SingBoxOutbound.tag},
+      if (isIp)
+        {
+          'ip_cidr': [host],
+          'outbound': SingBoxOutbound.tag,
+        },
     ];
   }
 

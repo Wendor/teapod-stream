@@ -15,28 +15,30 @@ class TunnelSocks {
 
   /// SOCKS credentials: with an empty [user] — no authentication.
   ProxySettings get proxySettings => ProxySettings(
-        InternetAddress.loopbackIPv4,
-        port,
-        username: user.isNotEmpty ? user : null,
-        password: user.isNotEmpty ? password : null,
-      );
+    InternetAddress.loopbackIPv4,
+    port,
+    username: user.isNotEmpty ? user : null,
+    password: user.isNotEmpty ? password : null,
+  );
 
   /// Route [client] through the tunnel. TLS over SOCKS is set up by the connection factory —
   /// the client's `badCertificateCallback` doesn't reach it, verification is passed to
   /// [onBadCertificate] with the host of the actual connection (after a redirect — the new one).
-  void apply(HttpClient client,
-      {bool Function(X509Certificate cert, String host, int port)? onBadCertificate}) {
+  void apply(HttpClient client, {bool Function(X509Certificate cert, String host, int port)? onBadCertificate}) {
     final proxies = [proxySettings];
     client.connectionFactory = (uri, proxyHost, proxyPort) async {
       final socket = SocksTCPClient.connect(
-          proxies, InternetAddress(uri.host, type: InternetAddressType.unix), uri.port);
+        proxies,
+        InternetAddress(uri.host, type: InternetAddressType.unix),
+        uri.port,
+      );
       if (uri.scheme != 'https') {
         return ConnectionTask.fromSocket(socket, () async => (await socket).close().ignore());
       }
-      final secure = (await socket).secure(uri.host,
-          onBadCertificate: onBadCertificate == null
-              ? null
-              : (cert) => onBadCertificate(cert, uri.host, uri.port));
+      final secure = (await socket).secure(
+        uri.host,
+        onBadCertificate: onBadCertificate == null ? null : (cert) => onBadCertificate(cert, uri.host, uri.port),
+      );
       return ConnectionTask.fromSocket(secure, () async => (await secure).close().ignore());
     };
   }

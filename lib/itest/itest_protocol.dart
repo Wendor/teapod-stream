@@ -11,13 +11,12 @@ String itestMarker(Map<String, Object?> payload) => 'TEAPOD_ITEST ${jsonEncode(p
 
 /// Nested Maps are merged, other values (including lists) are replaced.
 Map<String, dynamic> deepMerge(Map<String, dynamic> base, Map<String, dynamic> patch) => {
-      ...base,
-      for (final e in patch.entries)
-        e.key: e.value is Map && base[e.key] is Map
-            ? deepMerge(Map<String, dynamic>.from(base[e.key] as Map),
-                Map<String, dynamic>.from(e.value as Map))
-            : e.value,
-    };
+  ...base,
+  for (final e in patch.entries)
+    e.key: e.value is Map && base[e.key] is Map
+        ? deepMerge(Map<String, dynamic>.from(base[e.key] as Map), Map<String, dynamic>.from(e.value as Map))
+        : e.value,
+};
 
 /// null — the profile will start exactly on core [wanted]; otherwise the reason.
 String? pickCoreError(CoreResolution r, CoreKind wanted) {

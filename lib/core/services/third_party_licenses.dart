@@ -2,10 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// Licenses of the native cores in teapod-core.aar (not pub packages — Flutter doesn't know them).
-const _licenses = [
-  ('sing-box', 'assets/licenses/sing-box.txt'),
-  ('amneziawg-go', 'assets/licenses/amneziawg-go.txt'),
-];
+const _licenses = [('sing-box', 'assets/licenses/sing-box.txt'), ('amneziawg-go', 'assets/licenses/amneziawg-go.txt')];
 
 /// Registers the licenses for `showLicensePage`.
 void registerThirdPartyLicenses() {

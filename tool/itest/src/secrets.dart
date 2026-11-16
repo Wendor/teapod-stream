@@ -18,17 +18,17 @@ class Secrets {
   const Secrets(this.configs, this.subs, this.reference, [this.exclude = const []]);
 
   factory Secrets.fromJson(Map<String, dynamic> j) => Secrets(
-        [
-          for (final c in (j['configs'] as List? ?? const []).cast<Map<String, dynamic>>())
-            (uri: c['uri'] as String, owned: c['owned'] as bool? ?? true, egressIp: c['egressIp'] as String?),
-        ],
-        [
-          for (final s in (j['subs'] as List? ?? const []).cast<Map<String, dynamic>>())
-            (url: s['url'] as String, owned: s['owned'] as bool? ?? true),
-        ],
-        (j['reference'] as Map? ?? const {}).cast<String, String>(),
-        (j['exclude'] as List? ?? const []).cast<String>(),
-      );
+    [
+      for (final c in (j['configs'] as List? ?? const []).cast<Map<String, dynamic>>())
+        (uri: c['uri'] as String, owned: c['owned'] as bool? ?? true, egressIp: c['egressIp'] as String?),
+    ],
+    [
+      for (final s in (j['subs'] as List? ?? const []).cast<Map<String, dynamic>>())
+        (url: s['url'] as String, owned: s['owned'] as bool? ?? true),
+    ],
+    (j['reference'] as Map? ?? const {}).cast<String, String>(),
+    (j['exclude'] as List? ?? const []).cast<String>(),
+  );
 
   static Secrets load(String path) {
     final f = File(path);

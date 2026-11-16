@@ -26,9 +26,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
   String? _error;
   String? _clipboardSuggestion;
 
-  static final _uriRe = RegExp(
-      r'^(vless|vmess|trojan|ss|hy2|hysteria2|teapod|https?)://',
-      caseSensitive: false);
+  static final _uriRe = RegExp(r'^(vless|vmess|trojan|ss|hy2|hysteria2|teapod|https?)://', caseSensitive: false);
 
   @override
   void initState() {
@@ -62,16 +60,18 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
             // ── Header strip ──────────────────────────────────────
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.line))),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: t.line)),
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('teapod.stream // add',
-                      style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+                  Text('teapod.stream // add', style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
                   GestureDetector(
                     onTap: _openQrScan,
                     child: Container(
-                      width: 28, height: 28,
+                      width: 28,
+                      height: 28,
                       decoration: BoxDecoration(border: Border.all(color: t.line)),
                       child: Icon(Icons.qr_code_scanner_rounded, size: 14, color: t.textDim),
                     ),
@@ -83,7 +83,9 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
             // ── Hero panel ────────────────────────────────────────
             Container(
               width: double.infinity,
-              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.line))),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: t.line)),
+              ),
               child: Stack(
                 children: [
                   _CornerTicks(t: t),
@@ -92,21 +94,26 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(context.l10n.addTagline,
-                            style: AppTheme.mono(
-                                size: 10, color: t.textMuted, letterSpacing: 1.5)),
+                        Text(
+                          context.l10n.addTagline,
+                          style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1.5),
+                        ),
                         const SizedBox(height: 8),
-                        Text('ADD CONFIG',
-                            style: AppTheme.sans(
-                                size: 30,
-                                weight: FontWeight.w500,
-                                color: t.text,
-                                letterSpacing: -1,
-                                height: 1)),
+                        Text(
+                          'ADD CONFIG',
+                          style: AppTheme.sans(
+                            size: 30,
+                            weight: FontWeight.w500,
+                            color: t.text,
+                            letterSpacing: -1,
+                            height: 1,
+                          ),
+                        ),
                         const SizedBox(height: 6),
-                        Text('vless · vmess · trojan · ss · hy2 · subscription',
-                            style: AppTheme.mono(
-                                size: 11, color: t.textDim, letterSpacing: 0.5)),
+                        Text(
+                          'vless · vmess · trojan · ss · hy2 · subscription',
+                          style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5),
+                        ),
                       ],
                     ),
                   ),
@@ -116,16 +123,13 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
             // ── Body ─────────────────────────────────────────────
             Expanded(
               child: _loading
-                  ? Center(
-                      child: CircularProgressIndicator(
-                          color: t.accent, strokeWidth: 1.5))
+                  ? Center(child: CircularProgressIndicator(color: t.accent, strokeWidth: 1.5))
                   : ListView(
                       padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
                       children: [
                         // Input field
                         Container(
-                          decoration:
-                              BoxDecoration(border: Border.all(color: t.line)),
+                          decoration: BoxDecoration(border: Border.all(color: t.line)),
                           child: TextField(
                             controller: _uriController,
                             maxLines: 6,
@@ -133,8 +137,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
                             decoration: InputDecoration(
                               hintText:
                                   'vless://uuid@host:port?...\nvmess://base64\ntrojan://pass@host:port\nhttps://example.com/sub',
-                              hintStyle:
-                                  AppTheme.mono(size: 11, color: t.textMuted),
+                              hintStyle: AppTheme.mono(size: 11, color: t.textMuted),
                               contentPadding: const EdgeInsets.all(14),
                               isDense: true,
                               border: InputBorder.none,
@@ -153,17 +156,19 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
                             },
                             child: Container(
                               padding: const EdgeInsets.all(10),
-                              decoration:
-                                  BoxDecoration(border: Border.all(color: t.accent)),
+                              decoration: BoxDecoration(border: Border.all(color: t.accent)),
                               child: Row(
                                 children: [
                                   Icon(Icons.paste_rounded, size: 13, color: t.accent),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      context.l10n.addFromClipboard(_clipboardSuggestion!.length > 48 ? '${_clipboardSuggestion!.substring(0, 48)}…' : _clipboardSuggestion!),
-                                      style: AppTheme.mono(
-                                          size: 10, color: t.accent, letterSpacing: 0.5),
+                                      context.l10n.addFromClipboard(
+                                        _clipboardSuggestion!.length > 48
+                                            ? '${_clipboardSuggestion!.substring(0, 48)}…'
+                                            : _clipboardSuggestion!,
+                                      ),
+                                      style: AppTheme.mono(size: 10, color: t.accent, letterSpacing: 0.5),
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
@@ -177,11 +182,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
                           Container(
                             padding: const EdgeInsets.all(10),
                             color: t.danger.withAlpha(0x1A),
-                            child: Text(_error!,
-                                style: AppTheme.mono(
-                                    size: 11,
-                                    color: t.danger,
-                                    letterSpacing: 0.5)),
+                            child: Text(_error!, style: AppTheme.mono(size: 11, color: t.danger, letterSpacing: 0.5)),
                           ),
                         ],
                         const SizedBox(height: 16),
@@ -191,21 +192,17 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
                               child: GestureDetector(
                                 onTap: _loading ? null : _pasteFromClipboard,
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 13),
-                                  decoration: BoxDecoration(
-                                      border: Border.all(color: t.line)),
+                                  padding: const EdgeInsets.symmetric(vertical: 13),
+                                  decoration: BoxDecoration(border: Border.all(color: t.line)),
                                   child: Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Icon(Icons.paste_rounded,
-                                          size: 14, color: t.textDim),
+                                      Icon(Icons.paste_rounded, size: 14, color: t.textDim),
                                       const SizedBox(width: 8),
-                                      Text(context.l10n.addPaste,
-                                          style: AppTheme.mono(
-                                              size: 11,
-                                              color: t.textDim,
-                                              letterSpacing: 1)),
+                                      Text(
+                                        context.l10n.addPaste,
+                                        style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 1),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -216,20 +213,17 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
                               child: GestureDetector(
                                 onTap: _loading ? null : _import,
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 13),
+                                  padding: const EdgeInsets.symmetric(vertical: 13),
                                   color: t.accent,
                                   child: Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Icon(Icons.check_rounded,
-                                          size: 14, color: t.bg),
+                                      Icon(Icons.check_rounded, size: 14, color: t.bg),
                                       const SizedBox(width: 8),
-                                      Text(context.l10n.addAdd,
-                                          style: AppTheme.mono(
-                                              size: 11,
-                                              color: t.bg,
-                                              letterSpacing: 1)),
+                                      Text(
+                                        context.l10n.addAdd,
+                                        style: AppTheme.mono(size: 11, color: t.bg, letterSpacing: 1),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -247,11 +241,8 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
   }
 
   void _openQrScan() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const QrScanScreen()),
-    ).then((value) {
-      if (value != null && value is String) {
+    Navigator.push(context, MaterialPageRoute<String>(builder: (_) => const QrScanScreen())).then((value) {
+      if (value != null) {
         setState(() => _uriController.text = value);
         _processUri(value);
       }
@@ -291,10 +282,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
       final parsed = Uri.parse(uri);
 
       if (parsed.scheme == 'http' || parsed.scheme == 'https') {
-        await ref.read(configProvider.notifier).addSubscriptionFromUrl(
-              uri,
-              allowSelfSigned: allowSelfSigned,
-            );
+        await ref.read(configProvider.notifier).addSubscriptionFromUrl(uri, allowSelfSigned: allowSelfSigned);
         if (mounted) Navigator.pop(context);
       } else if (parsed.scheme == 'teapod') {
         final result = DeeplinkRouter.parse(uri);
@@ -325,11 +313,17 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
           addedSubscriptions = r.addedSubscriptions;
         }
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(
-                context.l10n.addImported(context.l10n.configsCount(addedConfigs), context.l10n.subscriptionsCount(addedSubscriptions))),
-            duration: const Duration(seconds: 2),
-          ));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                context.l10n.addImported(
+                  context.l10n.configsCount(addedConfigs),
+                  context.l10n.subscriptionsCount(addedSubscriptions),
+                ),
+              ),
+              duration: const Duration(seconds: 2),
+            ),
+          );
           Navigator.pop(context);
         }
       } else {
@@ -340,8 +334,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
           if (mounted) Navigator.pop(context);
           return;
         }
-        setState(() => _error =
-            context.l10n.addParseFailed);
+        setState(() => _error = context.l10n.addParseFailed);
       }
     } on FormatException catch (e) {
       setState(() => _error = e.message);
@@ -366,38 +359,28 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: t.bgElev,
-        title: Text(context.l10n.certUntrustedTitle,
-            style: AppTheme.sans(size: 16, color: t.text)),
+        title: Text(context.l10n.certUntrustedTitle, style: AppTheme.sans(size: 16, color: t.text)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              context.l10n.certUntrustedMessage,
-              style: AppTheme.sans(size: 13, color: t.textDim),
-            ),
+            Text(context.l10n.certUntrustedMessage, style: AppTheme.sans(size: 13, color: t.textDim)),
             const SizedBox(height: 12),
-            Text(context.l10n.certServer(e.host),
-                style: AppTheme.mono(size: 11, color: t.textDim)),
-            Text(context.l10n.certSubject(e.subject),
-                style: AppTheme.mono(size: 11, color: t.textDim)),
-            Text(context.l10n.certIssuer(e.issuer),
-                style: AppTheme.mono(size: 11, color: t.textDim)),
+            Text(context.l10n.certServer(e.host), style: AppTheme.mono(size: 11, color: t.textDim)),
+            Text(context.l10n.certSubject(e.subject), style: AppTheme.mono(size: 11, color: t.textDim)),
+            Text(context.l10n.certIssuer(e.issuer), style: AppTheme.mono(size: 11, color: t.textDim)),
             const SizedBox(height: 12),
-            Text(context.l10n.certContinueAnyway,
-                style: AppTheme.sans(size: 13, color: t.text)),
+            Text(context.l10n.certContinueAnyway, style: AppTheme.sans(size: 13, color: t.text)),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child:
-                Text(context.l10n.commonCancel, style: AppTheme.mono(size: 12, color: t.textDim)),
+            child: Text(context.l10n.commonCancel, style: AppTheme.mono(size: 12, color: t.textDim)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child:
-                Text(context.l10n.commonContinue, style: AppTheme.mono(size: 12, color: t.danger)),
+            child: Text(context.l10n.commonContinue, style: AppTheme.mono(size: 12, color: t.danger)),
           ),
         ],
       ),
@@ -417,9 +400,9 @@ class _CornerTicks extends StatelessWidget {
       child: IgnorePointer(
         child: Stack(
           children: [
-            Positioned(top: 6, left: 6,    child: _Tick(color: t.textMuted, tl: true)),
-            Positioned(top: 6, right: 6,   child: _Tick(color: t.textMuted, tr: true)),
-            Positioned(bottom: 6, left: 6,  child: _Tick(color: t.textMuted, bl: true)),
+            Positioned(top: 6, left: 6, child: _Tick(color: t.textMuted, tl: true)),
+            Positioned(top: 6, right: 6, child: _Tick(color: t.textMuted, tr: true)),
+            Positioned(bottom: 6, left: 6, child: _Tick(color: t.textMuted, bl: true)),
             Positioned(bottom: 6, right: 6, child: _Tick(color: t.textMuted, br: true)),
           ],
         ),
@@ -431,7 +414,7 @@ class _CornerTicks extends StatelessWidget {
 class _Tick extends StatelessWidget {
   final Color color;
   final bool tl, tr, bl, br;
-  const _Tick({required this.color, this.tl=false, this.tr=false, this.bl=false, this.br=false});
+  const _Tick({required this.color, this.tl = false, this.tr = false, this.bl = false, this.br = false});
 
   @override
   Widget build(BuildContext context) =>
@@ -445,12 +428,28 @@ class _TickPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final p = Paint()..color = color..strokeWidth = 1..style = PaintingStyle.stroke;
-    final w = size.width; final h = size.height;
-    if (tl) { canvas.drawLine(Offset.zero, Offset(w, 0), p); canvas.drawLine(Offset.zero, Offset(0, h), p); }
-    if (tr) { canvas.drawLine(const Offset(0,0), Offset(w, 0), p); canvas.drawLine(Offset(w,0), Offset(w, h), p); }
-    if (bl) { canvas.drawLine(Offset(0,h), Offset(w, h), p); canvas.drawLine(const Offset(0,0), Offset(0, h), p); }
-    if (br) { canvas.drawLine(Offset(0,h), Offset(w, h), p); canvas.drawLine(Offset(w,0), Offset(w, h), p); }
+    final p = Paint()
+      ..color = color
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+    final w = size.width;
+    final h = size.height;
+    if (tl) {
+      canvas.drawLine(Offset.zero, Offset(w, 0), p);
+      canvas.drawLine(Offset.zero, Offset(0, h), p);
+    }
+    if (tr) {
+      canvas.drawLine(const Offset(0, 0), Offset(w, 0), p);
+      canvas.drawLine(Offset(w, 0), Offset(w, h), p);
+    }
+    if (bl) {
+      canvas.drawLine(Offset(0, h), Offset(w, h), p);
+      canvas.drawLine(const Offset(0, 0), Offset(0, h), p);
+    }
+    if (br) {
+      canvas.drawLine(Offset(0, h), Offset(w, h), p);
+      canvas.drawLine(Offset(w, 0), Offset(w, h), p);
+    }
   }
 
   @override

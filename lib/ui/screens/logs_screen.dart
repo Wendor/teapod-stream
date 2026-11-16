@@ -61,15 +61,16 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
     final src = File(srcPath);
     if (!src.existsSync() || src.lengthSync() == 0) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.logsEmpty), duration: const Duration(seconds: 2)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.l10n.logsEmpty), duration: const Duration(seconds: 2)));
       }
       return;
     }
     // Copy to cache dir — share_plus requires files in a shareable location
     final now = DateTime.now();
-    final name = 'teapod_'
+    final name =
+        'teapod_'
         '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}'
         '_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}.txt';
     final tmp = File('${(await getTemporaryDirectory()).path}/$name');
@@ -78,17 +79,17 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
   }
 
   Color _lvlColor(LogLevel lvl, TeapodTokens t) => switch (lvl) {
-    LogLevel.error   => t.danger,
+    LogLevel.error => t.danger,
     LogLevel.warning => _warn,
-    LogLevel.info    => t.accent,
-    LogLevel.debug   => t.textMuted,
+    LogLevel.info => t.accent,
+    LogLevel.debug => t.textMuted,
   };
 
   String _lvlTag(LogLevel lvl) => switch (lvl) {
-    LogLevel.error   => 'ERR',
+    LogLevel.error => 'ERR',
     LogLevel.warning => 'WRN',
-    LogLevel.info    => 'INF',
-    LogLevel.debug   => 'DBG',
+    LogLevel.info => 'INF',
+    LogLevel.debug => 'DBG',
   };
 
   static String _fmtTs(DateTime ts) =>
@@ -107,13 +108,10 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
   @override
   Widget build(BuildContext context) {
     final logs = ref.watch(logServiceProvider);
-    final logsEnabled = ref.watch(settingsProvider)
-        .maybeWhen(data: (d) => d.logsEnabled, orElse: () => true);
+    final logsEnabled = ref.watch(settingsProvider).maybeWhen(data: (d) => d.logsEnabled, orElse: () => true);
     final t = Theme.of(context).extension<TeapodTokens>()!;
 
-    final filtered = _filters.isEmpty
-        ? logs
-        : logs.where((e) => _filters.contains(e.level)).toList();
+    final filtered = _filters.isEmpty ? logs : logs.where((e) => _filters.contains(e.level)).toList();
 
     final lastTs = logs.isNotEmpty ? _fmtTs(logs.last.timestamp) : '--:--:--';
     final bufStr = logs.length.toString().padLeft(4, '0');
@@ -134,19 +132,18 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
             // ── Console header strip ────────────────────────────
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.line))),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: t.line)),
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('teapod.stream // logs',
-                      style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
-                  Text('buf[$bufStr]',
-                      style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+                  Text('teapod.stream // logs', style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+                  Text('buf[$bufStr]', style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
                 ],
               ),
             ),
-            if (widget.breadcrumbParent != null)
-              BreadcrumbBar(t: t, parent: widget.breadcrumbParent!, current: 'logs'),
+            if (widget.breadcrumbParent != null) BreadcrumbBar(t: t, parent: widget.breadcrumbParent!, current: 'logs'),
 
             // ── Hero panel ──────────────────────────────────────
             HeroPanel(
@@ -155,8 +152,10 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
               title: 'LOGS',
               subtitle: Row(
                 children: [
-                  Text('last $lastTs · ${logsEnabled ? 'stream live' : 'stream paused'}',
-                      style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5)),
+                  Text(
+                    'last $lastTs · ${logsEnabled ? 'stream live' : 'stream paused'}',
+                    style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5),
+                  ),
                   const SizedBox(width: 8),
                   _PulseDot(color: logsEnabled ? t.accent : t.textMuted),
                 ],
@@ -175,11 +174,7 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
                     onTap: () => ref.read(vpnProvider.notifier).dumpTunnelDiag(),
                   ),
                   const SizedBox(width: 6),
-                  _IconBtn(
-                    t: t,
-                    icon: Icons.upload_file_rounded,
-                    onTap: _exportLogs,
-                  ),
+                  _IconBtn(t: t, icon: Icons.upload_file_rounded, onTap: _exportLogs),
                   const SizedBox(width: 6),
                   _IconBtn(
                     t: t,
@@ -196,14 +191,72 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
             // ── Filter tabs ──────────────────────────────────────
             IntrinsicHeight(
               child: Container(
-                decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.line))),
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: t.line)),
+                ),
                 child: Row(
                   children: [
-                    _FilterTab(t: t, label: 'ALL', count: logs.length,    active: _filters.isEmpty,                     color: t.text,      last: false, onTap: () => setState(() => _filters.clear())),
-                    _FilterTab(t: t, label: 'ERR', count: errCount,       active: _filters.contains(LogLevel.error),    color: t.danger,    last: false, onTap: () => setState(() => _filters.contains(LogLevel.error) ? _filters.remove(LogLevel.error) : _filters.add(LogLevel.error))),
-                    _FilterTab(t: t, label: 'WRN', count: wrnCount,       active: _filters.contains(LogLevel.warning),  color: _warn,       last: false, onTap: () => setState(() => _filters.contains(LogLevel.warning) ? _filters.remove(LogLevel.warning) : _filters.add(LogLevel.warning))),
-                    _FilterTab(t: t, label: 'INF', count: infCount,       active: _filters.contains(LogLevel.info),     color: t.accent,    last: false, onTap: () => setState(() => _filters.contains(LogLevel.info) ? _filters.remove(LogLevel.info) : _filters.add(LogLevel.info))),
-                    _FilterTab(t: t, label: 'DBG', count: dbgCount,       active: _filters.contains(LogLevel.debug),    color: t.textMuted, last: true,  onTap: () => setState(() => _filters.contains(LogLevel.debug) ? _filters.remove(LogLevel.debug) : _filters.add(LogLevel.debug))),
+                    _FilterTab(
+                      t: t,
+                      label: 'ALL',
+                      count: logs.length,
+                      active: _filters.isEmpty,
+                      color: t.text,
+                      last: false,
+                      onTap: () => setState(() => _filters.clear()),
+                    ),
+                    _FilterTab(
+                      t: t,
+                      label: 'ERR',
+                      count: errCount,
+                      active: _filters.contains(LogLevel.error),
+                      color: t.danger,
+                      last: false,
+                      onTap: () => setState(
+                        () => _filters.contains(LogLevel.error)
+                            ? _filters.remove(LogLevel.error)
+                            : _filters.add(LogLevel.error),
+                      ),
+                    ),
+                    _FilterTab(
+                      t: t,
+                      label: 'WRN',
+                      count: wrnCount,
+                      active: _filters.contains(LogLevel.warning),
+                      color: _warn,
+                      last: false,
+                      onTap: () => setState(
+                        () => _filters.contains(LogLevel.warning)
+                            ? _filters.remove(LogLevel.warning)
+                            : _filters.add(LogLevel.warning),
+                      ),
+                    ),
+                    _FilterTab(
+                      t: t,
+                      label: 'INF',
+                      count: infCount,
+                      active: _filters.contains(LogLevel.info),
+                      color: t.accent,
+                      last: false,
+                      onTap: () => setState(
+                        () => _filters.contains(LogLevel.info)
+                            ? _filters.remove(LogLevel.info)
+                            : _filters.add(LogLevel.info),
+                      ),
+                    ),
+                    _FilterTab(
+                      t: t,
+                      label: 'DBG',
+                      count: dbgCount,
+                      active: _filters.contains(LogLevel.debug),
+                      color: t.textMuted,
+                      last: true,
+                      onTap: () => setState(
+                        () => _filters.contains(LogLevel.debug)
+                            ? _filters.remove(LogLevel.debug)
+                            : _filters.add(LogLevel.debug),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -213,8 +266,10 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
             Expanded(
               child: filtered.isEmpty
                   ? Center(
-                      child: Text('[ stream empty ]',
-                          style: AppTheme.mono(size: 12, color: t.textMuted, letterSpacing: 1)),
+                      child: Text(
+                        '[ stream empty ]',
+                        style: AppTheme.mono(size: 12, color: t.textMuted, letterSpacing: 1),
+                      ),
                     )
                   : ListView.builder(
                       controller: _scrollController,
@@ -225,31 +280,35 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
                         return Container(
                           padding: const EdgeInsets.fromLTRB(10, 6, 20, 6),
                           decoration: BoxDecoration(
-                              border: Border(bottom: BorderSide(color: t.lineSoft))),
+                            border: Border(bottom: BorderSide(color: t.lineSoft)),
+                          ),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               SizedBox(
                                 width: 70,
-                                child: Text(_fmtTs(e.timestamp),
-                                    style: AppTheme.mono(size: 10, color: t.textMuted),
-                                    maxLines: 1),
+                                child: Text(
+                                  _fmtTs(e.timestamp),
+                                  style: AppTheme.mono(size: 10, color: t.textMuted),
+                                  maxLines: 1,
+                                ),
                               ),
                               const SizedBox(width: 8),
                               SizedBox(
                                 width: 28,
-                                child: Text(_lvlTag(e.level),
-                                    style: AppTheme.mono(
-                                        size: 10,
-                                        weight: FontWeight.w700,
-                                        color: lvlColor,
-                                        letterSpacing: 0.5)),
+                                child: Text(
+                                  _lvlTag(e.level),
+                                  style: AppTheme.mono(
+                                    size: 10,
+                                    weight: FontWeight.w700,
+                                    color: lvlColor,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
                               ),
                               const SizedBox(width: 8),
                               Expanded(
-                                child: Text(e.message,
-                                    style: AppTheme.mono(size: 10, color: t.text),
-                                    softWrap: true),
+                                child: Text(e.message, style: AppTheme.mono(size: 10, color: t.text), softWrap: true),
                               ),
                             ],
                           ),
@@ -266,17 +325,20 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
               },
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                decoration: BoxDecoration(border: Border(top: BorderSide(color: t.line))),
+                decoration: BoxDecoration(
+                  border: Border(top: BorderSide(color: t.line)),
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(_autoScroll ? '● auto-scroll' : '○ paused — tap to resume',
-                        style: AppTheme.mono(
-                            size: 10,
-                            color: _autoScroll ? t.accent : t.textMuted,
-                            letterSpacing: 1)),
-                    Text('${filtered.length} / ${logs.length}',
-                        style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+                    Text(
+                      _autoScroll ? '● auto-scroll' : '○ paused — tap to resume',
+                      style: AppTheme.mono(size: 10, color: _autoScroll ? t.accent : t.textMuted, letterSpacing: 1),
+                    ),
+                    Text(
+                      '${filtered.length} / ${logs.length}',
+                      style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1),
+                    ),
                   ],
                 ),
               ),
@@ -328,15 +390,17 @@ class _FilterTab extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(label,
-                  style: AppTheme.mono(
-                      size: 10,
-                      weight: active ? FontWeight.w700 : FontWeight.normal,
-                      color: active ? color : t.textDim,
-                      letterSpacing: 1)),
+              Text(
+                label,
+                style: AppTheme.mono(
+                  size: 10,
+                  weight: active ? FontWeight.w700 : FontWeight.normal,
+                  color: active ? color : t.textDim,
+                  letterSpacing: 1,
+                ),
+              ),
               const SizedBox(height: 2),
-              Text('$count',
-                  style: AppTheme.mono(size: 9, color: active ? color : t.textMuted)),
+              Text('$count', style: AppTheme.mono(size: 9, color: active ? color : t.textMuted)),
             ],
           ),
         ),
@@ -361,9 +425,7 @@ class _IconBtn extends StatelessWidget {
       child: Container(
         width: 32,
         height: 32,
-        decoration: BoxDecoration(
-          border: Border.all(color: t.line),
-        ),
+        decoration: BoxDecoration(border: Border.all(color: t.line)),
         child: Icon(icon, size: 14, color: onTap != null ? t.textDim : t.textMuted.withAlpha(0x66)),
       ),
     );
@@ -386,8 +448,7 @@ class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixi
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))
-      ..repeat(reverse: true);
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat(reverse: true);
   }
 
   @override
@@ -408,4 +469,3 @@ class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixi
     );
   }
 }
-

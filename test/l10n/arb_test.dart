@@ -7,10 +7,8 @@ Map<String, dynamic> _arb(String lang) =>
     jsonDecode(File('lib/l10n/app_$lang.arb').readAsStringSync()) as Map<String, dynamic>;
 
 /// Placeholder names a message uses; plural/select branch bodies are skipped.
-Set<String> _placeholders(String message) => RegExp(r'\{(\w+)(?=[,}])')
-    .allMatches(message)
-    .map((m) => m.group(1)!)
-    .toSet();
+Set<String> _placeholders(String message) =>
+    RegExp(r'\{(\w+)(?=[,}])').allMatches(message).map((m) => m.group(1)!).toSet();
 
 void main() {
   final en = _arb('en');

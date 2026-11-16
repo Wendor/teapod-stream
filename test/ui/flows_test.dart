@@ -26,11 +26,8 @@ class _DeeplinkHost extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => Scaffold(
-        body: TextButton(
-          onPressed: () => DeeplinkHandler(context, ref).handleUri(uri),
-          child: const Text('go'),
-        ),
-      );
+    body: TextButton(onPressed: () => DeeplinkHandler(context, ref).handleUri(uri), child: const Text('go')),
+  );
 }
 
 final _profileBundle = ProfileBundle(
@@ -88,30 +85,36 @@ void main() {
 
     testWidgets('non-https url is refused without a request', (tester) async {
       var requests = 0;
-      await http.runWithClient(() async {
-        final c = await go(tester, 'teapod://import/profile?url=http://plain.example/p.json');
-        expect(find.text('Import by link supports https only'), findsOneWidget);
-        await unmount(tester, c);
-      }, () => MockClient((_) async {
-            requests++;
-            return http.Response('', 200);
-          }));
+      await http.runWithClient(
+        () async {
+          final c = await go(tester, 'teapod://import/profile?url=http://plain.example/p.json');
+          expect(find.text('Import by link supports https only'), findsOneWidget);
+          await unmount(tester, c);
+        },
+        () => MockClient((_) async {
+          requests++;
+          return http.Response('', 200);
+        }),
+      );
       expect(requests, 0);
     });
 
     testWidgets('https url asks first; declining makes no request', (tester) async {
       var requests = 0;
-      await http.runWithClient(() async {
-        final c = await go(tester, 'teapod://import/profile?url=https://cfg.example/p.json');
-        expect(find.text('Load from link?'), findsOneWidget);
-        expect(find.textContaining('cfg.example'), findsOneWidget);
-        await tester.tap(find.text('Cancel'));
-        await settle(tester);
-        await unmount(tester, c);
-      }, () => MockClient((_) async {
-            requests++;
-            return http.Response('', 200);
-          }));
+      await http.runWithClient(
+        () async {
+          final c = await go(tester, 'teapod://import/profile?url=https://cfg.example/p.json');
+          expect(find.text('Load from link?'), findsOneWidget);
+          expect(find.textContaining('cfg.example'), findsOneWidget);
+          await tester.tap(find.text('Cancel'));
+          await settle(tester);
+          await unmount(tester, c);
+        },
+        () => MockClient((_) async {
+          requests++;
+          return http.Response('', 200);
+        }),
+      );
       expect(requests, 0);
     });
 

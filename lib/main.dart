@@ -19,7 +19,7 @@ void main() async {
   // Fetch xray-core version early so it's available in the subscription User-Agent.
   try {
     const channel = MethodChannel(AppConstants.methodChannel);
-    final versions = await channel.invokeMethod<Map>('getBinaryVersions');
+    final versions = await channel.invokeMethod<Map<Object?, Object?>>('getBinaryVersions');
     final xray = versions?['xray'] as String?;
     if (xray != null && xray.isNotEmpty && xray != 'Error' && xray != '—') {
       AppConstants.xrayCoreVersion = xray;
@@ -28,18 +28,17 @@ void main() async {
     // Non-critical: UA will fall back to 'unknown'
   }
 
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
 
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarBrightness: Brightness.dark,
-    statusBarIconBrightness: Brightness.light,
-    systemNavigationBarColor: Color(0xFF161A22),
-    systemNavigationBarIconBrightness: Brightness.light,
-  ));
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarBrightness: Brightness.dark,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarColor: Color(0xFF161A22),
+      systemNavigationBarIconBrightness: Brightness.light,
+    ),
+  );
 
   runApp(const TeapodApp());
 }

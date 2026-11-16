@@ -30,8 +30,7 @@ class CoreSupportGate extends ConsumerWidget {
 }
 
 /// Why [config] can't be selected for connection, or null.
-String? unsupportedReason(WidgetRef ref, VpnConfig config) =>
-    ref.read(coreResolverProvider).resolve(config).reason;
+String? unsupportedReason(WidgetRef ref, VpnConfig config) => ref.read(coreResolverProvider).resolve(config).reason;
 
 /// The profile's core for a list row — only if it's not the primary core
 /// (the first enabled one): this way only exceptions are visible.

@@ -10,13 +10,7 @@ class Pressable extends StatefulWidget {
   final Color? pressedColor;
   final Widget child;
 
-  const Pressable({
-    super.key,
-    this.onTap,
-    this.onLongPress,
-    this.pressedColor,
-    required this.child,
-  });
+  const Pressable({super.key, this.onTap, this.onLongPress, this.pressedColor, required this.child});
 
   @override
   State<Pressable> createState() => _PressableState();

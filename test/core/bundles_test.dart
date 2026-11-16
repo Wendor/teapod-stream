@@ -7,44 +7,44 @@ import 'package:teapodstream/core/services/config_storage_service.dart';
 import 'package:teapodstream/core/services/settings_service.dart';
 
 VpnConfig _cfg(String id, {String? rawUri, String? subId}) => VpnConfig(
-      id: id,
-      name: 'n$id',
-      protocol: VpnProtocol.trojan,
-      address: 'h$id.example',
-      port: 443,
-      uuid: '',
-      password: 'p',
-      security: VpnSecurity.tls,
-      transport: VpnTransport.tcp,
-      createdAt: DateTime(2026),
-      rawUri: rawUri,
-      subscriptionId: subId,
-    );
+  id: id,
+  name: 'n$id',
+  protocol: VpnProtocol.trojan,
+  address: 'h$id.example',
+  port: 443,
+  uuid: '',
+  password: 'p',
+  security: VpnSecurity.tls,
+  transport: VpnTransport.tcp,
+  createdAt: DateTime(2026),
+  rawUri: rawUri,
+  subscriptionId: subId,
+);
 
 Subscription _sub({String? pin}) => Subscription(
-      id: 's1',
-      name: 'Sub',
-      url: 'https://sub.example/x',
-      createdAt: DateTime(2026),
-      lastFetchedAt: DateTime(2026, 2),
-      expireAt: DateTime(2027),
-      uploadBytes: 1,
-      downloadBytes: 2,
-      totalBytes: 3,
-      announce: 'hi',
-      announceUrl: 'https://a',
-      pinnedCertDer: pin,
-    );
+  id: 's1',
+  name: 'Sub',
+  url: 'https://sub.example/x',
+  createdAt: DateTime(2026),
+  lastFetchedAt: DateTime(2026, 2),
+  expireAt: DateTime(2027),
+  uploadBytes: 1,
+  downloadBytes: 2,
+  totalBytes: 3,
+  announce: 'hi',
+  announceUrl: 'https://a',
+  pinnedCertDer: pin,
+);
 
 Profile _profile() => Profile(
-      id: 'p1',
-      name: 'Work',
-      readonly: true,
-      settings: const AppSettings(mtu: 1400, killSwitchEnabled: true),
-      createdAt: DateTime(2026, 3),
-      sourceUrl: 'https://p.example/profile.json',
-      lastFetchedAt: DateTime(2026, 4),
-    );
+  id: 'p1',
+  name: 'Work',
+  readonly: true,
+  settings: const AppSettings(mtu: 1400, killSwitchEnabled: true),
+  createdAt: DateTime(2026, 3),
+  sourceUrl: 'https://p.example/profile.json',
+  lastFetchedAt: DateTime(2026, 4),
+);
 
 void main() {
   group('Subscription', () {
@@ -81,12 +81,15 @@ void main() {
     });
 
     test('optional fields are omitted and defaulted', () {
-      final p = Profile(id: 'd', name: 'D', isDefault: true, settings: const AppSettings(),
-          createdAt: DateTime(2026));
+      final p = Profile(id: 'd', name: 'D', isDefault: true, settings: const AppSettings(), createdAt: DateTime(2026));
       final json = p.toJson();
       expect(json.containsKey('sourceUrl'), isFalse);
       expect(json.containsKey('lastFetchedAt'), isFalse);
-      final back = Profile.fromJson({...json}..remove('settings')..remove('readonly'));
+      final back = Profile.fromJson(
+        {...json}
+          ..remove('settings')
+          ..remove('readonly'),
+      );
       expect(back.isDefault, isTrue);
       expect(back.readonly, isFalse);
       expect(back.isFromUrl, isFalse);
@@ -124,13 +127,11 @@ void main() {
       expect(json.containsKey('configs'), isFalse);
       expect(json.containsKey('subscriptions'), isFalse);
       expect(ProfileBundle.fromJson(json).hasConnections, isFalse);
-      expect(ProfileBundle(exportedAt: DateTime(2026), profile: _profile(), configs: const [])
-          .hasConnections, isFalse);
+      expect(ProfileBundle(exportedAt: DateTime(2026), profile: _profile(), configs: const []).hasConnections, isFalse);
     });
 
     test('missing version defaults to 1', () {
-      final json = ProfileBundle(exportedAt: DateTime(2026), profile: _profile()).toJson()
-        ..remove('version');
+      final json = ProfileBundle(exportedAt: DateTime(2026), profile: _profile()).toJson()..remove('version');
       expect(ProfileBundle.fromJson(json).version, 1);
     });
   });
@@ -139,7 +140,10 @@ void main() {
     final bundle = ConnectionsBundle(
       exportedAt: DateTime(2026, 6),
       label: 'set',
-      configs: [_cfg('1', rawUri: 'trojan://a'), _cfg('2')],
+      configs: [
+        _cfg('1', rawUri: 'trojan://a'),
+        _cfg('2'),
+      ],
       subscriptions: [_sub()],
     );
 
@@ -163,8 +167,7 @@ void main() {
       expect(back.subscriptionUrls, ['https://sub.example/x']);
       expect(back.configs, isEmpty);
       expect(back.subscriptions, isEmpty);
-      expect(bundle.toCompactDeeplink(),
-          'teapod://import/connections?data=${bundle.toCompactBase64()}');
+      expect(bundle.toCompactDeeplink(), 'teapod://import/connections?data=${bundle.toCompactBase64()}');
     });
 
     test('mixed lists are split and junk entries ignored', () {

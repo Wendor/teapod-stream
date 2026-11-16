@@ -6,9 +6,7 @@ import 'subscription_service.dart';
 
 class DeviceService {
   static const _channel = MethodChannel(AppConstants.methodChannel);
-  static const _storage = FlutterSecureStorage(
-    aOptions: AndroidOptions(encryptedSharedPreferences: true),
-  );
+  static const _storage = FlutterSecureStorage(aOptions: AndroidOptions(encryptedSharedPreferences: true));
   static const _deviceIdKey = 'cached_device_id';
   static const _deviceInfoKey = 'cached_device_info';
 
@@ -47,7 +45,7 @@ class DeviceService {
     }
 
     try {
-      final result = await _channel.invokeMethod<Map>('getDeviceInfo');
+      final result = await _channel.invokeMethod<Map<Object?, Object?>>('getDeviceInfo');
       if (result != null) {
         _cachedDeviceInfo = Map<String, dynamic>.from(result);
         await _storage.write(key: _deviceInfoKey, value: jsonEncode(_cachedDeviceInfo));

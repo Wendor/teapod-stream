@@ -42,7 +42,11 @@ void main() {
     testWidgets('${e.key} renders with configs and subscriptions', (tester) async {
       final native = await setUpScreenTest(
         settings: const AppSettings(splitTunnelingEnabled: true, includedPackages: {'b.app'}),
-        configs: [testConfig('1', latency: 40), testConfig('2', subId: 's'), testConfig('3', subId: 's')],
+        configs: [
+          testConfig('1', latency: 40),
+          testConfig('2', subId: 's'),
+          testConfig('3', subId: 's'),
+        ],
         subscriptions: [
           Subscription(
             id: 's',

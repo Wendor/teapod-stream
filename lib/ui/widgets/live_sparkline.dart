@@ -5,23 +5,14 @@ class LiveSparkline extends StatelessWidget {
   final Color color;
   final double strokeWidth;
 
-  const LiveSparkline({
-    super.key,
-    required this.samples,
-    required this.color,
-    this.strokeWidth = 1.5,
-  });
+  const LiveSparkline({super.key, required this.samples, required this.color, this.strokeWidth = 1.5});
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       height: 42,
       child: CustomPaint(
-        painter: _SparklinePainter(
-          samples: samples,
-          color: color,
-          strokeWidth: strokeWidth,
-        ),
+        painter: _SparklinePainter(samples: samples, color: color, strokeWidth: strokeWidth),
         size: const Size(double.infinity, 42),
       ),
     );
@@ -33,11 +24,7 @@ class _SparklinePainter extends CustomPainter {
   final Color color;
   final double strokeWidth;
 
-  const _SparklinePainter({
-    required this.samples,
-    required this.color,
-    required this.strokeWidth,
-  });
+  const _SparklinePainter({required this.samples, required this.color, required this.strokeWidth});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -92,6 +79,5 @@ class _SparklinePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_SparklinePainter old) =>
-      old.samples != samples || old.color != color;
+  bool shouldRepaint(_SparklinePainter old) => old.samples != samples || old.color != color;
 }

@@ -9,15 +9,28 @@ import 'package:teapodstream/core/models/xray_tuning.dart';
 import 'package:teapodstream/protocols/xray/xray_rust_backend.dart';
 
 VpnConfig _vless() => VpnConfig(
-      id: 'v', name: 'v', protocol: VpnProtocol.vless, address: '1.2.3.4', port: 443,
-      uuid: '11111111-2222-4333-8444-555555555555', security: VpnSecurity.tls,
-      transport: VpnTransport.tcp, createdAt: DateTime(2026), encryption: 'none', sni: 's',
-    );
+  id: 'v',
+  name: 'v',
+  protocol: VpnProtocol.vless,
+  address: '1.2.3.4',
+  port: 443,
+  uuid: '11111111-2222-4333-8444-555555555555',
+  security: VpnSecurity.tls,
+  transport: VpnTransport.tcp,
+  createdAt: DateTime(2026),
+  encryption: 'none',
+  sni: 's',
+);
 
 VpnEngineOptions _opts({bool proxyOnly = false, int mtu = 1500, MuxSettings mux = const MuxSettings()}) =>
     VpnEngineOptions(
-      socksPort: 10808, httpPort: 0, socksUser: 'u', socksPassword: 'p',
-      proxyOnly: proxyOnly, mtu: mtu, mux: mux,
+      socksPort: 10808,
+      httpPort: 0,
+      socksUser: 'u',
+      socksPassword: 'p',
+      proxyOnly: proxyOnly,
+      mtu: mtu,
+      mux: mux,
     );
 
 Map<String, dynamic> _proxy(Map<String, dynamic> json) =>

@@ -10,12 +10,7 @@ class UpdateInfo {
   final int? totalBytes;
   final String? changelog;
 
-  const UpdateInfo({
-    required this.version,
-    required this.downloadUrl,
-    this.totalBytes,
-    this.changelog,
-  });
+  const UpdateInfo({required this.version, required this.downloadUrl, this.totalBytes, this.changelog});
 }
 
 class DownloadProgress {
@@ -23,18 +18,12 @@ class DownloadProgress {
   final int total; // -1 if unknown
   final bool done;
 
-  const DownloadProgress({
-    required this.downloaded,
-    required this.total,
-    required this.done,
-  });
+  const DownloadProgress({required this.downloaded, required this.total, required this.done});
 }
 
 class UpdateService {
-  static const _githubApiLatest =
-      'https://api.github.com/repos/Wendor/teapod-stream/releases/latest';
-  static const _githubApiList =
-      'https://api.github.com/repos/Wendor/teapod-stream/releases?per_page=10';
+  static const _githubApiLatest = 'https://api.github.com/repos/Wendor/teapod-stream/releases/latest';
+  static const _githubApiList = 'https://api.github.com/repos/Wendor/teapod-stream/releases?per_page=10';
 
   HttpClient _makeClient({int? socksPort, String? user, String? password}) {
     final client = HttpClient();
@@ -63,13 +52,11 @@ class UpdateService {
     String? socksPassword,
     bool force = false,
   }) async {
-    final client = _makeClient(
-        socksPort: socksPort, user: socksUser, password: socksPassword);
+    final client = _makeClient(socksPort: socksPort, user: socksUser, password: socksPassword);
     try {
       final releaseJson = await _fetchRelease(client, channel);
       if (releaseJson == null) return null;
-      final tagName = (releaseJson['tag_name'] as String? ?? '')
-          .replaceFirst(RegExp(r'^v'), '');
+      final tagName = (releaseJson['tag_name'] as String? ?? '').replaceFirst(RegExp(r'^v'), '');
       if (tagName.isEmpty) return null;
       if (!force && _compareVersions(tagName, currentVersion) <= 0) return null;
       final changelog = releaseJson['body'] as String?;
@@ -84,9 +71,7 @@ class UpdateService {
               version: tagName,
               downloadUrl: url,
               totalBytes: size,
-              changelog: (changelog != null && changelog.trim().isNotEmpty)
-                  ? changelog.trim()
-                  : null,
+              changelog: (changelog != null && changelog.trim().isNotEmpty) ? changelog.trim() : null,
             );
           }
         }
@@ -97,12 +82,9 @@ class UpdateService {
     }
   }
 
-  Future<Map<String, dynamic>?> _fetchRelease(
-      HttpClient client, UpdateChannel channel) async {
+  Future<Map<String, dynamic>?> _fetchRelease(HttpClient client, UpdateChannel channel) async {
     if (channel == UpdateChannel.stable) {
-      final req = await client
-          .getUrl(Uri.parse(_githubApiLatest))
-          .timeout(const Duration(seconds: 15));
+      final req = await client.getUrl(Uri.parse(_githubApiLatest)).timeout(const Duration(seconds: 15));
       req.headers.set('User-Agent', 'TeapodStream');
       req.headers.set('Accept', 'application/vnd.github+json');
       final resp = await req.close().timeout(const Duration(seconds: 15));
@@ -111,9 +93,7 @@ class UpdateService {
       return jsonDecode(body) as Map<String, dynamic>;
     } else {
       // beta: pick newest non-draft release (prerelease or stable)
-      final req = await client
-          .getUrl(Uri.parse(_githubApiList))
-          .timeout(const Duration(seconds: 15));
+      final req = await client.getUrl(Uri.parse(_githubApiList)).timeout(const Duration(seconds: 15));
       req.headers.set('User-Agent', 'TeapodStream');
       req.headers.set('Accept', 'application/vnd.github+json');
       final resp = await req.close().timeout(const Duration(seconds: 15));
@@ -140,8 +120,7 @@ class UpdateService {
   }) async* {
     final file = File(destPath);
     final existing = file.existsSync() ? file.lengthSync() : 0;
-    final client = _makeClient(
-        socksPort: socksPort, user: socksUser, password: socksPassword);
+    final client = _makeClient(socksPort: socksPort, user: socksUser, password: socksPassword);
     IOSink? sink;
     try {
       final req = await client.getUrl(Uri.parse(url));
@@ -158,9 +137,7 @@ class UpdateService {
       final isResume = resp.statusCode == 206;
       if (!isResume && existing > 0) await file.delete();
       final contentLength = resp.headers.contentLength;
-      final total = contentLength > 0
-          ? (isResume ? existing + contentLength : contentLength)
-          : -1;
+      final total = contentLength > 0 ? (isResume ? existing + contentLength : contentLength) : -1;
       sink = file.openWrite(mode: isResume ? FileMode.append : FileMode.write);
       int downloaded = isResume ? existing : 0;
       // Idle timeout: without it a stuck network holds the download forever, and cancelling

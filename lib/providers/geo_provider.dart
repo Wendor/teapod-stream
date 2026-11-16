@@ -53,9 +53,7 @@ class GeoNotifier extends Notifier<GeoState> {
       if (geoip.existsSync() && geosite.existsSync()) {
         final prefs = await SharedPreferences.getInstance();
         final ts = prefs.getInt(_kLastUpdated);
-        state = GeoReady(
-          lastUpdated: ts != null ? DateTime.fromMillisecondsSinceEpoch(ts) : null,
-        );
+        state = GeoReady(lastUpdated: ts != null ? DateTime.fromMillisecondsSinceEpoch(ts) : null);
       } else {
         state = GeoMissing();
       }
@@ -90,10 +88,7 @@ class GeoNotifier extends Notifier<GeoState> {
         if (lenGeoip > 0 && lenGeosite > 0) grandTotal = lenGeoip + lenGeosite;
       } catch (_) {}
       state = GeoDownloading(downloaded: 0, total: grandTotal);
-      for (final (url, name) in [
-        (settings.geoipUrl, 'geoip.dat'),
-        (settings.geositeUrl, 'geosite.dat'),
-      ]) {
+      for (final (url, name) in [(settings.geoipUrl, 'geoip.dat'), (settings.geositeUrl, 'geosite.dat')]) {
         await _downloadFile(
           url: url,
           destPath: '$dir/$name',
@@ -146,9 +141,7 @@ class GeoNotifier extends Notifier<GeoState> {
 
     final client = _client(socks);
     try {
-      final resp = await client
-          .send(http.Request('GET', Uri.parse(url)))
-          .timeout(const Duration(seconds: 30));
+      final resp = await client.send(http.Request('GET', Uri.parse(url))).timeout(const Duration(seconds: 30));
       if (resp.statusCode != 200) {
         throw Exception('HTTP ${resp.statusCode}');
       }

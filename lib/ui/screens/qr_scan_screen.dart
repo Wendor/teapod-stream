@@ -54,9 +54,7 @@ class _QrScanScreenState extends State<QrScanScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(context.l10n.qrTitle),
-      ),
+      appBar: AppBar(title: Text(context.l10n.qrTitle)),
       body: _error != null
           ? Center(
               child: Column(
@@ -68,7 +66,10 @@ class _QrScanScreenState extends State<QrScanScreen> {
                   const SizedBox(height: 8),
                   ElevatedButton(
                     onPressed: () {
-                      setState(() { _error = null; _scanned = false; });
+                      setState(() {
+                        _error = null;
+                        _scanned = false;
+                      });
                       _initCamera();
                     },
                     child: Text(context.l10n.commonRetry),
@@ -77,37 +78,28 @@ class _QrScanScreenState extends State<QrScanScreen> {
               ),
             )
           : _controller == null
-              ? const Center(child: CircularProgressIndicator())
-              : Stack(
-                  children: [
-                    MobileScanner(
-                      controller: _controller!,
-                      onDetect: _onDetect,
-                    ),
-                    CustomPaint(
-                      painter: _ScanOverlayPainter(),
-                      child: const SizedBox.expand(),
-                    ),
-                    Positioned(
-                      bottom: 40,
-                      left: 0,
-                      right: 0,
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: AppColors.bg.withValues(alpha: 0.8),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            context.l10n.qrHint,
-                            style: TextStyle(color: AppColors.textPrimary),
-                          ),
-                        ),
+          ? const Center(child: CircularProgressIndicator())
+          : Stack(
+              children: [
+                MobileScanner(controller: _controller!, onDetect: _onDetect),
+                CustomPaint(painter: _ScanOverlayPainter(), child: const SizedBox.expand()),
+                Positioned(
+                  bottom: 40,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.bg.withValues(alpha: 0.8),
+                        borderRadius: BorderRadius.circular(20),
                       ),
+                      child: Text(context.l10n.qrHint, style: TextStyle(color: AppColors.textPrimary)),
                     ),
-                  ],
+                  ),
                 ),
+              ],
+            ),
     );
   }
 }
@@ -115,7 +107,9 @@ class _QrScanScreenState extends State<QrScanScreen> {
 class _ScanOverlayPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.black54..style = PaintingStyle.fill;
+    final paint = Paint()
+      ..color = Colors.black54
+      ..style = PaintingStyle.fill;
     final scanSize = size.width * 0.65;
     final left = (size.width - scanSize) / 2;
     final top = (size.height - scanSize) / 2;
@@ -127,7 +121,10 @@ class _ScanOverlayPainter extends CustomPainter {
     cutoutPath.fillType = PathFillType.evenOdd;
     canvas.drawPath(cutoutPath, paint);
 
-    final cornerPaint = Paint()..color = Colors.white..strokeWidth = 3..style = PaintingStyle.stroke;
+    final cornerPaint = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 3
+      ..style = PaintingStyle.stroke;
     const cornerLen = 20.0;
     final corners = [
       Offset(left, top),

@@ -42,11 +42,11 @@ enum HeartbeatTarget {
   custom;
 
   String get url => switch (this) {
-        cloudflare => 'http://cp.cloudflare.com/generate_204',
-        google => 'http://connectivitycheck.gstatic.com/generate_204',
-        apple => 'http://captive.apple.com/generate_204',
-        custom => '',
-      };
+    cloudflare => 'http://cp.cloudflare.com/generate_204',
+    google => 'http://connectivitycheck.gstatic.com/generate_204',
+    apple => 'http://captive.apple.com/generate_204',
+    custom => '',
+  };
 }
 
 class HeartbeatSettings {
@@ -83,46 +83,40 @@ class HeartbeatSettings {
     SwitchSource? switchSource,
     HeartbeatTarget? target,
     String? customUrl,
-  }) =>
-      HeartbeatSettings(
-        probe: probe ?? this.probe,
-        failureThreshold: failureThreshold ?? this.failureThreshold,
-        failAction: failAction ?? this.failAction,
-        switchSource: switchSource ?? this.switchSource,
-        target: target ?? this.target,
-        customUrl: customUrl ?? this.customUrl,
-      );
+  }) => HeartbeatSettings(
+    probe: probe ?? this.probe,
+    failureThreshold: failureThreshold ?? this.failureThreshold,
+    failAction: failAction ?? this.failAction,
+    switchSource: switchSource ?? this.switchSource,
+    target: target ?? this.target,
+    customUrl: customUrl ?? this.customUrl,
+  );
 
   Map<String, dynamic> toJson() => {
-        'probe': probe.name,
-        'failureThreshold': failureThreshold,
-        'failAction': failAction.name,
-        'switchSource': switchSource.name,
-        'target': target.name,
-        'customUrl': customUrl,
-      };
+    'probe': probe.name,
+    'failureThreshold': failureThreshold,
+    'failAction': failAction.name,
+    'switchSource': switchSource.name,
+    'target': target.name,
+    'customUrl': customUrl,
+  };
 
   static HeartbeatSettings fromJson(Map<String, dynamic> json) => HeartbeatSettings(
-        probe: HeartbeatProbe.values.firstWhere(
-          (e) => e.name == json['probe'],
-          orElse: () => HeartbeatProbe.socks,
-        ),
-        failureThreshold: json['failureThreshold'] as int? ?? 3,
-        // Before 1.6.4: action = reconnect | urltest, source = subscription | pinned | all.
-        failAction: HeartbeatFailAction.values.firstWhere(
-          (e) => e.name == json['failAction'],
-          orElse: () => json['action'] == 'urltest'
-              ? HeartbeatFailAction.switchConfig
-              : HeartbeatFailAction.reconnect,
-        ),
-        switchSource: SwitchSource.values.firstWhere(
-          (e) => e.name == (json['switchSource'] ?? json['source']),
-          orElse: () => SwitchSource.subscription,
-        ),
-        target: HeartbeatTarget.values.firstWhere(
-          (e) => e.name == json['target'],
-          orElse: () => HeartbeatTarget.cloudflare,
-        ),
-        customUrl: json['customUrl'] as String? ?? '',
-      );
+    probe: HeartbeatProbe.values.firstWhere((e) => e.name == json['probe'], orElse: () => HeartbeatProbe.socks),
+    failureThreshold: json['failureThreshold'] as int? ?? 3,
+    // Before 1.6.4: action = reconnect | urltest, source = subscription | pinned | all.
+    failAction: HeartbeatFailAction.values.firstWhere(
+      (e) => e.name == json['failAction'],
+      orElse: () => json['action'] == 'urltest' ? HeartbeatFailAction.switchConfig : HeartbeatFailAction.reconnect,
+    ),
+    switchSource: SwitchSource.values.firstWhere(
+      (e) => e.name == (json['switchSource'] ?? json['source']),
+      orElse: () => SwitchSource.subscription,
+    ),
+    target: HeartbeatTarget.values.firstWhere(
+      (e) => e.name == json['target'],
+      orElse: () => HeartbeatTarget.cloudflare,
+    ),
+    customUrl: json['customUrl'] as String? ?? '',
+  );
 }

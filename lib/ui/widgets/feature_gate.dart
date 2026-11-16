@@ -26,8 +26,10 @@ class FeatureGate extends ConsumerWidget {
         child,
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-          child: Text(context.l10n.featureUnsupported(lacking.join(', ')),
-              style: Theme.of(context).textTheme.bodySmall),
+          child: Text(
+            context.l10n.featureUnsupported(lacking.join(', ')),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         ),
       ],
     );

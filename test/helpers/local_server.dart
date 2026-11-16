@@ -64,8 +64,7 @@ class RedirectHttpOverrides extends HttpOverrides {
   RedirectHttpOverrides(this.port);
 
   @override
-  HttpClient createHttpClient(SecurityContext? context) =>
-      _RedirectClient(super.createHttpClient(context), port);
+  HttpClient createHttpClient(SecurityContext? context) => _RedirectClient(super.createHttpClient(context), port);
 }
 
 class _RedirectClient implements HttpClient {
@@ -74,8 +73,7 @@ class _RedirectClient implements HttpClient {
   _RedirectClient(this.inner, this.port);
 
   @override
-  Future<HttpClientRequest> getUrl(Uri url) =>
-      inner.getUrl(url.replace(scheme: 'http', host: '127.0.0.1', port: port));
+  Future<HttpClientRequest> getUrl(Uri url) => inner.getUrl(url.replace(scheme: 'http', host: '127.0.0.1', port: port));
 
   @override
   void close({bool force = false}) => inner.close(force: force);

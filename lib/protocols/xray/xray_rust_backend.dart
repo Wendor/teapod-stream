@@ -62,8 +62,8 @@ class XrayRustBackend implements CoreBackend {
   /// Options the core won't apply are replaced with allowed ones; each replacement is a warning.
   ({VpnEngineOptions options, List<String> warnings}) _sanitize(VpnConfig config, VpnEngineOptions o) {
     final routing = o.routing;
-    final domainRules = routing.geositeEnabled || routing.domainEnabled ||
-        routing.sitesEnabled || routing.ruServicesEnabled;
+    final domainRules =
+        routing.geositeEnabled || routing.domainEnabled || routing.sitesEnabled || routing.ruServicesEnabled;
     final s = OptionsSanitizer(o)
       ..drop(
         when: o.mux.enabled && config.protocol != VpnProtocol.hysteria2,
@@ -78,7 +78,10 @@ class XrayRustBackend implements CoreBackend {
         fix: (v) => v.copyWith(sniffingEnabled: true),
       )
       ..drop(
-        when: routing.adBlockEnabled && routing.isActive && routing.geositeEnabled &&
+        when:
+            routing.adBlockEnabled &&
+            routing.isActive &&
+            routing.geositeEnabled &&
             routing.geositeCodes.any((c) => RustConfigBuilder.largeGeositeCodes.contains(c.trim().toLowerCase())),
         warning: L10n.current.rustAdBlockDropped,
         fix: (v) => v.copyWith(routing: v.routing.copyWith(adBlockEnabled: false)),

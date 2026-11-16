@@ -19,31 +19,24 @@ class StorageSecureService {
   static const _pinnedRefsKey = 'pinned_refs_v1';
 
   Future<String?> readProfilesRaw() => _storage.read(key: _profilesKey);
-  Future<void> writeProfilesRaw(String json) =>
-      _storage.write(key: _profilesKey, value: json);
+  Future<void> writeProfilesRaw(String json) => _storage.write(key: _profilesKey, value: json);
 
   Future<String?> readConfigsRaw() => _storage.read(key: _configsKey);
 
   Future<String?> readPinsRaw() => _storage.read(key: _pinnedRefsKey);
-  Future<void> writePinsRaw(String json) =>
-      _storage.write(key: _pinnedRefsKey, value: json);
-  Future<void> writeConfigsRaw(String json) =>
-      _storage.write(key: _configsKey, value: json);
+  Future<void> writePinsRaw(String json) => _storage.write(key: _pinnedRefsKey, value: json);
+  Future<void> writeConfigsRaw(String json) => _storage.write(key: _configsKey, value: json);
 
   Future<String?> readActiveConfigId() => _storage.read(key: _activeConfigKey);
-  Future<void> writeActiveConfigId(String? id) => id == null
-      ? _storage.delete(key: _activeConfigKey)
-      : _storage.write(key: _activeConfigKey, value: id);
+  Future<void> writeActiveConfigId(String? id) =>
+      id == null ? _storage.delete(key: _activeConfigKey) : _storage.write(key: _activeConfigKey, value: id);
 
   Future<String?> readActiveSubscriptionId() => _storage.read(key: _activeSubKey);
-  Future<void> writeActiveSubscriptionId(String? id) => id == null
-      ? _storage.delete(key: _activeSubKey)
-      : _storage.write(key: _activeSubKey, value: id);
+  Future<void> writeActiveSubscriptionId(String? id) =>
+      id == null ? _storage.delete(key: _activeSubKey) : _storage.write(key: _activeSubKey, value: id);
 
-  Future<String?> readSubscriptionsRaw() =>
-      _storage.read(key: _subscriptionsKey);
-  Future<void> writeSubscriptionsRaw(String json) =>
-      _storage.write(key: _subscriptionsKey, value: json);
+  Future<String?> readSubscriptionsRaw() => _storage.read(key: _subscriptionsKey);
+  Future<void> writeSubscriptionsRaw(String json) => _storage.write(key: _subscriptionsKey, value: json);
 
   Future<({String user, String password})> readSocksCredentials() async {
     final user = await _storage.read(key: _socksUserKey) ?? '';
@@ -57,11 +50,9 @@ class StorageSecureService {
   }
 
   Future<String?> readDeviceId() => _storage.read(key: _deviceIdKey);
-  Future<void> writeDeviceId(String? id) => id == null
-      ? _storage.delete(key: _deviceIdKey)
-      : _storage.write(key: _deviceIdKey, value: id);
+  Future<void> writeDeviceId(String? id) =>
+      id == null ? _storage.delete(key: _deviceIdKey) : _storage.write(key: _deviceIdKey, value: id);
 
   Future<String?> readDeviceInfoRaw() => _storage.read(key: _deviceInfoKey);
-  Future<void> writeDeviceInfoRaw(String json) =>
-      _storage.write(key: _deviceInfoKey, value: json);
+  Future<void> writeDeviceInfoRaw(String json) => _storage.write(key: _deviceInfoKey, value: json);
 }

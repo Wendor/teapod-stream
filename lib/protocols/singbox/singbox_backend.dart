@@ -34,14 +34,13 @@ class SingBoxBackend implements CoreBackend {
 
   @override
   SettingsCheck checkOptions(VpnConfig config, VpnEngineOptions options) => (
-        blocking: null,
-        warnings: [
-          ..._sanitize(options).warnings,
-          // The ML-DSA signature is an extra certificate extension; the main Reality check is the same.
-          if (config.postQuantumKey?.isNotEmpty ?? false)
-            L10n.current.singboxNoPqv,
-        ],
-      );
+    blocking: null,
+    warnings: [
+      ..._sanitize(options).warnings,
+      // The ML-DSA signature is an extra certificate extension; the main Reality check is the same.
+      if (config.postQuantumKey?.isNotEmpty ?? false) L10n.current.singboxNoPqv,
+    ],
+  );
 
   @override
   HeartbeatProbe effectiveHeartbeatProbe(HeartbeatProbe requested) => requested;

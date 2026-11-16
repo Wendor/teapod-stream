@@ -34,16 +34,20 @@ class Probes {
   /// Case log: the raw answer of a failed probe is written here.
   void Function(String)? log;
 
-  Future<String> _curl(String args, Duration timeout) async =>
-      (await shell.run(['shell', 'curl -s -m ${timeout.inSeconds} $args'], timeout: timeout + const Duration(seconds: 5)))
-          .out
-          .trim();
+  Future<String> _curl(String args, Duration timeout) async => (await shell.run([
+    'shell',
+    'curl -s -m ${timeout.inSeconds} $args',
+  ], timeout: timeout + const Duration(seconds: 5))).out.trim();
 
   /// Client IP via an echo service; an empty answer is retried [retries] times every 2 s —
   /// a single echo service failure (rate limit, timeout) must not fail the case.
-  Future<String?> ip(String url,
-      {Duration timeout = const Duration(seconds: 10), String extra = '', int retries = 1}) async {
-    for (var i = 0;; i++) {
+  Future<String?> ip(
+    String url, {
+    Duration timeout = const Duration(seconds: 10),
+    String extra = '',
+    int retries = 1,
+  }) async {
+    for (var i = 0; ; i++) {
       final out = await _curl('$extra -w "\\n%{http_code}" $url'.trim(), timeout);
       final nl = out.lastIndexOf('\n');
       final ip = _parseIp(url, (nl < 0 ? out : out.substring(0, nl)).trim());
@@ -57,11 +61,9 @@ class Probes {
 
   String? _parseIp(String url, String out) {
     if (_htmlEcho.contains(url)) {
-      return RegExp(r'\b(?:\d{1,3}\.){3}\d{1,3}\b')
-          .allMatches(out)
-          .map((m) => m[0]!)
-          .where((ip) => _public(InternetAddress.tryParse(ip)))
-          .firstOrNull;
+      return RegExp(
+        r'\b(?:\d{1,3}\.){3}\d{1,3}\b',
+      ).allMatches(out).map((m) => m[0]!).where((ip) => _public(InternetAddress.tryParse(ip))).firstOrNull;
     }
     final v = out.replaceAll('"', '');
     final a = InternetAddress.tryParse(v);
@@ -72,8 +74,9 @@ class Probes {
   Future<Resolver?> dnsResolver() async {
     try {
       // Redirect to a random subdomain — a query to the resolver without cache.
-      final j = jsonDecode(await _curl('-L http://edns.ip-api.com/json', const Duration(seconds: 10)))
-          as Map<String, dynamic>;
+      final j =
+          jsonDecode(await _curl('-L http://edns.ip-api.com/json', const Duration(seconds: 10)))
+              as Map<String, dynamic>;
       final dns = j['dns'] as Map?;
       final ip = dns?['ip'] as String?;
       return ip == null ? null : (ip: ip, geo: dns?['geo'] as String? ?? '');
@@ -115,24 +118,29 @@ class Baseline {
   const Baseline(this.direct, this.directRuIp, this.dnsResolver, {this.ping});
 
   Map<String, Object?> toJson() => {
-        'direct': direct,
-        'directRuIp': directRuIp,
-        'dnsResolver': dnsResolver == null ? null : {'ip': dnsResolver!.ip, 'geo': dnsResolver!.geo},
-        'ping': ping,
-      };
+    'direct': direct,
+    'directRuIp': directRuIp,
+    'dnsResolver': dnsResolver == null ? null : {'ip': dnsResolver!.ip, 'geo': dnsResolver!.geo},
+    'ping': ping,
+  };
 }
 
 /// Without VPN: direct IP per service, IP to the Russian echo, and the resolver.
 Future<Baseline> measureBaseline(Probes p) async {
   final ips = await p.ips(echoMain);
-  return Baseline({for (var i = 0; i < echoMain.length; i++) echoMain[i]: ips[i]},
-      await p.ip(echoRu), await p.dnsResolver(),
-      ping: await p.ping('1.1.1.1'));
+  return Baseline(
+    {for (var i = 0; i < echoMain.length; i++) echoMain[i]: ips[i]},
+    await p.ip(echoRu),
+    await p.dnsResolver(),
+    ping: await p.ping('1.1.1.1'),
+  );
 }
 
 /// Services through which a tunnel with exit [egress] is distinguishable from the direct path.
-List<String> informative(Map<String, String?> baseline, String? egress) =>
-    [for (final e in baseline.entries) if (e.value != null && e.value != egress) e.key];
+List<String> informative(Map<String, String?> baseline, String? egress) => [
+  for (final e in baseline.entries)
+    if (e.value != null && e.value != egress) e.key,
+];
 
 /// "Through the tunnel" expectation from service answers ([observed]: url → IP).
 Outcome classifyTunnel({

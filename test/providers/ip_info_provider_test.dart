@@ -71,8 +71,12 @@ class _Socks5 {
     while (!latin1.decode(buf).contains('\r\n\r\n')) {
       await Future<void>.delayed(const Duration(milliseconds: 5));
     }
-    s.add(utf8.encode('HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n'
-        'Content-Length: ${utf8.encode(httpBody).length}\r\nConnection: close\r\n\r\n$httpBody'));
+    s.add(
+      utf8.encode(
+        'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n'
+        'Content-Length: ${utf8.encode(httpBody).length}\r\nConnection: close\r\n\r\n$httpBody',
+      ),
+    );
     await s.flush();
     await s.close();
   }
@@ -88,10 +92,14 @@ void main() {
     // The binding replaces HttpClient with a stub (400) — a real one is needed.
     HttpOverrides.global = null;
     nativeState = {'state': 'disconnected'};
-    messenger.setMockMethodCallHandler(const MethodChannel(AppConstants.methodChannel),
-        (call) async => call.method == 'getState' ? nativeState : null);
-    messenger.setMockStreamHandler(const EventChannel('${AppConstants.methodChannel}/events'),
-        MockStreamHandler.inline(onListen: (_, _) {}));
+    messenger.setMockMethodCallHandler(
+      const MethodChannel(AppConstants.methodChannel),
+      (call) async => call.method == 'getState' ? nativeState : null,
+    );
+    messenger.setMockStreamHandler(
+      const EventChannel('${AppConstants.methodChannel}/events'),
+      MockStreamHandler.inline(onListen: (_, _) {}),
+    );
     SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
     FlutterSecureStorage.setMockInitialValues({});
     c = ProviderContainer();
@@ -106,7 +114,8 @@ void main() {
 
   test('connected VPN asks ip-api.com through the authenticated SOCKS proxy', () async {
     final socks = await _Socks5.start(
-        jsonEncode({'status': 'success', 'query': '203.0.113.7', 'country': 'Netherlands', 'countryCode': 'NL'}));
+      jsonEncode({'status': 'success', 'query': '203.0.113.7', 'country': 'Netherlands', 'countryCode': 'NL'}),
+    );
     addTearDown(socks.close);
     nativeState = {'state': 'connected', 'socksPort': socks.port, 'socksUser': 'su', 'socksPassword': 'sp'};
     final info = await read();

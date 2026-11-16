@@ -49,15 +49,16 @@ void main() {
     });
 
     test('custom DoT server keeps its own port and disables fallback', () {
-      final dns = XrayConfigBuilder.buildDnsBlock(VpnEngineOptions(
-        socksPort: 10808,
-        httpPort: 0,
-        socksUser: '',
-        socksPassword: '',
-        routing: const RoutingSettings(),
-        dnsServer: DnsServerConfig.fromPreset('custom',
-            customAddress: 'xbox-dns.ru', customType: DnsType.dot),
-      ));
+      final dns = XrayConfigBuilder.buildDnsBlock(
+        VpnEngineOptions(
+          socksPort: 10808,
+          httpPort: 0,
+          socksUser: '',
+          socksPassword: '',
+          routing: const RoutingSettings(),
+          dnsServer: DnsServerConfig.fromPreset('custom', customAddress: 'xbox-dns.ru', customType: DnsType.dot),
+        ),
+      );
       final servers = dns['servers'] as List;
       final main = servers.first as Map<String, dynamic>;
       expect(main['address'], 'tls://xbox-dns.ru');
@@ -69,8 +70,9 @@ void main() {
     });
 
     test('main DNS server stays first when adblock is enabled', () {
-      final dns = XrayConfigBuilder.buildDnsBlock(_defaultOptions(
-          routing: const RoutingSettings(adBlockEnabled: true)));
+      final dns = XrayConfigBuilder.buildDnsBlock(
+        _defaultOptions(routing: const RoutingSettings(adBlockEnabled: true)),
+      );
       final servers = dns['servers'] as List;
       expect((servers.first as Map)['address'], isNot('rcode://success'));
       expect((servers.last as Map)['address'], 'rcode://success');
@@ -113,11 +115,7 @@ void main() {
       });
 
       test('is true when geo routing is active', () {
-        final routing = const RoutingSettings(
-          direction: RoutingDirection.bypass,
-          geoEnabled: true,
-          geoCodes: ['RU'],
-        );
+        final routing = const RoutingSettings(direction: RoutingDirection.bypass, geoEnabled: true, geoCodes: ['RU']);
         final json = XrayConfigBuilder.build(_vlessConfig(), _defaultOptions(routing: routing));
         final inbound = (json['inbounds'] as List).first as Map<String, dynamic>;
         final sniffing = inbound['sniffing'] as Map<String, dynamic>;
@@ -125,8 +123,7 @@ void main() {
       });
 
       test('is absent when sniffing is disabled', () {
-        final json = XrayConfigBuilder.build(
-            _vlessConfig(), _defaultOptions(sniffingEnabled: false));
+        final json = XrayConfigBuilder.build(_vlessConfig(), _defaultOptions(sniffingEnabled: false));
         final inbound = (json['inbounds'] as List).first as Map<String, dynamic>;
         final sniffing = inbound['sniffing'] as Map<String, dynamic>;
         expect(sniffing['enabled'], isFalse);
@@ -140,10 +137,13 @@ void main() {
         final routing = json['routing'] as Map<String, dynamic>;
         final rules = routing['rules'] as List;
         // No rules with geo IPs when routing is global (only DNS + catch-all rules)
-        final geoRules = rules.where((r) =>
-          (r as Map).containsKey('ip') &&
-          ((r['ip'] as List).any((ip) => (ip as String).startsWith('geoip:') && ip != 'geoip:private'))
-        ).toList();
+        final geoRules = rules
+            .where(
+              (r) =>
+                  (r as Map).containsKey('ip') &&
+                  ((r['ip'] as List).any((ip) => (ip as String).startsWith('geoip:') && ip != 'geoip:private')),
+            )
+            .toList();
         expect(geoRules, isEmpty);
       });
 
@@ -179,10 +179,16 @@ void main() {
     group('Shadowsocks outbound', () {
       test('uses servers format with method and password', () {
         final config = VpnConfig(
-          id: 'id', name: 'ss', protocol: VpnProtocol.shadowsocks,
-          address: '1.2.3.4', port: 8388, uuid: '',
-          security: VpnSecurity.none, transport: VpnTransport.tcp,
-          method: 'chacha20-ietf-poly1305', password: 'secret',
+          id: 'id',
+          name: 'ss',
+          protocol: VpnProtocol.shadowsocks,
+          address: '1.2.3.4',
+          port: 8388,
+          uuid: '',
+          security: VpnSecurity.none,
+          transport: VpnTransport.tcp,
+          method: 'chacha20-ietf-poly1305',
+          password: 'secret',
           createdAt: DateTime.now(),
         );
         final json = XrayConfigBuilder.build(config, _defaultOptions());
@@ -196,10 +202,7 @@ void main() {
   });
 
   group('XrayConfigBuilder.mergeWithRaw', () {
-    Map<String, dynamic> rawManaged({
-      String probeInterval = '30s',
-      String? fallbackTag = 'direct',
-    }) => {
+    Map<String, dynamic> rawManaged({String probeInterval = '30s', String? fallbackTag = 'direct'}) => {
       'inbounds': [
         {'tag': 'socks', 'protocol': 'socks', 'port': 1080},
       ],
@@ -209,12 +212,18 @@ void main() {
           'protocol': 'vless',
           'settings': {
             'vnext': [
-              {'address': 'srv', 'port': 443, 'users': [{'id': 'u', 'flow': 'xtls-rprx-vision'}]},
+              {
+                'address': 'srv',
+                'port': 443,
+                'users': [
+                  {'id': 'u', 'flow': 'xtls-rprx-vision'},
+                ],
+              },
             ],
           },
         },
-        {'tag': 'direct', 'protocol': 'freedom', 'settings': {}},
-        {'tag': 'blocked', 'protocol': 'blackhole', 'settings': {}},
+        {'tag': 'direct', 'protocol': 'freedom', 'settings': <String, dynamic>{}},
+        {'tag': 'blocked', 'protocol': 'blackhole', 'settings': <String, dynamic>{}},
       ],
       'observatory': {
         'probeInterval': probeInterval,
@@ -266,8 +275,7 @@ void main() {
       expect(balancer['fallbackTag'], XrayConfigBuilder.blackholeTag);
       final outbounds = cfg['outbounds'] as List;
       expect(
-        outbounds.any((o) =>
-            (o as Map)['tag'] == XrayConfigBuilder.blackholeTag && o['protocol'] == 'blackhole'),
+        outbounds.any((o) => (o as Map)['tag'] == XrayConfigBuilder.blackholeTag && o['protocol'] == 'blackhole'),
         isTrue,
       );
     });
@@ -287,13 +295,11 @@ void main() {
     });
 
     test('adds adblock routing rule to blackhole when enabled', () {
-      final cfg = merge(
-        rawManaged(),
-        _defaultOptions(routing: const RoutingSettings(adBlockEnabled: true)),
-      );
+      final cfg = merge(rawManaged(), _defaultOptions(routing: const RoutingSettings(adBlockEnabled: true)));
       final rules = (cfg['routing'] as Map)['rules'] as List;
-      final adRule = rules.cast<Map>().firstWhere(
-          (r) => (r['domain'] as List?)?.contains('geosite:category-ads-all') ?? false);
+      final adRule = rules.cast<Map<String, dynamic>>().firstWhere(
+        (r) => (r['domain'] as List?)?.contains('geosite:category-ads-all') ?? false,
+      );
       expect(adRule['outboundTag'], XrayConfigBuilder.blackholeTag);
       // App rules must come before server rules (first-match wins).
       expect(rules.indexOf(adRule), lessThan(rules.indexWhere((r) => (r as Map).containsKey('balancerTag'))));
@@ -303,7 +309,9 @@ void main() {
       final cfg = merge(rawManaged());
       final rules = (cfg['routing'] as Map)['rules'] as List;
       expect(
-        rules.cast<Map>().any((r) => (r['domain'] as List?)?.contains('geosite:category-ads-all') ?? false),
+        rules.cast<Map<String, dynamic>>().any(
+          (r) => (r['domain'] as List?)?.contains('geosite:category-ads-all') ?? false,
+        ),
         isFalse,
       );
     });
@@ -317,36 +325,31 @@ void main() {
     }
 
     test('sites alone produce a domain rule to the selected outbound', () {
-      final rules = rulesFor(const RoutingSettings(
-        direction: RoutingDirection.bypass,
-        sitesEnabled: true,
-        sites: ['example.com'],
-      ));
+      final rules = rulesFor(
+        const RoutingSettings(direction: RoutingDirection.bypass, sitesEnabled: true, sites: ['example.com']),
+      );
       expect(rules.any((r) => (r['domain'] as List?)?.contains('domain:example.com') ?? false), isTrue);
     });
 
     test('ru services alone produce a domain rule to the selected outbound', () {
-      final rules = rulesFor(const RoutingSettings(
-        direction: RoutingDirection.bypass,
-        ruServicesEnabled: true,
-      ));
+      final rules = rulesFor(const RoutingSettings(direction: RoutingDirection.bypass, ruServicesEnabled: true));
       expect(rules.where((r) => r['domain'] != null && r['outboundTag'] == 'direct'), isNotEmpty);
     });
   });
 
   group('UDP off', () {
-    const block = {
-      'type': 'field',
-      'network': 'udp',
-      'port': '1-52,54-65535',
-    };
+    const block = {'type': 'field', 'network': 'udp', 'port': '1-52,54-65535'};
 
     test('build keeps SOCKS UDP for DNS and blocks the rest after the DNS rule', () {
       final json = XrayConfigBuilder.build(_vlessConfig(), _defaultOptions(enableUdp: false));
       expect(json['inbounds'][0]['settings']['udp'], isTrue);
       final rules = (json['routing']['rules'] as List).cast<Map<String, dynamic>>();
       final dns = rules.indexWhere((r) => r['outboundTag'] == 'dns-out');
-      expect(rules[dns + 1], {...block, 'inboundTag': ['socks-in'], 'outboundTag': 'block'});
+      expect(rules[dns + 1], {
+        ...block,
+        'inboundTag': ['socks-in'],
+        'outboundTag': 'block',
+      });
     });
 
     test('build adds no UDP rule when UDP is on', () {
@@ -356,31 +359,57 @@ void main() {
 
     test('mergeWithRaw blocks non-DNS UDP of the managed socks inbound', () {
       final raw = {
-        'inbounds': [{'tag': 'socks', 'protocol': 'socks', 'port': 1080}],
-        'outbounds': [{'tag': 'proxy', 'protocol': 'freedom'}],
+        'inbounds': [
+          {'tag': 'socks', 'protocol': 'socks', 'port': 1080},
+        ],
+        'outbounds': [
+          {'tag': 'proxy', 'protocol': 'freedom'},
+        ],
       };
-      final cfg = jsonDecode(XrayConfigBuilder.mergeWithRaw(jsonEncode(raw), _defaultOptions(enableUdp: false)))
-          as Map<String, dynamic>;
+      final cfg =
+          jsonDecode(XrayConfigBuilder.mergeWithRaw(jsonEncode(raw), _defaultOptions(enableUdp: false)))
+              as Map<String, dynamic>;
       expect(cfg['inbounds'][0]['settings']['udp'], isTrue);
-      expect(cfg['routing']['rules'],
-          contains(equals({...block, 'inboundTag': ['socks'], 'outboundTag': XrayConfigBuilder.blackholeTag})));
+      expect(
+        cfg['routing']['rules'],
+        contains(
+          equals({
+            ...block,
+            'inboundTag': ['socks'],
+            'outboundTag': XrayConfigBuilder.blackholeTag,
+          }),
+        ),
+      );
       expect((cfg['outbounds'] as List).map((o) => o['tag']), contains(XrayConfigBuilder.blackholeTag));
     });
 
     test('mergeWithRaw puts the UDP block before server rules that route UDP to freedom', () {
       final raw = {
-        'inbounds': [{'tag': 'socks', 'protocol': 'socks', 'port': 1080}],
-        'outbounds': [{'tag': 'out', 'protocol': 'freedom'}],
-        'routing': {'rules': [{'type': 'field', 'network': 'tcp,udp', 'outboundTag': 'out'}]},
+        'inbounds': [
+          {'tag': 'socks', 'protocol': 'socks', 'port': 1080},
+        ],
+        'outbounds': [
+          {'tag': 'out', 'protocol': 'freedom'},
+        ],
+        'routing': {
+          'rules': [
+            {'type': 'field', 'network': 'tcp,udp', 'outboundTag': 'out'},
+          ],
+        },
       };
-      final cfg = jsonDecode(XrayConfigBuilder.mergeWithRaw(jsonEncode(raw), _defaultOptions(enableUdp: false)))
-          as Map<String, dynamic>;
-      final rules = (cfg['routing']['rules'] as List).cast<Map>();
+      final cfg =
+          jsonDecode(XrayConfigBuilder.mergeWithRaw(jsonEncode(raw), _defaultOptions(enableUdp: false)))
+              as Map<String, dynamic>;
+      final rules = (cfg['routing']['rules'] as List).cast<Map<String, dynamic>>();
       final blockAt = rules.indexWhere((r) => r['outboundTag'] == XrayConfigBuilder.blackholeTag);
       final serverAt = rules.indexWhere((r) => r['outboundTag'] == 'out');
       expect(blockAt, greaterThanOrEqualTo(0));
       expect(blockAt, lessThan(serverAt));
-      expect(rules[blockAt], {...block, 'inboundTag': ['socks'], 'outboundTag': XrayConfigBuilder.blackholeTag});
+      expect(rules[blockAt], {
+        ...block,
+        'inboundTag': ['socks'],
+        'outboundTag': XrayConfigBuilder.blackholeTag,
+      });
       final bh = (cfg['outbounds'] as List).firstWhere((o) => o['tag'] == XrayConfigBuilder.blackholeTag);
       expect(bh['protocol'], 'blackhole');
     });
@@ -389,18 +418,34 @@ void main() {
       const tag = XrayConfigBuilder.blackholeTag;
       final serverRule = {'type': 'field', 'network': 'tcp', 'outboundTag': tag};
       final raw = {
-        'inbounds': [{'tag': 'socks', 'protocol': 'socks', 'port': 1080}],
-        'outbounds': [{'tag': tag, 'protocol': 'freedom'}],
-        'routing': {'rules': [serverRule]},
+        'inbounds': [
+          {'tag': 'socks', 'protocol': 'socks', 'port': 1080},
+        ],
+        'outbounds': [
+          {'tag': tag, 'protocol': 'freedom'},
+        ],
+        'routing': {
+          'rules': [serverRule],
+        },
       };
-      final cfg = jsonDecode(XrayConfigBuilder.mergeWithRaw(jsonEncode(raw), _defaultOptions(enableUdp: false)))
-          as Map<String, dynamic>;
+      final cfg =
+          jsonDecode(XrayConfigBuilder.mergeWithRaw(jsonEncode(raw), _defaultOptions(enableUdp: false)))
+              as Map<String, dynamic>;
       final protocols = {for (final o in cfg['outbounds'] as List) o['tag']: o['protocol']};
       expect(protocols[tag], 'freedom');
       expect(protocols['$tag-2'], 'blackhole');
       final rules = cfg['routing']['rules'] as List;
       expect(rules, contains(equals(serverRule)));
-      expect(rules, contains(equals({...block, 'inboundTag': ['socks'], 'outboundTag': '$tag-2'})));
+      expect(
+        rules,
+        contains(
+          equals({
+            ...block,
+            'inboundTag': ['socks'],
+            'outboundTag': '$tag-2',
+          }),
+        ),
+      );
     });
   });
 
@@ -429,22 +474,43 @@ void main() {
     }
 
     test('TLS pin wins over allowInsecure', () {
-      final tls = tlsOf(VpnConfig(
-        id: 'p', name: 'p', protocol: VpnProtocol.vless, address: 'h', port: 443, uuid: 'u',
-        security: VpnSecurity.tls, transport: VpnTransport.tcp, createdAt: DateTime(2026),
-        allowInsecure: true, pinSHA256: colon,
-      ));
+      final tls = tlsOf(
+        VpnConfig(
+          id: 'p',
+          name: 'p',
+          protocol: VpnProtocol.vless,
+          address: 'h',
+          port: 443,
+          uuid: 'u',
+          security: VpnSecurity.tls,
+          transport: VpnTransport.tcp,
+          createdAt: DateTime(2026),
+          allowInsecure: true,
+          pinSHA256: colon,
+        ),
+      );
       expect(tls['pinnedPeerCertSha256'], hex);
       expect(tls['allowInsecure'], isFalse);
       expect(tls.containsKey('pinnedPeerCertificateChainSha256'), isFalse);
     });
 
     test('Hysteria2 pin wins over allowInsecure', () {
-      final tls = tlsOf(VpnConfig(
-        id: 'p', name: 'p', protocol: VpnProtocol.hysteria2, address: 'h', port: 443, uuid: '', password: 'pw',
-        security: VpnSecurity.tls, transport: VpnTransport.tcp, createdAt: DateTime(2026),
-        allowInsecure: true, pinSHA256: hex,
-      ));
+      final tls = tlsOf(
+        VpnConfig(
+          id: 'p',
+          name: 'p',
+          protocol: VpnProtocol.hysteria2,
+          address: 'h',
+          port: 443,
+          uuid: '',
+          password: 'pw',
+          security: VpnSecurity.tls,
+          transport: VpnTransport.tcp,
+          createdAt: DateTime(2026),
+          allowInsecure: true,
+          pinSHA256: hex,
+        ),
+      );
       expect(tls['pinnedPeerCertSha256'], hex);
       expect(tls['allowInsecure'], isFalse);
       expect(tls.containsKey('pinnedPeerCertificateChainSha256'), isFalse);
@@ -453,12 +519,8 @@ void main() {
   group('hysteria2 hopping', () {
     group('Hysteria2 outbound', () {
       Map<String, dynamic> stream(String uri) {
-        final json = XrayConfigBuilder.build(
-          VlessParser.parseUri(uri)!,
-          _defaultOptions(),
-        );
-        final proxy = (json['outbounds'] as List)
-            .firstWhere((o) => (o as Map)['tag'] == 'proxy') as Map;
+        final json = XrayConfigBuilder.build(VlessParser.parseUri(uri)!, _defaultOptions());
+        final proxy = (json['outbounds'] as List).firstWhere((o) => (o as Map)['tag'] == 'proxy') as Map;
         return proxy['streamSettings'] as Map<String, dynamic>;
       }
 
@@ -466,7 +528,10 @@ void main() {
         expect(stream('hy2://pass@hy.example:443?sni=s').containsKey('finalmask'), isFalse);
         expect(stream('hy2://pass@hy.example:443?obfs=salamander&obfs-password=o')['finalmask'], {
           'udp': [
-            {'type': 'salamander', 'settings': {'password': 'o'}},
+            {
+              'type': 'salamander',
+              'settings': {'password': 'o'},
+            },
           ],
         });
       });
@@ -476,33 +541,40 @@ void main() {
           VlessParser.parseUri('hy2://pass@hy.example:20000-30000/?sni=s')!,
           _defaultOptions(),
         );
-        final proxy = (json['outbounds'] as List)
-            .firstWhere((o) => (o as Map)['tag'] == 'proxy') as Map;
+        final proxy = (json['outbounds'] as List).firstWhere((o) => (o as Map)['tag'] == 'proxy') as Map;
         expect(proxy['settings']['port'], 20000);
         expect(proxy['streamSettings']['finalmask'], {
-          'udp': [{'type': 'udphop', 'settings': {'mode': 'intervalLocal,intervalRemote', 'remotePorts': '20000-30000'}}],
+          'udp': [
+            {
+              'type': 'udphop',
+              'settings': {'mode': 'intervalLocal,intervalRemote', 'remotePorts': '20000-30000'},
+            },
+          ],
         });
-        expect(
-          stream('hy2://pass@hy.example:443,5000-6000?obfs=salamander&obfs-password=o')['finalmask'],
-          {
-            'udp': [
-              {'type': 'udphop', 'settings': {'mode': 'intervalLocal,intervalRemote', 'remotePorts': '443,5000-6000'}},
-              {'type': 'salamander', 'settings': {'password': 'o'}},
-            ],
-          },
-        );
-        expect(
-          stream('hy2://pass@hy.example:443?mport=20000-30000')['finalmask'],
-          {
-            'udp': [{'type': 'udphop', 'settings': {'mode': 'intervalLocal,intervalRemote', 'remotePorts': '20000-30000'}}],
-          },
-        );
+        expect(stream('hy2://pass@hy.example:443,5000-6000?obfs=salamander&obfs-password=o')['finalmask'], {
+          'udp': [
+            {
+              'type': 'udphop',
+              'settings': {'mode': 'intervalLocal,intervalRemote', 'remotePorts': '443,5000-6000'},
+            },
+            {
+              'type': 'salamander',
+              'settings': {'password': 'o'},
+            },
+          ],
+        });
+        expect(stream('hy2://pass@hy.example:443?mport=20000-30000')['finalmask'], {
+          'udp': [
+            {
+              'type': 'udphop',
+              'settings': {'mode': 'intervalLocal,intervalRemote', 'remotePorts': '20000-30000'},
+            },
+          ],
+        });
       });
 
       test('hop spec survives toJson/fromJson', () {
-        final config = VlessParser.parseUri(
-          'hy2://pass@hy.example:443,5000-6000/?sni=s',
-        )!;
+        final config = VlessParser.parseUri('hy2://pass@hy.example:443,5000-6000/?sni=s')!;
         final restored = VpnConfig.fromJsonString(config.toJsonString());
         expect(restored.hopPorts, '443,5000-6000');
         expect(restored.port, 443);
@@ -515,14 +587,15 @@ void main() {
         expect(VpnConfig.fromJson(legacy).hopPorts, isNull);
       });
     });
-
   });
 
   test('access log only at debug level', () {
-    Map<String, dynamic> logOf(LogLevel level) => XrayConfigBuilder.build(
-        _vlessConfig(),
-        VpnEngineOptions(socksPort: 1, httpPort: 0, socksUser: '', socksPassword: '', logLevel: level),
-      )['log'] as Map<String, dynamic>;
+    Map<String, dynamic> logOf(LogLevel level) =>
+        XrayConfigBuilder.build(
+              _vlessConfig(),
+              VpnEngineOptions(socksPort: 1, httpPort: 0, socksUser: '', socksPassword: '', logLevel: level),
+            )['log']
+            as Map<String, dynamic>;
     expect(logOf(LogLevel.debug).containsKey('access'), isFalse);
     for (final level in [LogLevel.info, LogLevel.warning, LogLevel.error]) {
       expect(logOf(level)['access'], 'none', reason: level.name);
@@ -558,12 +631,26 @@ void main() {
           'type': 'http',
           'request': {
             'path': ['/x'],
-            'headers': {'Host': ['a.com', 'b.com']},
+            'headers': {
+              'Host': ['a.com', 'b.com'],
+            },
           },
         },
       });
-      final vmessBody = base64.encode(utf8.encode(jsonEncode(
-          {'v': '2', 'ps': 'n', 'add': 'h', 'port': '80', 'id': 'u', 'net': 'tcp', 'type': 'http', 'host': 'c.com'})));
+      final vmessBody = base64.encode(
+        utf8.encode(
+          jsonEncode({
+            'v': '2',
+            'ps': 'n',
+            'add': 'h',
+            'port': '80',
+            'id': 'u',
+            'net': 'tcp',
+            'type': 'http',
+            'host': 'c.com',
+          }),
+        ),
+      );
       final vmess = streamOf(link('vmess://$vmessBody'));
       expect((vmess['tcpSettings'] as Map)['header']['request']['path'], ['/']);
       expect(streamOf(link('vless://u@h:443?type=tcp&security=tls#n')).containsKey('tcpSettings'), isFalse);
@@ -571,14 +658,22 @@ void main() {
 
     test('mergeWithRaw drops api/metrics and allowInsecure, fails closed', () {
       final raw = {
-        'api': {'listen': '127.0.0.1:10085', 'services': ['HandlerService']},
+        'api': {
+          'listen': '127.0.0.1:10085',
+          'services': ['HandlerService'],
+        },
         'metrics': {'listen': '127.0.0.1:11111'},
-        'inbounds': [{'tag': 'socks', 'protocol': 'socks', 'listen': '0.0.0.0', 'port': 1080}],
+        'inbounds': [
+          {'tag': 'socks', 'protocol': 'socks', 'listen': '0.0.0.0', 'port': 1080},
+        ],
         'outbounds': [
           {
             'tag': 'proxy',
             'protocol': 'vless',
-            'streamSettings': {'security': 'tls', 'tlsSettings': {'serverName': 's', 'allowInsecure': true}},
+            'streamSettings': {
+              'security': 'tls',
+              'tlsSettings': {'serverName': 's', 'allowInsecure': true},
+            },
           },
         ],
       };
@@ -587,8 +682,7 @@ void main() {
       expect(cfg.containsKey('metrics'), isFalse);
       expect(cfg['outbounds'][0]['streamSettings']['tlsSettings'], {'serverName': 's'});
       expect(cfg['inbounds'][0]['listen'], '127.0.0.1');
-      expect(() => XrayConfigBuilder.mergeWithRaw('{"inbounds": {}}', _defaultOptions()),
-          throwsFormatException);
+      expect(() => XrayConfigBuilder.mergeWithRaw('{"inbounds": {}}', _defaultOptions()), throwsFormatException);
     });
   });
 }

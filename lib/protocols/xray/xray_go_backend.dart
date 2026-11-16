@@ -34,13 +34,11 @@ class XrayGoBackend implements CoreBackend {
       requested || (flow?.contains('vision') ?? false);
 
   @override
-  String buildConfig(VpnConfig config, VpnEngineOptions options) =>
-      config.rawXrayConfig != null
-          ? XrayConfigBuilder.mergeWithRaw(config.rawXrayConfig!, options)
-          : XrayConfigBuilder.buildJson(config, options);
+  String buildConfig(VpnConfig config, VpnEngineOptions options) => config.rawXrayConfig != null
+      ? XrayConfigBuilder.mergeWithRaw(config.rawXrayConfig!, options)
+      : XrayConfigBuilder.buildJson(config, options);
 
   /// Go strips the temporary instance's inbounds itself.
   @override
-  String buildProbeConfig(VpnConfig config, VpnEngineOptions options) =>
-      buildConfig(config, options);
+  String buildProbeConfig(VpnConfig config, VpnEngineOptions options) => buildConfig(config, options);
 }

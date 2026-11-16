@@ -32,12 +32,16 @@ class ProfilesScreen extends ConsumerWidget {
             // Console header strip
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.line))),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: t.line)),
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('teapod.stream // profiles',
-                      style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+                  Text(
+                    'teapod.stream // profiles',
+                    style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1),
+                  ),
                   profileAsync.maybeWhen(
                     data: (s) => Text(
                       'profiles [${s.profiles.length.toString().padLeft(2, '0')}]',
@@ -53,26 +57,29 @@ class ProfilesScreen extends ConsumerWidget {
               t: t,
               tagline: context.l10n.profilesTagline,
               title: 'PROFILES',
-              subtitle: Text(context.l10n.profilesSubtitle,
-                  style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5)),
+              subtitle: Text(
+                context.l10n.profilesSubtitle,
+                style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5),
+              ),
               trailing: Row(
                 children: [
-                  _ProfIconBtn(t: t, icon: Icons.download_rounded,
-                      onTap: () => _profShowImportDialog(context, ref, t)),
+                  _ProfIconBtn(t: t, icon: Icons.download_rounded, onTap: () => _profShowImportDialog(context, ref, t)),
                   const SizedBox(width: 6),
-                  _ProfIconBtn(t: t, icon: Icons.add_rounded, accent: true,
-                      onTap: () => _profShowCreateDialog(context, ref, t)),
+                  _ProfIconBtn(
+                    t: t,
+                    icon: Icons.add_rounded,
+                    accent: true,
+                    onTap: () => _profShowCreateDialog(context, ref, t),
+                  ),
                 ],
               ),
             ),
             Expanded(
               child: profileAsync.when(
-                loading: () => Center(
-                    child: CircularProgressIndicator(
-                        color: t.accent, strokeWidth: 1.5)),
+                loading: () => Center(child: CircularProgressIndicator(color: t.accent, strokeWidth: 1.5)),
                 error: (e, _) => Center(
-                    child: Text(context.l10n.commonErrorWith('$e'),
-                        style: AppTheme.mono(size: 12, color: t.danger))),
+                  child: Text(context.l10n.commonErrorWith('$e'), style: AppTheme.mono(size: 12, color: t.danger)),
+                ),
                 data: (state) => _ProfBody(state: state),
               ),
             ),
@@ -100,16 +107,16 @@ class _ProfBody extends ConsumerWidget {
         Container(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
           decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: t.lineSoft))),
+            border: Border(bottom: BorderSide(color: t.lineSoft)),
+          ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('[profiles]',
-                  style: AppTheme.mono(
-                      size: 10, color: t.textMuted, letterSpacing: 1)),
-              Text('${state.profiles.length.toString().padLeft(2, '0')} rows',
-                  style: AppTheme.mono(
-                      size: 10, color: t.textMuted, letterSpacing: 1)),
+              Text('[profiles]', style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+              Text(
+                '${state.profiles.length.toString().padLeft(2, '0')} rows',
+                style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1),
+              ),
             ],
           ),
         ),
@@ -130,8 +137,7 @@ class _ProfBody extends ConsumerWidget {
     );
   }
 
-  void _onProfileTap(
-      BuildContext context, WidgetRef ref, Profile profile, ProfileState state) {
+  void _onProfileTap(BuildContext context, WidgetRef ref, Profile profile, ProfileState state) {
     if (profile.id == state.activeProfileId) return;
     ref.read(profileProvider.notifier).switchProfile(profile.id);
   }
@@ -140,252 +146,54 @@ class _ProfBody extends ConsumerWidget {
 // ── Dialog helpers (top-level) ────────────────────────────────────
 
 void _profShowCreateDialog(BuildContext context, WidgetRef ref, TeapodTokens t) {
-    final ctrl = TextEditingController();
-    var copyFromCurrent = true;
+  final ctrl = TextEditingController();
+  var copyFromCurrent = true;
 
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) => AlertDialog(
-          backgroundColor: t.bg,
-          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-          title: Text(context.l10n.profilesNew,
-              style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: ctrl,
-                autofocus: true,
-                style: AppTheme.mono(size: 13, color: t.text),
-                decoration: InputDecoration(
-                  hintText: context.l10n.profilesNameHint,
-                  hintStyle: AppTheme.mono(size: 12, color: t.textMuted),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  isDense: true,
-                  enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: t.line),
-                      borderRadius: BorderRadius.zero),
-                  focusedBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: t.accent),
-                      borderRadius: BorderRadius.zero),
-                ),
-              ),
-              const SizedBox(height: 14),
-              GestureDetector(
-                onTap: () => setState(() => copyFromCurrent = !copyFromCurrent),
-                child: Row(
-                  children: [
-                    _CheckBox(t: t, value: copyFromCurrent),
-                    const SizedBox(width: 10),
-                    Text(context.l10n.profilesCopyCurrent,
-                        style: AppTheme.mono(size: 11, color: t.text)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(context.l10n.commonCancel,
-                  style: AppTheme.mono(size: 11, color: t.textMuted)),
-            ),
-            TextButton(
-              onPressed: () {
-                final name = ctrl.text.trim();
-                if (name.isEmpty) return;
-                ref.read(profileProvider.notifier)
-                    .createProfile(name, copyFromCurrent: copyFromCurrent);
-                Navigator.pop(ctx);
-              },
-              child: Text(context.l10n.commonCreate,
-                  style: AppTheme.mono(size: 11, color: t.accent)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) {
-    final ctrl = TextEditingController();
-    var switchTo = true;
-    var makeReadonly = false;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) => AlertDialog(
-          backgroundColor: t.bg,
-          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-          title: Text(context.l10n.profileImportTitle,
-              style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: ctrl,
-                maxLines: 4,
-                style: AppTheme.mono(size: 11, color: t.text),
-                decoration: InputDecoration(
-                  hintText: context.l10n.profilesImportHint,
-                  hintStyle: AppTheme.mono(size: 10, color: t.textMuted),
-                  contentPadding: const EdgeInsets.all(10),
-                  isDense: true,
-                  enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: t.line),
-                      borderRadius: BorderRadius.zero),
-                  focusedBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: t.accent),
-                      borderRadius: BorderRadius.zero),
-                ),
-              ),
-              const SizedBox(height: 14),
-              GestureDetector(
-                onTap: () => setState(() => switchTo = !switchTo),
-                child: Row(children: [
-                  _CheckBox(t: t, value: switchTo),
-                  const SizedBox(width: 10),
-                  Text(context.l10n.profilesSwitchAfterImport,
-                      style: AppTheme.mono(size: 11, color: t.text)),
-                ]),
-              ),
-              const SizedBox(height: 8),
-              GestureDetector(
-                onTap: () => setState(() => makeReadonly = !makeReadonly),
-                child: Row(children: [
-                  _CheckBox(t: t, value: makeReadonly),
-                  const SizedBox(width: 10),
-                  Text(context.l10n.profilesReadonly,
-                      style: AppTheme.mono(size: 11, color: t.text)),
-                ]),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(context.l10n.commonCancel,
-                  style: AppTheme.mono(size: 11, color: t.textMuted)),
-            ),
-            TextButton(
-              onPressed: () async {
-                var loading = false;
-
-                final parseFuture = _parseProfileInput(ctrl.text);
-
-                if (DeeplinkRouter.parse(ctrl.text.trim())?.source == DeeplinkSource.url) {
-                  loading = true;
-                  showDialog(
-                    context: ctx,
-                    barrierDismissible: false,
-                    builder: (_) => const Center(child: CircularProgressIndicator()),
-                  );
-                }
-
-                final (result, error, sourceUrl) = await parseFuture;
-
-                if (loading && ctx.mounted) Navigator.pop(ctx);
-                if (!ctx.mounted) return;
-
-                if (result == null) {
-                  ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-                    content: Text(error.isNotEmpty ? error : context.l10n.profilesInvalidFormat,
-                        style: AppTheme.mono(size: 12, color: t.bg)),
-                    backgroundColor: t.danger,
-                    duration: const Duration(seconds: 2),
-                  ));
-                  return;
-                }
-                Navigator.pop(ctx);
-                await ref.read(profileProvider.notifier).importBundle(
-                  result,
-                  switchToProfile: switchTo,
-                  makeReadonly: makeReadonly,
-                  sourceUrl: sourceUrl,
-                );
-              },
-              child: Text(context.l10n.commonImport,
-                  style: AppTheme.mono(size: 11, color: t.accent)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showActionsSheet(
-    BuildContext context,
-    WidgetRef ref,
-    Profile profile,
-    ProfileState state,
-    TeapodTokens t,
-  ) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: t.bg,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-      builder: (ctx) => _ProfileActionsSheet(
-        profile: profile,
-        isActive: profile.id == state.activeProfileId,
-        t: t,
-        onSwitch: () {
-          Navigator.pop(ctx);
-          ref.read(profileProvider.notifier).switchProfile(profile.id);
-        },
-        onRename: () {
-          Navigator.pop(ctx);
-          _showRenameDialog(context, ref, profile, t);
-        },
-        onToggleReadonly: () {
-          Navigator.pop(ctx);
-          ref.read(profileProvider.notifier).toggleReadonly(profile.id);
-        },
-        onExport: () {
-          Navigator.pop(ctx);
-          _showExportSheet(context, ref, profile, t);
-        },
-        onDelete: !profile.isDefault && profile.id != state.activeProfileId
-            ? () {
-                Navigator.pop(ctx);
-                _confirmDelete(context, ref, profile, t);
-              }
-            : null,
-        onRefresh: profile.sourceUrl != null
-            ? () {
-                Navigator.pop(ctx);
-                _refreshProfile(context, ref, profile, t);
-              }
-            : null,
-      ),
-    );
-  }
-
-  void _showRenameDialog(
-      BuildContext context, WidgetRef ref, Profile profile, TeapodTokens t) {
-    final ctrl = TextEditingController(text: profile.name);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setState) => AlertDialog(
         backgroundColor: t.bg,
         shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-        title: Text(context.l10n.commonRename,
-            style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500)),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          style: AppTheme.mono(size: 13, color: t.text),
-          decoration: InputDecoration(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            isDense: true,
-            enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: t.line), borderRadius: BorderRadius.zero),
-            focusedBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: t.accent), borderRadius: BorderRadius.zero),
-          ),
+        title: Text(
+          context.l10n.profilesNew,
+          style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              style: AppTheme.mono(size: 13, color: t.text),
+              decoration: InputDecoration(
+                hintText: context.l10n.profilesNameHint,
+                hintStyle: AppTheme.mono(size: 12, color: t.textMuted),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                isDense: true,
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: t.line),
+                  borderRadius: BorderRadius.zero,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: t.accent),
+                  borderRadius: BorderRadius.zero,
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            GestureDetector(
+              onTap: () => setState(() => copyFromCurrent = !copyFromCurrent),
+              child: Row(
+                children: [
+                  _CheckBox(t: t, value: copyFromCurrent),
+                  const SizedBox(width: 10),
+                  Text(context.l10n.profilesCopyCurrent, style: AppTheme.mono(size: 11, color: t.text)),
+                ],
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -396,137 +204,335 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
             onPressed: () {
               final name = ctrl.text.trim();
               if (name.isEmpty) return;
-              ref.read(profileProvider.notifier).renameProfile(profile.id, name);
+              ref.read(profileProvider.notifier).createProfile(name, copyFromCurrent: copyFromCurrent);
               Navigator.pop(ctx);
             },
-            child: Text(context.l10n.commonSave, style: AppTheme.mono(size: 11, color: t.accent)),
+            child: Text(context.l10n.commonCreate, style: AppTheme.mono(size: 11, color: t.accent)),
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
-  void _showExportSheet(
-      BuildContext context, WidgetRef ref, Profile profile, TeapodTokens t) {
-    final bundle =
-        ref.read(profileProvider.notifier).exportBundle(profile.id);
-    final deeplink = bundle.toDeeplink();
+void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) {
+  final ctrl = TextEditingController();
+  var switchTo = true;
+  var makeReadonly = false;
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: t.bg,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('${context.l10n.profilesExportUpper} · ${profile.name.toUpperCase()}',
-                  style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1.5)),
-              const SizedBox(height: 16),
-              _ExportRow(
-                t: t,
-                label: context.l10n.profilesCopyLink,
-                hint: 'teapod://import/profile?data=...',
-                onTap: () {
-                  Clipboard.setData(ClipboardData(text: deeplink));
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(context.l10n.profilesLinkCopied,
-                        style: AppTheme.mono(size: 12, color: t.bg)),
-                    backgroundColor: t.accent,
-                    duration: const Duration(seconds: 2),
-                  ));
-                },
-              ),
-              _ExportRow(
-                t: t,
-                label: context.l10n.profilesShareFile,
-                hint: '${profile.name.toLowerCase().replaceAll(' ', '_')}.json',
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  await _shareAsFile(context, profile, bundle);
-                },
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _shareAsFile(
-      BuildContext context, Profile profile, ProfileBundle bundle) async {
-    final dir = await getTemporaryDirectory();
-    final safeName = profile.name.replaceAll(RegExp(r'[^a-zA-Z0-9а-яА-Я_\- ]'), '_');
-    final file = File('${dir.path}/$safeName.json');
-    await file.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(bundle.toJson()),
-    );
-    await Share.shareXFiles(
-      [XFile(file.path)],
-      text: 'Teapod profile: ${profile.name}',
-    );
-  }
-
-  void _confirmDelete(
-      BuildContext context, WidgetRef ref, Profile profile, TeapodTokens t) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setState) => AlertDialog(
         backgroundColor: t.bg,
         shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-        title: Text(context.l10n.profilesDeleteTitle,
-            style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500)),
-        content: Text(context.l10n.profilesDeleteMessage(profile.name),
-            style: AppTheme.mono(size: 12, color: t.textDim)),
+        title: Text(
+          context.l10n.profileImportTitle,
+          style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: ctrl,
+              maxLines: 4,
+              style: AppTheme.mono(size: 11, color: t.text),
+              decoration: InputDecoration(
+                hintText: context.l10n.profilesImportHint,
+                hintStyle: AppTheme.mono(size: 10, color: t.textMuted),
+                contentPadding: const EdgeInsets.all(10),
+                isDense: true,
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: t.line),
+                  borderRadius: BorderRadius.zero,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: t.accent),
+                  borderRadius: BorderRadius.zero,
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            GestureDetector(
+              onTap: () => setState(() => switchTo = !switchTo),
+              child: Row(
+                children: [
+                  _CheckBox(t: t, value: switchTo),
+                  const SizedBox(width: 10),
+                  Text(context.l10n.profilesSwitchAfterImport, style: AppTheme.mono(size: 11, color: t.text)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () => setState(() => makeReadonly = !makeReadonly),
+              child: Row(
+                children: [
+                  _CheckBox(t: t, value: makeReadonly),
+                  const SizedBox(width: 10),
+                  Text(context.l10n.profilesReadonly, style: AppTheme.mono(size: 11, color: t.text)),
+                ],
+              ),
+            ),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: Text(context.l10n.commonCancel, style: AppTheme.mono(size: 11, color: t.textMuted)),
           ),
           TextButton(
-            onPressed: () {
-              ref.read(profileProvider.notifier).deleteProfile(profile.id);
+            onPressed: () async {
+              var loading = false;
+
+              final parseFuture = _parseProfileInput(ctrl.text);
+
+              if (DeeplinkRouter.parse(ctrl.text.trim())?.source == DeeplinkSource.url) {
+                loading = true;
+                showDialog<void>(
+                  context: ctx,
+                  barrierDismissible: false,
+                  builder: (_) => const Center(child: CircularProgressIndicator()),
+                );
+              }
+
+              final (result, error, sourceUrl) = await parseFuture;
+
+              if (loading && ctx.mounted) Navigator.pop(ctx);
+              if (!ctx.mounted) return;
+
+              if (result == null) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      error.isNotEmpty ? error : context.l10n.profilesInvalidFormat,
+                      style: AppTheme.mono(size: 12, color: t.bg),
+                    ),
+                    backgroundColor: t.danger,
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+                return;
+              }
               Navigator.pop(ctx);
+              await ref
+                  .read(profileProvider.notifier)
+                  .importBundle(result, switchToProfile: switchTo, makeReadonly: makeReadonly, sourceUrl: sourceUrl);
             },
-            child: Text(context.l10n.commonDelete, style: AppTheme.mono(size: 11, color: t.danger)),
+            child: Text(context.l10n.commonImport, style: AppTheme.mono(size: 11, color: t.accent)),
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
-  void _refreshProfile(
-      BuildContext context, WidgetRef ref, Profile profile, TeapodTokens t) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-    ref.read(profileProvider.notifier).refreshProfile(profile.id, profile.sourceUrl!).then((result) {
-      if (!context.mounted) return;
-      Navigator.pop(context);
-      if (result != null) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(context.l10n.profilesUpdated(profile.name),
-              style: AppTheme.mono(size: 12, color: t.bg)),
+void _showActionsSheet(BuildContext context, WidgetRef ref, Profile profile, ProfileState state, TeapodTokens t) {
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: t.bg,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+    builder: (ctx) => _ProfileActionsSheet(
+      profile: profile,
+      isActive: profile.id == state.activeProfileId,
+      t: t,
+      onSwitch: () {
+        Navigator.pop(ctx);
+        ref.read(profileProvider.notifier).switchProfile(profile.id);
+      },
+      onRename: () {
+        Navigator.pop(ctx);
+        _showRenameDialog(context, ref, profile, t);
+      },
+      onToggleReadonly: () {
+        Navigator.pop(ctx);
+        ref.read(profileProvider.notifier).toggleReadonly(profile.id);
+      },
+      onExport: () {
+        Navigator.pop(ctx);
+        _showExportSheet(context, ref, profile, t);
+      },
+      onDelete: !profile.isDefault && profile.id != state.activeProfileId
+          ? () {
+              Navigator.pop(ctx);
+              _confirmDelete(context, ref, profile, t);
+            }
+          : null,
+      onRefresh: profile.sourceUrl != null
+          ? () {
+              Navigator.pop(ctx);
+              _refreshProfile(context, ref, profile, t);
+            }
+          : null,
+    ),
+  );
+}
+
+void _showRenameDialog(BuildContext context, WidgetRef ref, Profile profile, TeapodTokens t) {
+  final ctrl = TextEditingController(text: profile.name);
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: t.bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      title: Text(
+        context.l10n.commonRename,
+        style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500),
+      ),
+      content: TextField(
+        controller: ctrl,
+        autofocus: true,
+        style: AppTheme.mono(size: 13, color: t.text),
+        decoration: InputDecoration(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          isDense: true,
+          enabledBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: t.line),
+            borderRadius: BorderRadius.zero,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: t.accent),
+            borderRadius: BorderRadius.zero,
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: Text(context.l10n.commonCancel, style: AppTheme.mono(size: 11, color: t.textMuted)),
+        ),
+        TextButton(
+          onPressed: () {
+            final name = ctrl.text.trim();
+            if (name.isEmpty) return;
+            ref.read(profileProvider.notifier).renameProfile(profile.id, name);
+            Navigator.pop(ctx);
+          },
+          child: Text(context.l10n.commonSave, style: AppTheme.mono(size: 11, color: t.accent)),
+        ),
+      ],
+    ),
+  );
+}
+
+void _showExportSheet(BuildContext context, WidgetRef ref, Profile profile, TeapodTokens t) {
+  final bundle = ref.read(profileProvider.notifier).exportBundle(profile.id);
+  final deeplink = bundle.toDeeplink();
+
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: t.bg,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+    builder: (ctx) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${context.l10n.profilesExportUpper} · ${profile.name.toUpperCase()}',
+              style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1.5),
+            ),
+            const SizedBox(height: 16),
+            _ExportRow(
+              t: t,
+              label: context.l10n.profilesCopyLink,
+              hint: 'teapod://import/profile?data=...',
+              onTap: () {
+                Clipboard.setData(ClipboardData(text: deeplink));
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(context.l10n.profilesLinkCopied, style: AppTheme.mono(size: 12, color: t.bg)),
+                    backgroundColor: t.accent,
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              },
+            ),
+            _ExportRow(
+              t: t,
+              label: context.l10n.profilesShareFile,
+              hint: '${profile.name.toLowerCase().replaceAll(' ', '_')}.json',
+              onTap: () async {
+                Navigator.pop(ctx);
+                await _shareAsFile(context, profile, bundle);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+Future<void> _shareAsFile(BuildContext context, Profile profile, ProfileBundle bundle) async {
+  final dir = await getTemporaryDirectory();
+  final safeName = profile.name.replaceAll(RegExp(r'[^a-zA-Z0-9а-яА-Я_\- ]'), '_');
+  final file = File('${dir.path}/$safeName.json');
+  await file.writeAsString(const JsonEncoder.withIndent('  ').convert(bundle.toJson()));
+  await Share.shareXFiles([XFile(file.path)], text: 'Teapod profile: ${profile.name}');
+}
+
+void _confirmDelete(BuildContext context, WidgetRef ref, Profile profile, TeapodTokens t) {
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: t.bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      title: Text(
+        context.l10n.profilesDeleteTitle,
+        style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500),
+      ),
+      content: Text(context.l10n.profilesDeleteMessage(profile.name), style: AppTheme.mono(size: 12, color: t.textDim)),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: Text(context.l10n.commonCancel, style: AppTheme.mono(size: 11, color: t.textMuted)),
+        ),
+        TextButton(
+          onPressed: () {
+            ref.read(profileProvider.notifier).deleteProfile(profile.id);
+            Navigator.pop(ctx);
+          },
+          child: Text(context.l10n.commonDelete, style: AppTheme.mono(size: 11, color: t.danger)),
+        ),
+      ],
+    ),
+  );
+}
+
+void _refreshProfile(BuildContext context, WidgetRef ref, Profile profile, TeapodTokens t) {
+  showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const Center(child: CircularProgressIndicator()),
+  );
+  ref.read(profileProvider.notifier).refreshProfile(profile.id, profile.sourceUrl!).then((result) {
+    if (!context.mounted) return;
+    Navigator.pop(context);
+    if (result != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.l10n.profilesUpdated(profile.name), style: AppTheme.mono(size: 12, color: t.bg)),
           backgroundColor: t.accent,
           duration: const Duration(seconds: 2),
-        ));
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(context.l10n.profilesUpdateError,
-              style: AppTheme.mono(size: 12, color: t.bg)),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.l10n.profilesUpdateError, style: AppTheme.mono(size: 12, color: t.bg)),
           backgroundColor: t.danger,
           duration: const Duration(seconds: 2),
-        ));
-      }
-    });
-  }
+        ),
+      );
+    }
+  });
+}
 
 // ── Profile card ──────────────────────────────────────────────────
 
@@ -568,48 +574,44 @@ class _ProfileCard extends StatelessWidget {
           children: [
             SizedBox(
               width: 32,
-              child: Text(hexAddr,
-                  style: AppTheme.mono(size: 10, color: t.textMuted)),
+              child: Text(hexAddr, style: AppTheme.mono(size: 10, color: t.textMuted)),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    profile.name,
-                    style: AppTheme.sans(
-                      size: 14,
-                      color: isActive ? t.accent : t.text,
-                      weight: isActive ? FontWeight.w600 : FontWeight.normal,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          profile.name,
+                          style: AppTheme.sans(
+                            size: 14,
+                            color: isActive ? t.accent : t.text,
+                            weight: isActive ? FontWeight.w600 : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                      if (isActive)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: t.accent),
+                            color: t.accentSoft,
+                          ),
+                          child: Text('ACTIVE', style: AppTheme.mono(size: 9, color: t.accent, letterSpacing: 1)),
+                        ),
+                      if (profile.readonly) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(border: Border.all(color: t.textMuted)),
+                          child: Text('RO', style: AppTheme.mono(size: 9, color: t.textMuted, letterSpacing: 1)),
+                        ),
+                      ],
+                    ],
                   ),
-                ),
-                if (isActive)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                        border: Border.all(color: t.accent),
-                        color: t.accentSoft),
-                    child: Text('ACTIVE',
-                        style: AppTheme.mono(
-                            size: 9, color: t.accent, letterSpacing: 1)),
-                  ),
-                if (profile.readonly) ...[
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(border: Border.all(color: t.textMuted)),
-                    child: Text('RO',
-                        style: AppTheme.mono(
-                            size: 9, color: t.textMuted, letterSpacing: 1)),
-                  ),
-                ],
-              ],
-            ),
                   const SizedBox(height: 3),
                   Text(
                     '${profile.id}  ·  ${_formatDate(profile.createdAt)}',
@@ -664,22 +666,18 @@ class _ProfileActionsSheet extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
             child: Row(
               children: [
-                Text(profile.name,
-                    style: AppTheme.sans(
-                        size: 16, color: t.text, weight: FontWeight.w500)),
+                Text(
+                  profile.name,
+                  style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500),
+                ),
                 const Spacer(),
-                if (profile.readonly)
-                  Text('readonly',
-                      style: AppTheme.mono(size: 10, color: t.textMuted)),
+                if (profile.readonly) Text('readonly', style: AppTheme.mono(size: 10, color: t.textMuted)),
               ],
             ),
           ),
           Container(height: 1, color: t.line),
-          if (!isActive)
-            _ActionTile(
-                t: t, label: context.l10n.profilesSwitch, onTap: onSwitch),
-          if (onRefresh != null)
-            _ActionTile(t: t, label: context.l10n.configsRefresh, onTap: onRefresh!),
+          if (!isActive) _ActionTile(t: t, label: context.l10n.profilesSwitch, onTap: onSwitch),
+          if (onRefresh != null) _ActionTile(t: t, label: context.l10n.configsRefresh, onTap: onRefresh!),
           _ActionTile(t: t, label: context.l10n.commonRename, onTap: onRename),
           _ActionTile(
             t: t,
@@ -687,9 +685,7 @@ class _ProfileActionsSheet extends StatelessWidget {
             onTap: onToggleReadonly,
           ),
           _ActionTile(t: t, label: context.l10n.profilesExport, onTap: onExport),
-          if (onDelete != null)
-            _ActionTile(
-                t: t, label: context.l10n.commonDelete, color: t.danger, onTap: onDelete!),
+          if (onDelete != null) _ActionTile(t: t, label: context.l10n.commonDelete, color: t.danger, onTap: onDelete!),
           const SizedBox(height: 8),
         ],
       ),
@@ -712,9 +708,10 @@ class _ActionTile extends StatelessWidget {
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
-        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.lineSoft))),
-        child: Text(label,
-            style: AppTheme.sans(size: 14, color: color ?? t.text)),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: t.lineSoft)),
+        ),
+        child: Text(label, style: AppTheme.sans(size: 14, color: color ?? t.text)),
       ),
     );
   }
@@ -736,7 +733,9 @@ class _ExportRow extends StatelessWidget {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.lineSoft))),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: t.lineSoft)),
+        ),
         child: Row(
           children: [
             Expanded(
@@ -745,8 +744,7 @@ class _ExportRow extends StatelessWidget {
                 children: [
                   Text(label, style: AppTheme.sans(size: 14, color: t.text)),
                   const SizedBox(height: 2),
-                  Text(hint,
-                      style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5)),
+                  Text(hint, style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5)),
                 ],
               ),
             ),
@@ -766,12 +764,7 @@ class _ProfIconBtn extends StatelessWidget {
   final bool accent;
   final VoidCallback onTap;
 
-  const _ProfIconBtn({
-    required this.t,
-    required this.icon,
-    required this.onTap,
-    this.accent = false,
-  });
+  const _ProfIconBtn({required this.t, required this.icon, required this.onTap, this.accent = false});
 
   @override
   Widget build(BuildContext context) {
@@ -802,11 +795,10 @@ class _CheckBox extends StatelessWidget {
       width: 16,
       height: 16,
       decoration: BoxDecoration(
-          border: Border.all(color: value ? t.accent : t.line),
-          color: value ? t.accent : Colors.transparent),
-      child: value
-          ? Icon(Icons.check, size: 10, color: t.bg)
-          : null,
+        border: Border.all(color: value ? t.accent : t.line),
+        color: value ? t.accent : Colors.transparent,
+      ),
+      child: value ? Icon(Icons.check, size: 10, color: t.bg) : null,
     );
   }
 }
@@ -833,4 +825,3 @@ Future<(ProfileBundle?, String, String?)> _parseProfileInput(String input) async
     return (null, '$e', null);
   }
 }
-

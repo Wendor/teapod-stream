@@ -17,12 +17,12 @@ const _channel = MethodChannel(AppConstants.methodChannel);
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 
 Map<String, Object?> _release(String tag) => {
-      'tag_name': 'v$tag',
-      'body': 'notes',
-      'assets': [
-        {'name': 'teapod-arm64-v8a-$tag.apk', 'browser_download_url': 'https://dl/app.apk', 'size': 6},
-      ],
-    };
+  'tag_name': 'v$tag',
+  'body': 'notes',
+  'assets': [
+    {'name': 'teapod-arm64-v8a-$tag.apk', 'browser_download_url': 'https://dl/app.apk', 'size': 6},
+  ],
+};
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -44,16 +44,26 @@ void main() {
     support = Directory.systemTemp.createTempSync('support');
     server = await LocalServer.start();
     PackageInfo.setMockInitialValues(
-        appName: 'a', packageName: 'p', version: '1.7.3', buildNumber: '1', buildSignature: '');
+      appName: 'a',
+      packageName: 'p',
+      version: '1.7.3',
+      buildNumber: '1',
+      buildSignature: '',
+    );
     messenger.setMockMethodCallHandler(_pathChannel, (call) async => support.path);
-    messenger.setMockMethodCallHandler(_channel, (call) async => switch (call.method) {
-          'getAbi' => abi,
-          'installApk' => onInstall?.call(call),
-          'getState' => {'state': 'disconnected'},
-          _ => null,
-        });
-    messenger.setMockStreamHandler(const EventChannel('${AppConstants.methodChannel}/events'),
-        MockStreamHandler.inline(onListen: (_, _) {}));
+    messenger.setMockMethodCallHandler(
+      _channel,
+      (call) async => switch (call.method) {
+        'getAbi' => abi,
+        'installApk' => onInstall?.call(call),
+        'getState' => {'state': 'disconnected'},
+        _ => null,
+      },
+    );
+    messenger.setMockStreamHandler(
+      const EventChannel('${AppConstants.methodChannel}/events'),
+      MockStreamHandler.inline(onListen: (_, _) {}),
+    );
     SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
     FlutterSecureStorage.setMockInitialValues({});
     c = ProviderContainer();

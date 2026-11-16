@@ -14,7 +14,7 @@ import 'update_service.dart' show UpdateChannel;
 
 /// VPN operating mode
 enum VpnMode {
-  allExcept,    // Everything through VPN except the selected ones
+  allExcept, // Everything through VPN except the selected ones
   onlySelected, // Only the selected through VPN, the rest bypass it
 }
 
@@ -25,26 +25,35 @@ enum DnsQueryStrategy { ipv4Only, ipv6Only, auto }
 /// uTLS fingerprint override for TLS/REALITY outbounds.
 /// `defaultFp` — don't override (the value from the config/URI is used).
 enum TlsFingerprint {
-  defaultFp, chrome, firefox, safari, ios, android, edge, random, randomized;
+  defaultFp,
+  chrome,
+  firefox,
+  safari,
+  ios,
+  android,
+  edge,
+  random,
+  randomized;
 
   /// Value for the `fingerprint` field in xray streamSettings; null = don't override.
   String? get xrayValue => this == defaultFp ? null : name;
 }
 
 class GeoPresets {
-  static const _lsGeoip    = 'https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat';
-  static const _lsGeosite  = 'https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat';
-  static const _rfGeoip    = 'https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/geoip.dat';
-  static const _rfGeosite  = 'https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/geosite.dat';
-  static const _v2Geoip    = 'https://github.com/v2fly/geoip/releases/latest/download/geoip.dat';
-  static const _v2Geosite  = 'https://github.com/v2fly/domain-list-community/releases/latest/download/dlc.dat';
+  static const _lsGeoip = 'https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat';
+  static const _lsGeosite = 'https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat';
+  static const _rfGeoip = 'https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/geoip.dat';
+  static const _rfGeosite =
+      'https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/geosite.dat';
+  static const _v2Geoip = 'https://github.com/v2fly/geoip/releases/latest/download/geoip.dat';
+  static const _v2Geosite = 'https://github.com/v2fly/domain-list-community/releases/latest/download/dlc.dat';
 
-  static const defaultGeoipUrl    = _lsGeoip;
-  static const defaultGeositeUrl  = _lsGeosite;
+  static const defaultGeoipUrl = _lsGeoip;
+  static const defaultGeositeUrl = _lsGeosite;
 
-  static const loyalsoldier = (name: 'Loyalsoldier', geoipUrl: _lsGeoip,  geositeUrl: _lsGeosite);
-  static const runetfreedom = (name: 'runetfreedom', geoipUrl: _rfGeoip,  geositeUrl: _rfGeosite);
-  static const v2fly         = (name: 'v2fly',        geoipUrl: _v2Geoip,  geositeUrl: _v2Geosite);
+  static const loyalsoldier = (name: 'Loyalsoldier', geoipUrl: _lsGeoip, geositeUrl: _lsGeosite);
+  static const runetfreedom = (name: 'runetfreedom', geoipUrl: _rfGeoip, geositeUrl: _rfGeosite);
+  static const v2fly = (name: 'v2fly', geoipUrl: _v2Geoip, geositeUrl: _v2Geosite);
   static final all = [loyalsoldier, runetfreedom, v2fly];
 
   static String nameOf(String geoipUrl, String geositeUrl) {
@@ -91,6 +100,7 @@ class AppSettings {
   final DnsQueryStrategy dnsQueryStrategy;
   final bool blockQuic;
   final bool ipv6Enabled;
+
   /// allExcept: let ownerless flows into the tunnel (hotspot tethering).
   /// Weakens protection: excluded apps can go out through tun0.
   final bool allowTethering;
@@ -316,17 +326,14 @@ class AppSettings {
     final routingJson = json['routing'] as Map<String, dynamic>?;
     return AppSettings(
       socksPort: json['socksPort'] as int? ?? AppConstants.defaultSocksPort,
-      logLevel: LogLevel.values.firstWhere(
-        (e) => e.name == json['logLevel'], orElse: () => LogLevel.info),
+      logLevel: LogLevel.values.firstWhere((e) => e.name == json['logLevel'], orElse: () => LogLevel.info),
       excludedPackages: (json['excludedPackages'] as List<dynamic>?)?.cast<String>().toSet() ?? {},
       includedPackages: (json['includedPackages'] as List<dynamic>?)?.cast<String>().toSet() ?? {},
-      vpnMode: VpnMode.values.firstWhere(
-        (e) => e.name == json['vpnMode'], orElse: () => VpnMode.onlySelected),
+      vpnMode: VpnMode.values.firstWhere((e) => e.name == json['vpnMode'], orElse: () => VpnMode.onlySelected),
       splitTunnelingEnabled: json['splitTunnelingEnabled'] as bool? ?? false,
       randomPort: json['randomPort'] as bool? ?? true,
       autoConnect: json['autoConnect'] as bool? ?? false,
-      dnsMode: DnsMode.values.firstWhere(
-        (e) => e.name == json['dnsMode'], orElse: () => DnsMode.proxy),
+      dnsMode: DnsMode.values.firstWhere((e) => e.name == json['dnsMode'], orElse: () => DnsMode.proxy),
       dnsPreset: json['dnsPreset'] as String? ?? 'cf_udp',
       customDnsAddress: json['customDnsAddress'] as String? ?? '1.1.1.1',
       customDnsType: json['customDnsType'] as String? ?? 'udp',
@@ -341,9 +348,10 @@ class AppSettings {
       hwidEnabled: json['hwidEnabled'] as bool? ?? false,
       routing: routingJson != null ? RoutingSettings.fromJson(routingJson) : const RoutingSettings(),
       updateChannel: UpdateChannel.values.firstWhere(
-        (e) => e.name == json['updateChannel'], orElse: () => UpdateChannel.stable),
-      fontScale: FontScale.values.firstWhere(
-        (e) => e.name == json['fontScale'], orElse: () => FontScale.normal),
+        (e) => e.name == json['updateChannel'],
+        orElse: () => UpdateChannel.stable,
+      ),
+      fontScale: FontScale.values.firstWhere((e) => e.name == json['fontScale'], orElse: () => FontScale.normal),
       geoipUrl: json['geoipUrl'] as String? ?? GeoPresets.defaultGeoipUrl,
       geositeUrl: json['geositeUrl'] as String? ?? GeoPresets.defaultGeositeUrl,
       sniffingEnabled: json['sniffingEnabled'] as bool? ?? true,
@@ -353,14 +361,18 @@ class AppSettings {
       subUserAgent: json['subUserAgent'] as String? ?? '',
       obsProbeIntervalSec: json['obsProbeIntervalSec'] as int? ?? 600,
       dnsQueryStrategy: DnsQueryStrategy.values.firstWhere(
-        (e) => e.name == json['dnsQueryStrategy'], orElse: () => DnsQueryStrategy.ipv4Only),
+        (e) => e.name == json['dnsQueryStrategy'],
+        orElse: () => DnsQueryStrategy.ipv4Only,
+      ),
       blockQuic: json['blockQuic'] as bool? ?? false,
       ipv6Enabled: json['ipv6Enabled'] as bool? ?? false,
       allowTethering: json['allowTethering'] as bool? ?? false,
       autoStartOnBoot: json['autoStartOnBoot'] as bool? ?? false,
       automationEnabled: json['automationEnabled'] as bool? ?? false,
       tlsFingerprint: TlsFingerprint.values.firstWhere(
-        (e) => e.name == json['tlsFingerprint'], orElse: () => TlsFingerprint.defaultFp),
+        (e) => e.name == json['tlsFingerprint'],
+        orElse: () => TlsFingerprint.defaultFp,
+      ),
       fragment: json['fragment'] is Map<String, dynamic>
           ? FragmentSettings.fromJson(json['fragment'] as Map<String, dynamic>)
           : const FragmentSettings(),
@@ -374,8 +386,7 @@ class AppSettings {
           ? HeartbeatSettings.fromJson(json['heartbeat'] as Map<String, dynamic>)
           : const HeartbeatSettings(),
       logsEnabled: json['logsEnabled'] as bool? ?? true,
-      coreOrder: CoreKind.parseOrder((json['coreOrder'] as List?)?.cast<String>(),
-          first: json['core'] as String?),
+      coreOrder: CoreKind.parseOrder((json['coreOrder'] as List?)?.cast<String>(), first: json['core'] as String?),
       disabledCores: _coreSet((json['disabledCores'] as List?)?.cast<String>()),
     );
   }
@@ -383,7 +394,11 @@ class AppSettings {
   DnsServerConfig get dnsServer => DnsServerConfig.fromPreset(
     dnsPreset,
     customAddress: customDnsAddress,
-    customType: customDnsType == 'doh' ? DnsType.doh : customDnsType == 'dot' ? DnsType.dot : DnsType.udp,
+    customType: customDnsType == 'doh'
+        ? DnsType.doh
+        : customDnsType == 'dot'
+        ? DnsType.dot
+        : DnsType.udp,
   );
 }
 
@@ -441,6 +456,7 @@ class SettingsService {
   static const _muxKey = 'xray_mux';
   static const _heartbeatKey = 'heartbeat_settings';
   static const _logsEnabledKey = 'logs_enabled';
+
   /// Before priorities — a single selected core; read only for migration.
   static const _legacyCoreKey = 'core_kind';
   static const _coreOrderKey = 'core_order';
@@ -456,10 +472,7 @@ class SettingsService {
     final included = (prefs.getStringList(_includedPackagesKey) ?? []).toSet();
     return AppSettings(
       socksPort: prefs.getInt(_socksPortKey) ?? AppConstants.defaultSocksPort,
-      logLevel: LogLevel.values.firstWhere(
-        (e) => e.name == prefs.getString(_logLevelKey),
-        orElse: () => LogLevel.info,
-      ),
+      logLevel: LogLevel.values.firstWhere((e) => e.name == prefs.getString(_logLevelKey), orElse: () => LogLevel.info),
       excludedPackages: excluded,
       includedPackages: included,
       vpnMode: VpnMode.values.firstWhere(
@@ -469,10 +482,7 @@ class SettingsService {
       splitTunnelingEnabled: prefs.getBool(_splitTunnelingKey) ?? false,
       randomPort: prefs.getBool(_randomPortKey) ?? true,
       autoConnect: prefs.getBool(_autoConnectKey) ?? false,
-      dnsMode: DnsMode.values.firstWhere(
-        (e) => e.name == prefs.getString(_dnsModeKey),
-        orElse: () => DnsMode.proxy,
-      ),
+      dnsMode: DnsMode.values.firstWhere((e) => e.name == prefs.getString(_dnsModeKey), orElse: () => DnsMode.proxy),
       dnsPreset: prefs.getString(_dnsPresetKey) ?? 'cf_udp',
       customDnsAddress: prefs.getString(_customDnsAddressKey) ?? '1.1.1.1',
       customDnsType: prefs.getString(_customDnsTypeKey) ?? 'udp',
@@ -515,15 +525,12 @@ class SettingsService {
         (e) => e.name == prefs.getString(_tlsFingerprintKey),
         orElse: () => TlsFingerprint.defaultFp,
       ),
-      fragment: _decodeOr(prefs.getString(_fragmentKey), FragmentSettings.fromJson,
-          const FragmentSettings()),
+      fragment: _decodeOr(prefs.getString(_fragmentKey), FragmentSettings.fromJson, const FragmentSettings()),
       noise: _decodeOr(prefs.getString(_noiseKey), NoiseSettings.fromJson, const NoiseSettings()),
       mux: _decodeOr(prefs.getString(_muxKey), MuxSettings.fromJson, const MuxSettings()),
-      heartbeat: _decodeOr(prefs.getString(_heartbeatKey), HeartbeatSettings.fromJson,
-          const HeartbeatSettings()),
+      heartbeat: _decodeOr(prefs.getString(_heartbeatKey), HeartbeatSettings.fromJson, const HeartbeatSettings()),
       logsEnabled: prefs.getBool(_logsEnabledKey) ?? true,
-      coreOrder: CoreKind.parseOrder(prefs.getStringList(_coreOrderKey),
-          first: prefs.getString(_legacyCoreKey)),
+      coreOrder: CoreKind.parseOrder(prefs.getStringList(_coreOrderKey), first: prefs.getString(_legacyCoreKey)),
       disabledCores: _coreSet(prefs.getStringList(_disabledCoresKey)),
     );
   }
@@ -562,10 +569,8 @@ class SettingsService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_socksPortKey, settings.socksPort);
     await prefs.setString(_logLevelKey, settings.logLevel.name);
-    await prefs.setStringList(
-        _excludedPackagesKey, settings.excludedPackages.toList());
-    await prefs.setStringList(
-        _includedPackagesKey, settings.includedPackages.toList());
+    await prefs.setStringList(_excludedPackagesKey, settings.excludedPackages.toList());
+    await prefs.setStringList(_includedPackagesKey, settings.includedPackages.toList());
     await prefs.setString(_vpnModeKey, settings.vpnMode.name);
     await prefs.setBool(_splitTunnelingKey, settings.splitTunnelingEnabled);
     await prefs.setBool(_randomPortKey, settings.randomPort);

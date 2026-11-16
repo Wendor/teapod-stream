@@ -46,8 +46,13 @@ void main() {
 
       test('valid JSON parses correctly', () {
         final uri = makeVmessUri({
-          'ps': 'VMess Test', 'add': '1.2.3.4', 'port': '8388',
-          'id': 'test-uuid', 'aid': '0', 'net': 'tcp', 'tls': '',
+          'ps': 'VMess Test',
+          'add': '1.2.3.4',
+          'port': '8388',
+          'id': 'test-uuid',
+          'aid': '0',
+          'net': 'tcp',
+          'tls': '',
         });
         final config = VlessParser.parseUri(uri);
         expect(config, isNotNull);
@@ -58,9 +63,7 @@ void main() {
       });
 
       test('port as string is converted to int', () {
-        final uri = makeVmessUri({
-          'add': 'host', 'port': '9090', 'id': 'uid', 'net': 'tcp', 'tls': '',
-        });
+        final uri = makeVmessUri({'add': 'host', 'port': '9090', 'id': 'uid', 'net': 'tcp', 'tls': ''});
         expect(VlessParser.parseUri(uri)?.port, 9090);
       });
 
@@ -85,21 +88,11 @@ void main() {
       });
 
       test('percent-decodes the password, as share links encode it', () {
-        expect(
-          VlessParser.parseUri('trojan://p%40ss%3A1@server.com:443?security=tls')!
-              .password,
-          'p@ss:1',
-        );
+        expect(VlessParser.parseUri('trojan://p%40ss%3A1@server.com:443?security=tls')!.password, 'p@ss:1');
         // A raw "@" still parses (the last "@" ends the password); a stray
         // "%" leaves the password as given.
-        expect(
-          VlessParser.parseUri('trojan://p@ss@server.com:443')!.password,
-          'p@ss',
-        );
-        expect(
-          VlessParser.parseUri('trojan://100%zz@server.com:443')!.password,
-          '100%zz',
-        );
+        expect(VlessParser.parseUri('trojan://p@ss@server.com:443')!.password, 'p@ss');
+        expect(VlessParser.parseUri('trojan://100%zz@server.com:443')!.password, '100%zz');
       });
 
       test('security defaults to TLS and keeps reality or none', () {
@@ -135,7 +128,8 @@ void main() {
 
     test('VLESS path and spx are decoded once (%25 survives)', () {
       final config = VlessParser.parseUri(
-          'vless://u@h.com:443?type=ws&path=%2Fa%2550b&security=reality&pbk=k&spx=%2F%25x#n')!;
+        'vless://u@h.com:443?type=ws&path=%2Fa%2550b&security=reality&pbk=k&spx=%2F%25x#n',
+      )!;
       expect(config.wsPath, '/a%50b');
       expect(config.spiderX, '/%x');
     });
@@ -189,9 +183,7 @@ void main() {
       });
 
       test('official host:port/?query form keeps a non-default port', () {
-        final config = VlessParser.parseUri(
-          'hysteria2://pass@server.com:8443/?sni=cover.example#HY2',
-        )!;
+        final config = VlessParser.parseUri('hysteria2://pass@server.com:8443/?sni=cover.example#HY2')!;
         expect(config.port, 8443);
         expect(config.hopPorts, isNull);
         expect(config.sni, 'cover.example');
@@ -213,15 +205,9 @@ void main() {
           expect(config.hopPorts, entry.value.$2, reason: entry.key);
           expect(config.validate(), isNull, reason: entry.key);
         }
-        expect(
-          VlessParser.parseUri('hy2://pass@[2001:db8::1]:20000-20010')!.address,
-          '2001:db8::1',
-        );
+        expect(VlessParser.parseUri('hy2://pass@[2001:db8::1]:20000-20010')!.address, '2001:db8::1');
         // An mport equal to the only port is not hopping.
-        expect(
-          VlessParser.parseUri('hy2://pass@server.com:443?mport=443')!.hopPorts,
-          isNull,
-        );
+        expect(VlessParser.parseUri('hy2://pass@server.com:443?mport=443')!.hopPorts, isNull);
       });
 
       test('an unreadable port is rejected instead of becoming 443', () {

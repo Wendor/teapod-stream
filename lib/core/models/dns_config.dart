@@ -1,15 +1,16 @@
 import '../../l10n/l10n.dart';
+
 /// DNS operating mode
 enum DnsMode {
-  proxy,   // DNS queries go through the proxy server
-  direct,  // DNS queries go direct
+  proxy, // DNS queries go through the proxy server
+  direct, // DNS queries go direct
 }
 
 /// DNS server type
 enum DnsType {
-  udp,   // Plain UDP DNS (port 53)
-  doh,   // DNS over HTTPS
-  dot,   // DNS over TLS
+  udp, // Plain UDP DNS (port 53)
+  doh, // DNS over HTTPS
+  dot, // DNS over TLS
 }
 
 /// DNS server setting
@@ -20,28 +21,54 @@ class DnsServerConfig {
   final String? domain; // For DoH/DoT (SNI)
   final String? fallbackIp; // IP fallback if DNS is unavailable (for DoH/DoT domains)
 
-  const DnsServerConfig({
-    required this.type,
-    required this.address,
-    this.port = 53,
-    this.domain,
-    this.fallbackIp,
-  });
+  const DnsServerConfig({required this.type, required this.address, this.port = 53, this.domain, this.fallbackIp});
 
   /// Preset DNS servers
   static const cloudflare = DnsServerConfig(type: DnsType.udp, address: '1.1.1.1');
-  static const cloudflareDoH = DnsServerConfig(type: DnsType.doh, address: 'https://cloudflare-dns.com/dns-query', domain: 'cloudflare-dns.com', fallbackIp: '1.1.1.1');
-  static const cloudflareDoT = DnsServerConfig(type: DnsType.dot, address: '1.1.1.1', port: 853, domain: 'cloudflare-dns.com', fallbackIp: '1.1.1.1');
+  static const cloudflareDoH = DnsServerConfig(
+    type: DnsType.doh,
+    address: 'https://cloudflare-dns.com/dns-query',
+    domain: 'cloudflare-dns.com',
+    fallbackIp: '1.1.1.1',
+  );
+  static const cloudflareDoT = DnsServerConfig(
+    type: DnsType.dot,
+    address: '1.1.1.1',
+    port: 853,
+    domain: 'cloudflare-dns.com',
+    fallbackIp: '1.1.1.1',
+  );
 
   static const google = DnsServerConfig(type: DnsType.udp, address: '8.8.8.8');
-  static const googleDoH = DnsServerConfig(type: DnsType.doh, address: 'https://dns.google/dns-query', domain: 'dns.google', fallbackIp: '8.8.8.8');
-  static const googleDoT = DnsServerConfig(type: DnsType.dot, address: '8.8.8.8', port: 853, domain: 'dns.google', fallbackIp: '8.8.8.8');
+  static const googleDoH = DnsServerConfig(
+    type: DnsType.doh,
+    address: 'https://dns.google/dns-query',
+    domain: 'dns.google',
+    fallbackIp: '8.8.8.8',
+  );
+  static const googleDoT = DnsServerConfig(
+    type: DnsType.dot,
+    address: '8.8.8.8',
+    port: 853,
+    domain: 'dns.google',
+    fallbackIp: '8.8.8.8',
+  );
 
   static const quad9 = DnsServerConfig(type: DnsType.udp, address: '9.9.9.9');
-  static const quad9DoH = DnsServerConfig(type: DnsType.doh, address: 'https://dns.quad9.net/dns-query', domain: 'dns.quad9.net', fallbackIp: '9.9.9.9');
+  static const quad9DoH = DnsServerConfig(
+    type: DnsType.doh,
+    address: 'https://dns.quad9.net/dns-query',
+    domain: 'dns.quad9.net',
+    fallbackIp: '9.9.9.9',
+  );
 
   static const adguard = DnsServerConfig(type: DnsType.udp, address: '94.140.14.14');
-  static const adguardDoH = DnsServerConfig(type: DnsType.doh, address: 'https://dns.adguard-dns.com/dns-query', domain: 'dns.adguard-dns.com', fallbackIp: '94.140.14.14');
+  static const adguardDoH = DnsServerConfig(
+    type: DnsType.doh,
+    address: 'https://dns.adguard-dns.com/dns-query',
+    domain: 'dns.adguard-dns.com',
+    fallbackIp: '94.140.14.14',
+  );
 
   /// All preset servers for the UI
   static List<Map<String, dynamic>> get presets => [
@@ -60,19 +87,30 @@ class DnsServerConfig {
 
   static DnsServerConfig fromPreset(String preset, {String? customAddress, DnsType? customType}) {
     switch (preset) {
-      case 'cf_udp': return cloudflare;
-      case 'cf_doh': return cloudflareDoH;
-      case 'cf_dot': return cloudflareDoT;
-      case 'google_udp': return google;
-      case 'google_doh': return googleDoH;
-      case 'google_dot': return googleDoT;
-      case 'quad9_udp': return quad9;
-      case 'quad9_doh': return quad9DoH;
-      case 'adguard_udp': return adguard;
-      case 'adguard_doh': return adguardDoH;
+      case 'cf_udp':
+        return cloudflare;
+      case 'cf_doh':
+        return cloudflareDoH;
+      case 'cf_dot':
+        return cloudflareDoT;
+      case 'google_udp':
+        return google;
+      case 'google_doh':
+        return googleDoH;
+      case 'google_dot':
+        return googleDoT;
+      case 'quad9_udp':
+        return quad9;
+      case 'quad9_doh':
+        return quad9DoH;
+      case 'adguard_udp':
+        return adguard;
+      case 'adguard_doh':
+        return adguardDoH;
       case 'custom':
         return _custom(customType ?? DnsType.udp, customAddress);
-      default: return cloudflare;
+      default:
+        return cloudflare;
     }
   }
 
@@ -126,9 +164,12 @@ class DnsServerConfig {
 
   String get displayName {
     switch (type) {
-      case DnsType.udp: return address;
-      case DnsType.doh: return 'DoH: $address';
-      case DnsType.dot: return 'DoT: $address:$port';
+      case DnsType.udp:
+        return address;
+      case DnsType.doh:
+        return 'DoH: $address';
+      case DnsType.dot:
+        return 'DoT: $address:$port';
     }
   }
 }

@@ -52,8 +52,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
     _noiseDelayCtrl ??= TextEditingController(text: s.noise.delay);
     _muxConcCtrl ??= TextEditingController(text: s.mux.concurrency.toString());
     _muxXudpCtrl ??= TextEditingController(text: s.mux.xudpConcurrency.toString());
-    _hbThresholdCtrl ??=
-        TextEditingController(text: s.heartbeat.failureThreshold.toString());
+    _hbThresholdCtrl ??= TextEditingController(text: s.heartbeat.failureThreshold.toString());
     _hbUrlCtrl ??= TextEditingController(text: s.heartbeat.customUrl);
   }
 
@@ -78,8 +77,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
 
   void _update(AppSettings s) => ref.read(settingsProvider.notifier).save(s);
 
-  static String _fpLabel(TlsFingerprint fp) =>
-      fp == TlsFingerprint.defaultFp ? 'DEFAULT' : fp.name.toUpperCase();
+  static String _fpLabel(TlsFingerprint fp) => fp == TlsFingerprint.defaultFp ? 'DEFAULT' : fp.name.toUpperCase();
 
   /// Screen-styled dropdown of values; used for enums.
   void _showEnumPicker<T>(
@@ -91,7 +89,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
     required void Function(T) onPick,
   }) {
     final t = Theme.of(context).extension<TeapodTokens>()!;
-    showModalBottomSheet(
+    showModalBottomSheet<void>(
       context: context,
       backgroundColor: t.bg,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
@@ -101,12 +99,13 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-              child: Row(children: [
-                Expanded(
-                  child: Text(title,
-                      style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
-                ),
-              ]),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(title, style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+                  ),
+                ],
+              ),
             ),
             Container(height: 1, color: t.line),
             for (final v in values)
@@ -120,14 +119,12 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: Text(labelOf(v),
-                            style: AppTheme.mono(
-                                size: 12,
-                                color: v == current ? t.accent : t.text,
-                                letterSpacing: 0.5)),
+                        child: Text(
+                          labelOf(v),
+                          style: AppTheme.mono(size: 12, color: v == current ? t.accent : t.text, letterSpacing: 0.5),
+                        ),
                       ),
-                      if (v == current)
-                        Text('•', style: AppTheme.mono(size: 12, color: t.accent)),
+                      if (v == current) Text('•', style: AppTheme.mono(size: 12, color: t.accent)),
                     ],
                   ),
                 ),
@@ -140,7 +137,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
 
   void _showFingerprintPicker(BuildContext context, AppSettings s) {
     final t = Theme.of(context).extension<TeapodTokens>()!;
-    showModalBottomSheet(
+    showModalBottomSheet<void>(
       context: context,
       backgroundColor: t.bg,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
@@ -150,12 +147,16 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-              child: Row(children: [
-                Expanded(
-                  child: Text('tls // fingerprint',
-                      style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
-                ),
-              ]),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'tls // fingerprint',
+                      style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1),
+                    ),
+                  ),
+                ],
+              ),
             ),
             Container(height: 1, color: t.line),
             for (final fp in TlsFingerprint.values)
@@ -169,14 +170,16 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: Text(_fpLabel(fp),
-                            style: AppTheme.mono(
-                                size: 12,
-                                color: fp == s.tlsFingerprint ? t.accent : t.text,
-                                letterSpacing: 0.5)),
+                        child: Text(
+                          _fpLabel(fp),
+                          style: AppTheme.mono(
+                            size: 12,
+                            color: fp == s.tlsFingerprint ? t.accent : t.text,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
                       ),
-                      if (fp == s.tlsFingerprint)
-                        Text('●', style: AppTheme.mono(size: 10, color: t.accent)),
+                      if (fp == s.tlsFingerprint) Text('●', style: AppTheme.mono(size: 10, color: t.accent)),
                     ],
                   ),
                 ),
@@ -192,42 +195,42 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
   Widget build(BuildContext context) {
     final t = Theme.of(context).extension<TeapodTokens>()!;
     final settingsAsync = ref.watch(settingsProvider);
-    final profileState =
-        ref.watch(profileProvider).maybeWhen(data: (d) => d, orElse: () => null);
+    final profileState = ref.watch(profileProvider).maybeWhen(data: (d) => d, orElse: () => null);
     final locked = profileState?.isReadonly ?? false;
     final l = context.l10n;
 
     return Scaffold(
       body: SafeArea(
         child: settingsAsync.when(
-          loading: () => Center(
-              child: CircularProgressIndicator(color: t.accent, strokeWidth: 1.5)),
+          loading: () => Center(child: CircularProgressIndicator(color: t.accent, strokeWidth: 1.5)),
           error: (e, _) => Center(
-              child: Text(l.commonErrorWith('$e'), style: AppTheme.mono(size: 12, color: t.danger))),
+            child: Text(l.commonErrorWith('$e'), style: AppTheme.mono(size: 12, color: t.danger)),
+          ),
           data: (s) {
             _ensureControllers(s);
             return Column(
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  decoration:
-                      BoxDecoration(border: Border(bottom: BorderSide(color: t.line))),
+                  decoration: BoxDecoration(
+                    border: Border(bottom: BorderSide(color: t.line)),
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('teapod.stream // network',
-                          style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
-                      Text('socks [${s.randomPort ? 'rnd' : s.socksPort}]',
-                          style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+                      Text(
+                        'teapod.stream // network',
+                        style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1),
+                      ),
+                      Text(
+                        'socks [${s.randomPort ? 'rnd' : s.socksPort}]',
+                        style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1),
+                      ),
                     ],
                   ),
                 ),
                 BreadcrumbBar(t: t, parent: 'settings', current: 'network'),
-                HeroPanel(
-                  t: t,
-                  tagline: l.networkTagline,
-                  title: 'NETWORK',
-                ),
+                HeroPanel(t: t, tagline: l.networkTagline, title: 'NETWORK'),
                 const ReconnectBanner(),
                 Expanded(
                   child: ListView(
@@ -277,10 +280,9 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             controller: _socksUserCtrl!,
                             enabled: !locked,
                             hint: l.networkNoAuth,
-                            onChanged: (_) => _update(s.copyWith(
-                              socksUser: _socksUserCtrl!.text,
-                              socksPassword: _socksPasswordCtrl!.text,
-                            )),
+                            onChanged: (_) => _update(
+                              s.copyWith(socksUser: _socksUserCtrl!.text, socksPassword: _socksPasswordCtrl!.text),
+                            ),
                             t: t,
                           ),
                         ),
@@ -293,10 +295,9 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             enabled: !locked,
                             hint: l.networkNoAuth,
                             obscureText: true,
-                            onChanged: (_) => _update(s.copyWith(
-                              socksUser: _socksUserCtrl!.text,
-                              socksPassword: _socksPasswordCtrl!.text,
-                            )),
+                            onChanged: (_) => _update(
+                              s.copyWith(socksUser: _socksUserCtrl!.text, socksPassword: _socksPasswordCtrl!.text),
+                            ),
                             t: t,
                           ),
                         ),
@@ -304,13 +305,13 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                       FeatureGate(
                         feature: CoreFeature.proxyOnly,
                         child: SetRowToggle(
-                        t: t,
-                        title: l.networkProxyOnly,
-                        hint: l.networkProxyOnlyHint,
-                        value: s.proxyOnly,
-                        locked: locked,
-                        onChange: (v) => _update(s.copyWith(proxyOnly: v)),
-                      ),
+                          t: t,
+                          title: l.networkProxyOnly,
+                          hint: l.networkProxyOnlyHint,
+                          value: s.proxyOnly,
+                          locked: locked,
+                          onChange: (v) => _update(s.copyWith(proxyOnly: v)),
+                        ),
                       ),
                       SetSectionHeader(t: t, addr: '0x32', label: 'traffic'),
                       SetRowToggle(
@@ -324,13 +325,13 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                       FeatureGate(
                         feature: CoreFeature.icmpToggle,
                         child: SetRowToggle(
-                        t: t,
-                        title: 'ICMP (ping)',
-                        hint: l.networkIcmpHint,
-                        value: s.allowIcmp,
-                        locked: locked,
-                        onChange: (v) => _update(s.copyWith(allowIcmp: v)),
-                      ),
+                          t: t,
+                          title: 'ICMP (ping)',
+                          hint: l.networkIcmpHint,
+                          value: s.allowIcmp,
+                          locked: locked,
+                          onChange: (v) => _update(s.copyWith(allowIcmp: v)),
+                        ),
                       ),
                       SetRowToggle(
                         t: t,
@@ -344,7 +345,8 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                       Container(
                         padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
                         decoration: BoxDecoration(
-                            border: Border(bottom: BorderSide(color: t.lineSoft))),
+                          border: Border(bottom: BorderSide(color: t.lineSoft)),
+                        ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -352,12 +354,12 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('TLS fingerprint',
-                                      style: AppTheme.sans(size: 14, color: t.text)),
+                                  Text('TLS fingerprint', style: AppTheme.sans(size: 14, color: t.text)),
                                   const SizedBox(height: 3),
-                                  Text(l.networkFingerprintHint,
-                                      style: AppTheme.mono(
-                                          size: 10, color: t.textMuted, letterSpacing: 0.5)),
+                                  Text(
+                                    l.networkFingerprintHint,
+                                    style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5),
+                                  ),
                                 ],
                               ),
                             ),
@@ -367,15 +369,16 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                                   ? () => showReadonlySnack(context)
                                   : () => _showFingerprintPicker(context, s),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 8),
-                                decoration:
-                                    BoxDecoration(border: Border.all(color: t.line)),
-                                child: Text(_fpLabel(s.tlsFingerprint),
-                                    style: AppTheme.mono(
-                                        size: 11,
-                                        color: locked ? t.textDim : t.accent,
-                                        letterSpacing: 0.5)),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(border: Border.all(color: t.line)),
+                                child: Text(
+                                  _fpLabel(s.tlsFingerprint),
+                                  style: AppTheme.mono(
+                                    size: 11,
+                                    color: locked ? t.textDim : t.accent,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
                               ),
                             ),
                           ],
@@ -395,42 +398,42 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                         FeatureGate(
                           feature: CoreFeature.customMtu,
                           child: SetInlineField(
-                          t: t,
-                          label: 'MTU',
-                          locked: locked,
-                          child: SetNumField(
                             t: t,
-                            controller: _mtuCtrl!,
-                            enabled: !locked,
-                            hint: '1500',
-                            onChanged: (v) {
-                              final mtu = int.tryParse(v);
-                              if (mtu != null) {
-                                _update(s.copyWith(mtu: mtu.clamp(576, 9000)));
-                              }
-                            },
+                            label: 'MTU',
+                            locked: locked,
+                            child: SetNumField(
+                              t: t,
+                              controller: _mtuCtrl!,
+                              enabled: !locked,
+                              hint: '1500',
+                              onChanged: (v) {
+                                final mtu = int.tryParse(v);
+                                if (mtu != null) {
+                                  _update(s.copyWith(mtu: mtu.clamp(576, 9000)));
+                                }
+                              },
+                            ),
                           ),
-                        ),
                         ),
                       FeatureGate(
                         feature: CoreFeature.observatory,
                         child: SetInlineField(
-                        t: t,
-                        label: l.networkObservatoryInterval,
-                        locked: locked,
-                        child: SetNumField(
                           t: t,
-                          controller: _obsCtrl!,
-                          enabled: !locked,
-                          hint: '600',
-                          onChanged: (v) {
-                            final sec = int.tryParse(v);
-                            if (sec != null) {
-                              _update(s.copyWith(obsProbeIntervalSec: sec.clamp(0, 86400)));
-                            }
-                          },
+                          label: l.networkObservatoryInterval,
+                          locked: locked,
+                          child: SetNumField(
+                            t: t,
+                            controller: _obsCtrl!,
+                            enabled: !locked,
+                            hint: '600',
+                            onChanged: (v) {
+                              final sec = int.tryParse(v);
+                              if (sec != null) {
+                                _update(s.copyWith(obsProbeIntervalSec: sec.clamp(0, 86400)));
+                              }
+                            },
+                          ),
                         ),
-                      ),
                       ),
                       SetSectionHeader(t: t, addr: '0x34', label: 'fragment'),
                       SetRowToggle(
@@ -451,8 +454,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             controller: _fragPacketsCtrl!,
                             enabled: !locked,
                             hint: 'tlshello',
-                            onChanged: (v) => _update(
-                                s.copyWith(fragment: s.fragment.copyWith(packets: v.trim()))),
+                            onChanged: (v) => _update(s.copyWith(fragment: s.fragment.copyWith(packets: v.trim()))),
                           ),
                         ),
                         SetInlineField(
@@ -464,8 +466,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             controller: _fragLengthCtrl!,
                             enabled: !locked,
                             hint: '100-200',
-                            onChanged: (v) => _update(
-                                s.copyWith(fragment: s.fragment.copyWith(length: v.trim()))),
+                            onChanged: (v) => _update(s.copyWith(fragment: s.fragment.copyWith(length: v.trim()))),
                           ),
                         ),
                         SetInlineField(
@@ -477,15 +478,11 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             controller: _fragIntervalCtrl!,
                             enabled: !locked,
                             hint: '10-20',
-                            onChanged: (v) => _update(
-                                s.copyWith(fragment: s.fragment.copyWith(interval: v.trim()))),
+                            onChanged: (v) => _update(s.copyWith(fragment: s.fragment.copyWith(interval: v.trim()))),
                           ),
                         ),
                       ],
-                      if (s.fragment.enabled && !s.fragment.isValid)
-                        _HintRow(
-                            t: t,
-                            text: l.networkFragmentInvalid),
+                      if (s.fragment.enabled && !s.fragment.isValid) _HintRow(t: t, text: l.networkFragmentInvalid),
                       SetSectionHeader(t: t, addr: '0x35', label: 'noise'),
                       SetRowToggle(
                         t: t,
@@ -520,8 +517,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             controller: _noisePacketCtrl!,
                             enabled: !locked,
                             hint: s.noise.type == NoiseType.rand ? '50-100' : l.networkNoiseContent,
-                            onChanged: (v) =>
-                                _update(s.copyWith(noise: s.noise.copyWith(packet: v.trim()))),
+                            onChanged: (v) => _update(s.copyWith(noise: s.noise.copyWith(packet: v.trim()))),
                           ),
                         ),
                         SetInlineField(
@@ -533,28 +529,28 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             controller: _noiseDelayCtrl!,
                             enabled: !locked,
                             hint: '10-20',
-                            onChanged: (v) =>
-                                _update(s.copyWith(noise: s.noise.copyWith(delay: v.trim()))),
+                            onChanged: (v) => _update(s.copyWith(noise: s.noise.copyWith(delay: v.trim()))),
                           ),
                         ),
                         if (!s.noise.isValid)
                           _HintRow(
-                              t: t,
-                              text: s.noise.type == NoiseType.rand
-                                  ? l.networkNoiseInvalidRand
-                                  : l.networkNoiseInvalidPacket),
+                            t: t,
+                            text: s.noise.type == NoiseType.rand
+                                ? l.networkNoiseInvalidRand
+                                : l.networkNoiseInvalidPacket,
+                          ),
                       ],
                       SetSectionHeader(t: t, addr: '0x36', label: 'mux'),
                       FeatureGate(
                         feature: CoreFeature.mux,
                         child: SetRowToggle(
-                        t: t,
-                        title: 'Mux',
-                        hint: l.networkMuxHint,
-                        value: s.mux.enabled,
-                        locked: locked,
-                        onChange: (v) => _update(s.copyWith(mux: s.mux.copyWith(enabled: v))),
-                      ),
+                          t: t,
+                          title: 'Mux',
+                          hint: l.networkMuxHint,
+                          value: s.mux.enabled,
+                          locked: locked,
+                          onChange: (v) => _update(s.copyWith(mux: s.mux.copyWith(enabled: v))),
+                        ),
                       ),
                       if (s.mux.enabled) ...[
                         SetInlineField(
@@ -569,8 +565,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             onChanged: (v) {
                               final n = int.tryParse(v);
                               if (n != null) {
-                                _update(s.copyWith(
-                                    mux: s.mux.copyWith(concurrency: n.clamp(1, 1024))));
+                                _update(s.copyWith(mux: s.mux.copyWith(concurrency: n.clamp(1, 1024))));
                               }
                             },
                           ),
@@ -587,8 +582,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             onChanged: (v) {
                               final n = int.tryParse(v);
                               if (n != null) {
-                                _update(s.copyWith(
-                                    mux: s.mux.copyWith(xudpConcurrency: n.clamp(1, 1024))));
+                                _update(s.copyWith(mux: s.mux.copyWith(xudpConcurrency: n.clamp(1, 1024))));
                               }
                             },
                           ),
@@ -605,8 +599,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             values: XudpUdp443.values,
                             current: s.mux.xudpProxyUDP443,
                             labelOf: (v) => v.name.toUpperCase(),
-                            onPick: (v) =>
-                                _update(s.copyWith(mux: s.mux.copyWith(xudpProxyUDP443: v))),
+                            onPick: (v) => _update(s.copyWith(mux: s.mux.copyWith(xudpProxyUDP443: v))),
                           ),
                         ),
                       ],
@@ -623,8 +616,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                           values: HeartbeatProbe.values,
                           current: s.heartbeat.probe,
                           labelOf: (v) => v.name.toUpperCase(),
-                          onPick: (v) =>
-                              _update(s.copyWith(heartbeat: s.heartbeat.copyWith(probe: v))),
+                          onPick: (v) => _update(s.copyWith(heartbeat: s.heartbeat.copyWith(probe: v))),
                         ),
                       ),
                       if (s.heartbeat.probe != HeartbeatProbe.passive) ...[
@@ -640,8 +632,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             values: HeartbeatTarget.values,
                             current: s.heartbeat.target,
                             labelOf: (v) => v.name.toUpperCase(),
-                            onPick: (v) =>
-                                _update(s.copyWith(heartbeat: s.heartbeat.copyWith(target: v))),
+                            onPick: (v) => _update(s.copyWith(heartbeat: s.heartbeat.copyWith(target: v))),
                           ),
                         ),
                         if (s.heartbeat.target == HeartbeatTarget.custom)
@@ -654,8 +645,8 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                               controller: _hbUrlCtrl!,
                               enabled: !locked,
                               hint: 'http://…/generate_204',
-                              onChanged: (v) => _update(
-                                  s.copyWith(heartbeat: s.heartbeat.copyWith(customUrl: v.trim()))),
+                              onChanged: (v) =>
+                                  _update(s.copyWith(heartbeat: s.heartbeat.copyWith(customUrl: v.trim()))),
                             ),
                           ),
                       ],
@@ -671,9 +662,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                           onChanged: (v) {
                             final n = int.tryParse(v);
                             if (n != null) {
-                              _update(s.copyWith(
-                                  heartbeat:
-                                      s.heartbeat.copyWith(failureThreshold: n.clamp(1, 10))));
+                              _update(s.copyWith(heartbeat: s.heartbeat.copyWith(failureThreshold: n.clamp(1, 10))));
                             }
                           },
                         ),
@@ -690,8 +679,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                           values: HeartbeatFailAction.values,
                           current: s.heartbeat.failAction,
                           labelOf: (v) => v.name.toUpperCase(),
-                          onPick: (v) =>
-                              _update(s.copyWith(heartbeat: s.heartbeat.copyWith(failAction: v))),
+                          onPick: (v) => _update(s.copyWith(heartbeat: s.heartbeat.copyWith(failAction: v))),
                         ),
                       ),
                       if (s.heartbeat.failAction == HeartbeatFailAction.switchConfig)
@@ -707,8 +695,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             values: SwitchSource.values,
                             current: s.heartbeat.switchSource,
                             labelOf: (v) => v.name.toUpperCase(),
-                            onPick: (v) => _update(
-                                s.copyWith(heartbeat: s.heartbeat.copyWith(switchSource: v))),
+                            onPick: (v) => _update(s.copyWith(heartbeat: s.heartbeat.copyWith(switchSource: v))),
                           ),
                         ),
                       const SizedBox(height: 32),
@@ -746,7 +733,9 @@ class _PickerRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.lineSoft))),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: t.lineSoft)),
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -756,8 +745,7 @@ class _PickerRow extends StatelessWidget {
               children: [
                 Text(title, style: AppTheme.sans(size: 14, color: t.text)),
                 const SizedBox(height: 3),
-                Text(hint,
-                    style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5)),
+                Text(hint, style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5)),
               ],
             ),
           ),
@@ -767,11 +755,10 @@ class _PickerRow extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(border: Border.all(color: t.line)),
-              child: Text(value,
-                  style: AppTheme.mono(
-                      size: 11,
-                      color: locked ? t.textDim : t.accent,
-                      letterSpacing: 0.5)),
+              child: Text(
+                value,
+                style: AppTheme.mono(size: 11, color: locked ? t.textDim : t.accent, letterSpacing: 0.5),
+              ),
             ),
           ),
         ],
@@ -791,9 +778,10 @@ class _HintRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.lineSoft))),
-      child: Text(text,
-          style: AppTheme.mono(size: 10, color: t.danger, letterSpacing: 0.5)),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: t.lineSoft)),
+      ),
+      child: Text(text, style: AppTheme.mono(size: 10, color: t.danger, letterSpacing: 0.5)),
     );
   }
 }

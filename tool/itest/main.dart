@@ -18,7 +18,11 @@ Duration parseDuration(String s) {
   final m = RegExp(r'^(\d+)(s|m|h)$').firstMatch(s);
   if (m == null) throw FormatException('duration like 30s / 15m / 2h: $s');
   final n = int.parse(m[1]!);
-  return switch (m[2]) { 's' => Duration(seconds: n), 'm' => Duration(minutes: n), _ => Duration(hours: n) };
+  return switch (m[2]) {
+    's' => Duration(seconds: n),
+    'm' => Duration(minutes: n),
+    _ => Duration(hours: n),
+  };
 }
 
 Future<void> main(List<String> argv) async {
@@ -57,8 +61,12 @@ Future<void> _main(List<String> argv) async {
   final secrets = Secrets.load(args.option('secrets')!);
   final adb = await Adb.connect(args.option('serial'));
   if (!args.flag('skip-install') && !args.flag('list')) {
-    final r = await Process.start('./build.sh', ['itest'],
-        mode: ProcessStartMode.inheritStdio, environment: {'ANDROID_SERIAL': adb.serial});
+    final r = await Process.start(
+      './build.sh',
+      ['itest'],
+      mode: ProcessStartMode.inheritStdio,
+      environment: {'ANDROID_SERIAL': adb.serial},
+    );
     if (await r.exitCode != 0) throw StateError('./build.sh itest failed');
   }
 
@@ -75,16 +83,16 @@ Future<void> _main(List<String> argv) async {
   // The phone first (restore also forbids new faults), then the rest.
   Future<void>? finalizing;
   Future<void> finalize() => finalizing ??= () async {
-        await device.restore();
-        try {
-          await agent.send('disconnect', const {}, const Duration(seconds: 5));
-        } catch (_) {}
-        await device.parkApp();
-        report.write();
-        await adb.stopLogcat();
-        await logSink.close();
-        stdout.writeln('▶ report: ${run.file('report.md').path}');
-      }();
+    await device.restore();
+    try {
+      await agent.send('disconnect', const {}, const Duration(seconds: 5));
+    } catch (_) {}
+    await device.parkApp();
+    report.write();
+    await adb.stopLogcat();
+    await logSink.close();
+    stdout.writeln('▶ report: ${run.file('report.md').path}');
+  }();
   _finalize = finalize;
 
   final sigint = ProcessSignal.sigint.watch().listen((_) async {
@@ -104,18 +112,25 @@ Future<void> _main(List<String> argv) async {
     stdout.writeln('▶ configs: ${configs.length}');
 
     String? glob(String name) => args.option(name);
-    var cases = buildMatrix(configs,
-        owned: imported.owned, configGlob: glob('config'), coreGlob: glob('core'), caseGlob: glob('case'));
+    var cases = buildMatrix(
+      configs,
+      owned: imported.owned,
+      configGlob: glob('config'),
+      coreGlob: glob('core'),
+      caseGlob: glob('case'),
+    );
     if (args.flag('list')) {
-      final all = buildMatrix(configs,
-          owned: imported.owned,
-          reference: {
-            for (final core in coreNames.keys)
-              if (configs.where((c) => c.cores.contains(core)).firstOrNull case final c?) core: c.id,
-          },
-          configGlob: glob('config'),
-          coreGlob: glob('core'),
-          caseGlob: glob('case'));
+      final all = buildMatrix(
+        configs,
+        owned: imported.owned,
+        reference: {
+          for (final core in coreNames.keys)
+            if (configs.where((c) => c.cores.contains(core)).firstOrNull case final c?) core: c.id,
+        },
+        configGlob: glob('config'),
+        coreGlob: glob('core'),
+        caseGlob: glob('case'),
+      );
       for (final c in all) {
         stdout.writeln(c.id);
       }
@@ -138,14 +153,26 @@ Future<void> _main(List<String> argv) async {
     report.baseline = baseline;
     run.file('baseline.json').writeAsStringSync(jsonEncode(baseline.toJson()));
     stdout.writeln('▶ baseline: ${baseline.toJson()}');
-    if (baseline.direct.values.every((v) => v == null)) throw StateError('no internet without VPN — the run is impossible');
+    if (baseline.direct.values.every((v) => v == null)) {
+      throw StateError('no internet without VPN — the run is impossible');
+    }
 
-    CaseCtx ctxFor(String configId) => CaseCtx(agent, probes, baseline, device, imported.egress[configId],
-        strictEgress: imported.strict.contains(configId));
+    CaseCtx ctxFor(String configId) => CaseCtx(
+      agent,
+      probes,
+      baseline,
+      device,
+      imported.egress[configId],
+      strictEgress: imported.strict.contains(configId),
+    );
 
     final reference = <String, String>{};
     // The reference config — from the same ones --config selects.
-    final inScope = buildMatrix(configs, owned: imported.owned, configGlob: glob('config')).map((m) => m.configId).toSet();
+    final inScope = buildMatrix(
+      configs,
+      owned: imported.owned,
+      configGlob: glob('config'),
+    ).map((m) => m.configId).toSet();
     final refPool = configs.where((c) => inScope.contains(c.id)).toList();
     if (args.option('phase') != 'soak') {
       final base = cases.where((c) => c.id.startsWith('base/')).toList();
@@ -159,13 +186,14 @@ Future<void> _main(List<String> argv) async {
           report.note('opt/soak ${coreNames[core]}: skipped — no reference config (no owned config passed base)');
         }
       }
-      final opt = buildMatrix(configs,
-              owned: imported.owned,
-              reference: reference,
-              configGlob: glob('config'),
-              coreGlob: glob('core'),
-              caseGlob: glob('case'))
-          .where((c) => c.id.startsWith('opt/'));
+      final opt = buildMatrix(
+        configs,
+        owned: imported.owned,
+        reference: reference,
+        configGlob: glob('config'),
+        coreGlob: glob('core'),
+        caseGlob: glob('case'),
+      ).where((c) => c.id.startsWith('opt/'));
       for (final mc in opt) {
         report.add(await runCase(mc, ctxFor(mc.configId), run, adb, logcat));
       }
@@ -234,7 +262,11 @@ Future<Imported> importAll(AgentClient agent, Secrets s, RunReport report) async
   Future<Set<String>> ids() async => {for (final m in (await agent.send('list') as List)) (m as Map)['id'] as String};
   for (final c in s.configs) {
     final before = await ids();
-    final r = await agent.send('import', {'uris': [c.uri]}, const Duration(seconds: 60)) as Map;
+    final r =
+        await agent.send('import', {
+              'uris': [c.uri],
+            }, const Duration(seconds: 60))
+            as Map;
     for (final f in r['failed'] as List) {
       report.note('import: config #${s.configs.indexOf(c)} not parsed ($f)');
     }
@@ -245,7 +277,11 @@ Future<Imported> importAll(AgentClient agent, Secrets s, RunReport report) async
   }
   for (final sub in s.subs) {
     final before = await ids();
-    final r = await agent.send('import', {'subs': [sub.url]}, const Duration(seconds: 90)) as Map;
+    final r =
+        await agent.send('import', {
+              'subs': [sub.url],
+            }, const Duration(seconds: 90))
+            as Map;
     for (final f in r['failed'] as List) {
       report.note('import: subscription #${s.subs.indexOf(sub)}${sub.owned ? '' : ' (not owned)'} — $f');
     }
@@ -256,7 +292,10 @@ Future<Imported> importAll(AgentClient agent, Secrets s, RunReport report) async
   final configs = (await agent.send('list') as List).cast<Map<String, dynamic>>().map(agentConfigFromJson).toList()
     ..removeWhere((c) => s.exclude.any((g) => globMatch(g, '${c.host}:${c.port}')));
   // Without an explicit egressIp the expected exit is the server host IP (a hint, not strict).
-  final strict = {for (final e in egress.entries) if (e.value != null) e.key};
+  final strict = {
+    for (final e in egress.entries)
+      if (e.value != null) e.key,
+  };
   for (final c in configs) {
     if (egress[c.id] != null) continue;
     try {
@@ -268,17 +307,27 @@ Future<Imported> importAll(AgentClient agent, Secrets s, RunReport report) async
 
 /// The core's reference config: from secrets.reference by name, otherwise the first owned one with PASS in base.
 Map<String, String> pickReference(
-    List<AgentConfig> configs, Map<String, bool> owned, Map<String, String> byName, List<CaseResult> results) {
+  List<AgentConfig> configs,
+  Map<String, bool> owned,
+  Map<String, String> byName,
+  List<CaseResult> results,
+) {
   final out = <String, String>{};
   for (final core in coreNames.keys) {
     final named = byName[core];
     final pinned = configs.where((c) => c.name == named && c.cores.contains(core)).firstOrNull;
-    final passed = configs.where((c) =>
-        owned[c.id] == true &&
-        c.cores.contains(core) &&
-        results.any((r) =>
-            r.configId == c.id && r.id.startsWith('base/${coreNames[core]}/') && r.verdict == Verdict.pass));
-    final ref = pinned ?? passed.firstOrNull ?? (results.isEmpty ? configs.where((c) => owned[c.id] == true && c.cores.contains(core)).firstOrNull : null);
+    final passed = configs.where(
+      (c) =>
+          owned[c.id] == true &&
+          c.cores.contains(core) &&
+          results.any(
+            (r) => r.configId == c.id && r.id.startsWith('base/${coreNames[core]}/') && r.verdict == Verdict.pass,
+          ),
+    );
+    final ref =
+        pinned ??
+        passed.firstOrNull ??
+        (results.isEmpty ? configs.where((c) => owned[c.id] == true && c.cores.contains(core)).firstOrNull : null);
     if (ref != null) out[core] = ref.id;
   }
   return out;

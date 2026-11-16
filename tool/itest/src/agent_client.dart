@@ -62,8 +62,11 @@ class AgentClient {
     }
   }
 
-  Future<Object?> send(String op,
-      [Map<String, dynamic> args = const {}, Duration timeout = const Duration(seconds: 30)]) async {
+  Future<Object?> send(
+    String op, [
+    Map<String, dynamic> args = const {},
+    Duration timeout = const Duration(seconds: 30),
+  ]) async {
     final id = '${++_seq}-${DateTime.now().millisecondsSinceEpoch}';
     final reply = Completer<Map<String, dynamic>>();
     _replies[id] = reply;
@@ -74,10 +77,13 @@ class AgentClient {
     if ((await shell.run(am, timeout: const Duration(seconds: 15))).code == -1) {
       await shell.run(am, timeout: const Duration(seconds: 15));
     }
-    var m = await reply.future.timeout(timeout, onTimeout: () {
-      _replies.remove(id);
-      throw ItestTimeout('$op: no agent response within ${timeout.inSeconds} s');
-    });
+    var m = await reply.future.timeout(
+      timeout,
+      onTimeout: () {
+        _replies.remove(id);
+        throw ItestTimeout('$op: no agent response within ${timeout.inSeconds} s');
+      },
+    );
     if (m['file'] is String) {
       final file = m['file'];
       final r = await shell.run(['shell', 'run-as $pkg cat $file']);
@@ -93,8 +99,12 @@ class AgentClient {
   /// Waits for a state from [targets]; if it is already current — right away.
   Future<String> waitState(Set<String> targets, Duration timeout) async {
     if (targets.contains(lastState)) return lastState!;
-    final s = await states.firstWhere((s) => targets.contains(s.state)).timeout(timeout,
-        onTimeout: () => throw ItestTimeout('no state $targets within ${timeout.inSeconds} s (now $lastState)'));
+    final s = await states
+        .firstWhere((s) => targets.contains(s.state))
+        .timeout(
+          timeout,
+          onTimeout: () => throw ItestTimeout('no state $targets within ${timeout.inSeconds} s (now $lastState)'),
+        );
     return s.state;
   }
 }

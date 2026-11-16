@@ -45,8 +45,7 @@ void main() {
     });
 
     test('data wins over url', () {
-      final r = DeeplinkRouter.parse(
-          'teapod://import/profile?url=https://x&data=${_profileBundle.toBase64()}')!;
+      final r = DeeplinkRouter.parse('teapod://import/profile?url=https://x&data=${_profileBundle.toBase64()}')!;
       expect(r.source, DeeplinkSource.data);
     });
 
@@ -71,26 +70,32 @@ void main() {
         http.runWithClient(() => DeeplinkRouter.fetchFromUrl(r), () => MockClient(h));
 
     test('fetches a profile bundle', () async {
-      final b = await fetch(DeeplinkParseResult.urlProfile('https://x/p'),
-          (req) async => http.Response(jsonEncode(_profileBundle.toJson()), 200));
+      final b = await fetch(
+        DeeplinkParseResult.urlProfile('https://x/p'),
+        (req) async => http.Response(jsonEncode(_profileBundle.toJson()), 200),
+      );
       expect((b as ProfileBundle).profile.name, 'P');
     });
 
     test('fetches a connections bundle', () async {
-      final b = await fetch(DeeplinkParseResult.urlConnections('https://x/c'),
-          (req) async => http.Response(jsonEncode(_connections.toJson()), 200));
+      final b = await fetch(
+        DeeplinkParseResult.urlConnections('https://x/c'),
+        (req) async => http.Response(jsonEncode(_connections.toJson()), 200),
+      );
       expect((b as ConnectionsBundle).label, 'L');
     });
 
     test('non-200, bad json and inline results give null', () async {
-      expect(await fetch(DeeplinkParseResult.urlProfile('https://x'),
-          (_) async => http.Response('', 404)), isNull);
-      expect(await fetch(DeeplinkParseResult.urlProfile('https://x'),
-          (_) async => http.Response('[1]', 200)), isNull);
-      expect(await fetch(DeeplinkParseResult.urlConnections('https://x'),
-          (_) async => throw http.ClientException('offline')), isNull);
-      expect(await DeeplinkRouter.fetchFromUrl(DeeplinkParseResult.inlineProfile(_profileBundle)),
-          isNull);
+      expect(await fetch(DeeplinkParseResult.urlProfile('https://x'), (_) async => http.Response('', 404)), isNull);
+      expect(await fetch(DeeplinkParseResult.urlProfile('https://x'), (_) async => http.Response('[1]', 200)), isNull);
+      expect(
+        await fetch(
+          DeeplinkParseResult.urlConnections('https://x'),
+          (_) async => throw http.ClientException('offline'),
+        ),
+        isNull,
+      );
+      expect(await DeeplinkRouter.fetchFromUrl(DeeplinkParseResult.inlineProfile(_profileBundle)), isNull);
     });
   });
 }

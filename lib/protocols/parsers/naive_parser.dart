@@ -42,7 +42,7 @@ abstract final class NaiveParser {
   }
 
   static Map<String, String> _headers(String raw) => {
-        for (final line in raw.split(RegExp(r'\r?\n')))
-          if (line.indexOf(':') case final i when i > 0) line.substring(0, i).trim(): line.substring(i + 1).trim(),
-      };
+    for (final line in raw.split(RegExp(r'\r?\n')))
+      if (line.indexOf(':') case final i when i > 0) line.substring(0, i).trim(): line.substring(i + 1).trim(),
+  };
 }

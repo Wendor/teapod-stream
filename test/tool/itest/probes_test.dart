@@ -27,8 +27,10 @@ void main() {
       expect(r.note, contains('leak'));
     });
     test('service already routed to the egress by the network is ignored', () {
-      expect(classifyTunnel(baseline: base, observed: {a: '144.0.0.1', b: '144.0.0.1'}, egress: '144.0.0.1').v,
-          Verdict.pass);
+      expect(
+        classifyTunnel(baseline: base, observed: {a: '144.0.0.1', b: '144.0.0.1'}, egress: '144.0.0.1').v,
+        Verdict.pass,
+      );
     });
     test('egress equals direct IP → pass, leak undetectable', () {
       final r = classifyTunnel(baseline: {a: '77.0.0.1'}, observed: {a: '77.0.0.1'}, egress: '77.0.0.1');
@@ -38,7 +40,11 @@ void main() {
     test('server in the device network (egress = ISP IP) → pass, leak undetectable', () {
       // Home server: its exit is the same ISP IP, and the router reroutes b to 144.x.
       final r = classifyTunnel(
-          baseline: base, observed: {a: '77.0.0.1', b: '144.0.0.1'}, egress: '77.0.0.1', ispIp: '77.0.0.1');
+        baseline: base,
+        observed: {a: '77.0.0.1', b: '144.0.0.1'},
+        egress: '77.0.0.1',
+        ispIp: '77.0.0.1',
+      );
       expect(r.v, Verdict.pass);
       expect(r.note, contains('undetectable'));
     });
@@ -73,8 +79,7 @@ void main() {
   });
 
   test('ip() accepts bare IPv4/IPv6 and rejects HTML', () async {
-    expect(await Probes(FakeShell({'checkip': '203.0.113.7\n'})).ip('https://checkip.amazonaws.com/'),
-        '203.0.113.7');
+    expect(await Probes(FakeShell({'checkip': '203.0.113.7\n'})).ip('https://checkip.amazonaws.com/'), '203.0.113.7');
     expect(await Probes(FakeShell({'ifconfig': '2001:db8::1'})).ip('https://ifconfig.co/ip'), '2001:db8::1');
     expect(await Probes(FakeShell({'mail.ru': '<html>blocked</html>'})).ip('https://ip.mail.ru', retries: 0), isNull);
   });
@@ -86,18 +91,25 @@ void main() {
     final p = Probes(shell)..log = log.add;
     expect(await p.ip('https://ifconfig.co/ip'), isNull);
     expect(shell.calls, hasLength(2));
-    expect(log, ['probe https://ifconfig.co/ip #1: rate limited 429', 'probe https://ifconfig.co/ip #2: rate limited 429']);
+    expect(log, [
+      'probe https://ifconfig.co/ip #1: rate limited 429',
+      'probe https://ifconfig.co/ip #2: rate limited 429',
+    ]);
   });
 
   test('baseline keeps direct IP per service and drops loopback answers', () async {
-    final b = await measureBaseline(Probes(FakeShell({
-      'ifconfig.co': '77.0.0.1',
-      'ipinfo.io': '77.0.0.1',
-      'amazonaws': '144.0.0.1',
-      'ipify': '144.0.0.1',
-      'ident.me': '<html>',
-      'nic.ru': '<html>no ip</html>',
-    })));
+    final b = await measureBaseline(
+      Probes(
+        FakeShell({
+          'ifconfig.co': '77.0.0.1',
+          'ipinfo.io': '77.0.0.1',
+          'amazonaws': '144.0.0.1',
+          'ipify': '144.0.0.1',
+          'ident.me': '<html>',
+          'nic.ru': '<html>no ip</html>',
+        }),
+      ),
+    );
     expect(b.direct['https://ifconfig.co/ip'], '77.0.0.1');
     expect(b.direct['https://checkip.amazonaws.com/'], '144.0.0.1');
     expect(b.direct['https://ident.me'], isNull);
@@ -116,12 +128,16 @@ void main() {
       expect(r.v, Verdict.fail);
     });
     test('other provider in proxy mode → pass', () {
-      expect(classifyDns(baseline: isp, observed: (ip: '1.1.1.1', geo: 'Norway - Cloudflare'), proxy: true).v,
-          Verdict.pass);
+      expect(
+        classifyDns(baseline: isp, observed: (ip: '1.1.1.1', geo: 'Norway - Cloudflare'), proxy: true).v,
+        Verdict.pass,
+      );
     });
     test('empty geo on both sides is not the same provider', () {
-      expect(classifyDns(baseline: (ip: '9.9.9.9', geo: ''), observed: (ip: '1.1.1.1', geo: ''), proxy: true).v,
-          Verdict.pass);
+      expect(
+        classifyDns(baseline: (ip: '9.9.9.9', geo: ''), observed: (ip: '1.1.1.1', geo: ''), proxy: true).v,
+        Verdict.pass,
+      );
     });
     test('no answer → fail; direct mode only needs an answer', () {
       expect(classifyDns(baseline: isp, observed: null, proxy: false).v, Verdict.fail);

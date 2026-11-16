@@ -45,37 +45,34 @@ class _ServerPickerSheet extends ConsumerWidget {
     final cs = ref.watch(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
     if (cs == null) return const SizedBox.shrink();
 
-    final pinned = cs.resolvedPins
-        .where((e) => e.$2 != null)
-        .map((e) => e.$2!)
-        .toList();
+    final pinned = cs.resolvedPins.where((e) => e.$2 != null).map((e) => e.$2!).toList();
 
     final sections = <(String, List<VpnConfig>)>[
       if (pinned.isNotEmpty) ('[pinned]', pinned),
       if (cs.standaloneConfigs.isNotEmpty) ('[local]', cs.standaloneConfigs),
       for (final sub in cs.subscriptions)
-        if ((cs.configsBySubscription[sub.id] ?? []).isNotEmpty)
-          (sub.name, cs.configsBySubscription[sub.id]!),
+        if ((cs.configsBySubscription[sub.id] ?? []).isNotEmpty) (sub.name, cs.configsBySubscription[sub.id]!),
     ];
 
     return SafeArea(
       child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.7,
-        ),
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-              child: Row(children: [
-                Expanded(
-                  child: Text('select // server',
-                      style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
-                ),
-                Text('${cs.configs.length}',
-                    style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
-              ]),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'select // server',
+                      style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1),
+                    ),
+                  ),
+                  Text('${cs.configs.length}', style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+                ],
+              ),
             ),
             Container(height: 1, color: t.line),
             Flexible(
@@ -86,9 +83,7 @@ class _ServerPickerSheet extends ConsumerWidget {
                   for (final (title, configs) in sections) ...[
                     Container(
                       padding: const EdgeInsets.fromLTRB(20, 12, 20, 6),
-                      child: Text(title,
-                          style: AppTheme.mono(
-                              size: 10, color: t.textMuted, letterSpacing: 1)),
+                      child: Text(title, style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
                     ),
                     for (final c in configs)
                       _PickerRow(
@@ -115,18 +110,12 @@ class _PickerRow extends StatelessWidget {
   final bool isActive;
   final VoidCallback onTap;
 
-  const _PickerRow({
-    required this.t,
-    required this.config,
-    required this.isActive,
-    required this.onTap,
-  });
+  const _PickerRow({required this.t, required this.config, required this.isActive, required this.onTap});
 
   String get _protoTag => config.protoTag;
 
   @override
-  Widget build(BuildContext context) =>
-      CoreSupportGate(config: config, child: _buildRow(context));
+  Widget build(BuildContext context) => CoreSupportGate(config: config, child: _buildRow(context));
 
   Widget _buildRow(BuildContext context) {
     final ping = config.latencyMs;
@@ -140,41 +129,32 @@ class _PickerRow extends StatelessWidget {
         ),
         child: Stack(
           children: [
-            if (isActive)
-              Positioned(
-                left: 0, top: 0, bottom: 0,
-                child: Container(width: 2, color: t.accent),
-              ),
+            if (isActive) Positioned(left: 0, top: 0, bottom: 0, child: Container(width: 2, color: t.accent)),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 11, 20, 11),
               child: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                    decoration: BoxDecoration(
-                        border: Border.all(color: isActive ? t.accent : t.line)),
+                    decoration: BoxDecoration(border: Border.all(color: isActive ? t.accent : t.line)),
                     constraints: const BoxConstraints(minWidth: 44),
-                    child: Text(_protoTag,
-                        textAlign: TextAlign.center,
-                        style: AppTheme.mono(
-                            size: 10,
-                            color: isActive ? t.accent : t.textDim,
-                            letterSpacing: 1)),
+                    child: Text(
+                      _protoTag,
+                      textAlign: TextAlign.center,
+                      style: AppTheme.mono(size: 10, color: isActive ? t.accent : t.textDim, letterSpacing: 1),
+                    ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(config.name,
-                        style: AppTheme.sans(
-                            size: 13,
-                            weight: FontWeight.w500,
-                            color: t.text,
-                            letterSpacing: -0.2),
-                        overflow: TextOverflow.ellipsis),
+                    child: Text(
+                      config.name,
+                      style: AppTheme.sans(size: 13, weight: FontWeight.w500, color: t.text, letterSpacing: -0.2),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   if (ping != null) ...[
                     const SizedBox(width: 8),
-                    Text('${ping}ms',
-                        style: AppTheme.mono(size: 11, color: t.accent)),
+                    Text('${ping}ms', style: AppTheme.mono(size: 11, color: t.accent)),
                   ],
                 ],
               ),

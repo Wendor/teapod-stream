@@ -24,11 +24,7 @@ class RustConfigBuilder {
   static const visionFlows = {'xtls-rprx-vision', 'xtls-rprx-vision-udp443'};
 
   /// xray-rust 0.9.0 (`shadowsocks2022::Cipher`): SS2022 only, no AEAD-2017.
-  static const ss2022Methods = {
-    '2022-blake3-aes-128-gcm',
-    '2022-blake3-aes-256-gcm',
-    '2022-blake3-chacha20-poly1305',
-  };
+  static const ss2022Methods = {'2022-blake3-aes-128-gcm', '2022-blake3-aes-256-gcm', '2022-blake3-chacha20-poly1305'};
 
   /// VMess AEAD body ciphers (`vmess::Cipher`). The core refuses `none`,
   /// `zero` and CFB; a link's other `scy` is sent as `auto`, as Go always does.
@@ -42,16 +38,7 @@ class RustConfigBuilder {
     VpnTransport.xhttp,
     VpnTransport.splithttp,
   };
-  static const _urlTransports = {
-    'tcp',
-    'raw',
-    'ws',
-    'websocket',
-    'httpupgrade',
-    'grpc',
-    'xhttp',
-    'splithttp',
-  };
+  static const _urlTransports = {'tcp', 'raw', 'ws', 'websocket', 'httpupgrade', 'grpc', 'xhttp', 'splithttp'};
 
   static bool supports(VpnConfig config) => unsupportedReason(config) == null;
 
@@ -83,14 +70,9 @@ class RustConfigBuilder {
       return L10n.current.rustVlessUuid;
     }
     final params = VlessParser.linkParams(config);
-    final carrier = _carrierReason(
-      config,
-      declaredTransport: params['type'],
-      headerType: params['headerType'],
-    );
+    final carrier = _carrierReason(config, declaredTransport: params['type'], headerType: params['headerType']);
     if (carrier != null) return carrier;
-    if (config.security != VpnSecurity.tls &&
-        config.security != VpnSecurity.reality) {
+    if (config.security != VpnSecurity.tls && config.security != VpnSecurity.reality) {
       return L10n.current.rustVlessSecurity;
     }
     final flow = config.flow ?? '';
@@ -112,15 +94,10 @@ class RustConfigBuilder {
       return L10n.current.rustTrojanPassword;
     }
     final params = VlessParser.linkParams(config);
-    final carrier = _carrierReason(
-      config,
-      declaredTransport: params['type'],
-      headerType: params['headerType'],
-    );
+    final carrier = _carrierReason(config, declaredTransport: params['type'], headerType: params['headerType']);
     if (carrier != null) return carrier;
     // xray-rust rejects Trojan without TLS/Reality for a public server.
-    if (config.security != VpnSecurity.tls &&
-        config.security != VpnSecurity.reality) {
+    if (config.security != VpnSecurity.tls && config.security != VpnSecurity.reality) {
       return L10n.current.rustTrojanSecurity;
     }
     return null;
@@ -146,11 +123,7 @@ class RustConfigBuilder {
     if (tls == 'tls' && config.security != VpnSecurity.tls) {
       return L10n.current.rustVmessTls(rawTls);
     }
-    return _carrierReason(
-      config,
-      declaredTransport: json['net']?.toString(),
-      headerType: json['type']?.toString(),
-    );
+    return _carrierReason(config, declaredTransport: json['net']?.toString(), headerType: json['type']?.toString());
   }
 
   static String? _shadowsocksUnsupportedReason(VpnConfig config) {
@@ -171,27 +144,19 @@ class RustConfigBuilder {
 
   /// Transport, TCP header and outer TLS/REALITY rules shared by the protocols
   /// on xray-rust's stream carriers (VLESS, Trojan, VMess).
-  static String? _carrierReason(
-    VpnConfig config, {
-    String? declaredTransport,
-    String? headerType,
-  }) {
+  static String? _carrierReason(VpnConfig config, {String? declaredTransport, String? headerType}) {
     final declared = declaredTransport?.trim().toLowerCase() ?? '';
-    if (!_transports.contains(config.transport) ||
-        (declared.isNotEmpty && !_urlTransports.contains(declared))) {
+    if (!_transports.contains(config.transport) || (declared.isNotEmpty && !_urlTransports.contains(declared))) {
       return L10n.current.rustTransport;
     }
     // The parser doesn't read headerType: without the check TCP with HTTP camouflage would silently
     // go out as bare TCP. xray-rust accepts only header.type none.
     final header = headerType?.trim().toLowerCase() ?? '';
-    if (config.transport == VpnTransport.tcp &&
-        header.isNotEmpty &&
-        header != 'none') {
+    if (config.transport == VpnTransport.tcp && header.isNotEmpty && header != 'none') {
       return L10n.current.rustTcpHeader(header);
     }
     if (config.security == VpnSecurity.reality &&
-        (config.transport == VpnTransport.ws ||
-            config.transport == VpnTransport.httpupgrade)) {
+        (config.transport == VpnTransport.ws || config.transport == VpnTransport.httpupgrade)) {
       return L10n.current.rustReality;
     }
     if (config.security == VpnSecurity.tls && _insecureWithoutPin(config)) {
@@ -219,13 +184,8 @@ class RustConfigBuilder {
     final keyLength = method == '2022-blake3-aes-128-gcm' ? 16 : 32;
     final keys = password.split(':');
     final chacha = method == '2022-blake3-chacha20-poly1305';
-    if (password.isEmpty ||
-        utf8.encode(password).length > 8192 ||
-        keys.length > 8 ||
-        (chacha && keys.length != 1)) {
-      return chacha
-          ? L10n.current.rustSsOneKey(method)
-          : L10n.current.rustSsMaxKeys(method);
+    if (password.isEmpty || utf8.encode(password).length > 8192 || keys.length > 8 || (chacha && keys.length != 1)) {
+      return chacha ? L10n.current.rustSsOneKey(method) : L10n.current.rustSsMaxKeys(method);
     }
     for (final key in keys) {
       final decoded = _strictBase64(key);
@@ -238,9 +198,7 @@ class RustConfigBuilder {
 
   /// Standard padded base64, as the `base64` crate's STANDARD engine decodes.
   static List<int>? _strictBase64(String value) {
-    if (value.isEmpty ||
-        value.length % 4 != 0 ||
-        !RegExp(r'^[A-Za-z0-9+/]+={0,2}$').hasMatch(value)) {
+    if (value.isEmpty || value.length % 4 != 0 || !RegExp(r'^[A-Za-z0-9+/]+={0,2}$').hasMatch(value)) {
       return null;
     }
     try {
@@ -266,11 +224,9 @@ class RustConfigBuilder {
 
   static String get _insecureReason => L10n.current.rustInsecure;
 
-  static bool _hasPin(VpnConfig config) =>
-      config.pinSHA256?.trim().isNotEmpty ?? false;
+  static bool _hasPin(VpnConfig config) => config.pinSHA256?.trim().isNotEmpty ?? false;
 
-  static bool _insecureWithoutPin(VpnConfig config) =>
-      config.allowInsecure && !_hasPin(config);
+  static bool _insecureWithoutPin(VpnConfig config) => config.allowInsecure && !_hasPin(config);
 
   /// xray-rust 0.9.0: Hysteria2 over stock QUIC TLS (h3), default BBR, with
   /// optional FinalMask Salamander and `quicParams.udpHop` in Xray-core
@@ -287,9 +243,7 @@ class RustConfigBuilder {
     if (obfs == 'salamander' && salamander.isEmpty) {
       return L10n.current.rustSalamanderNoPassword;
     }
-    if (salamander.isNotEmpty &&
-        (utf8.encode(salamander).length < 4 ||
-            utf8.encode(salamander).length > 4096)) {
+    if (salamander.isNotEmpty && (utf8.encode(salamander).length < 4 || utf8.encode(salamander).length > 4096)) {
       return L10n.current.rustSalamanderPassword;
     }
     final hop = config.hopPorts ?? '';
@@ -297,9 +251,7 @@ class RustConfigBuilder {
       return L10n.current.rustPortHopping;
     }
     final auth = config.password ?? '';
-    if (auth.isEmpty ||
-        utf8.encode(auth).length > 4096 ||
-        auth.codeUnits.any((c) => c < 0x20 || c == 0x7f)) {
+    if (auth.isEmpty || utf8.encode(auth).length > 4096 || auth.codeUnits.any((c) => c < 0x20 || c == 0x7f)) {
       return L10n.current.rustHy2Password;
     }
     if (_insecureWithoutPin(config)) return _insecureReason;
@@ -320,29 +272,20 @@ class RustConfigBuilder {
     return count;
   }
 
-  static Map<String, dynamic> build(
-    VpnConfig config,
-    VpnEngineOptions options,
-  ) {
+  static Map<String, dynamic> build(VpnConfig config, VpnEngineOptions options) {
     final reason = unsupportedReason(config);
     if (reason != null) throw FormatException(reason);
     if (options.proxyOnly || options.httpPort != 0) {
-      throw FormatException(
-        L10n.current.rustTunOnly,
-      );
+      throw FormatException(L10n.current.rustTunOnly);
     }
     // Go doesn't apply Mux to Hysteria2 (QUIC multiplexes streams itself),
     // so it doesn't get in the way here either.
     final hysteria2 = config.protocol == VpnProtocol.hysteria2;
     if (options.mux.enabled && !hysteria2) {
-      throw FormatException(
-        L10n.current.rustMux,
-      );
+      throw FormatException(L10n.current.rustMux);
     }
     if (options.mtu != 1500) {
-      throw FormatException(
-        L10n.current.rustMtu,
-      );
+      throw FormatException(L10n.current.rustMtu);
     }
     final fragment = fragmentMask(config, options.fragment);
     final noise = noiseMask(config, options.noise);
@@ -352,19 +295,13 @@ class RustConfigBuilder {
             options.routing.domainEnabled ||
             options.routing.sitesEnabled ||
             options.routing.ruServicesEnabled)) {
-      throw FormatException(
-        L10n.current.rustSniffing,
-      );
+      throw FormatException(L10n.current.rustSniffing);
     }
     if (options.routing.adBlockEnabled &&
         options.routing.isActive &&
         options.routing.geositeEnabled &&
-        options.routing.geositeCodes.any(
-          (c) => largeGeositeCodes.contains(c.trim().toLowerCase()),
-        )) {
-      throw FormatException(
-        L10n.current.rustAdBlockLimit,
-      );
+        options.routing.geositeCodes.any((c) => largeGeositeCodes.contains(c.trim().toLowerCase()))) {
+      throw FormatException(L10n.current.rustAdBlockLimit);
     }
 
     // Reuse the existing profile and domain-routing translation, then replace
@@ -375,8 +312,7 @@ class RustConfigBuilder {
     // the server (every supported protocol carries domain destinations)
     // without an extra client-side DNS round trip for every new host.
     result['routing']['domainStrategy'] =
-        options.routing.isActive &&
-            (options.routing.geoEnabled || options.routing.bypassLocal)
+        options.routing.isActive && (options.routing.geoEnabled || options.routing.bypassLocal)
         ? 'IPIfNonMatch'
         : 'AsIs';
     // Rust 0.6 restores domain identity from FakeDNS before TUN routing.
@@ -448,8 +384,7 @@ class RustConfigBuilder {
       final host = (ws.remove('headers') as Map?)?['Host'] as String? ?? '';
       if (host.isNotEmpty) ws['host'] = host;
     }
-    if (config.transport == VpnTransport.xhttp ||
-        config.transport == VpnTransport.splithttp) {
+    if (config.transport == VpnTransport.xhttp || config.transport == VpnTransport.splithttp) {
       stream['network'] = 'xhttp';
       stream.remove('splithttpSettings');
       stream['xhttpSettings'] = {
@@ -477,7 +412,7 @@ class RustConfigBuilder {
       // Go already wrote Salamander and udpHop; noise goes after Salamander, i.e.
       // raw, like freedom packets under obfuscation in Go.
       final mask = <String, dynamic>{
-        ...?stream['finalmask'] as Map?,
+        ...?(stream['finalmask'] as Map<String, dynamic>?),
         if (fragment != null) 'tcp': [fragment],
       };
       if (noise != null) {
@@ -486,9 +421,7 @@ class RustConfigBuilder {
       stream['finalmask'] = mask;
     }
     if (options.routing.direction == RoutingDirection.onlySelected) {
-      final direct = outbounds.singleWhere(
-        (dynamic out) => out['tag'] == 'direct',
-      );
+      final direct = outbounds.singleWhere((dynamic out) => out['tag'] == 'direct');
       outbounds.remove(direct);
       outbounds.insert(0, direct);
     }
@@ -506,8 +439,7 @@ class RustConfigBuilder {
   /// Returns whether a rule was added.
   static bool _blockTunUdp(List<dynamic> rules, VpnEngineOptions options) {
     if (options.enableUdp && !options.blockQuic) return false;
-    final at =
-        rules.lastIndexWhere((dynamic r) => r['outboundTag'] == 'dns-out') + 1;
+    final at = rules.lastIndexWhere((dynamic r) => r['outboundTag'] == 'dns-out') + 1;
     if (at == 0) throw StateError('DNS rule not found');
     rules.insert(at, <String, dynamic>{
       'type': 'field',
@@ -520,8 +452,7 @@ class RustConfigBuilder {
   }
 
   static bool _isXhttpH3(VpnConfig config) =>
-      (config.transport == VpnTransport.xhttp ||
-          config.transport == VpnTransport.splithttp) &&
+      (config.transport == VpnTransport.xhttp || config.transport == VpnTransport.splithttp) &&
       config.security == VpnSecurity.tls &&
       (config.alpn ?? '').split(',').map((s) => s.trim()).join(',') == 'h3';
 
@@ -551,42 +482,27 @@ class RustConfigBuilder {
   /// and `tlshello` leaves a first write that is not a TLS handshake record
   /// (Shadowsocks, VMess without TLS) untouched. Invalid settings are not
   /// applied in either build; the settings screen says so.
-  static Map<String, dynamic>? fragmentMask(
-    VpnConfig config,
-    FragmentSettings f,
-  ) {
+  static Map<String, dynamic>? fragmentMask(VpnConfig config, FragmentSettings f) {
     if (!f.enabled || !f.isValid) return null;
     if (config.protocol == VpnProtocol.hysteria2 || _isXhttpH3(config)) {
       return null;
     }
     if (f.packets.trim() != 'tlshello') {
-      throw FormatException(
-        L10n.current.rustFragmentPackets,
-      );
+      throw FormatException(L10n.current.rustFragmentPackets);
     }
     if (config.security == VpnSecurity.none) return null;
     final length = _range(f.length);
     final delay = _range(f.interval);
     if (length.$2 > 16384) {
-      throw FormatException(
-        L10n.current.rustFragmentLength,
-      );
+      throw FormatException(L10n.current.rustFragmentLength);
     }
     if (delay.$2 > 1000) {
-      throw FormatException(
-        L10n.current.rustFragmentDelay,
-      );
+      throw FormatException(L10n.current.rustFragmentDelay);
     }
     if (config.xhttpExtra?['downloadSettings'] != null) {
-      throw FormatException(
-        L10n.current.rustFragmentXhttp,
-      );
+      throw FormatException(L10n.current.rustFragmentXhttp);
     }
-    final settings = <String, dynamic>{
-      'packets': 'tlshello',
-      'length': f.length.trim(),
-      'delay': f.interval.trim(),
-    };
+    final settings = <String, dynamic>{'packets': 'tlshello', 'length': f.length.trim(), 'delay': f.interval.trim()};
     // xray-rust drops the connection if the split plan exceeds 4096 chunks or
     // 10 s of pauses; Go has no such limits. maxSplit caps the number of chunks
     // so that even a 16 KiB ClientHello of minimum-length chunks fits,
@@ -607,17 +523,13 @@ class RustConfigBuilder {
     if (!n.enabled || !n.isValid) return null;
     if (config.protocol != VpnProtocol.hysteria2 && !_isXhttpH3(config)) {
       if (config.protocol == VpnProtocol.shadowsocks) {
-        throw FormatException(
-          L10n.current.rustNoiseSs,
-        );
+        throw FormatException(L10n.current.rustNoiseSs);
       }
       return null;
     }
     final delay = n.delay.trim();
     if (_range(delay).$2 > 1000) {
-      throw FormatException(
-        L10n.current.rustNoiseDelay,
-      );
+      throw FormatException(L10n.current.rustNoiseDelay);
     }
     final packet = n.packet.trim();
     final int bytes;
@@ -627,26 +539,19 @@ class RustConfigBuilder {
       case NoiseType.str:
         bytes = utf8.encode(packet).length;
       case NoiseType.hex:
-        if (packet.length.isOdd ||
-            !RegExp(r'^[0-9a-fA-F]+$').hasMatch(packet)) {
-          throw FormatException(
-            L10n.current.rustNoiseHex,
-          );
+        if (packet.length.isOdd || !RegExp(r'^[0-9a-fA-F]+$').hasMatch(packet)) {
+          throw FormatException(L10n.current.rustNoiseHex);
         }
         bytes = packet.length ~/ 2;
       case NoiseType.base64:
         final decoded = _strictBase64(packet);
         if (decoded == null) {
-          throw FormatException(
-            L10n.current.rustNoiseBase64,
-          );
+          throw FormatException(L10n.current.rustNoiseBase64);
         }
         bytes = decoded.length;
     }
     if (bytes > 4096) {
-      throw FormatException(
-        L10n.current.rustNoisePacket,
-      );
+      throw FormatException(L10n.current.rustNoisePacket);
     }
     return {
       'type': 'noise',
@@ -667,17 +572,13 @@ class RustConfigBuilder {
   /// (both with FakeDNS and in "direct" mode). The domains are the same as Go's.
   static void _blockAdsInDnsOutbound(Map<String, dynamic> result) {
     final servers = (result['dns'] as Map)['servers'] as List<dynamic>;
-    final adServer = servers.singleWhere(
-      (dynamic s) => s is Map && s['address'] == 'rcode://success',
-    );
+    final adServer = servers.singleWhere((dynamic s) => s is Map && s['address'] == 'rcode://success');
     servers.remove(adServer);
     final outbounds = result['outbounds'] as List<dynamic>;
-    final dnsOut = outbounds.indexWhere(
-      (dynamic out) => out['protocol'] == 'dns',
-    );
+    final dnsOut = outbounds.indexWhere((dynamic out) => out['protocol'] == 'dns');
     // Go writes dns-out as a Map<String, String> literal — rebuild it.
     outbounds[dnsOut] = <String, dynamic>{
-      ...outbounds[dnsOut] as Map,
+      ...(outbounds[dnsOut] as Map).cast<String, dynamic>(),
       'settings': {
         'rules': [
           {'action': 'return', 'rCode': 0, 'domain': adServer['domains']},
@@ -689,8 +590,7 @@ class RustConfigBuilder {
   /// xray-rust reads a DoT server's port only from its `tls://` URL and ignores
   /// the object's `port`, so a custom DoT port would silently become 853.
   /// A plain server keeps `port`, but its IPv6 literal must be unbracketed.
-  static final _dotAuthorityWithPort =
-      RegExp(r'^tls://(\[[^\]]*\]|[^:\[\]]+):\d+$');
+  static final _dotAuthorityWithPort = RegExp(r'^tls://(\[[^\]]*\]|[^:\[\]]+):\d+$');
 
   static void _adaptDnsServers(Map<String, dynamic> dns) {
     for (final dynamic server in dns['servers'] as List<dynamic>) {
@@ -709,8 +609,7 @@ class RustConfigBuilder {
     }
   }
 
-  static String buildJson(VpnConfig config, VpnEngineOptions options) =>
-      jsonEncode(build(config, options));
+  static String buildJson(VpnConfig config, VpnEngineOptions options) => jsonEncode(build(config, options));
 
   /// Candidate check for switchConfig (`XrayEngine.measureOutbound`): the
   /// profile's proxy outbound, exactly as [build] writes it for the VPN, in a
@@ -721,10 +620,7 @@ class RustConfigBuilder {
   /// an ephemeral port and never collides with the VPN's SOCKS port. Android pins the server name
   /// into `dns.hosts` before the start, as for the VPN. Throws
   /// [FormatException] where [build] does.
-  static Map<String, dynamic> buildProbe(
-    VpnConfig config,
-    VpnEngineOptions options,
-  ) {
+  static Map<String, dynamic> buildProbe(VpnConfig config, VpnEngineOptions options) {
     final outbounds = build(config, options)['outbounds'] as List<dynamic>;
     final proxy = outbounds.singleWhere((dynamic o) => o['tag'] == 'proxy');
     // A one-time password: probeOutboundUrl bypasses the inbound, and without it any
@@ -752,6 +648,5 @@ class RustConfigBuilder {
     };
   }
 
-  static String buildProbeJson(VpnConfig config, VpnEngineOptions options) =>
-      jsonEncode(buildProbe(config, options));
+  static String buildProbeJson(VpnConfig config, VpnEngineOptions options) => jsonEncode(buildProbe(config, options));
 }

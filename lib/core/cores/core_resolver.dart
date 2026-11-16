@@ -52,9 +52,9 @@ class CoreResolver {
 
   /// Enabled and available cores by priority.
   List<CoreKind> get usable => [
-        for (final k in settings.coreOrder)
-          if (available.contains(k) && !settings.disabledCores.contains(k)) k,
-      ];
+    for (final k in settings.coreOrder)
+      if (available.contains(k) && !settings.disabledCores.contains(k)) k,
+  ];
 
   /// The core that runs most profiles.
   CoreKind? get primary => usable.firstOrNull;

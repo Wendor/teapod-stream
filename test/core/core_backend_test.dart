@@ -9,10 +9,16 @@ import 'package:teapodstream/protocols/xray/xray_config_builder.dart';
 import 'package:teapodstream/protocols/xray/xray_go_backend.dart';
 
 VpnConfig _vless() => VpnConfig(
-      id: 'v', name: 'v', protocol: VpnProtocol.vless, address: '1.2.3.4', port: 443,
-      uuid: '11111111-2222-4333-8444-555555555555', security: VpnSecurity.tls,
-      transport: VpnTransport.tcp, createdAt: DateTime(2026),
-    );
+  id: 'v',
+  name: 'v',
+  protocol: VpnProtocol.vless,
+  address: '1.2.3.4',
+  port: 443,
+  uuid: '11111111-2222-4333-8444-555555555555',
+  security: VpnSecurity.tls,
+  transport: VpnTransport.tcp,
+  createdAt: DateTime(2026),
+);
 
 const _opts = VpnEngineOptions(socksPort: 10808, httpPort: 0, socksUser: 'u', socksPassword: 'p');
 
@@ -20,12 +26,17 @@ void main() {
   test('core order: defaults, json round trip, legacy single core goes first', () {
     expect(AppSettings.fromJson(const {}).coreOrder, CoreKind.defaultOrder);
     final s = const AppSettings().copyWith(
-        coreOrder: [CoreKind.xrayRust, CoreKind.singBox, CoreKind.xrayGo], disabledCores: {CoreKind.xrayGo});
+      coreOrder: [CoreKind.xrayRust, CoreKind.singBox, CoreKind.xrayGo],
+      disabledCores: {CoreKind.xrayGo},
+    );
     final back = AppSettings.fromJson(s.toJson());
     expect(back.coreOrder, s.coreOrder);
     expect(back.disabledCores, {CoreKind.xrayGo});
-    expect(AppSettings.fromJson(const {'core': 'singBox'}).coreOrder,
-        [CoreKind.singBox, CoreKind.xrayGo, CoreKind.xrayRust]);
+    expect(AppSettings.fromJson(const {'core': 'singBox'}).coreOrder, [
+      CoreKind.singBox,
+      CoreKind.xrayGo,
+      CoreKind.xrayRust,
+    ]);
     expect(CoreKind.xrayGo.nativeId, 'go');
     expect(CoreKind.xrayRust.nativeId, 'rust');
   });
@@ -37,8 +48,7 @@ void main() {
 
   test('the running core is part of the connection fingerprint', () {
     const s = AppSettings();
-    expect(connectionFingerprint(s, core: CoreKind.xrayGo),
-        isNot(connectionFingerprint(s, core: CoreKind.xrayRust)));
+    expect(connectionFingerprint(s, core: CoreKind.xrayGo), isNot(connectionFingerprint(s, core: CoreKind.xrayRust)));
   });
 
   group('XrayGoBackend', () {
@@ -58,7 +68,10 @@ void main() {
     });
     test('uses mergeWithRaw for raw configs', () {
       final raw = _vless().copyWith(rawUri: 'x');
-      final managed = VpnConfig.fromJson({...raw.toJson(), 'rawXrayConfig': '{"outbounds":[{"tag":"proxy","protocol":"freedom"}]}'});
+      final managed = VpnConfig.fromJson({
+        ...raw.toJson(),
+        'rawXrayConfig': '{"outbounds":[{"tag":"proxy","protocol":"freedom"}]}',
+      });
       expect(go.buildConfig(managed, _opts), XrayConfigBuilder.mergeWithRaw(managed.rawXrayConfig!, _opts));
     });
   });

@@ -13,36 +13,43 @@ import '../../l10n/l10n.dart';
 abstract final class SingBoxConfigBuilder {
   /// Shadowsocks methods available in sing-box.
   static const ssMethods = {
-    'none', 'aes-128-gcm', 'aes-192-gcm', 'aes-256-gcm', 'chacha20-ietf-poly1305', 'xchacha20-ietf-poly1305',
-    '2022-blake3-aes-128-gcm', '2022-blake3-aes-256-gcm', '2022-blake3-chacha20-poly1305',
+    'none',
+    'aes-128-gcm',
+    'aes-192-gcm',
+    'aes-256-gcm',
+    'chacha20-ietf-poly1305',
+    'xchacha20-ietf-poly1305',
+    '2022-blake3-aes-128-gcm',
+    '2022-blake3-aes-256-gcm',
+    '2022-blake3-chacha20-poly1305',
   };
 
   static Map<String, dynamic> build(VpnConfig config, VpnEngineOptions options) => {
-        'log': {
-          'level': switch (options.logLevel) {
-            LogLevel.debug => 'debug',
-            // sing-box info is a line per connection (browsing history in vpn_log.txt).
-            LogLevel.info || LogLevel.warning => 'warn',
-            LogLevel.error => 'error',
-          },
-          'timestamp': false,
-        },
-        'dns': SingBoxRoute.dns(options, tcpOnlyProxy: SingBoxOutbound.isTcpOnly(config)),
-        'inbounds': [
-          {
-            'type': 'mixed',
-            'tag': SingBoxRoute.inboundTag,
-            'listen': SingBoxRoute.listen,
-            'listen_port': options.socksPort,
-            if (options.socksUser.isNotEmpty)
-              'users': [
-                {'username': options.socksUser, 'password': options.socksPassword},
-              ],
-          },
-        ],
-        ..._proxy(config, options),
-        'route': SingBoxRoute.route(options),
-      };
+    'log': {
+      'level': switch (options.logLevel) {
+        LogLevel.debug => 'debug',
+        // sing-box info is a line per connection (browsing history in vpn_log.txt).
+        LogLevel.info || LogLevel.warning => 'warn',
+        LogLevel.error => 'error',
+      },
+      'timestamp': false,
+    },
+    'dns': SingBoxRoute.dns(options, tcpOnlyProxy: SingBoxOutbound.isTcpOnly(config)),
+    'inbounds': [
+      {
+        'type': 'mixed',
+        'tag': SingBoxRoute.inboundTag,
+        'listen': SingBoxRoute.listen,
+        'listen_port': options.socksPort,
+        if (options.socksUser.isNotEmpty)
+          'users': [
+            {'username': options.socksUser, 'password': options.socksPassword},
+          ],
+      },
+    ],
+    ..._proxy(config, options),
+    'route': SingBoxRoute.route(options),
+  };
 
   static String buildJson(VpnConfig config, VpnEngineOptions options) => jsonEncode(build(config, options));
 
@@ -57,8 +64,13 @@ abstract final class SingBoxConfigBuilder {
     final proxy = SingBoxOutbound.build(config, options);
     const direct = {'type': 'direct', 'tag': SingBoxRoute.directTag};
     return SingBoxOutbound.isEndpoint(config)
-        ? {'endpoints': [proxy], 'outbounds': [direct]}
-        : {'outbounds': [proxy, direct]};
+        ? {
+            'endpoints': [proxy],
+            'outbounds': [direct],
+          }
+        : {
+            'outbounds': [proxy, direct],
+          };
   }
 
   /// null — the profile runs on sing-box; otherwise the reason.

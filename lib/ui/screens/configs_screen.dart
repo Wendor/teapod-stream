@@ -66,11 +66,11 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
   List<VpnConfig> _applySort(List<VpnConfig> configs) {
     if (!_sortByPing) return configs;
     return [...configs]..sort((a, b) {
-        if (a.latencyMs == null && b.latencyMs == null) return 0;
-        if (a.latencyMs == null) return 1;
-        if (b.latencyMs == null) return -1;
-        return a.latencyMs!.compareTo(b.latencyMs!);
-      });
+      if (a.latencyMs == null && b.latencyMs == null) return 0;
+      if (a.latencyMs == null) return 1;
+      if (b.latencyMs == null) return -1;
+      return a.latencyMs!.compareTo(b.latencyMs!);
+    });
   }
 
   // ── Build ──────────────────────────────────────────────────────
@@ -121,10 +121,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
               onSettings: () => _showSettingsSheet(context, t),
               onSubSettings: () => Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      const SubscriptionSettingsScreen(breadcrumbParent: 'configs'),
-                ),
+                MaterialPageRoute<void>(builder: (_) => const SubscriptionSettingsScreen(breadcrumbParent: 'configs')),
               ),
               onExport: configStateAsync.maybeWhen(
                 data: (s) => s.configs.isNotEmpty ? () => _exportAll(s.configs) : null,
@@ -133,12 +130,9 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
             ),
             Expanded(
               child: configStateAsync.when(
-                loading: () => Center(
-                  child: CircularProgressIndicator(color: t.accent, strokeWidth: 1.5),
-                ),
+                loading: () => Center(child: CircularProgressIndicator(color: t.accent, strokeWidth: 1.5)),
                 error: (e, _) => Center(
-                  child: Text(context.l10n.commonErrorWith('$e'),
-                      style: AppTheme.mono(size: 12, color: t.danger)),
+                  child: Text(context.l10n.commonErrorWith('$e'), style: AppTheme.mono(size: 12, color: t.danger)),
                 ),
                 data: (cs) => _buildBody(context, cs, vpnState, t),
               ),
@@ -234,8 +228,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
               }),
               onSelectConfig: (c) => _selectConfig(ref, c),
               onConfigMenu: (c) => _showConfigMenu(context, ref, c),
-              onReorderConfigs: (o, n) =>
-                  ref.read(configProvider.notifier).reorderGroupConfigs(null, o, n),
+              onReorderConfigs: (o, n) => ref.read(configProvider.notifier).reorderGroupConfigs(null, o, n),
             ),
         ],
       );
@@ -247,9 +240,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
       onReorder: (old, nw) {
         if (old < localOffset) return;
         final safeNew = nw < localOffset ? localOffset : nw;
-        ref
-            .read(configProvider.notifier)
-            .reorderSubscriptions(old - localOffset, safeNew - localOffset);
+        ref.read(configProvider.notifier).reorderSubscriptions(old - localOffset, safeNew - localOffset);
       },
       children: [
         ?pinnedGroup,
@@ -270,8 +261,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
             }),
             onSelectConfig: (c) => _selectConfig(ref, c),
             onConfigMenu: (c) => _showConfigMenu(context, ref, c),
-            onReorderConfigs: (o, n) =>
-                ref.read(configProvider.notifier).reorderGroupConfigs(null, o, n),
+            onReorderConfigs: (o, n) => ref.read(configProvider.notifier).reorderGroupConfigs(null, o, n),
           ),
         for (var i = 0; i < subs.length; i++)
           _SubGroup(
@@ -308,8 +298,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
             },
             onSelectConfig: (c) => _selectConfig(ref, c),
             onConfigMenu: (c) => _showConfigMenu(context, ref, c),
-            onReorderConfigs: (o, n) =>
-                ref.read(configProvider.notifier).reorderGroupConfigs(subs[i].id, o, n),
+            onReorderConfigs: (o, n) => ref.read(configProvider.notifier).reorderGroupConfigs(subs[i].id, o, n),
           ),
       ],
     );
@@ -318,7 +307,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
   // ── Settings sheet ─────────────────────────────────────────────
 
   void _showSettingsSheet(BuildContext context, TeapodTokens t) {
-    showModalBottomSheet(
+    showModalBottomSheet<void>(
       context: context,
       backgroundColor: t.bg,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
@@ -329,12 +318,16 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-                child: Row(children: [
-                  Expanded(
-                    child: Text('configs // display',
-                        style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
-                  ),
-                ]),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'configs // display',
+                        style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               Container(height: 1, color: t.line),
               _ToggleTile(
@@ -421,11 +414,8 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
 
   Future<void> _showConfigMenu(BuildContext context, WidgetRef ref, VpnConfig config) async {
     final t = Theme.of(context).extension<TeapodTokens>()!;
-    final isPinned = ref.read(configProvider).maybeWhen(
-          data: (d) => d.isPinned(config),
-          orElse: () => false,
-        );
-    await showModalBottomSheet(
+    final isPinned = ref.read(configProvider).maybeWhen(data: (d) => d.isPinned(config), orElse: () => false);
+    await showModalBottomSheet<void>(
       context: context,
       backgroundColor: t.bg,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
@@ -438,11 +428,12 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(config.name,
-                        style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500)),
+                    child: Text(
+                      config.name,
+                      style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500),
+                    ),
                   ),
-                  Text(config.protocol.name.toUpperCase(),
-                      style: AppTheme.mono(size: 10, color: t.textMuted)),
+                  Text(config.protocol.name.toUpperCase(), style: AppTheme.mono(size: 10, color: t.textMuted)),
                 ],
               ),
             ),
@@ -457,41 +448,64 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
             ),
             _SheetTile(
               t: t,
-              label: '${context.l10n.configsCore} · ${ref.read(coreResolverProvider).resolve(config).backend?.kind.displayName ?? context.l10n.configsCoreNone}',
+              label:
+                  '${context.l10n.configsCore} · ${ref.read(coreResolverProvider).resolve(config).backend?.kind.displayName ?? context.l10n.configsCoreNone}',
               onTap: () {
                 Navigator.pop(ctx);
                 showCoreSheet(context, config);
               },
             ),
-            _SheetTile(t: t, label: context.l10n.commonRename, onTap: () async {
-              Navigator.pop(ctx);
-              if (!context.mounted) return;
-              await _renameConfig(context, ref, config);
-            }),
-            _SheetTile(t: t, label: context.l10n.configsEditUri, onTap: () async {
-              Navigator.pop(ctx);
-              if (!context.mounted) return;
-              await _editConfig(context, ref, config);
-            }),
-            _SheetTile(t: t, label: context.l10n.configsCopyUrl, onTap: () async {
-              Navigator.pop(ctx);
-              if (config.rawUri != null) {
-                await Clipboard.setData(ClipboardData(text: config.rawUri!));
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text(context.l10n.configsUrlCopied), duration: const Duration(seconds: 1)));
+            _SheetTile(
+              t: t,
+              label: context.l10n.commonRename,
+              onTap: () async {
+                Navigator.pop(ctx);
+                if (!context.mounted) return;
+                await _renameConfig(context, ref, config);
+              },
+            ),
+            _SheetTile(
+              t: t,
+              label: context.l10n.configsEditUri,
+              onTap: () async {
+                Navigator.pop(ctx);
+                if (!context.mounted) return;
+                await _editConfig(context, ref, config);
+              },
+            ),
+            _SheetTile(
+              t: t,
+              label: context.l10n.configsCopyUrl,
+              onTap: () async {
+                Navigator.pop(ctx);
+                if (config.rawUri != null) {
+                  await Clipboard.setData(ClipboardData(text: config.rawUri!));
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(context.l10n.configsUrlCopied), duration: const Duration(seconds: 1)),
+                    );
+                  }
                 }
-              }
-            }),
-            _SheetTile(t: t, label: context.l10n.configsShare, onTap: () async {
-              Navigator.pop(ctx);
-              if (config.rawUri != null) await Share.share(config.rawUri!);
-            }),
-            _SheetTile(t: t, label: context.l10n.commonDelete, color: t.danger, onTap: () async {
-              Navigator.pop(ctx);
-              if (!context.mounted) return;
-              await _deleteConfig(context, ref, config);
-            }),
+              },
+            ),
+            _SheetTile(
+              t: t,
+              label: context.l10n.configsShare,
+              onTap: () async {
+                Navigator.pop(ctx);
+                if (config.rawUri != null) await Share.share(config.rawUri!);
+              },
+            ),
+            _SheetTile(
+              t: t,
+              label: context.l10n.commonDelete,
+              color: t.danger,
+              onTap: () async {
+                Navigator.pop(ctx);
+                if (!context.mounted) return;
+                await _deleteConfig(context, ref, config);
+              },
+            ),
             const SizedBox(height: 8),
           ],
         ),
@@ -533,11 +547,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
             controller: controller,
             maxLines: 5,
             keyboardType: TextInputType.multiline,
-            decoration: const InputDecoration(
-              hintText: 'vless://...',
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
+            decoration: const InputDecoration(hintText: 'vless://...', border: OutlineInputBorder(), isDense: true),
           ),
         ),
         actions: [
@@ -561,9 +571,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
         );
         ref.read(configProvider.notifier).updateConfig(renamed);
       } else if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.configsUriParseFailed)),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.l10n.configsUriParseFailed)));
       }
     }
   }
@@ -589,23 +597,24 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
     }
   }
 
-  Future<void> _refreshSubscription(BuildContext context, WidgetRef ref, Subscription sub,
-      {bool allowSelfSigned = false}) async {
-    showDialog(
+  Future<void> _refreshSubscription(
+    BuildContext context,
+    WidgetRef ref,
+    Subscription sub, {
+    bool allowSelfSigned = false,
+  }) async {
+    showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (_) => const Center(child: CircularProgressIndicator()),
     );
     try {
-      await ref.read(configProvider.notifier).addSubscriptionFromUrl(
-            sub.url,
-            name: sub.name,
-            allowSelfSigned: allowSelfSigned,
-          );
+      await ref
+          .read(configProvider.notifier)
+          .addSubscriptionFromUrl(sub.url, name: sub.name, allowSelfSigned: allowSelfSigned);
       if (context.mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(context.l10n.configsSubUpdated)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.l10n.configsSubUpdated)));
       }
     } on UntrustedCertificateException catch (e) {
       if (!context.mounted) return;
@@ -620,12 +629,9 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
             children: [
               Text(context.l10n.certUntrustedMessage),
               const SizedBox(height: 12),
-              Text(context.l10n.certServer(e.host),
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
-              Text(context.l10n.certSubject(e.subject),
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
-              Text(context.l10n.certIssuer(e.issuer),
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+              Text(context.l10n.certServer(e.host), style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+              Text(context.l10n.certSubject(e.subject), style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+              Text(context.l10n.certIssuer(e.issuer), style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
               const SizedBox(height: 12),
               Text(context.l10n.certContinueAnyway),
             ],
@@ -642,9 +648,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
     } catch (e) {
       if (context.mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.configsUpdateError('$e'))),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.l10n.configsUpdateError('$e'))));
       }
     }
   }
@@ -693,24 +697,20 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l10n.commonCancel)),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, true), child: Text(context.l10n.configsSaveAndRefresh)),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.l10n.configsSaveAndRefresh)),
         ],
       ),
     );
     if (ok == true && controller.text.trim().isNotEmpty) {
       final updatedUrl = controller.text.trim();
       try {
-        await ref.read(configProvider.notifier)
-            .addSubscriptionFromUrl(updatedUrl, name: sub.name, replaceId: sub.id);
+        await ref.read(configProvider.notifier).addSubscriptionFromUrl(updatedUrl, name: sub.name, replaceId: sub.id);
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(context.l10n.configsSubUpdatedNewUrl)));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.l10n.configsSubUpdatedNewUrl)));
         }
       } catch (e) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(context.l10n.configsUpdateError('$e'))));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.l10n.configsUpdateError('$e'))));
         }
       }
     }
@@ -741,26 +741,27 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
     if (_isRefreshingAll) return;
     setState(() => _isRefreshingAll = true);
     try {
-      final configState =
-          ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
+      final configState = ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
       if (configState == null) return;
       final failed = <String>[];
       for (final sub in configState.subscriptions) {
         try {
-          await ref
-              .read(configProvider.notifier)
-              .addSubscriptionFromUrl(sub.url, name: sub.name);
+          await ref.read(configProvider.notifier).addSubscriptionFromUrl(sub.url, name: sub.name);
         } catch (e) {
           failed.add('${sub.name}: ${e.toString().replaceFirst('Exception: ', '')}');
         }
       }
       if (mounted) {
         final total = configState.subscriptions.length;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(failed.isEmpty
-              ? context.l10n.configsSubsUpdated(total)
-              : '${context.l10n.configsSubsUpdatedPartial(total - failed.length, total)}\n${failed.join('\n')}'),
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              failed.isEmpty
+                  ? context.l10n.configsSubsUpdated(total)
+                  : '${context.l10n.configsSubsUpdatedPartial(total - failed.length, total)}\n${failed.join('\n')}',
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _isRefreshingAll = false);
@@ -768,7 +769,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
   }
 
   void _openAddConfig(BuildContext context) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const AddConfigScreen()));
+    Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const AddConfigScreen()));
   }
 }
 
@@ -780,41 +781,31 @@ class _CfgHeaderStrip extends StatelessWidget {
   final bool isPinging;
   final VoidCallback? onPing;
 
-  const _CfgHeaderStrip({
-    required this.t,
-    required this.total,
-    required this.isPinging,
-    this.onPing,
-  });
+  const _CfgHeaderStrip({required this.t, required this.total, required this.isPinging, this.onPing});
 
   @override
   Widget build(BuildContext context) {
     final totalStr = total.toString().padLeft(2, '0');
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.line))),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: t.line)),
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text('teapod.stream // configs',
-              style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+          Text('teapod.stream // configs', style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
           Row(
             children: [
               if (isPinging)
-                SizedBox(
-                  width: 12,
-                  height: 12,
-                  child: CircularProgressIndicator(color: t.accent, strokeWidth: 1.2),
-                )
+                SizedBox(width: 12, height: 12, child: CircularProgressIndicator(color: t.accent, strokeWidth: 1.2))
               else if (onPing != null)
                 GestureDetector(
                   onTap: onPing,
-                  child: Text('ping',
-                      style: AppTheme.mono(size: 10, color: t.accent, letterSpacing: 1)),
+                  child: Text('ping', style: AppTheme.mono(size: 10, color: t.accent, letterSpacing: 1)),
                 ),
               const SizedBox(width: 12),
-              Text('total [$totalStr]',
-                  style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+              Text('total [$totalStr]', style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
             ],
           ),
         ],
@@ -850,15 +841,35 @@ class _CfgTitlePanel extends StatelessWidget {
       t: t,
       tagline: context.l10n.configsTagline,
       title: 'CONFIGS',
-      subtitle: Text('subs · standalone · imported',
-          style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5)),
+      subtitle: Text(
+        'subs · standalone · imported',
+        style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5),
+      ),
       trailing: Row(
         children: [
-          _IconBtn(t: t, icon: Icons.tune_rounded, accent: false, label: context.l10n.configsDisplaySettings, onTap: onSettings),
+          _IconBtn(
+            t: t,
+            icon: Icons.tune_rounded,
+            accent: false,
+            label: context.l10n.configsDisplaySettings,
+            onTap: onSettings,
+          ),
           const SizedBox(width: 6),
-          _IconBtn(t: t, icon: Icons.schedule_rounded, accent: false, label: context.l10n.configsSubSettings, onTap: onSubSettings),
+          _IconBtn(
+            t: t,
+            icon: Icons.schedule_rounded,
+            accent: false,
+            label: context.l10n.configsSubSettings,
+            onTap: onSubSettings,
+          ),
           const SizedBox(width: 6),
-          _IconBtn(t: t, icon: Icons.ios_share_rounded, accent: false, label: context.l10n.configsExport, onTap: onExport),
+          _IconBtn(
+            t: t,
+            icon: Icons.ios_share_rounded,
+            accent: false,
+            label: context.l10n.configsExport,
+            onTap: onExport,
+          ),
           const SizedBox(width: 6),
           if (isRefreshing)
             SizedBox(
@@ -873,7 +884,13 @@ class _CfgTitlePanel extends StatelessWidget {
               ),
             )
           else
-            _IconBtn(t: t, icon: Icons.refresh_rounded, accent: false, label: context.l10n.configsRefreshSubs, onTap: onRefreshAll),
+            _IconBtn(
+              t: t,
+              icon: Icons.refresh_rounded,
+              accent: false,
+              label: context.l10n.configsRefreshSubs,
+              onTap: onRefreshAll,
+            ),
           const SizedBox(width: 6),
           _IconBtn(t: t, icon: Icons.add_rounded, accent: true, label: context.l10n.configsAdd, onTap: onAdd),
         ],
@@ -889,13 +906,7 @@ class _IconBtn extends StatelessWidget {
   final String label;
   final VoidCallback? onTap;
 
-  const _IconBtn({
-    required this.t,
-    required this.icon,
-    required this.accent,
-    required this.label,
-    this.onTap,
-  });
+  const _IconBtn({required this.t, required this.icon, required this.accent, required this.label, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -912,7 +923,15 @@ class _IconBtn extends StatelessWidget {
             color: accent ? t.accent : Colors.transparent,
             border: Border.all(color: accent ? t.accent : t.line),
           ),
-          child: Icon(icon, size: 15, color: accent ? t.bg : onTap != null ? t.textDim : t.textMuted),
+          child: Icon(
+            icon,
+            size: 15,
+            color: accent
+                ? t.bg
+                : onTap != null
+                ? t.textDim
+                : t.textMuted,
+          ),
         ),
       ),
     );
@@ -953,33 +972,30 @@ class _LocalGroup extends StatelessWidget {
           onTap: onToggle,
           child: Container(
             padding: const EdgeInsets.fromLTRB(20, 11, 20, 11),
-            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.lineSoft))),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: t.lineSoft)),
+            ),
             child: Row(
               children: [
                 SizedBox(
                   width: 32,
-                  child: Text('[00]',
-                      style: AppTheme.mono(size: 10, color: t.textMuted)),
+                  child: Text('[00]', style: AppTheme.mono(size: 10, color: t.textMuted)),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('[local]',
-                          style: AppTheme.sans(
-                              size: 13, weight: FontWeight.w500, color: t.text)),
+                      Text(
+                        '[local]',
+                        style: AppTheme.sans(size: 13, weight: FontWeight.w500, color: t.text),
+                      ),
                       const SizedBox(height: 2),
-                      Text('cnt=${configs.length} · standalone',
-                          style: AppTheme.mono(size: 10, color: t.textMuted)),
+                      Text('cnt=${configs.length} · standalone', style: AppTheme.mono(size: 10, color: t.textMuted)),
                     ],
                   ),
                 ),
-                Icon(
-                  isExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                  size: 16,
-                  color: t.textMuted,
-                ),
+                Icon(isExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 16, color: t.textMuted),
               ],
             ),
           ),
@@ -1101,10 +1117,7 @@ class _SubGroup extends StatelessWidget {
 
     final Widget addrWidget = SizedBox(
       width: 32,
-      child: Text(hexAddr,
-          style: AppTheme.mono(
-              size: 10,
-              color: isActiveSubscription ? t.accent : t.textMuted)),
+      child: Text(hexAddr, style: AppTheme.mono(size: 10, color: isActiveSubscription ? t.accent : t.textMuted)),
     );
 
     return Column(
@@ -1119,10 +1132,7 @@ class _SubGroup extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 11, 0, 11),
-                    child: addrWidget,
-                  ),
+                  Padding(padding: const EdgeInsets.fromLTRB(20, 11, 0, 11), child: addrWidget),
                   const SizedBox(width: 10),
                   Expanded(
                     child: GestureDetector(
@@ -1134,24 +1144,26 @@ class _SubGroup extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(sub.name,
-                                style: AppTheme.sans(
-                                    size: 13,
-                                    weight: FontWeight.w500,
-                                    color: isActiveSubscription ? t.accent : t.text,
-                                    letterSpacing: -0.2)),
+                            Text(
+                              sub.name,
+                              style: AppTheme.sans(
+                                size: 13,
+                                weight: FontWeight.w500,
+                                color: isActiveSubscription ? t.accent : t.text,
+                                letterSpacing: -0.2,
+                              ),
+                            ),
                             const SizedBox(height: 2),
                             Row(
                               children: [
-                                Text('cnt=${configs.length}',
-                                    style: AppTheme.mono(size: 10, color: t.textMuted)),
-                                Text(' · ${_lastRefresh(context.l10n)}',
-                                    style: AppTheme.mono(size: 10, color: t.textMuted)),
+                                Text('cnt=${configs.length}', style: AppTheme.mono(size: 10, color: t.textMuted)),
+                                Text(
+                                  ' · ${_lastRefresh(context.l10n)}',
+                                  style: AppTheme.mono(size: 10, color: t.textMuted),
+                                ),
                                 if (expireLabel != null) ...[
-                                  Text(' · ',
-                                      style: AppTheme.mono(size: 10, color: t.textMuted)),
-                                  Text(expireLabel,
-                                      style: AppTheme.mono(size: 10, color: t.danger)),
+                                  Text(' · ', style: AppTheme.mono(size: 10, color: t.textMuted)),
+                                  Text(expireLabel, style: AppTheme.mono(size: 10, color: t.danger)),
                                 ],
                               ],
                             ),
@@ -1204,12 +1216,7 @@ class _SubGroup extends StatelessWidget {
               ),
             ),
             if (isActiveSubscription)
-              Positioned(
-                left: 0,
-                top: 0,
-                bottom: 0,
-                child: Container(width: 2, color: t.accent),
-              ),
+              Positioned(left: 0, top: 0, bottom: 0, child: Container(width: 2, color: t.accent)),
           ],
         ),
 
@@ -1219,50 +1226,45 @@ class _SubGroup extends StatelessWidget {
             color: t.bgSunken,
             child: Column(
               children: [
-                if (sub.totalBytes != null && sub.totalBytes! > 0)
-                  _DataUsageBanner(t: t, sub: sub),
+                if (sub.totalBytes != null && sub.totalBytes! > 0) _DataUsageBanner(t: t, sub: sub),
                 // Provider message (announce header), link — announce-url
                 if (sub.announce?.isNotEmpty == true)
                   GestureDetector(
                     onTap: sub.announceUrl == null
                         ? null
-                        : () => launchUrl(Uri.parse(sub.announceUrl!),
-                                mode: LaunchMode.externalApplication)
-                            .ignore(),
+                        : () => launchUrl(Uri.parse(sub.announceUrl!), mode: LaunchMode.externalApplication).ignore(),
                     child: Container(
                       width: double.infinity,
                       padding: const EdgeInsets.fromLTRB(52, 10, 20, 12),
-                      decoration:
-                          BoxDecoration(border: Border(top: BorderSide(color: t.lineSoft))),
-                      child: Text(sub.announce!,
-                          style: AppTheme.sans(
-                              size: 12,
-                              color: sub.announceUrl == null ? t.textDim : t.accent)),
+                      decoration: BoxDecoration(
+                        border: Border(top: BorderSide(color: t.lineSoft)),
+                      ),
+                      child: Text(
+                        sub.announce!,
+                        style: AppTheme.sans(size: 12, color: sub.announceUrl == null ? t.textDim : t.accent),
+                      ),
                     ),
                   ),
                 // Expired renewal banner
-                if (sub.expireAt != null &&
-                    sub.expireAt!.difference(DateTime.now()).inDays <= 0)
+                if (sub.expireAt != null && sub.expireAt!.difference(DateTime.now()).inDays <= 0)
                   Container(
                     padding: const EdgeInsets.fromLTRB(52, 10, 20, 12),
-                    decoration:
-                        BoxDecoration(border: Border(top: BorderSide(color: t.lineSoft))),
+                    decoration: BoxDecoration(
+                      border: Border(top: BorderSide(color: t.lineSoft)),
+                    ),
                     child: Row(
                       children: [
                         Icon(Icons.bolt_rounded, size: 11, color: t.accent),
                         const SizedBox(width: 6),
                         Expanded(
-                          child: Text('trial // renew subscription',
-                              style: AppTheme.mono(size: 11, color: t.textDim)),
+                          child: Text('trial // renew subscription', style: AppTheme.mono(size: 11, color: t.textDim)),
                         ),
                         GestureDetector(
                           onTap: onRefresh,
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                             color: t.line,
-                            child: Text('RENEW',
-                                style: AppTheme.mono(
-                                    size: 10, color: t.textDim, letterSpacing: 1)),
+                            child: Text('RENEW', style: AppTheme.mono(size: 10, color: t.textDim, letterSpacing: 1)),
                           ),
                         ),
                       ],
@@ -1315,7 +1317,7 @@ class _SubGroup extends StatelessWidget {
 
   Future<void> _showSubMenu(BuildContext context) async {
     final t = Theme.of(context).extension<TeapodTokens>()!;
-    await showModalBottomSheet(
+    await showModalBottomSheet<void>(
       context: context,
       backgroundColor: t.bg,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
@@ -1328,12 +1330,15 @@ class _SubGroup extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(sub.name,
-                        style:
-                            AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500)),
+                    child: Text(
+                      sub.name,
+                      style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500),
+                    ),
                   ),
-                  Text('sub · ${context.l10n.configsCount(configs.length)}',
-                      style: AppTheme.mono(size: 10, color: t.textMuted)),
+                  Text(
+                    'sub · ${context.l10n.configsCount(configs.length)}',
+                    style: AppTheme.mono(size: 10, color: t.textMuted),
+                  ),
                 ],
               ),
             ),
@@ -1341,21 +1346,57 @@ class _SubGroup extends StatelessWidget {
             _SheetTile(
               t: t,
               label: isActiveSubscription ? context.l10n.configsAutoSelectReset : context.l10n.configsAutoSelectBest,
-              onTap: () { Navigator.pop(ctx); onSelectSubscription(); },
+              onTap: () {
+                Navigator.pop(ctx);
+                onSelectSubscription();
+              },
             ),
-            _SheetTile(t: t, label: context.l10n.commonRename, onTap: () { Navigator.pop(ctx); onRename(); }),
-            _SheetTile(t: t, label: context.l10n.configsEditUrl, onTap: () { Navigator.pop(ctx); onEditUrl(); }),
-            _SheetTile(t: t, label: context.l10n.configsCopyUrl, onTap: () async {
-              Navigator.pop(ctx);
-              await Clipboard.setData(ClipboardData(text: sub.url));
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(context.l10n.configsUrlCopied), duration: const Duration(seconds: 1)));
-              }
-            }),
-            _SheetTile(t: t, label: context.l10n.configsRefresh, onTap: () { Navigator.pop(ctx); onRefresh(); }),
-            _SheetTile(t: t, label: context.l10n.commonDelete, color: t.danger,
-                onTap: () { Navigator.pop(ctx); onDelete(); }),
+            _SheetTile(
+              t: t,
+              label: context.l10n.commonRename,
+              onTap: () {
+                Navigator.pop(ctx);
+                onRename();
+              },
+            ),
+            _SheetTile(
+              t: t,
+              label: context.l10n.configsEditUrl,
+              onTap: () {
+                Navigator.pop(ctx);
+                onEditUrl();
+              },
+            ),
+            _SheetTile(
+              t: t,
+              label: context.l10n.configsCopyUrl,
+              onTap: () async {
+                Navigator.pop(ctx);
+                await Clipboard.setData(ClipboardData(text: sub.url));
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(context.l10n.configsUrlCopied), duration: const Duration(seconds: 1)),
+                  );
+                }
+              },
+            ),
+            _SheetTile(
+              t: t,
+              label: context.l10n.configsRefresh,
+              onTap: () {
+                Navigator.pop(ctx);
+                onRefresh();
+              },
+            ),
+            _SheetTile(
+              t: t,
+              label: context.l10n.commonDelete,
+              color: t.danger,
+              onTap: () {
+                Navigator.pop(ctx);
+                onDelete();
+              },
+            ),
             const SizedBox(height: 8),
           ],
         ),
@@ -1384,13 +1425,15 @@ class _DataUsageBanner extends StatelessWidget {
     final used = (sub.uploadBytes ?? 0) + (sub.downloadBytes ?? 0);
     final total = sub.totalBytes!;
     final percent = (used / total).clamp(0.0, 1.0);
-    
+
     final usedStr = _formatBytes(used);
     final totalStr = _formatBytes(total);
-    
+
     return Container(
       padding: const EdgeInsets.fromLTRB(52, 12, 20, 12),
-      decoration: BoxDecoration(border: Border(top: BorderSide(color: t.lineSoft))),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: t.lineSoft)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1404,19 +1447,12 @@ class _DataUsageBanner extends StatelessWidget {
           const SizedBox(height: 8),
           Stack(
             children: [
-              Container(
-                height: 2,
-                width: double.infinity,
-                color: t.line,
-              ),
+              Container(height: 2, width: double.infinity, color: t.line),
               if (percent > 0)
                 FractionallySizedBox(
                   widthFactor: percent,
                   alignment: Alignment.centerLeft,
-                  child: Container(
-                    height: 2,
-                    color: percent > 0.9 ? t.danger : t.accent,
-                  ),
+                  child: Container(height: 2, color: percent > 0.9 ? t.danger : t.accent),
                 ),
             ],
           ),
@@ -1457,8 +1493,7 @@ class _ConfigRow extends StatelessWidget {
   String get _protoTag => config.protoTag;
 
   @override
-  Widget build(BuildContext context) =>
-      CoreSupportGate(config: config, child: _buildRow(context));
+  Widget build(BuildContext context) => CoreSupportGate(config: config, child: _buildRow(context));
 
   Widget _buildRow(BuildContext context) {
     final hexAddr = '0x${addr.toString().padLeft(2, '0')}';
@@ -1471,11 +1506,7 @@ class _ConfigRow extends StatelessWidget {
     final trailing = isDraggable
         ? ReorderableDragStartListener(
             index: draggableIndex!,
-            child: SizedBox(
-              width: 36,
-              height: 40,
-              child: Icon(Icons.drag_handle_rounded, size: 18, color: t.accent),
-            ),
+            child: SizedBox(width: 36, height: 40, child: Icon(Icons.drag_handle_rounded, size: 18, color: t.accent)),
           )
         : Semantics(
             label: context.l10n.configsConfigMenu,
@@ -1483,11 +1514,7 @@ class _ConfigRow extends StatelessWidget {
             child: GestureDetector(
               onTap: onLongPress,
               behavior: HitTestBehavior.opaque,
-              child: SizedBox(
-                width: 36,
-                height: 40,
-                child: Icon(Icons.more_vert, size: 16, color: t.textMuted),
-              ),
+              child: SizedBox(width: 36, height: 40, child: Icon(Icons.more_vert, size: 16, color: t.textMuted)),
             ),
           );
 
@@ -1501,60 +1528,53 @@ class _ConfigRow extends StatelessWidget {
         ),
         child: Stack(
           children: [
-            if (isActive)
-              Positioned(
-                left: 0, top: 0, bottom: 0,
-                child: Container(width: 2, color: t.accent),
-              ),
+            if (isActive) Positioned(left: 0, top: 0, bottom: 0, child: Container(width: 2, color: t.accent)),
             Padding(
               padding: EdgeInsets.fromLTRB(leftPad, 6, 10, 6),
               child: Row(
                 children: [
                   SizedBox(
                     width: 32,
-                    child: Text(hexAddr,
-                        style: AppTheme.mono(size: 10, color: t.textMuted)),
+                    child: Text(hexAddr, style: AppTheme.mono(size: 10, color: t.textMuted)),
                   ),
                   const SizedBox(width: 10),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                     decoration: BoxDecoration(border: Border.all(color: tagBorder)),
                     constraints: const BoxConstraints(minWidth: 44),
-                    child: Text(_protoTag,
-                        textAlign: TextAlign.center,
-                        style: AppTheme.mono(size: 10, color: tagColor, letterSpacing: 1)),
+                    child: Text(
+                      _protoTag,
+                      textAlign: TextAlign.center,
+                      style: AppTheme.mono(size: 10, color: tagColor, letterSpacing: 1),
+                    ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(config.name,
-                            style: AppTheme.sans(
-                                size: 13,
-                                weight: FontWeight.w500,
-                                color: t.text,
-                                letterSpacing: -0.2),
-                            overflow: TextOverflow.ellipsis),
+                        Text(
+                          config.name,
+                          style: AppTheme.sans(size: 13, weight: FontWeight.w500, color: t.text, letterSpacing: -0.2),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         const SizedBox(height: 2),
-                        Consumer(builder: (_, ref, _) {
-                          // Core — only if the profile landed on a non-primary one.
-                          final core = coreNote(ref, config);
-                          return Text(
+                        Consumer(
+                          builder: (_, ref, _) {
+                            // Core — only if the profile landed on a non-primary one.
+                            final core = coreNote(ref, config);
+                            return Text(
                               '${config.address}:${config.port}${core == null ? '' : ' · $core'}',
                               style: AppTheme.mono(size: 10, color: t.textMuted),
-                              overflow: TextOverflow.ellipsis);
-                        }),
+                              overflow: TextOverflow.ellipsis,
+                            );
+                          },
+                        ),
                       ],
                     ),
                   ),
-                  if (pinned) ...[
-                    Text('★', style: AppTheme.mono(size: 10, color: t.accent)),
-                    const SizedBox(width: 6),
-                  ],
-                  if (ping != null)
-                    Text('${ping}ms',
-                        style: AppTheme.mono(size: 11, color: t.accent)),
+                  if (pinned) ...[Text('★', style: AppTheme.mono(size: 10, color: t.accent)), const SizedBox(width: 6)],
+                  if (ping != null) Text('${ping}ms', style: AppTheme.mono(size: 11, color: t.accent)),
                   trailing,
                 ],
               ),
@@ -1587,7 +1607,7 @@ class _PinnedGroup extends StatelessWidget {
   });
 
   void _showLostMenu(BuildContext context, PinnedRef pin) {
-    showModalBottomSheet(
+    showModalBottomSheet<void>(
       context: context,
       backgroundColor: t.bg,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
@@ -1600,19 +1620,25 @@ class _PinnedGroup extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(pin.name,
-                        style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500)),
+                    child: Text(
+                      pin.name,
+                      style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500),
+                    ),
                   ),
-                  Text(context.l10n.configsNotInSub,
-                      style: AppTheme.mono(size: 10, color: t.textMuted)),
+                  Text(context.l10n.configsNotInSub, style: AppTheme.mono(size: 10, color: t.textMuted)),
                 ],
               ),
             ),
             Container(height: 1, color: t.line),
-            _SheetTile(t: t, label: context.l10n.configsUnpin, color: t.danger, onTap: () {
-              Navigator.pop(ctx);
-              onUnpin(pin);
-            }),
+            _SheetTile(
+              t: t,
+              label: context.l10n.configsUnpin,
+              color: t.danger,
+              onTap: () {
+                Navigator.pop(ctx);
+                onUnpin(pin);
+              },
+            ),
             const SizedBox(height: 8),
           ],
         ),
@@ -1626,25 +1652,29 @@ class _PinnedGroup extends StatelessWidget {
       children: [
         Container(
           padding: const EdgeInsets.fromLTRB(20, 11, 20, 11),
-          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.lineSoft))),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: t.lineSoft)),
+          ),
           child: Row(
             children: [
               SizedBox(
                 width: 32,
-                child: Text('[★]',
-                    style: AppTheme.mono(size: 10, color: t.accent)),
+                child: Text('[★]', style: AppTheme.mono(size: 10, color: t.accent)),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('[pinned]',
-                        style: AppTheme.sans(
-                            size: 13, weight: FontWeight.w500, color: t.text)),
+                    Text(
+                      '[pinned]',
+                      style: AppTheme.sans(size: 13, weight: FontWeight.w500, color: t.text),
+                    ),
                     const SizedBox(height: 2),
-                    Text('cnt=${pins.length} · ${context.l10n.configsPinned}',
-                        style: AppTheme.mono(size: 10, color: t.textMuted)),
+                    Text(
+                      'cnt=${pins.length} · ${context.l10n.configsPinned}',
+                      style: AppTheme.mono(size: 10, color: t.textMuted),
+                    ),
                   ],
                 ),
               ),
@@ -1689,13 +1719,7 @@ class _LostPinRow extends StatelessWidget {
   final int addr;
   final VoidCallback onTap;
 
-  const _LostPinRow({
-    super.key,
-    required this.t,
-    required this.pin,
-    required this.addr,
-    required this.onTap,
-  });
+  const _LostPinRow({super.key, required this.t, required this.pin, required this.addr, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1705,41 +1729,44 @@ class _LostPinRow extends StatelessWidget {
       onLongPress: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.lineSoft))),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: t.lineSoft)),
+        ),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 11, 20, 11),
           child: Row(
             children: [
               SizedBox(
                 width: 32,
-                child: Text(hexAddr,
-                    style: AppTheme.mono(size: 10, color: t.textMuted)),
+                child: Text(hexAddr, style: AppTheme.mono(size: 10, color: t.textMuted)),
               ),
               const SizedBox(width: 10),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 decoration: BoxDecoration(border: Border.all(color: t.lineSoft)),
                 constraints: const BoxConstraints(minWidth: 44),
-                child: Text('LOST',
-                    textAlign: TextAlign.center,
-                    style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+                child: Text(
+                  'LOST',
+                  textAlign: TextAlign.center,
+                  style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1),
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(pin.name,
-                        style: AppTheme.sans(
-                            size: 13,
-                            weight: FontWeight.w500,
-                            color: t.textMuted,
-                            letterSpacing: -0.2),
-                        overflow: TextOverflow.ellipsis),
+                    Text(
+                      pin.name,
+                      style: AppTheme.sans(size: 13, weight: FontWeight.w500, color: t.textMuted, letterSpacing: -0.2),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     const SizedBox(height: 2),
-                    Text(context.l10n.configsPinUnavailable,
-                        style: AppTheme.mono(size: 10, color: t.textMuted),
-                        overflow: TextOverflow.ellipsis),
+                    Text(
+                      context.l10n.configsPinUnavailable,
+                      style: AppTheme.mono(size: 10, color: t.textMuted),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
                 ),
               ),
@@ -1759,12 +1786,7 @@ class _ToggleTile extends StatelessWidget {
   final bool value;
   final void Function(bool) onChanged;
 
-  const _ToggleTile({
-    required this.t,
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
+  const _ToggleTile({required this.t, required this.label, required this.value, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -1772,10 +1794,14 @@ class _ToggleTile extends StatelessWidget {
       onTap: () => onChanged(!value),
       child: Container(
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
-        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.lineSoft))),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: t.lineSoft)),
+        ),
         child: Row(
           children: [
-            Expanded(child: Text(label, style: AppTheme.sans(size: 14, color: t.text))),
+            Expanded(
+              child: Text(label, style: AppTheme.sans(size: 14, color: t.text)),
+            ),
             Container(
               width: 16,
               height: 16,
@@ -1807,7 +1833,9 @@ class _SheetTile extends StatelessWidget {
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
-        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.lineSoft))),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: t.lineSoft)),
+        ),
         child: Text(label, style: AppTheme.sans(size: 14, color: color ?? t.text)),
       ),
     );
@@ -1825,20 +1853,20 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text('[ no configs ]',
-              style: AppTheme.mono(size: 14, color: t.textMuted, letterSpacing: 1)),
+          Text('[ no configs ]', style: AppTheme.mono(size: 14, color: t.textMuted, letterSpacing: 1)),
           const SizedBox(height: 20),
-          Text(context.l10n.configsEmpty,
-              textAlign: TextAlign.center,
-              style: AppTheme.sans(size: 14, color: t.textDim)),
+          Text(
+            context.l10n.configsEmpty,
+            textAlign: TextAlign.center,
+            style: AppTheme.sans(size: 14, color: t.textDim),
+          ),
           const SizedBox(height: 24),
           GestureDetector(
             onTap: onAdd,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               color: t.accent,
-              child: Text('+ ADD CONFIG',
-                  style: AppTheme.mono(size: 11, color: t.bg, letterSpacing: 1)),
+              child: Text('+ ADD CONFIG', style: AppTheme.mono(size: 11, color: t.bg, letterSpacing: 1)),
             ),
           ),
         ],

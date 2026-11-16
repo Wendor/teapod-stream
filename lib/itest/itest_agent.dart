@@ -77,9 +77,9 @@ class ItestAgent {
   }
 
   Future<Object?> _ping() async => {
-        'version': AppConstants.appVersion,
-        'cores': [for (final k in await read(availableCoresProvider.future)) k.nativeId],
-      };
+    'version': AppConstants.appVersion,
+    'cores': [for (final k in await read(availableCoresProvider.future)) k.nativeId],
+  };
 
   Future<Object?> _reset(Map<String, dynamic> cmd) async {
     if (cmd['keepConfigs'] != true) {
@@ -146,11 +146,15 @@ class ItestAgent {
   }
 
   Future<Object?> _connect(String configId, String core) async {
-    final kind = CoreKind.values.firstWhere((k) => k.nativeId == core || k.displayName == core,
-        orElse: () => throw ArgumentError('unknown core: $core'));
+    final kind = CoreKind.values.firstWhere(
+      (k) => k.nativeId == core || k.displayName == core,
+      orElse: () => throw ArgumentError('unknown core: $core'),
+    );
     final configs = read(configProvider.notifier);
-    final config = read(configProvider).value!.configs.firstWhere((c) => c.id == configId,
-        orElse: () => throw ArgumentError('unknown config: $configId'));
+    final config = read(configProvider).value!.configs.firstWhere(
+      (c) => c.id == configId,
+      orElse: () => throw ArgumentError('unknown config: $configId'),
+    );
     final pinned = config.copyWith(core: kind);
     final error = pickCoreError(read(coreResolverProvider).resolve(pinned), kind);
     if (error != null) throw StateError('core ${kind.displayName}: $error');

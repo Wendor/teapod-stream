@@ -32,32 +32,21 @@ class FragmentSettings {
     this.interval = '10-20',
   });
 
-  FragmentSettings copyWith({
-    bool? enabled,
-    String? packets,
-    String? length,
-    String? interval,
-  }) =>
-      FragmentSettings(
-        enabled: enabled ?? this.enabled,
-        packets: packets ?? this.packets,
-        length: length ?? this.length,
-        interval: interval ?? this.interval,
-      );
+  FragmentSettings copyWith({bool? enabled, String? packets, String? length, String? interval}) => FragmentSettings(
+    enabled: enabled ?? this.enabled,
+    packets: packets ?? this.packets,
+    length: length ?? this.length,
+    interval: interval ?? this.interval,
+  );
 
-  Map<String, dynamic> toJson() => {
-        'enabled': enabled,
-        'packets': packets,
-        'length': length,
-        'interval': interval,
-      };
+  Map<String, dynamic> toJson() => {'enabled': enabled, 'packets': packets, 'length': length, 'interval': interval};
 
   static FragmentSettings fromJson(Map<String, dynamic> json) => FragmentSettings(
-        enabled: json['enabled'] as bool? ?? false,
-        packets: json['packets'] as String? ?? 'tlshello',
-        length: json['length'] as String? ?? '100-200',
-        interval: json['interval'] as String? ?? '10-20',
-      );
+    enabled: json['enabled'] as bool? ?? false,
+    packets: json['packets'] as String? ?? 'tlshello',
+    length: json['length'] as String? ?? '100-200',
+    interval: json['interval'] as String? ?? '10-20',
+  );
 
   /// Fields are entered by hand: garbage in length/interval breaks the whole xray startup
   /// ("Length can't be empty", "Invalid PacketsFrom"). The builder applies
@@ -86,42 +75,23 @@ class NoiseSettings {
   /// Pause before sending, ms, a `from-to` range.
   final String delay;
 
-  const NoiseSettings({
-    this.enabled = false,
-    this.type = NoiseType.rand,
-    this.packet = '50-100',
-    this.delay = '10-20',
-  });
+  const NoiseSettings({this.enabled = false, this.type = NoiseType.rand, this.packet = '50-100', this.delay = '10-20'});
 
-  NoiseSettings copyWith({
-    bool? enabled,
-    NoiseType? type,
-    String? packet,
-    String? delay,
-  }) =>
-      NoiseSettings(
-        enabled: enabled ?? this.enabled,
-        type: type ?? this.type,
-        packet: packet ?? this.packet,
-        delay: delay ?? this.delay,
-      );
+  NoiseSettings copyWith({bool? enabled, NoiseType? type, String? packet, String? delay}) => NoiseSettings(
+    enabled: enabled ?? this.enabled,
+    type: type ?? this.type,
+    packet: packet ?? this.packet,
+    delay: delay ?? this.delay,
+  );
 
-  Map<String, dynamic> toJson() => {
-        'enabled': enabled,
-        'type': type.name,
-        'packet': packet,
-        'delay': delay,
-      };
+  Map<String, dynamic> toJson() => {'enabled': enabled, 'type': type.name, 'packet': packet, 'delay': delay};
 
   static NoiseSettings fromJson(Map<String, dynamic> json) => NoiseSettings(
-        enabled: json['enabled'] as bool? ?? false,
-        type: NoiseType.values.firstWhere(
-          (e) => e.name == json['type'],
-          orElse: () => NoiseType.rand,
-        ),
-        packet: json['packet'] as String? ?? '50-100',
-        delay: json['delay'] as String? ?? '10-20',
-      );
+    enabled: json['enabled'] as bool? ?? false,
+    type: NoiseType.values.firstWhere((e) => e.name == json['type'], orElse: () => NoiseType.rand),
+    packet: json['packet'] as String? ?? '50-100',
+    delay: json['delay'] as String? ?? '10-20',
+  );
 
   bool get isValid {
     if (packet.trim().isEmpty) return false;
@@ -152,12 +122,7 @@ class MuxSettings {
     this.xudpProxyUDP443 = XudpUdp443.reject,
   });
 
-  MuxSettings copyWith({
-    bool? enabled,
-    int? concurrency,
-    int? xudpConcurrency,
-    XudpUdp443? xudpProxyUDP443,
-  }) =>
+  MuxSettings copyWith({bool? enabled, int? concurrency, int? xudpConcurrency, XudpUdp443? xudpProxyUDP443}) =>
       MuxSettings(
         enabled: enabled ?? this.enabled,
         concurrency: concurrency ?? this.concurrency,
@@ -166,19 +131,19 @@ class MuxSettings {
       );
 
   Map<String, dynamic> toJson() => {
-        'enabled': enabled,
-        'concurrency': concurrency,
-        'xudpConcurrency': xudpConcurrency,
-        'xudpProxyUDP443': xudpProxyUDP443.name,
-      };
+    'enabled': enabled,
+    'concurrency': concurrency,
+    'xudpConcurrency': xudpConcurrency,
+    'xudpProxyUDP443': xudpProxyUDP443.name,
+  };
 
   static MuxSettings fromJson(Map<String, dynamic> json) => MuxSettings(
-        enabled: json['enabled'] as bool? ?? false,
-        concurrency: json['concurrency'] as int? ?? 8,
-        xudpConcurrency: json['xudpConcurrency'] as int? ?? 16,
-        xudpProxyUDP443: XudpUdp443.values.firstWhere(
-          (e) => e.name == json['xudpProxyUDP443'],
-          orElse: () => XudpUdp443.reject,
-        ),
-      );
+    enabled: json['enabled'] as bool? ?? false,
+    concurrency: json['concurrency'] as int? ?? 8,
+    xudpConcurrency: json['xudpConcurrency'] as int? ?? 16,
+    xudpProxyUDP443: XudpUdp443.values.firstWhere(
+      (e) => e.name == json['xudpProxyUDP443'],
+      orElse: () => XudpUdp443.reject,
+    ),
+  );
 }

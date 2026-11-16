@@ -5,6 +5,7 @@ import 'storage_secure_service.dart';
 /// Safe to call on every launch — skips immediately after the first successful run.
 class StorageMigrationService {
   static const _flagKey = 'storage_migrated_v2';
+
   /// One migration per session; concurrent calls (configs and settings load
   /// simultaneously) wait for it to finish instead of reading storage before the move.
   static Future<void>? _run;
@@ -55,8 +56,7 @@ class StorageMigrationService {
 
       // Mark complete and remove plaintext keys
       await prefs.setBool(_flagKey, true);
-      for (final key in ['vpn_configs', 'active_config_id', 'subscriptions',
-                          'socks_user', 'socks_password']) {
+      for (final key in ['vpn_configs', 'active_config_id', 'subscriptions', 'socks_user', 'socks_password']) {
         await prefs.remove(key);
       }
     } catch (_) {

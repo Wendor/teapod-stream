@@ -30,11 +30,9 @@ class Adb implements Shell {
     serial ??= Platform.environment['ANDROID_SERIAL'];
     if (serial != null && serial.isNotEmpty) return Adb(serial);
     final r = await Process.run('adb', ['devices']);
-    final ids = LineSplitter.split(r.stdout as String)
-        .skip(1)
-        .where((l) => l.trim().endsWith('device'))
-        .map((l) => l.split(RegExp(r'\s+')).first)
-        .toList();
+    final ids = LineSplitter.split(
+      r.stdout as String,
+    ).skip(1).where((l) => l.trim().endsWith('device')).map((l) => l.split(RegExp(r'\s+')).first).toList();
     if (ids.length != 1) throw StateError('exactly one device is required (--serial), found: ${ids.length}');
     return Adb(ids.single);
   }
@@ -53,10 +51,13 @@ class Adb implements Shell {
     final p = await Process.start('adb', ['-s', serial, ...args]);
     final out = p.stdout.transform(_utf8).join();
     final err = p.stderr.transform(_utf8).join();
-    final code = await p.exitCode.timeout(timeout, onTimeout: () {
-      p.kill();
-      return -1;
-    });
+    final code = await p.exitCode.timeout(
+      timeout,
+      onTimeout: () {
+        p.kill();
+        return -1;
+      },
+    );
     return ProcResult(code, await out, await err);
   }
 
@@ -72,45 +73,59 @@ class Adb implements Shell {
     var sameTime = 0;
     Future<void> start() async {
       if (_stopped) return;
-      final p = await Process.start(
-          'adb', ['-s', serial, 'logcat', '-v', 'threadtime', if (last != null) ...['-T', last!]]);
+      final p = await Process.start('adb', [
+        '-s',
+        serial,
+        'logcat',
+        '-v',
+        'threadtime',
+        if (last != null) ...['-T', last!],
+      ]);
       _logcat = p;
       // After a restart with `-T` lines from the time of the last received one repeat:
       // skip earlier ones and those already emitted with the same time, otherwise an old
       // state marker would be taken as new. New lines with the same time pass.
       final replayFrom = last;
       var replaySkip = sameTime;
-      _sub = p.stdout.transform(_utf8).transform(const LineSplitter()).listen((l) {
-        if (_stopped) return;
-        final t = _logTime.firstMatch(l)?[0];
-        if (replayFrom != null) {
-          if (t == null) {
-            if (replaySkip >= 0) return; // logcat headers before the first new line
-          } else if (replaySkip >= 0) {
-            final c = t.compareTo(replayFrom);
-            if (c < 0) return;
-            if (c == 0 && replaySkip > 0) {
-              replaySkip--;
-              return;
-            }
-            replaySkip = -1;
-          }
-        }
-        if (t != null) {
-          sameTime = t == last ? sameTime + 1 : 1;
-          last = t;
-        }
-        sink.writeln(mask(l));
-        out.add(l);
-      }, onError: (Object e) {
-        if (!_stopped) sink.writeln('ITEST_RUNNER logcat error: $e');
-      });
-      unawaited(p.exitCode.then((code) async {
-        if (_stopped) return;
-        sink.writeln('ITEST_RUNNER logcat exited ($code), restarting');
-        await Future<void>.delayed(const Duration(seconds: 2));
-        await start();
-      }));
+      _sub = p.stdout
+          .transform(_utf8)
+          .transform(const LineSplitter())
+          .listen(
+            (l) {
+              if (_stopped) return;
+              final t = _logTime.firstMatch(l)?[0];
+              if (replayFrom != null) {
+                if (t == null) {
+                  if (replaySkip >= 0) return; // logcat headers before the first new line
+                } else if (replaySkip >= 0) {
+                  final c = t.compareTo(replayFrom);
+                  if (c < 0) return;
+                  if (c == 0 && replaySkip > 0) {
+                    replaySkip--;
+                    return;
+                  }
+                  replaySkip = -1;
+                }
+              }
+              if (t != null) {
+                sameTime = t == last ? sameTime + 1 : 1;
+                last = t;
+              }
+              sink.writeln(mask(l));
+              out.add(l);
+            },
+            onError: (Object e) {
+              if (!_stopped) sink.writeln('ITEST_RUNNER logcat error: $e');
+            },
+          );
+      unawaited(
+        p.exitCode.then((code) async {
+          if (_stopped) return;
+          sink.writeln('ITEST_RUNNER logcat exited ($code), restarting');
+          await Future<void>.delayed(const Duration(seconds: 2));
+          await start();
+        }),
+      );
     }
 
     await start();

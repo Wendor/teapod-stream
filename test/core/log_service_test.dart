@@ -19,8 +19,7 @@ void main() {
       ..addError('e')
       ..addDebug('d');
     final entries = c.read(logServiceProvider);
-    expect(entries.map((e) => e.level),
-        [LogLevel.info, LogLevel.warning, LogLevel.error, LogLevel.debug]);
+    expect(entries.map((e) => e.level), [LogLevel.info, LogLevel.warning, LogLevel.error, LogLevel.debug]);
     expect(entries.first.source, 's');
   });
 

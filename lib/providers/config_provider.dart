@@ -25,12 +25,10 @@ class ConfigState {
     this.pins = const [],
   });
 
-  VpnConfig? get activeConfig => activeConfigId == null
-      ? null
-      : configs.where((c) => c.id == activeConfigId).firstOrNull;
+  VpnConfig? get activeConfig =>
+      activeConfigId == null ? null : configs.where((c) => c.id == activeConfigId).firstOrNull;
 
-  late final List<VpnConfig> standaloneConfigs =
-      configs.where((c) => c.subscriptionId == null).toList();
+  late final List<VpnConfig> standaloneConfigs = configs.where((c) => c.subscriptionId == null).toList();
 
   late final Map<String, List<VpnConfig>> configsBySubscription = () {
     final result = <String, List<VpnConfig>>{};
@@ -42,11 +40,12 @@ class ConfigState {
 
   /// Pins in pinning order; null — a config with that name
   /// is missing from the subscription (the pin is "lost" but not removed).
-  late final List<(PinnedRef, VpnConfig?)> resolvedPins =
-      pins.map((p) => (p, p.resolve(configs))).toList();
+  late final List<(PinnedRef, VpnConfig?)> resolvedPins = pins.map((p) => (p, p.resolve(configs))).toList();
 
-  late final Set<String> pinnedIds =
-      {for (final (_, c) in resolvedPins) if (c != null) c.id};
+  late final Set<String> pinnedIds = {
+    for (final (_, c) in resolvedPins)
+      if (c != null) c.id,
+  };
 
   bool isPinned(VpnConfig c) => pinnedIds.contains(c.id);
 
@@ -91,7 +90,13 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     final activeSubId = await storage.loadActiveSubscriptionId();
     final subs = await storage.loadSubscriptions();
     final pins = await storage.loadPins();
-    return ConfigState(configs: configs, activeConfigId: activeId, activeSubscriptionId: activeSubId, subscriptions: subs, pins: pins);
+    return ConfigState(
+      configs: configs,
+      activeConfigId: activeId,
+      activeSubscriptionId: activeSubId,
+      subscriptions: subs,
+      pins: pins,
+    );
   }
 
   // ─── Pins ───
@@ -101,7 +106,10 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     if (current == null) return;
     // Remove the pin that resolves to this config (including the old format).
     final pins = current.isPinned(c)
-        ? [for (final (p, r) in current.resolvedPins) if (r?.id != c.id) p]
+        ? [
+            for (final (p, r) in current.resolvedPins)
+              if (r?.id != c.id) p,
+          ]
         : [...current.pins, PinnedRef.of(c)];
     await storage.savePins(pins);
     state = AsyncData(current.copyWith(pins: pins));
@@ -164,9 +172,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
 
   Future<void> updateConfig(VpnConfig updated) => _serial(() async {
     final current = state.maybeWhen(data: (d) => d, orElse: () => null) ?? ConfigState();
-    final configs = current.configs
-        .map((c) => c.id == updated.id ? updated : c)
-        .toList();
+    final configs = current.configs.map((c) => c.id == updated.id ? updated : c).toList();
     await storage.updateConfig(updated);
     state = AsyncData(current.copyWith(configs: configs));
   });
@@ -175,8 +181,12 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
 
   /// [replaceId] — update the subscription with this id to the new [url] (URL change):
   /// on a load error the old subscription stays untouched.
-  Future<void> addSubscriptionFromUrl(String url,
-      {String? name, bool allowSelfSigned = false, String? replaceId}) async {
+  Future<void> addSubscriptionFromUrl(
+    String url, {
+    String? name,
+    bool allowSelfSigned = false,
+    String? replaceId,
+  }) async {
     bool isTarget(Subscription s) => replaceId != null ? s.id == replaceId : s.url == url;
     final before = state.value ?? ConfigState();
     final target = before.subscriptions.where(isTarget).firstOrNull;
@@ -185,14 +195,21 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     final settings = ref.read(settingsProvider).value;
     final hwid = (settings?.hwidEnabled ?? false) ? await DeviceService.getHwidInfo() : null;
     // Network — outside the mutation queue so config selection doesn't wait for the download.
-    final (tagged, fetchResult) = await _fetchAndTagConfigs(url, subId,
-        allowSelfSigned: allowSelfSigned, pinnedCertDer: target?.pinnedCertDer,
-        hwid: hwid, userAgent: settings?.subUserAgent ?? '');
+    final (tagged, fetchResult) = await _fetchAndTagConfigs(
+      url,
+      subId,
+      allowSelfSigned: allowSelfSigned,
+      pinnedCertDer: target?.pinnedCertDer,
+      hwid: hwid,
+      userAgent: settings?.subUserAgent ?? '',
+    );
     if (tagged.isEmpty) {
       // The provider usually explains an empty response: HWID device limit or announce.
-      throw Exception(fetchResult.hwidStatus?.maxDevicesReached == true
-          ? L10n.current.subHwidLimit
-          : fetchResult.announce ?? L10n.current.subEmpty);
+      throw Exception(
+        fetchResult.hwidStatus?.maxDevicesReached == true
+            ? L10n.current.subHwidLimit
+            : fetchResult.announce ?? L10n.current.subEmpty,
+      );
     }
 
     await _serial(() async {
@@ -220,12 +237,12 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
       String? activeId = current.activeConfigId;
       final oldActive = current.activeConfig;
       if (oldActive != null && oldActive.subscriptionId == subId) {
-        bool sameEndpoint(VpnConfig c) =>
-            c.address == oldActive.address && c.port == oldActive.port;
-        activeId = (newConfigs.where((c) => sameEndpoint(c) && c.name == oldActive.name).firstOrNull ??
-                newConfigs.where(sameEndpoint).firstOrNull ??
-                newConfigs.where((c) => c.name == oldActive.name).firstOrNull)
-            ?.id;
+        bool sameEndpoint(VpnConfig c) => c.address == oldActive.address && c.port == oldActive.port;
+        activeId =
+            (newConfigs.where((c) => sameEndpoint(c) && c.name == oldActive.name).firstOrNull ??
+                    newConfigs.where(sameEndpoint).firstOrNull ??
+                    newConfigs.where((c) => c.name == oldActive.name).firstOrNull)
+                ?.id;
       }
       // No active one (or it vanished from the subscription) — the first new one. The subscription
       // auto-select mode (activeSubscriptionId) is not reset by this.
@@ -257,21 +274,35 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
       }
       if (activeId != current.activeConfigId) await storage.saveActiveConfigId(activeId);
 
-      state = AsyncData(current.copyWith(
-        configs: [...current.configs.where((c) => c.subscriptionId != subId), ...newConfigs],
-        subscriptions: existing != null
-            ? current.subscriptions.map((s) => s.id == subId ? sub : s).toList()
-            : [...current.subscriptions, sub],
-        activeConfigId: activeId,
-      ));
+      state = AsyncData(
+        current.copyWith(
+          configs: [...current.configs.where((c) => c.subscriptionId != subId), ...newConfigs],
+          subscriptions: existing != null
+              ? current.subscriptions.map((s) => s.id == subId ? sub : s).toList()
+              : [...current.subscriptions, sub],
+          activeConfigId: activeId,
+        ),
+      );
     });
   }
 
-  Future<(List<VpnConfig>, SubscriptionFetchResult)> _fetchAndTagConfigs(String url, String subId, {bool allowSelfSigned = false, String? pinnedCertDer, HwidDeviceInfo? hwid, String? userAgent}) async {
+  Future<(List<VpnConfig>, SubscriptionFetchResult)> _fetchAndTagConfigs(
+    String url,
+    String subId, {
+    bool allowSelfSigned = false,
+    String? pinnedCertDer,
+    HwidDeviceInfo? hwid,
+    String? userAgent,
+  }) async {
     final svc = SubscriptionService();
-    final result = await svc.fetchSubscription(url,
-        allowSelfSigned: allowSelfSigned, pinnedCertDer: pinnedCertDer, hwid: hwid, userAgent: userAgent,
-        socks: ref.read(tunnelSocksProvider));
+    final result = await svc.fetchSubscription(
+      url,
+      allowSelfSigned: allowSelfSigned,
+      pinnedCertDer: pinnedCertDer,
+      hwid: hwid,
+      userAgent: userAgent,
+      socks: ref.read(tunnelSocksProvider),
+    );
     final tagged = result.configs.map((c) => c.copyWith(subscriptionId: subId)).toList();
     return (tagged, result);
   }
@@ -281,9 +312,9 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     final sub = current.subscriptions.firstWhere((s) => s.id == id);
     final renamed = sub.copyWith(name: newName);
     await storage.updateSubscription(renamed);
-    state = AsyncData(current.copyWith(
-      subscriptions: current.subscriptions.map((s) => s.id == id ? renamed : s).toList(),
-    ));
+    state = AsyncData(
+      current.copyWith(subscriptions: current.subscriptions.map((s) => s.id == id ? renamed : s).toList()),
+    );
   });
 
   Future<void> removeSubscription(String subId) => _serial(() async {
@@ -293,14 +324,17 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     if (clearActiveSub) await storage.saveActiveSubscriptionId(null);
     final pins = current.pins.where((p) => p.subscriptionId != subId).toList();
     if (pins.length != current.pins.length) await storage.savePins(pins);
-    state = AsyncData(current.copyWith(
-      pins: pins,
-      configs: current.configs.where((c) => c.subscriptionId != subId).toList(),
-      subscriptions: current.subscriptions.where((s) => s.id != subId).toList(),
-      clearActive: current.activeConfigId != null &&
-          current.configs.any((c) => c.id == current.activeConfigId && c.subscriptionId == subId),
-      clearActiveSub: clearActiveSub,
-    ));
+    state = AsyncData(
+      current.copyWith(
+        pins: pins,
+        configs: current.configs.where((c) => c.subscriptionId != subId).toList(),
+        subscriptions: current.subscriptions.where((s) => s.id != subId).toList(),
+        clearActive:
+            current.activeConfigId != null &&
+            current.configs.any((c) => c.id == current.activeConfigId && c.subscriptionId == subId),
+        clearActiveSub: clearActiveSub,
+      ),
+    );
   });
 
   Future<void> refreshStaleSubscriptions({int intervalHours = 6}) async {
@@ -317,8 +351,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
       for (final sub in stale) {
         // A broken subscription doesn't block the others and isn't retried on every resume.
         final failedAt = _subFailedAt[sub.id];
-        if (failedAt != null &&
-            DateTime.now().difference(failedAt) < const Duration(hours: 1)) {
+        if (failedAt != null && DateTime.now().difference(failedAt) < const Duration(hours: 1)) {
           continue;
         }
         try {
@@ -351,7 +384,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     // Import subscriptions first, creating new IDs
     for (final sub in bundle.subscriptions) {
       final existingSub = current.subscriptions.where((s) => s.url == sub.url).firstOrNull;
-      
+
       if (existingSub != null) {
         subIdMap[sub.id] = existingSub.id;
         continue;
@@ -388,11 +421,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
           ? subIdMap[c.subscriptionId]
           : c.subscriptionId;
 
-      return c.copyWith(
-        id: newId,
-        createdAt: DateTime.now(),
-        subscriptionId: newSubId,
-      );
+      return c.copyWith(id: newId, createdAt: DateTime.now(), subscriptionId: newSubId);
     }).toList();
 
     // Import configs that don't already exist (by rawUri or address:port match)
@@ -413,10 +442,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     // Update in-memory state
     final updatedSubs = [...current.subscriptions, ...newSubscriptions];
 
-    state = AsyncData(current.copyWith(
-      configs: [...current.configs, ...newConfigs],
-      subscriptions: updatedSubs,
-    ));
+    state = AsyncData(current.copyWith(configs: [...current.configs, ...newConfigs], subscriptions: updatedSubs));
 
     if (state.value?.activeConfigId == null && newConfigs.isNotEmpty) {
       await _setActiveConfig(newConfigs.first.id);
@@ -464,9 +490,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     final current = state.maybeWhen(data: (d) => d, orElse: () => null);
     if (current == null) return;
     final groupConfigs = List<VpnConfig>.from(
-      subId == null
-          ? current.standaloneConfigs
-          : (current.configsBySubscription[subId] ?? []),
+      subId == null ? current.standaloneConfigs : (current.configsBySubscription[subId] ?? []),
     );
     if (oldIndex < newIndex) newIndex -= 1;
     final item = groupConfigs.removeAt(oldIndex);
@@ -496,8 +520,7 @@ class ImportConnectionsResult {
   });
 }
 
-final configProvider =
-    AsyncNotifierProvider<ConfigNotifier, ConfigState>(ConfigNotifier.new);
+final configProvider = AsyncNotifierProvider<ConfigNotifier, ConfigState>(ConfigNotifier.new);
 
 /// The config that will actually be used on connect:
 /// best-latency config from the active subscription, or the manually selected config.

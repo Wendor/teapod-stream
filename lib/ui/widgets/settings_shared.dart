@@ -19,10 +19,7 @@ void saveSettings(BuildContext context, WidgetRef ref, AppSettings settings) {
 void showReadonlySnack(BuildContext context) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(
-      content: Text(context.l10n.settingsReadonlySnack),
-      duration: const Duration(seconds: 2),
-    ));
+    ..showSnackBar(SnackBar(content: Text(context.l10n.settingsReadonlySnack), duration: const Duration(seconds: 2)));
 }
 
 // ── Row: toggle ───────────────────────────────────────────────────
@@ -52,7 +49,8 @@ class SetRowToggle extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
         decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: t.lineSoft))),
+          border: Border(bottom: BorderSide(color: t.lineSoft)),
+        ),
         child: Row(
           children: [
             Expanded(
@@ -62,18 +60,13 @@ class SetRowToggle extends StatelessWidget {
                   Text(title, style: AppTheme.sans(size: 14, color: t.text)),
                   if (hint != null) ...[
                     const SizedBox(height: 3),
-                    Text(hint!,
-                        style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5)),
+                    Text(hint!, style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5)),
                   ],
                 ],
               ),
             ),
             const SizedBox(width: 14),
-            SetSquareSwitch(
-              t: t,
-              value: value,
-              onChanged: locked ? null : (v) => onChange(v),
-            ),
+            SetSquareSwitch(t: t, value: value, onChanged: locked ? null : (v) => onChange(v)),
           ],
         ),
       ),
@@ -144,7 +137,8 @@ class SetRowChev extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
         decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: last ? t.line : t.lineSoft))),
+          border: Border(bottom: BorderSide(color: last ? t.line : t.lineSoft)),
+        ),
         child: Row(
           children: [
             Expanded(
@@ -154,9 +148,11 @@ class SetRowChev extends StatelessWidget {
                   Text(title, style: AppTheme.sans(size: 14, color: t.text)),
                   if (hint != null) ...[
                     const SizedBox(height: 3),
-                    Text(hint!,
-                        style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5),
-                        overflow: TextOverflow.ellipsis),
+                    Text(
+                      hint!,
+                      style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
                 ],
               ),
@@ -177,19 +173,15 @@ class SetInlineField extends StatelessWidget {
   final String label;
   final Widget child;
   final bool locked;
-  const SetInlineField({
-    super.key,
-    required this.t,
-    required this.label,
-    required this.child,
-    this.locked = false,
-  });
+  const SetInlineField({super.key, required this.t, required this.label, required this.child, this.locked = false});
 
   @override
   Widget build(BuildContext context) {
     final row = Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.lineSoft))),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: t.lineSoft)),
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -199,11 +191,7 @@ class SetInlineField extends StatelessWidget {
       ),
     );
     if (!locked) return row;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => showReadonlySnack(context),
-      child: row,
-    );
+    return GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => showReadonlySnack(context), child: row);
   }
 }
 
@@ -245,11 +233,17 @@ class SetCredField extends StatelessWidget {
           contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           isDense: true,
           enabledBorder: OutlineInputBorder(
-              borderSide: BorderSide(color: t.line), borderRadius: BorderRadius.zero),
+            borderSide: BorderSide(color: t.line),
+            borderRadius: BorderRadius.zero,
+          ),
           focusedBorder: OutlineInputBorder(
-              borderSide: BorderSide(color: t.accent), borderRadius: BorderRadius.zero),
+            borderSide: BorderSide(color: t.accent),
+            borderRadius: BorderRadius.zero,
+          ),
           disabledBorder: OutlineInputBorder(
-              borderSide: BorderSide(color: t.lineSoft), borderRadius: BorderRadius.zero),
+            borderSide: BorderSide(color: t.lineSoft),
+            borderRadius: BorderRadius.zero,
+          ),
         ),
       ),
     );
@@ -293,11 +287,17 @@ class SetNumField extends StatelessWidget {
           contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           isDense: true,
           enabledBorder: OutlineInputBorder(
-              borderSide: BorderSide(color: t.line), borderRadius: BorderRadius.zero),
+            borderSide: BorderSide(color: t.line),
+            borderRadius: BorderRadius.zero,
+          ),
           focusedBorder: OutlineInputBorder(
-              borderSide: BorderSide(color: t.accent), borderRadius: BorderRadius.zero),
+            borderSide: BorderSide(color: t.accent),
+            borderRadius: BorderRadius.zero,
+          ),
           disabledBorder: OutlineInputBorder(
-              borderSide: BorderSide(color: t.lineSoft), borderRadius: BorderRadius.zero),
+            borderSide: BorderSide(color: t.lineSoft),
+            borderRadius: BorderRadius.zero,
+          ),
         ),
       ),
     );
@@ -339,19 +339,13 @@ class SetSegSquare extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: active ? t.accentSoft : Colors.transparent,
-                border: Border(
-                  right: idx < opts.length - 1
-                      ? BorderSide(color: t.line)
-                      : BorderSide.none,
-                ),
+                border: Border(right: idx < opts.length - 1 ? BorderSide(color: t.line) : BorderSide.none),
               ),
               child: AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 200),
-                  style: AppTheme.mono(
-                      size: 11,
-                      color: active ? t.accent : t.textDim,
-                      letterSpacing: 0.5),
-                  child: Text(lab)),
+                duration: const Duration(milliseconds: 200),
+                style: AppTheme.mono(size: 11, color: active ? t.accent : t.textDim, letterSpacing: 0.5),
+                child: Text(lab),
+              ),
             ),
           );
         }).toList(),
@@ -370,21 +364,24 @@ class SetSectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.lineSoft))),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: t.lineSoft)),
+      ),
       child: Row(
         children: [
           Text(addr, style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
           const SizedBox(width: 8),
           Text('·', style: AppTheme.mono(size: 10, color: t.textMuted)),
           const SizedBox(width: 8),
-          Text(label.toUpperCase(),
-              style: AppTheme.mono(size: 10, color: t.textDim, letterSpacing: 1)),
+          Text(label.toUpperCase(), style: AppTheme.mono(size: 10, color: t.textDim, letterSpacing: 1)),
           const SizedBox(width: 8),
           Expanded(
-            child: Text('—' * 16,
-                style: AppTheme.mono(size: 10, color: t.textMuted),
-                overflow: TextOverflow.clip,
-                maxLines: 1),
+            child: Text(
+              '—' * 16,
+              style: AppTheme.mono(size: 10, color: t.textMuted),
+              overflow: TextOverflow.clip,
+              maxLines: 1,
+            ),
           ),
         ],
       ),
@@ -403,9 +400,9 @@ class SetCornerTicks extends StatelessWidget {
       child: IgnorePointer(
         child: Stack(
           children: [
-            Positioned(top: 6, left: 6,    child: _SmallTick(color: color, tl: true)),
-            Positioned(top: 6, right: 6,   child: _SmallTick(color: color, tr: true)),
-            Positioned(bottom: 6, left: 6,  child: _SmallTick(color: color, bl: true)),
+            Positioned(top: 6, left: 6, child: _SmallTick(color: color, tl: true)),
+            Positioned(top: 6, right: 6, child: _SmallTick(color: color, tr: true)),
+            Positioned(bottom: 6, left: 6, child: _SmallTick(color: color, bl: true)),
             Positioned(bottom: 6, right: 6, child: _SmallTick(color: color, br: true)),
           ],
         ),
@@ -417,19 +414,13 @@ class SetCornerTicks extends StatelessWidget {
 class _SmallTick extends StatelessWidget {
   final Color color;
   final bool tl, tr, bl, br;
-  const _SmallTick({
-    required this.color,
-    this.tl = false,
-    this.tr = false,
-    this.bl = false,
-    this.br = false,
-  });
+  const _SmallTick({required this.color, this.tl = false, this.tr = false, this.bl = false, this.br = false});
 
   @override
   Widget build(BuildContext context) => CustomPaint(
-        size: const Size(8, 8),
-        painter: _SmallTickPainter(color: color, tl: tl, tr: tr, bl: bl, br: br),
-      );
+    size: const Size(8, 8),
+    painter: _SmallTickPainter(color: color, tl: tl, tr: tr, bl: bl, br: br),
+  );
 }
 
 class _SmallTickPainter extends CustomPainter {

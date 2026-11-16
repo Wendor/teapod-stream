@@ -39,12 +39,12 @@ class FaultResult {
   FaultResult(this.fault, this.verdict, this.recovery, this.note, {DateTime? at}) : at = at ?? DateTime.now();
 
   Map<String, Object?> toJson() => {
-        'fault': fault.cli,
-        'verdict': verdict.name,
-        'recoveryMs': recovery?.inMilliseconds,
-        'note': note,
-        'at': at.toIso8601String(),
-      };
+    'fault': fault.cli,
+    'verdict': verdict.name,
+    'recoveryMs': recovery?.inMilliseconds,
+    'note': note,
+    'at': at.toIso8601String(),
+  };
 }
 
 /// Recovery after a fault: traffic within [failAfter] — pass; otherwise
@@ -64,13 +64,21 @@ FaultResult classifyRecovery({
   final failing = after.where((s) => !s.ok).toList();
   final connected = failing.reversed.takeWhile((s) => s.appState == 'connected').toList();
   if (connected.length > 1 && connected.first.t.difference(connected.last.t) >= zombieAfter) {
-    return FaultResult(fault, Verdict.zombie, null,
-        'connected without traffic for ${connected.first.t.difference(connected.last.t).inSeconds}s',
-        at: restoredAt);
+    return FaultResult(
+      fault,
+      Verdict.zombie,
+      null,
+      'connected without traffic for ${connected.first.t.difference(connected.last.t).inSeconds}s',
+      at: restoredAt,
+    );
   }
-  return FaultResult(fault, Verdict.fail, null,
-      'no traffic ${failAfter.inSeconds}s after restore (state ${after.lastOrNull?.appState})',
-      at: restoredAt);
+  return FaultResult(
+    fault,
+    Verdict.fail,
+    null,
+    'no traffic ${failAfter.inSeconds}s after restore (state ${after.lastOrNull?.appState})',
+    at: restoredAt,
+  );
 }
 
 /// Quiet interval: ≥ [minRun] failed probes in a row — a drop without a cause.
@@ -85,15 +93,18 @@ FaultResult classifyIdle(List<ProbeSample> samples, {int minRun = 3}) {
     if (run.length >= minRun) {
       final zombie = run.every((r) => r.appState == 'connected');
       final secs = run.last.t.difference(run.first.t).inSeconds;
-      return FaultResult(Fault.idle, zombie ? Verdict.zombie : Verdict.fail, null,
-          'outage ${secs}s from ${run.first.t.toIso8601String().substring(11, 19)}, '
-          '${s == null ? 'not recovered' : 'recovered'} (state ${run.last.appState})',
-          at: run.first.t);
+      return FaultResult(
+        Fault.idle,
+        zombie ? Verdict.zombie : Verdict.fail,
+        null,
+        'outage ${secs}s from ${run.first.t.toIso8601String().substring(11, 19)}, '
+        '${s == null ? 'not recovered' : 'recovered'} (state ${run.last.appState})',
+        at: run.first.t,
+      );
     }
     run = [];
   }
-  return FaultResult(Fault.idle, Verdict.pass, null, '${samples.length} probes ok',
-      at: samples.firstOrNull?.t);
+  return FaultResult(Fault.idle, Verdict.pass, null, '${samples.length} probes ok', at: samples.firstOrNull?.t);
 }
 
 /// A long run of one core with faults.
@@ -149,7 +160,9 @@ class Soak {
   /// so the recovery time doesn't include retries of failed attempts.
   Future<ProbeSample> _probe({bool fast = false}) async {
     // A distinguishable service: answer ≠ its direct IP; otherwise any answer is enough.
-    final urls = egress != null && egress == baseline.directRuIp ? const <String>[] : informative(baseline.direct, egress);
+    final urls = egress != null && egress == baseline.directRuIp
+        ? const <String>[]
+        : informative(baseline.direct, egress);
     final url = urls.isEmpty ? echoMain.first : urls.first;
     Future<String?> get(String u) =>
         fast ? probes.ip(u, timeout: const Duration(seconds: 5), retries: 0) : probes.ip(u);
@@ -276,7 +289,8 @@ class Soak {
     final deadline = DateTime.now().add(duration);
     final schedule = [for (var i = 0; i < repeat; i++) ...faults];
     final idleLen = Duration(
-        seconds: (duration.inSeconds ~/ (2 * (schedule.isEmpty ? 1 : schedule.length))).clamp(60, 600));
+      seconds: (duration.inSeconds ~/ (2 * (schedule.isEmpty ? 1 : schedule.length))).clamp(60, 600),
+    );
     try {
       if (!await _connect()) {
         final r = FaultResult(Fault.idle, Verdict.fail, null, 'initial connect failed');
@@ -299,17 +313,22 @@ class Soak {
         final f = schedule[i++ % schedule.length];
         final restoredAt = await _inject(f);
         var r = classifyRecovery(
-            fault: f,
-            restoredAt: restoredAt,
-            after: await _sample(const Duration(minutes: 3, seconds: 30), untilOk: true));
+          fault: f,
+          restoredAt: restoredAt,
+          after: await _sample(const Duration(minutes: 3, seconds: 30), untilOk: true),
+        );
         // Android didn't restart the service — its race with the system Vpn (unbinding before
         // the process death is handled); without always-on VPN this is OS behavior. Only
         // when confirmed in logcat, otherwise the failure stays FAIL.
         final log = _faultLog ?? const <String>[];
         _faultLog = null;
-        final osRace = log.any((l) => l.contains('Exception when unbinding service $itestPackage/')) &&
+        final osRace =
+            log.any((l) => l.contains('Exception when unbinding service $itestPackage/')) &&
             !log.any((l) => l.contains('Scheduling restart of crashed service $itestPackage/'));
-        if (f == Fault.killApp && r.verdict != Verdict.pass && agent.lastState == null && osRace &&
+        if (f == Fault.killApp &&
+            r.verdict != Verdict.pass &&
+            agent.lastState == null &&
+            osRace &&
             await _alwaysOnOff()) {
           r = FaultResult(f, Verdict.skip, null, 'Android did not restart the service (always-on VPN off)', at: r.at);
         }

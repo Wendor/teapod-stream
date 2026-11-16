@@ -29,7 +29,13 @@ class FakeNative {
       'getLogs' => logs,
       'getInstalledApps' => apps,
       'getAvailableEngines' => ['go', 'rust', 'box'],
-      'getBinaryVersions' => {'xray': '26.1.1', 'xray-go': '26.1.1', 'xray-rust': '0.9.0', 'sing-box': '1.14.4', 'tun2socks': '1.7.3'},
+      'getBinaryVersions' => {
+        'xray': '26.1.1',
+        'xray-go': '26.1.1',
+        'xray-rust': '0.9.0',
+        'sing-box': '1.14.4',
+        'tun2socks': '1.7.3',
+      },
       'getFilesDir' => '',
       'getAbi' => 'arm64-v8a',
       _ => null,
@@ -38,20 +44,20 @@ class FakeNative {
 }
 
 VpnConfig testConfig(String id, {String? subId, int? latency}) => VpnConfig(
-      id: id,
-      name: 'Server $id',
-      protocol: VpnProtocol.trojan,
-      address: 'h$id.example',
-      port: 443,
-      uuid: '',
-      password: 'p',
-      security: VpnSecurity.tls,
-      transport: VpnTransport.tcp,
-      createdAt: DateTime(2026),
-      subscriptionId: subId,
-      latencyMs: latency,
-      rawUri: 'trojan://p@h$id.example:443#Server%20$id',
-    );
+  id: id,
+  name: 'Server $id',
+  protocol: VpnProtocol.trojan,
+  address: 'h$id.example',
+  port: 443,
+  uuid: '',
+  password: 'p',
+  security: VpnSecurity.tls,
+  transport: VpnTransport.tcp,
+  createdAt: DateTime(2026),
+  subscriptionId: subId,
+  latencyMs: latency,
+  rawUri: 'trojan://p@h$id.example:443#Server%20$id',
+);
 
 /// Mocks channels, storages and data; returns the native stub.
 Future<FakeNative> setUpScreenTest({
@@ -63,13 +69,24 @@ Future<FakeNative> setUpScreenTest({
   final native = FakeNative();
   final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   messenger.setMockMethodCallHandler(
-      const MethodChannel(AppConstants.methodChannel), (call) async => native.handle(call));
+    const MethodChannel(AppConstants.methodChannel),
+    (call) async => native.handle(call),
+  );
   messenger.setMockMethodCallHandler(
-      const MethodChannel('flutter.baseflow.com/permissions/methods'), (call) async => <int, int>{17: 1});
-  messenger.setMockStreamHandler(const EventChannel('${AppConstants.methodChannel}/events'),
-      MockStreamHandler.inline(onListen: (_, _) {}));
+    const MethodChannel('flutter.baseflow.com/permissions/methods'),
+    (call) async => <int, int>{17: 1},
+  );
+  messenger.setMockStreamHandler(
+    const EventChannel('${AppConstants.methodChannel}/events'),
+    MockStreamHandler.inline(onListen: (_, _) {}),
+  );
   PackageInfo.setMockInitialValues(
-      appName: 'TeapodStream', packageName: 'p', version: '1.7.3', buildNumber: '1', buildSignature: '');
+    appName: 'TeapodStream',
+    packageName: 'p',
+    version: '1.7.3',
+    buildNumber: '1',
+    buildSignature: '',
+  );
   SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
   FlutterSecureStorage.setMockInitialValues({});
   await SettingsService().save(settings);
@@ -87,14 +104,16 @@ Future<ProviderContainer> pumpScreen(WidgetTester tester, Widget screen) async {
   tester.view.devicePixelRatio = 2.5;
   addTearDown(tester.view.reset);
   final container = ProviderContainer();
-  await tester.pumpWidget(UncontrolledProviderScope(
-    container: container,
-    child: MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      theme: AppTheme.build(Brightness.dark, AppColors.accentCyan),
-      home: screen,
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        theme: AppTheme.build(Brightness.dark, AppColors.accentCyan),
+        home: screen,
+      ),
     ),
-  ));
+  );
   await settle(tester);
   return container;
 }

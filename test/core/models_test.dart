@@ -31,8 +31,12 @@ void main() {
     });
 
     test('copyWith keeps untouched fields', () {
-      const s = VpnStats(uploadBytes: 1, downloadBytes: 2, connectedServer: 'srv',
-          speedHistory: [SpeedPoint(uploadSpeed: 5)]);
+      const s = VpnStats(
+        uploadBytes: 1,
+        downloadBytes: 2,
+        connectedServer: 'srv',
+        speedHistory: [SpeedPoint(uploadSpeed: 5)],
+      );
       final c = s.copyWith(downloadBytes: 9);
       expect(c.uploadBytes, 1);
       expect(c.downloadBytes, 9);
@@ -51,7 +55,11 @@ void main() {
   group('VpnLogEntry', () {
     test('json round trip', () {
       final e = VpnLogEntry(
-          timestamp: DateTime(2026, 1, 2, 3, 4, 5), level: LogLevel.warning, message: 'm', source: 's');
+        timestamp: DateTime(2026, 1, 2, 3, 4, 5),
+        level: LogLevel.warning,
+        message: 'm',
+        source: 's',
+      );
       final back = VpnLogEntry.fromJson(e.toJson());
       expect(back.timestamp, e.timestamp);
       expect(back.level, LogLevel.warning);
@@ -60,8 +68,7 @@ void main() {
     });
 
     test('unknown level falls back to info', () {
-      final e = VpnLogEntry.fromJson(
-          {'timestamp': '2026-01-01T00:00:00.000', 'level': 'fatal', 'message': 'x'});
+      final e = VpnLogEntry.fromJson({'timestamp': '2026-01-01T00:00:00.000', 'level': 'fatal', 'message': 'x'});
       expect(e.level, LogLevel.info);
       expect(e.source, isNull);
     });
@@ -86,12 +93,15 @@ void main() {
   group('HeartbeatSettings', () {
     test('url uses preset or trimmed custom value', () {
       expect(const HeartbeatSettings().url, HeartbeatTarget.cloudflare.url);
-      expect(const HeartbeatSettings(target: HeartbeatTarget.google).url,
-          'http://connectivitycheck.gstatic.com/generate_204');
-      expect(const HeartbeatSettings(target: HeartbeatTarget.custom, customUrl: ' http://x/ ').url,
-          'http://x/');
-      expect(const HeartbeatSettings(target: HeartbeatTarget.custom, customUrl: '  ').url,
-          HeartbeatTarget.cloudflare.url);
+      expect(
+        const HeartbeatSettings(target: HeartbeatTarget.google).url,
+        'http://connectivitycheck.gstatic.com/generate_204',
+      );
+      expect(const HeartbeatSettings(target: HeartbeatTarget.custom, customUrl: ' http://x/ ').url, 'http://x/');
+      expect(
+        const HeartbeatSettings(target: HeartbeatTarget.custom, customUrl: '  ').url,
+        HeartbeatTarget.cloudflare.url,
+      );
     });
 
     test('json round trip keeps every field', () {
@@ -114,8 +124,7 @@ void main() {
       final s = HeartbeatSettings.fromJson(const {'action': 'urltest', 'source': 'all'});
       expect(s.failAction, HeartbeatFailAction.switchConfig);
       expect(s.switchSource, SwitchSource.all);
-      expect(HeartbeatSettings.fromJson(const {'action': 'reconnect'}).failAction,
-          HeartbeatFailAction.reconnect);
+      expect(HeartbeatSettings.fromJson(const {'action': 'reconnect'}).failAction, HeartbeatFailAction.reconnect);
     });
 
     test('copyWith changes only given fields', () {
@@ -157,13 +166,15 @@ void main() {
     });
 
     test('summary lists every enabled part', () {
-      expect(full.summary,
-          'Bypass: ru, by…, .ru, .рф…, geosite:2, sites:1, RU+, LAN, Ads✗');
+      expect(full.summary, 'Bypass: ru, by…, .ru, .рф…, geosite:2, sites:1, RU+, LAN, Ads✗');
     });
 
     test('summary keeps multi-level zones and handles empty only-mode', () {
       const s = RoutingSettings(
-          direction: RoutingDirection.onlySelected, domainEnabled: true, domainZones: ['gov.spb.ru']);
+        direction: RoutingDirection.onlySelected,
+        domainEnabled: true,
+        domainZones: ['gov.spb.ru'],
+      );
       expect(s.summary, 'Only: gov.spb.ru');
       expect(const RoutingSettings(direction: RoutingDirection.onlySelected).summary, 'Only');
     });
@@ -226,8 +237,7 @@ void main() {
   });
 
   test('MuxSettings json round trip', () {
-    const m = MuxSettings(
-        enabled: true, concurrency: 4, xudpConcurrency: 32, xudpProxyUDP443: XudpUdp443.skip);
+    const m = MuxSettings(enabled: true, concurrency: 4, xudpConcurrency: 32, xudpProxyUDP443: XudpUdp443.skip);
     expect(MuxSettings.fromJson(m.toJson()).toJson(), m.toJson());
     expect(MuxSettings.fromJson(const {}).toJson(), const MuxSettings().toJson());
     expect(m.copyWith(concurrency: 1).xudpProxyUDP443, XudpUdp443.skip);

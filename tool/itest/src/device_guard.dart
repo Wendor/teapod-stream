@@ -38,12 +38,12 @@ class DeviceGuard {
   /// is registered before the command: Ctrl+C in the middle of it still rolls back.
   /// Returning to the original ([undo] == null) removes the rollback only after a successful command.
   Future<void> _apply(String key, String cmd, List<String>? undo) => _serial(() async {
-        if (_closed) throw StateError('DeviceGuard: the phone has already been restored to its original state');
-        if (undo != null) _undo.putIfAbsent(key, () => undo);
-        final r = await shell.run(['shell', cmd]);
-        if (!r.ok) throw StateError('adb: $cmd → ${r.code} ${r.err.trim()}');
-        if (undo == null) _undo.remove(key);
-      });
+    if (_closed) throw StateError('DeviceGuard: the phone has already been restored to its original state');
+    if (undo != null) _undo.putIfAbsent(key, () => undo);
+    final r = await shell.run(['shell', cmd]);
+    if (!r.ok) throw StateError('adb: $cmd → ${r.code} ${r.err.trim()}');
+    if (undo == null) _undo.remove(key);
+  });
 
   /// Rollback to the original [flag] (`'0'`/`'1'`); null — the original is unknown.
   List<String>? _toggleUndo(String flag, bool on, String Function(bool on) cmd) {
@@ -81,13 +81,19 @@ class DeviceGuard {
 
   Future<void> stayAwake(bool on) {
     final orig = _original['stay_on_while_plugged_in'];
-    return _apply('stay', 'svc power stayon ${on ? 'usb' : 'false'}',
-        orig == null ? null : ['settings put global stay_on_while_plugged_in $orig']);
+    return _apply(
+      'stay',
+      'svc power stayon ${on ? 'usb' : 'false'}',
+      orig == null ? null : ['settings put global stay_on_while_plugged_in $orig'],
+    );
   }
 
   /// Doze exemption (build.sh itest enables it on install).
-  Future<void> whitelist(String pkg, bool on) => _apply('whitelist', 'dumpsys deviceidle whitelist ${on ? '+' : '-'}$pkg',
-      on ? null : ['dumpsys deviceidle whitelist +$pkg']);
+  Future<void> whitelist(String pkg, bool on) => _apply(
+    'whitelist',
+    'dumpsys deviceidle whitelist ${on ? '+' : '-'}$pkg',
+    on ? null : ['dumpsys deviceidle whitelist +$pkg'],
+  );
 
   Future<void> screen(bool on) => _sh('input keyevent ${on ? 'WAKEUP' : 'SLEEP'}');
 
@@ -110,22 +116,22 @@ class DeviceGuard {
   /// A failed rollback stays and is retried on the next call; errors
   /// don't interrupt the rest of the rollback.
   Future<void> restore() => _serial(() async {
-        _closed = true;
-        for (final MapEntry(key: key, value: cmds) in Map.of(_undo).entries) {
-          var ok = true;
-          for (final c in cmds) {
-            try {
-              final r = await shell.run(['shell', c]);
-              if (!r.ok) {
-                ok = false;
-                stderr.writeln('  ! rollback failed: $c (${r.code}) ${r.err.trim()}');
-              }
-            } catch (e) {
-              ok = false;
-              stderr.writeln('  ! rollback failed: $c ($e)');
-            }
+    _closed = true;
+    for (final MapEntry(key: key, value: cmds) in Map.of(_undo).entries) {
+      var ok = true;
+      for (final c in cmds) {
+        try {
+          final r = await shell.run(['shell', c]);
+          if (!r.ok) {
+            ok = false;
+            stderr.writeln('  ! rollback failed: $c (${r.code}) ${r.err.trim()}');
           }
-          if (ok) _undo.remove(key);
+        } catch (e) {
+          ok = false;
+          stderr.writeln('  ! rollback failed: $c ($e)');
         }
-      });
+      }
+      if (ok) _undo.remove(key);
+    }
+  });
 }

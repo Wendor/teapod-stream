@@ -10,6 +10,7 @@ set -euo pipefail
 #    ./build.sh run          — run on the connected device
 #    ./build.sh itest        — build and install the …itest package for integration tests
 #    ./build.sh bump X.Y.Z   — app version
+#    ./build.sh notes [X.Y.Z] — release body from changelog/ (default: the pubspec version)
 #    ./build.sh core         — build the teapod-core AAR from core/ (Go, gomobile, NDK)
 #    ./build.sh binaries     — teapod-core AAR for core/ (cache → release asset → build) + geodata
 #    ./build.sh clean        — clean build artifacts
@@ -236,6 +237,9 @@ push_release() {
   if [[ ! -f "${apks[0]}" ]]; then
     err "No APKs found! Run first: ./build.sh release"
   fi
+  # Release body from changelog/<lang>.md; stops when a language has no section for this version
+  local notes
+  notes=$(tool/release_notes.sh "$VERSION") || err "Write the $VERSION notes in changelog/ first"
   # The AAR the APKs were built with, so ./build.sh binaries can download it by the core/ hash
   local key
   key=$(core_key)
@@ -263,7 +267,7 @@ push_release() {
     local head
     head=$(git -C "$SCRIPT_DIR" rev-parse HEAD)
     [[ -n "$(git -C "$SCRIPT_DIR" branch -r --contains "$head")" ]] || err "Commit $head is not pushed — git push first"
-    local flags=("--title" "TeapodStream $VERSION" "--generate-notes" "--target" "$head")
+    local flags=("--title" "TeapodStream $VERSION" "--notes" "$notes" "--target" "$head")
     [[ "$is_pre" == "true" ]] && flags+=("--prerelease")
     gh release create "$tag" "${flags[@]}" "${apks[@]}"
   fi
@@ -353,6 +357,10 @@ case "${1:-help}" in
     bump_version "${2:-}"
     ;;
 
+  notes)
+    tool/release_notes.sh "${2:-$VERSION}"
+    ;;
+
   push)
     push_release false
     ;;
@@ -381,6 +389,7 @@ case "${1:-help}" in
     echo "    ./build.sh run          Run debug on the device"
     echo "    ./build.sh itest        Build and install the …itest package (integration tests)"
     echo "    ./build.sh run-release  Run release on the device"
+    echo "    ./build.sh notes [X.Y.Z] Release body from changelog/ (default: the pubspec version)"
     echo "    ./build.sh pushpre      Publish a Pre-release on GitHub"
     echo "    ./build.sh push         Publish a Release on GitHub"
     echo "    ./build.sh clean        Clean artifacts"

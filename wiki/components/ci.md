@@ -41,6 +41,13 @@ CodeRabbit (`.coderabbit.yaml`) reviews every non-draft PR; its guidelines are `
 
 ## `release.yml` — release
 
+Before the release, write its notes in `changelog/<lang>.md` — one file per language (`en.md`, `ru.md`), H1 is the
+language's own name (`# English`, `# Русский`), then `## X.Y.Z` per version, newest first, short `- ` bullets about
+what a user notices, with issue numbers like `(#76)`. `./build.sh notes [X.Y.Z]` prints the release body
+(`tool/release_notes.sh`): every file's section for the version as `### <H1>` + its bullets, English first.
+`./build.sh push|pushpre` creates the release with that body and stops before publishing when a file has no section
+for the pubspec version; re-running it for an existing release only uploads the files.
+
 Manual (`workflow_dispatch`): Actions → Release → Run workflow, or
 `gh workflow run release.yml --ref <branch> [-f prerelease=false]` (`prerelease` defaults to `true`).
 

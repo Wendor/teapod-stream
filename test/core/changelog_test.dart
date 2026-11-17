@@ -30,7 +30,15 @@ void main() {
         expect(v.items, isNotEmpty, reason: 'changelog/$code.md ${v.version}');
       }
     }
-    final numbers = [for (final v in en) v.version.split('.').map(int.parse).toList()];
+    // A release `X.Y.Z`, or a summary of older versions: `X.Y` or a range `X.Y–X.Y`.
+    final heading = RegExp(r'^(\d+)\.(\d+)(?:\.(\d+))?(?:–\d+\.\d+)?$');
+    final numbers = [
+      for (final v in en)
+        if (heading.firstMatch(v.version) case final m?)
+          [int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3] ?? '0')]
+        else
+          fail('changelog/en.md: "## ${v.version}" is not a version'),
+    ];
     for (var i = 1; i < numbers.length; i++) {
       final (a, b) = (numbers[i - 1], numbers[i]);
       final newer = a[0] != b[0] ? a[0] > b[0] : (a[1] != b[1] ? a[1] > b[1] : a[2] > b[2]);

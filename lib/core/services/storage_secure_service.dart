@@ -4,10 +4,12 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 /// Stores raw JSON strings — callers handle parsing.
 class StorageSecureService {
   /// Shared by every `FlutterSecureStorage` of the app ([DeviceService] too): instances over the same file must agree.
-  /// Data written by flutter_secure_storage 9 (EncryptedSharedPreferences) is migrated on first access. If that fails,
-  /// reads throw for the session and the migration runs again on the next launch; `resetOnError: false` keeps the data
-  /// meanwhile (the plugin's default deletes everything on a read error). `migrateWithBackup` must stay off: on that
-  /// path the plugin never migrates v9 data and reads a v9-only store as empty.
+  /// Data written by flutter_secure_storage 9 (EncryptedSharedPreferences) is migrated key by key on first access.
+  /// If that fails before any key moved, reads throw for the session and the migration runs again on the next launch.
+  /// If it stops after some keys moved (an error or a killed process), keys not yet moved read as missing (`null`).
+  /// `resetOnError: false` keeps the data on a read error (the plugin's default deletes that key, or all keys on a
+  /// `readAll` error). `migrateWithBackup` must stay off: on that path the plugin never migrates v9 data and reads a
+  /// v9-only store as empty.
   static const androidOptions = AndroidOptions(resetOnError: false);
 
   final _storage = const FlutterSecureStorage(aOptions: androidOptions);

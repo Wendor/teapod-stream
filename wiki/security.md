@@ -49,12 +49,13 @@ says how, and what counts.
 `StorageMigrationService` moved data from plaintext SharedPreferences to encrypted storage once
 (`storage_migrated_v2`); on a Keystore error the flag isn't set and it retries next launch.
 
-flutter_secure_storage moves data written by its v9 (EncryptedSharedPreferences) to its own cipher on first
-access; if that fails, reads fail for that launch and the migration runs again on the next one.
-`StorageSecureService.androidOptions` (shared by every instance) sets `resetOnError: false` (the plugin's default
-deletes all secure data on a read error) and leaves `migrateWithBackup` off (that path never migrates v9 data and
-reads a v9-only store as empty). Accepted risk: the migration moves key by key without a progress marker, so a
-process killed in the middle of it (milliseconds on the first launch) can leave the rest unreadable.
+flutter_secure_storage moves data written by its v9 (EncryptedSharedPreferences) to its own cipher key by key on
+first access. If that fails before any key moved, reads fail for that launch and the migration runs again on the next
+one. `StorageSecureService.androidOptions` (shared by every instance) sets `resetOnError: false` (the plugin's default
+deletes the key on a read error, all keys on a `readAll` error) and leaves `migrateWithBackup` off (that path never
+migrates v9 data and reads a v9-only store as empty). Accepted risk: there is no progress marker, so a migration that
+stops after some keys moved (an error, or the process killed in those milliseconds of the first launch) leaves the keys
+not yet moved reading as missing (`null`).
 
 ## Rules for contributors
 

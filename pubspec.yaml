@@ -17,10 +17,12 @@ dependencies:
 
   # Storage
   shared_preferences: ^2.3.2
-  flutter_secure_storage: ^9.2.2
+  # Stay on 10.x until at least 2027-01-17: 11 reads only data a 10.x release already migrated from 9.x
+  # (EncryptedSharedPreferences); users updating straight from a 9.x build would lose their configs. See #191.
+  flutter_secure_storage: ^10.3.4
 
   # Sharing
-  share_plus: ^12.0.2
+  share_plus: ^13.3.1
 
   # QR code scanning
   mobile_scanner: ^7.2.0
@@ -40,7 +42,7 @@ dependencies:
 
   # Permissions
   permission_handler: ^13.0.2
-  package_info_plus: ^9.0.1
+  package_info_plus: ^10.2.2
   url_launcher_android: ^6.3.33
   url_launcher: ^6.3.2
   path_provider: ^2.1.5

@@ -38,7 +38,7 @@ says how, and what counts.
 
 | Data | Storage | Class |
 |---|---|---|
-| Configs (`password`, `uuid`, keys, `rawUri`), subscription URLs, profiles, pins, active ids | EncryptedSharedPreferences via `StorageSecureService` (Keystore AES-256-GCM): `vpn_configs_v2`, `subscriptions_v2`, `profiles_v1`, `pinned_refs_v1`, `active_*_v2` | SECRET |
+| Configs (`password`, `uuid`, keys, `rawUri`), subscription URLs, profiles, pins, active ids | flutter_secure_storage via `StorageSecureService` (AES-GCM, key wrapped by a Keystore RSA key): `vpn_configs_v2`, `subscriptions_v2`, `profiles_v1`, `pinned_refs_v1`, `active_*_v2` | SECRET |
 | SOCKS user / password | `socks_user_v2`, `socks_password_v2` (encrypted) | SENSITIVE |
 | HWID cache | `device_id_v2`, `device_info_v2` (encrypted) | SENSITIVE |
 | Other settings (ports, DNS, split tunneling, kill switch, …) | SharedPreferences | PUBLIC |
@@ -48,6 +48,14 @@ says how, and what counts.
 
 `StorageMigrationService` moved data from plaintext SharedPreferences to encrypted storage once
 (`storage_migrated_v2`); on a Keystore error the flag isn't set and it retries next launch.
+
+flutter_secure_storage moves data written by its v9 (EncryptedSharedPreferences) to its own cipher key by key on
+first access. If that fails before any key moved, reads fail for that launch and the migration runs again on the next
+one. `StorageSecureService.androidOptions` (shared by every instance) sets `resetOnError: false` (the plugin's default
+deletes the key on a read error, all keys on a `readAll` error) and leaves `migrateWithBackup` off (that path never
+migrates v9 data and reads a v9-only store as empty). Accepted risk: there is no progress marker, so a migration that
+stops after some keys moved (an error, or the process killed in those milliseconds of the first launch) leaves the keys
+not yet moved reading as missing (`null`).
 
 ## Rules for contributors
 

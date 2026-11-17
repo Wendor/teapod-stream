@@ -31,7 +31,7 @@ Export strips the SOCKS credentials and the custom heartbeat URL.
 
 | Data | Key | Storage |
 |---|---|---|
-| Profiles | `profiles_v1` | EncryptedSharedPreferences (`StorageSecureService`) |
+| Profiles | `profiles_v1` | flutter_secure_storage (`StorageSecureService`) |
 | Active profile id | `active_profile_id` | SharedPreferences |
 
 ## Bundles and deep links

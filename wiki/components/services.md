@@ -46,7 +46,7 @@ leave from the real IP.
 
 | Service | Stores | Backend |
 |---|---|---|
-| `StorageSecureService` | configs (`vpn_configs_v2`), subscriptions, active config/subscription, pins, profiles | EncryptedSharedPreferences (Keystore AES-256-GCM) |
+| `StorageSecureService` | configs (`vpn_configs_v2`), subscriptions, active config/subscription, pins, profiles | flutter_secure_storage (AES-GCM, key wrapped by a Keystore RSA key) |
 | `ConfigStorageService` | typed load/save of configs, subscriptions, active ids, pins | through `StorageSecureService` |
 | `ProfileStorageService` | profiles, active profile id | secure + SharedPreferences |
 | `SettingsService` | `AppSettings`: one key per field; SOCKS credentials in secure storage | SharedPreferences |

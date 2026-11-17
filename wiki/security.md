@@ -2,7 +2,8 @@
 
 **Threat model.** A malicious app on the same device wants to learn that a VPN is on, find the server, or learn the
 real IP; a link or a subscription tries to change security-relevant settings. A rooted device is out of scope.
-Vulnerabilities are reported privately (GitHub security advisories), not in issues.
+Vulnerabilities are reported privately (GitHub security advisories), not in issues: [SECURITY.md](../SECURITY.md)
+says how, and what counts.
 
 ## Protections
 
@@ -16,6 +17,7 @@ Vulnerabilities are reported privately (GitHub security advisories), not in issu
 | Deep link `?url=` makes the app fetch an attacker URL from the real IP | https only, downloaded after a dialog showing the host |
 | An imported profile opens a noauth proxy or redirects probes | security fields stay local; export strips credentials and the custom probe URL ([profiles](components/profiles.md)) |
 | `api` / `metrics` in a managed config expose outbounds over gRPC / pprof | removed by `mergeWithRaw` |
+| Apps' DNS queries leave outside the tunnel | the TUN's DNS address is the only resolver apps get; tun2socks hands port 53 to the core (xray `dns-out`, sing-box `hijack-dns`), which resolves with the configured server through the tunnel ([xray](components/xray_config_builder.md#dns), [sing-box](components/singbox_config_builder.md)); a server-made xray config keeps the server's DNS |
 | Traffic leaks during reconnect | TUN is kept as a sink during reconnects and hot switches; kill switch keeps it after a failure |
 | QUIC leaking when blocked | answered locally with ICMP in tun2socks, never routed `direct` |
 | Backups / device transfer copy secrets | `allowBackup=false`, `dataExtractionRules` exclude everything |

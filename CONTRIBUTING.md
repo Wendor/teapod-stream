@@ -10,7 +10,8 @@ agent. Agents also read [AGENTS.md](AGENTS.md).
   approach. A large PR nobody asked for will be closed, however good it is.
 - **Work for an AI agent:** the *Agent task* issue template — goal, scope, how to split it into PRs, when it is done.
 - **Security problems:** don't open a public issue — use
-  [private vulnerability reporting](https://github.com/Wendor/teapod-stream/security/advisories/new).
+  [private vulnerability reporting](https://github.com/Wendor/teapod-stream/security/advisories/new); what counts
+  and what to include: [SECURITY.md](SECURITY.md).
 
 ## Setup
 

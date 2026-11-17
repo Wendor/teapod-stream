@@ -52,7 +52,8 @@ jobs:
           gh label create dependencies --color 0366D6 --description "Updates of cores, toolchains and libraries" 2>/dev/null || true
           printf '\nCo-Authored-By: github-actions[bot] <github-actions[bot]@users.noreply.github.com>\n' >> "$body"
           title="[ai] deps: monthly update check"
-          n=$(gh issue list --state open --label dependencies --search "in:title \"$title\"" --json number --jq '.[0].number // empty')
+          n=$(gh issue list --state open --label dependencies --search "in:title \"$title\"" --json number,title \
+            --jq "[.[] | select(.title == \"$title\") | .number][0] // empty")
           if [ -n "$n" ]; then
             gh issue edit "$n" --body-file "$body"
             echo "Updated #$n" >> "$GITHUB_STEP_SUMMARY"

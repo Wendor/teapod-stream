@@ -9,15 +9,15 @@ items=()  # work items
 add() { rows+=("| $1 | \`$2\` | \`$3\` | $4 |"); items+=("- [ ] $1: \`$2\` → \`$3\`"); }
 latest_tag() { gh api "repos/$1/releases/latest" --jq .tag_name; }
 # A version is newer when sort -V puts it last and it differs.
-newer() { [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "${1#v}" "${2#v}" | sort -V | tail -1)" = "${2#v}" ]; }
+newer() { local a=${1#v} b=${2#v}; [ "$a" != "$b" ] && [ "$(printf '%s\n%s\n' "$a" "$b" | sort -V | tail -1)" = "$b" ]; }
 
 # xray-core: go.mod pins a tag or a pseudo-version of a master commit; patches/xray-core must be re-applied.
 xray=$(awk '$1=="github.com/xtls/xray-core"{print $2; exit}' core/go.mod)
 xray_latest=$(latest_tag XTLS/Xray-core)
-if [[ "$xray" =~ -0\.([0-9]{14})- ]]; then
-  pinned_at=${BASH_REMATCH[1]}
-  released_at=$(gh api "repos/XTLS/Xray-core/releases/latest" --jq .published_at | tr -d -- '-:TZ')
-  [ "$released_at" -gt "$pinned_at" ] && add "xray-core" "$xray" "$xray_latest" "\`core/go.mod\`, \`core/patches/xray-core/\`"
+if [[ "$xray" =~ -0\.[0-9]{14}-([0-9a-f]{12})$ ]]; then
+  # Pseudo-version of a master commit: an update when the release tag has commits the pinned one lacks.
+  status=$(gh api "repos/XTLS/Xray-core/compare/${BASH_REMATCH[1]}...$xray_latest" --jq .status)
+  [ "$status" = ahead ] && add "xray-core" "$xray" "$xray_latest" "\`core/go.mod\`, \`core/patches/xray-core/\`"
 elif newer "$xray" "$xray_latest"; then
   add "xray-core" "$xray" "$xray_latest" "\`core/go.mod\`, \`core/patches/xray-core/\`"
 fi
@@ -38,7 +38,7 @@ newer "$go_pinned" "$go_minor" && add "Go" "$go_pinned" "$go_latest" "\`core/go.
 flutter=$(sed -n 's/^  FLUTTER_VERSION: //p' .github/workflows/ci.yml)
 flutter_latest=$(curl -fsSL https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json \
   | jq -r '.current_release.stable as $h | .releases[] | select(.hash == $h) | .version' | head -1)
-newer "$flutter" "$flutter_latest" && add "Flutter" "$flutter" "$flutter_latest" "\`FLUTTER_VERSION\` in \`ci.yml\` and \`release.yml\`"
+newer "$flutter" "$flutter_latest" && add "Flutter" "$flutter" "$flutter_latest" "\`FLUTTER_VERSION\` in \`ci.yml\`, \`release.yml\` and \`updates.yml\`"
 
 maven_latest() { curl -fsSL "$1" | grep -o '<version>[^<]*</version>' | sed 's/<[^>]*>//g' | grep -E '^[0-9.]+$' | sort -V | tail -1; }
 agp=$(sed -n 's/.*id("com.android.application") version "\(.*\)".*/\1/p' android/settings.gradle.kts)

@@ -28,8 +28,10 @@ gh pr diff <n>
 
 From `statusCheckRollup`:
 
-- A required check (`dart`, `kotlin`, `core`, `rules`) still running → **pending: CI**, stop.
-- A required check failed → an issue for the verdict.
+Every required check (`dart`, `kotlin`, `core`, `rules`) must have succeeded on the head commit.
+
+- One is missing, queued or still running → **pending: CI**, stop.
+- One failed, was cancelled or skipped → an issue for the verdict (cancelled: ask for a re-run).
 
 ## 3. CodeRabbit
 

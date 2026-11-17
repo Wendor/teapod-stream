@@ -3,16 +3,16 @@ module github.com/Wendor/teapod-core
 go 1.27
 
 require (
-	github.com/amnezia-vpn/amneziawg-go/v3 v3.1.20260828
+	github.com/amnezia-vpn/amneziawg-go/v3 v3.1.20261116
 	github.com/miekg/dns v1.1.73
 	github.com/sagernet/gvisor v0.0.0-20250811-sing-box-mod.1
 	github.com/sagernet/sing v0.9.7-0.20261023115459-5dc452e537bf
 	github.com/sagernet/sing-box v1.14.4
 	github.com/sagernet/sing-tun v0.9.7-0.20261023115432-040db71fcd33
 	github.com/xtls/xray-core v1.260327.1-0.20261109052709-676eaf66f8f0
-	golang.org/x/crypto v0.58.0
-	golang.org/x/mobile v0.0.0-20260410095206-2cfb76559b7b
-	golang.org/x/sys v0.49.0
+	golang.org/x/crypto v0.59.0
+	golang.org/x/mobile v0.0.0-20261011034528-197770444867
+	golang.org/x/sys v0.50.0
 	google.golang.org/protobuf v1.36.12
 )
 
@@ -183,14 +183,14 @@ require (
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba // indirect
 	golang.org/x/crypto/x509roots/fallback v0.0.0-20261020153306-9f2b28d4331a // indirect
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
-	golang.org/x/mod v0.41.0 // indirect
+	golang.org/x/mod v0.42.0 // indirect
 	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sync v0.24.0 // indirect
-	golang.org/x/term v0.47.0 // indirect
-	golang.org/x/text v0.43.0 // indirect
+	golang.org/x/sync v0.25.0 // indirect
+	golang.org/x/term v0.48.0 // indirect
+	golang.org/x/text v0.44.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
-	golang.org/x/tools v0.51.0 // indirect
+	golang.org/x/tools v0.52.0 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 	golang.zx2c4.com/wireguard v0.0.0-20250521234502-f333402bd9cb // indirect
 	golang.zx2c4.com/wireguard/windows v1.1.1 // indirect
@@ -204,7 +204,7 @@ require (
 
 replace (
 	golang.org/x/net => golang.org/x/net v0.62.0
-	golang.org/x/sys => golang.org/x/sys v0.49.0
+	golang.org/x/sys => golang.org/x/sys v0.50.0
 	google.golang.org/grpc => google.golang.org/grpc v1.85.0
 	google.golang.org/protobuf => google.golang.org/protobuf v1.36.12
 )

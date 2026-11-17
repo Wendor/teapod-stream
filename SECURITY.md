@@ -3,8 +3,9 @@
 TeapodStream exists to keep traffic where the user put it. It was started to close a hole in Linux and Android:
 an app that is *outside* the split tunnel can bind a socket to the VPN interface (`SO_BINDTODEVICE`) and send traffic
 through the tunnel anyway — and so learn that a VPN is on and the IP address of the VPN server. Strict per-flow owner
-checks in tun2socks, dropping connections whose owner is unknown, and keeping DNS inside the tunnel all come from
-that goal. A way around any of them is a vulnerability, and we treat it as the most serious kind of bug.
+checks in tun2socks, dropping connections whose owner is unknown (unless the user turns on tethering through the
+VPN, which can't be told apart from such an app), and keeping DNS inside the tunnel all come from that goal. A way
+around any of them is a vulnerability, and we treat it as the most serious kind of bug.
 
 ## Reporting
 
@@ -36,7 +37,8 @@ without a system dialog; or a link, a QR code, a subscription or a server the us
 - Traffic of an app excluded from the tunnel (or not included in it) goes through the tunnel, or traffic of an
   included app goes around it.
 - DNS queries leave outside the tunnel, or reach a resolver other than the configured one.
-- An unprivileged app learns the VPN server's IP address or the device's real IP while the VPN is on.
+- An unprivileged app learns the VPN server's IP address while the VPN is on; or an app whose traffic goes through
+  the tunnel learns the device's real IP.
 - The kill switch lets traffic out during a reconnect, a config switch, a core crash or a network change.
 
 **High**
@@ -58,4 +60,4 @@ without a system dialog; or a link, a QR code, a subscription or a server the us
   tell us too if the app makes them exploitable.
 - What the VPN server or its operator can see.
 
-How the app protects against each of these: [`wiki/security.md`](wiki/security.md).
+How the app protects against these: [`wiki/security.md`](wiki/security.md).

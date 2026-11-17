@@ -89,7 +89,8 @@ gh api graphql -F id=<thread id> -f query='mutation($id:ID!){resolveReviewThread
 
 ## Approval
 
-Ask for it when the script says `READY` and nothing is left: every finding fixed or answered, fixed and accepted
+Ask for it when the script says `READY` — or `SKIPPED` because the last push had nothing to review (only a merge
+from `master`; CodeRabbit's comment says so, never after a rate limit) — and nothing is left: every finding fixed or answered, fixed and accepted
 threads resolved, disputed ones left open with a PR comment. A maintainer or the reviewer bot approves the latest
 commit; any push after that dismisses the approval, so ask once, after the last push. Waiting for CodeRabbit to
 come round on a thread it still disputes is not a reason to hold the approval request.

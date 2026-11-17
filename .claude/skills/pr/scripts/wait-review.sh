@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Usage: wait-review.sh <pr> [minutes, default 40]
 # Waits until the PR is ready for your next step and prints that step. Ready means: the required checks finished,
-# CodeRabbit reviewed the head commit, and every unresolved thread you replied to has CodeRabbit's answer.
+# CodeRabbit reviewed the head commit, and every unresolved CodeRabbit thread someone replied to has its answer.
 # Exit codes: 0 ready, 1 a check failed, 2 CodeRabbit skipped the head commit, 3 timed out.
 set -uo pipefail
 n=${1:?usage: wait-review.sh <pr> [minutes]}
@@ -9,12 +9,14 @@ deadline=$(( $(date +%s) + ${2:-40} * 60 ))
 repo=Wendor/teapod-stream
 bot='coderabbitai[bot]'
 
-threads() {  # unresolved threads: "<id> <path> <author of the last comment>"
+threads() {  # unresolved threads: "<id> <path> <who started it> <who spoke last>"
   # GraphQL names the bot "coderabbitai", REST "coderabbitai[bot]".
-  gh api graphql -F n="$n" -f query='query($n:Int!){repository(owner:"Wendor",name:"teapod-stream"){pullRequest(number:$n){
-    reviewThreads(first:100){nodes{id isResolved path comments(last:1){nodes{author{login}}}}}}}}' \
+  gh api graphql --paginate -F n="$n" -f query='query($n:Int!,$endCursor:String){repository(owner:"Wendor",
+    name:"teapod-stream"){pullRequest(number:$n){reviewThreads(first:100,after:$endCursor){nodes{id isResolved path
+    first:comments(first:1){nodes{author{login}}} last:comments(last:1){nodes{author{login}}}}
+    pageInfo{hasNextPage endCursor}}}}}' \
     --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved | not)
-      | "\(.id) \(.path) \(.comments.nodes[0].author.login)"'
+      | "\(.id) \(.path) \(.first.nodes[0].author.login) \(.last.nodes[0].author.login)"'
 }
 
 while :; do
@@ -42,12 +44,15 @@ while :; do
     fi
     # CodeRabbit posts a reply only when it is complete (the "Analysis chain" block is part of the final reply),
     # so a thread is answered when its last comment is CodeRabbit's.
-    open=$(threads)
-    waiting=$(awk '$3 != "coderabbitai"' <<< "$open" | sed '/^$/d')
-    if [ -z "$waiting" ]; then
+    # A thread waits for CodeRabbit when CodeRabbit started it and someone else spoke last; threads people started
+    # are theirs to answer.
+    if ! open=$(threads); then echo "thread query failed; retrying" >&2; sleep 30; continue; fi
+    waiting=$(awk '$3 == "coderabbitai" && $4 != "coderabbitai"' <<< "$open" | sed '/^$/d')
+    # A push between the reads above and now makes them stale.
+    if [ -z "$waiting" ] && [ "$(gh pr view "$n" --json headRefOid --jq .headRefOid)" = "$head" ]; then
       echo "READY: CodeRabbit reviewed ${head:0:7}; checks passed."
       if [ -n "$open" ]; then
-        echo "Unresolved threads (CodeRabbit spoke last):"
+        echo "Unresolved threads (id, path, started by, last comment by):"
         sed 's/^/  /' <<< "$open"
       fi
       gh api --paginate "repos/$repo/pulls/$n/reviews" \

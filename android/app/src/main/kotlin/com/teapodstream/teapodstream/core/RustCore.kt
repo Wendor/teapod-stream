@@ -41,7 +41,7 @@ object RustCore : VpnCore {
     override fun tunMtu(requested: Int): Int = XrayTunInterface.MTU
 
     /** xray-rust-mobile version in teapod-core (XRAY_RUST_VERSION in build.sh). */
-    private const val XRAY_RUST_VERSION = "0.9.0"
+    private const val XRAY_RUST_VERSION = "0.10.0"
     private const val RESOLVE_TIMEOUT_SECONDS = 5L
     private const val PROXY_TAG = "proxy"
     private val PROXY_PROTOCOLS = setOf("vless", "vmess", "trojan", "shadowsocks", "hysteria")
@@ -335,7 +335,7 @@ object RustCore : VpnCore {
         block(runtime, stats)
     }
 
-    /** ABI 0.9.0 doesn't expose the fd loop state: "alive" = the runtime is started and reports stats. */
+    /** "Alive" = the runtime is started and reports stats (the fd loop exit counters are not checked). */
     override fun isTunRunning(): Boolean = withStats(false) { _, _ -> true }
 
     override fun activeConnections(): Long = synchronized(this) {

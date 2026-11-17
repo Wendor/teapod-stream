@@ -27,8 +27,8 @@ OUTPUT_DIR="$SCRIPT_DIR/outputs"
 mkdir -p "$OUTPUT_DIR"
 
 # ── Rust core: the prebuilt xray-rust-mobile AAR (built upstream from xray-rust without patches) ──
-XRAY_RUST_VERSION="0.9.0"
-XRAY_RUST_SHA256="8f882b5bba982bc0eb44439e1b02eb963299f8929dcfa93ec99246f6c7e78c50"
+XRAY_RUST_VERSION="0.10.0"
+XRAY_RUST_SHA256="21eb1ae0343bb199c9ba661ce41b6ac81eac3b826783f960153cf16ee69b87c7"
 XRAY_RUST_URL="https://github.com/aimalygin/xray-rust-mobile/releases/download/v${XRAY_RUST_VERSION}/xray-rust-mobile-${XRAY_RUST_VERSION}.aar"
 XRAY_RUST_AAR="$SCRIPT_DIR/.native/xray-rust-mobile-${XRAY_RUST_VERSION}.aar"
 

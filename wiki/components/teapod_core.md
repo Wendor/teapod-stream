@@ -17,7 +17,7 @@ arm64-v8a + x86_64) and per-ABI AARs.
 | xray-core (Go) | `github.com/xtls/xray-core`, patched (below) |
 | sing-box (Go) | upstream v1.14.4 + AmneziaWG endpoint, `sysdns`, geo conversion (`internal/`) |
 | tun2socks (Go) | `core/tun2socks/` ([teapod_tun2socks](teapod_tun2socks.md)) |
-| xray-rust | prebuilt [xray-rust-mobile](https://github.com/aimalygin/xray-rust-mobile) AAR 0.9.0 (SHA-256 pinned), merged into the fat AAR |
+| xray-rust | prebuilt [xray-rust-mobile](https://github.com/aimalygin/xray-rust-mobile) AAR 0.10.0 (SHA-256 pinned), merged into the fat AAR |
 
 ```
 GoCore / BoxCore:  TUN → tun2socks → SOCKS5 inbound → xray-core | sing-box → server

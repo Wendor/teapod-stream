@@ -39,6 +39,16 @@ branch protection doesn't enforce it: an approval from the `wendor-ai-reviewer` 
 
 CodeRabbit (`.coderabbit.yaml`) reviews every non-draft PR; its guidelines are `AGENTS.md` and `CONTRIBUTING.md`.
 
+## `updates.yml` — monthly update check
+
+On the 1st of every month (and by hand). `.github/scripts/check-updates.sh` compares what the build pins with the
+latest upstream releases: xray-core (a release newer than the pinned commit), sing-box and xray-rust-mobile, Go,
+Flutter, AGP, Kotlin, Gradle, the direct Go modules of `core/` and the direct Dart packages. If anything is behind,
+it opens the issue `[ai] deps: monthly update check` (labels `ai`, `dependencies`), written as an *Agent task* with a
+table of versions, or rewrites the body of the one already open. The maintainer hands it to an agent; closing the
+issue lets the next run open a new one. The script runs locally the same way (needs `gh`, `go`, `flutter`, and
+`core/build.sh prepare` first).
+
 ## `release.yml` — release
 
 Manual (`workflow_dispatch`): Actions → Release → Run workflow, or

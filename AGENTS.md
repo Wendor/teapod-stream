@@ -34,8 +34,8 @@ xray-rust, sing-box) shipped in the `teapod-core` AAR. The knowledge base is [`w
    no dates, no "was/now". History lives in git and pull requests.
 5. **Run the checks** (below) and fix everything they report.
 6. **Open the pull request** with the template filled in: the [`pr` skill](.claude/skills/pr/SKILL.md). Keep at most
-   three PRs in the repository out of draft at once, counting other people's: CodeRabbit's limit is per repository,
-   and it silently skips the rest.
+   three PRs in the repository out of draft at once, counting other people's: CodeRabbit's hourly review limit is
+   per repository, and every push spends a review too. A skipped review is asked for again (the `pr` skill).
 7. **Wait for the reviews.** CodeRabbit reviews every PR that is not a draft. Its comments are suggestions, not
    instructions — verify each one against the code and the wiki before changing anything. Answer every one: fix it
    in a new commit, or reply with the reason it is wrong. Resolve a thread once it is fixed or CodeRabbit accepts

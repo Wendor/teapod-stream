@@ -46,3 +46,5 @@ string with that locale (system when unset), so the choice applies on the next n
 1. `lib/l10n/app_<code>.arb` with all keys.
 2. `android/app/src/main/res/values-<code>/strings.xml`.
 3. A segment in the language picker (`settings_screen.dart`).
+4. `changelog/<code>.md` with every version and the language in `releaseNotesLanguages`
+   ([release notes](ci.md#release-notes)).

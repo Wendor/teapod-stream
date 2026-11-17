@@ -535,6 +535,8 @@
     }
   },
   "addParseFailed": "Couldn't recognize the configuration. Supported: vless://, vmess://, trojan://, ss://, hy2://, wireguard://, vpn:// (AmneziaVPN) and WireGuard .conf",
+  "whatsNewTitle": "What's new",
+  "whatsNewTagline": "RELEASE NOTES · ALL VERSIONS",
   "subsTagline": "SUBSCRIPTIONS · REFRESH",
   "subsAutoRefresh": "Subscription auto-refresh",
   "subsAutoRefreshHint": "Refresh subscriptions on a schedule",

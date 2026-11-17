@@ -6,11 +6,14 @@ import 'package:teapodstream/core/models/profile.dart';
 import 'package:teapodstream/core/models/routing_settings.dart';
 import 'package:teapodstream/core/services/profile_storage_service.dart';
 import 'package:teapodstream/core/services/settings_service.dart';
+import 'package:teapodstream/core/services/update_service.dart';
 import 'package:teapodstream/providers/profile_provider.dart';
 import 'package:teapodstream/providers/settings_provider.dart';
+import 'package:teapodstream/providers/update_provider.dart';
 import 'package:teapodstream/ui/screens/network_settings_screen.dart';
 import 'package:teapodstream/ui/screens/routing_screen.dart';
 import 'package:teapodstream/ui/screens/settings_screen.dart';
+import 'package:teapodstream/ui/screens/whats_new_screen.dart';
 import 'package:teapodstream/ui/widgets/settings_shared.dart';
 
 import '../helpers/ui_harness.dart';
@@ -23,6 +26,14 @@ Future<void> _tapRow(WidgetTester tester, String title) async {
 }
 
 AppSettings _settings(ProviderContainer c) => c.read(settingsProvider).value!;
+
+class _FixedUpdate extends UpdateNotifier {
+  final UpdateState fixed;
+  _FixedUpdate(this.fixed);
+
+  @override
+  UpdateState build() => fixed;
+}
 
 void main() {
   group('core picker', () {
@@ -65,6 +76,53 @@ void main() {
       await tester.tap(row);
       await settle(tester);
       expect(find.byType(LicensePage), findsOneWidget);
+      await unmount(tester, c);
+    });
+
+    testWidgets('changelog row opens the release history in the app language', (tester) async {
+      await setUpScreenTest();
+      final c = await pumpScreen(tester, const SettingsScreen());
+      final row = find.text('CHANGELOG');
+      await tester.scrollUntilVisible(row, 200, scrollable: find.byType(Scrollable).first);
+      await tester.tap(row);
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+      await settle(tester);
+      expect(find.byType(WhatsNewScreen), findsOneWidget);
+      expect(find.text('v1.8.0'), findsOneWidget);
+      expect(find.text('v1.7.0'), findsNothing); // below the fold of the lazy list
+      expect(find.textContaining('Fixed rare AmneziaWG'), findsOneWidget);
+      await unmount(tester, c);
+    });
+
+    testWidgets('update tile lists the notes of every new version in the app language', (tester) async {
+      await setUpScreenTest();
+      const body = '### English\n\n- {v} en\n\n### Русский\n\n- {v} ru\n';
+      final c = await pumpScreen(
+        tester,
+        ProviderScope(
+          overrides: [
+            updateProvider.overrideWith(
+              () => _FixedUpdate(
+                UpdateAvailable(
+                  UpdateInfo(
+                    version: '1.8.1',
+                    downloadUrl: 'https://dl/a.apk',
+                    notes: [
+                      ReleaseNotes('1.8.1', body.replaceAll('{v}', '1.8.1')),
+                      const ReleaseNotes('1.8.0', '- old style body'),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+          child: const SettingsScreen(),
+        ),
+      );
+      expect(find.text('- 1.8.1 en'), findsOneWidget);
+      expect(find.textContaining('1.8.1 ru'), findsNothing);
+      expect(find.text('- old style body'), findsOneWidget);
+      expect(find.text('v1.8.0'), findsOneWidget);
       await unmount(tester, c);
     });
   });

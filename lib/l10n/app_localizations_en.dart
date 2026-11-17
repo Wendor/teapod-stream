@@ -1013,6 +1013,12 @@ class AppLocalizationsEn extends AppLocalizations {
       'Couldn\'t recognize the configuration. Supported: vless://, vmess://, trojan://, ss://, hy2://, wireguard://, vpn:// (AmneziaVPN) and WireGuard .conf';
 
   @override
+  String get whatsNewTitle => 'What\'s new';
+
+  @override
+  String get whatsNewTagline => 'RELEASE NOTES · ALL VERSIONS';
+
+  @override
   String get subsTagline => 'SUBSCRIPTIONS · REFRESH';
 
   @override

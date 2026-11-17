@@ -29,11 +29,12 @@ pause, auto-connects on start (`autoConnect`), pings stale configs, checks geoda
 | `AddConfigScreen` | one input for links, subscription URLs (`http(s)://`), WireGuard `.conf` text, `vpn://` keys and `teapod://import/connections`; QR scan |
 | `RoutingScreen` | direction (global / bypass / only selected), kill switch, split tunneling entry, sniffing, geo data (source, download), domain zones, sites, geosite/geoip codes, Russian services, ad block |
 | `SplitTunnelScreen` | app list with lazy icons, mode, tethering through VPN (`allExcept` only), cleans uninstalled packages |
-| `SettingsScreen` | `0x10` diagnostics (logs) · `0x20` appearance (theme, language, font size, accent) · `0x30` connection (auto-connect, boot, notification, automation, subscriptions) · `0x40` network (network screen, DNS screen, core order) · `0x50` system (profiles, update channel) · `0x60` about. An available update is shown first |
+| `SettingsScreen` | `0x10` diagnostics (logs) · `0x20` appearance (theme, language, font size, accent) · `0x30` connection (auto-connect, boot, notification, automation, subscriptions) · `0x40` network (network screen, DNS screen, core order) · `0x50` system (profiles, update channel) · `0x60` about (version, changelog → `WhatsNewScreen`, licenses, source). An available update is shown first |
 | `NetworkSettingsScreen` | local proxy, proxy-only, UDP/ICMP/QUIC, IPv6, MTU, TLS fingerprint, fragment, noise, Mux, heartbeat, observatory interval |
 | `DnsSettingsScreen` | DNS mode, server presets and custom server, query strategy |
 | `SubscriptionSettingsScreen` | HWID, auto-refresh and interval, User-Agent |
 | `ProfilesScreen` | profile cards: switch, rename, read-only, export link/QR, import, refresh from URL, delete |
+| `WhatsNewScreen` | release history from the bundled `changelog/<lang>.md` (English fallback): versions and their bullets (`parseChangelog`) |
 | `LogsScreen` | log list with auto-scroll, share the file, clear, logging on/off, tunnel diagnostics |
 
 ## Cores in the UI

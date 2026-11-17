@@ -24,6 +24,7 @@ import '../theme/app_theme.dart';
 import '../widgets/settings_shared.dart';
 import '../widgets/reconnect_banner.dart';
 import 'subscription_settings_screen.dart';
+import 'whats_new_screen.dart';
 import '../../l10n/l10n.dart';
 
 // ── Screen ────────────────────────────────────────────────────────
@@ -463,6 +464,12 @@ class _SettingsBody extends StatelessWidget {
             // ── 0x60 ABOUT ────────────────────────────────────────
             SetSectionHeader(t: t, addr: '0x60', label: 'about'),
             _KVRow(t: t, k: 'version', v: version.isEmpty ? '...' : version),
+            _KVRowTap(
+              t: t,
+              k: 'changelog',
+              v: l.whatsNewTitle,
+              onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const WhatsNewScreen())),
+            ),
             _KVRowTap(
               t: t,
               k: 'licenses',
@@ -997,7 +1004,6 @@ class _UpdateVersionTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context).extension<TeapodTokens>()!;
-    final hasChangelog = info.changelog?.isNotEmpty ?? false;
 
     final badge = Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
@@ -1034,9 +1040,14 @@ class _UpdateVersionTile extends ConsumerWidget {
               _SqBtn(t: t, label: btnLabel, filled: isUpdate, onTap: onTap),
             ],
           ),
-          if (hasChangelog) ...[
+          for (final n in info.notes) ...[
             const SizedBox(height: 10),
-            SelectableText(info.changelog!, style: AppTheme.mono(size: 11, color: t.textDim, height: 1.5)),
+            Text('v${n.version}', style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5)),
+            const SizedBox(height: 4),
+            SelectableText(
+              n.forLanguage(Localizations.localeOf(context).languageCode),
+              style: AppTheme.mono(size: 11, color: t.textDim, height: 1.5),
+            ),
           ],
         ],
       ),

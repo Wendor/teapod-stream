@@ -305,6 +305,8 @@
   "addImported": "Импортировано: {configs}, {subscriptions}",
   "subscriptionsCount": "{count, plural, one{{count} подписка} few{{count} подписки} many{{count} подписок} other{{count} подписки}}",
   "addParseFailed": "Не удалось распознать конфигурацию. Поддерживаются: vless://, vmess://, trojan://, ss://, hy2://, wireguard://, vpn:// (AmneziaVPN) и .conf WireGuard",
+  "whatsNewTitle": "Что нового",
+  "whatsNewTagline": "ИЗМЕНЕНИЯ · ВСЕ ВЕРСИИ",
   "subsTagline": "ПОДПИСКИ · ОБНОВЛЕНИЕ",
   "subsAutoRefresh": "Автообновление подписок",
   "subsAutoRefreshHint": "Обновлять подписки по расписанию",

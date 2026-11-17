@@ -65,3 +65,4 @@ flutter:
   assets:
     - assets/binaries/
     - assets/licenses/
+    - changelog/

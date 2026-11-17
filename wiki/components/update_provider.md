@@ -19,4 +19,7 @@ State (sealed): `UpdateIdle`, `UpdateChecking`, `UpdateUpToDate(info)`, `UpdateA
 `_cleanOldApks(keepPath)` removes other `teapod-update-*.apk` files so the installer never picks a stale one
 ("Cannot parse package").
 
-UI: the update row in Settings → About.
+UI: the update row in Settings → system (at the top when an update is available) with the notes of each version
+between the installed one and the update, in the app's language (`ReleaseNotes.forLanguage`). Settings → about →
+changelog opens `WhatsNewScreen`: the whole history from the bundled `changelog/<lang>.md` asset (English when there is
+no file for the app's language), offline.

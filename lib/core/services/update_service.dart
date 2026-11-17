@@ -4,13 +4,48 @@ import 'package:socks5_proxy/socks.dart';
 
 enum UpdateChannel { stable, beta }
 
+/// Release notes languages: code → the language's own name. The name is the H1 of `changelog/<code>.md` and the
+/// `### <name>` heading of that language's section in a release body (`./build.sh notes`).
+const releaseNotesLanguages = {'en': 'English', 'ru': 'Русский'};
+
+/// The notes of one release as published (every language).
+class ReleaseNotes {
+  final String version;
+  final String body;
+
+  const ReleaseNotes(this.version, this.body);
+
+  /// The section of [body] for [languageCode]; English when it has none; the whole body when it has no
+  /// language sections (releases before per-language notes).
+  String forLanguage(String languageCode) {
+    final sections = <String, List<String>>{};
+    List<String>? current;
+    for (final line in body.split(RegExp(r'\r?\n'))) {
+      final heading = RegExp(r'^###\s+(.+?)\s*$').firstMatch(line);
+      if (heading != null) {
+        current = sections.putIfAbsent(heading.group(1)!, () => []);
+      } else {
+        current?.add(line);
+      }
+    }
+    for (final code in [languageCode, 'en']) {
+      final section = sections[releaseNotesLanguages[code]]?.join('\n').trim();
+      if (section != null && section.isNotEmpty) return section;
+    }
+    return body.trim();
+  }
+}
+
 class UpdateInfo {
   final String version;
   final String downloadUrl;
   final int? totalBytes;
-  final String? changelog;
 
-  const UpdateInfo({required this.version, required this.downloadUrl, this.totalBytes, this.changelog});
+  /// Notes of every release newer than the installed version up to [version], newest first; when nothing is
+  /// newer (reinstall), the notes of [version]. Releases with an empty body are left out.
+  final List<ReleaseNotes> notes;
+
+  const UpdateInfo({required this.version, required this.downloadUrl, this.totalBytes, this.notes = const []});
 }
 
 class DownloadProgress {
@@ -22,8 +57,8 @@ class DownloadProgress {
 }
 
 class UpdateService {
-  static const _githubApiLatest = 'https://api.github.com/repos/Wendor/teapod-stream/releases/latest';
-  static const _githubApiList = 'https://api.github.com/repos/Wendor/teapod-stream/releases?per_page=10';
+  // Newest first; 30 covers the versions a user may have skipped.
+  static const _githubApiList = 'https://api.github.com/repos/Wendor/teapod-stream/releases?per_page=30';
 
   HttpClient _makeClient({int? socksPort, String? user, String? password}) {
     final client = HttpClient();
@@ -54,13 +89,13 @@ class UpdateService {
   }) async {
     final client = _makeClient(socksPort: socksPort, user: socksUser, password: socksPassword);
     try {
-      final releaseJson = await _fetchRelease(client, channel);
-      if (releaseJson == null) return null;
-      final tagName = (releaseJson['tag_name'] as String? ?? '').replaceFirst(RegExp(r'^v'), '');
+      final releases = await _fetchReleases(client, channel);
+      if (releases.isEmpty) return null;
+      final release = releases.first;
+      final tagName = _version(release);
       if (tagName.isEmpty) return null;
       if (!force && _compareVersions(tagName, currentVersion) <= 0) return null;
-      final changelog = releaseJson['body'] as String?;
-      final assets = releaseJson['assets'] as List<dynamic>? ?? [];
+      final assets = release['assets'] as List<dynamic>? ?? [];
       for (final asset in assets) {
         final name = asset['name'] as String? ?? '';
         if (name.contains(abi) && name.endsWith('.apk')) {
@@ -71,7 +106,7 @@ class UpdateService {
               version: tagName,
               downloadUrl: url,
               totalBytes: size,
-              changelog: (changelog != null && changelog.trim().isNotEmpty) ? changelog.trim() : null,
+              notes: _notes(releases, release, currentVersion),
             );
           }
         }
@@ -82,32 +117,41 @@ class UpdateService {
     }
   }
 
-  Future<Map<String, dynamic>?> _fetchRelease(HttpClient client, UpdateChannel channel) async {
-    if (channel == UpdateChannel.stable) {
-      final req = await client.getUrl(Uri.parse(_githubApiLatest)).timeout(const Duration(seconds: 15));
-      req.headers.set('User-Agent', 'TeapodStream');
-      req.headers.set('Accept', 'application/vnd.github+json');
-      final resp = await req.close().timeout(const Duration(seconds: 15));
-      if (resp.statusCode != 200) return null;
-      final body = await resp.transform(utf8.decoder).join();
-      return jsonDecode(body) as Map<String, dynamic>;
-    } else {
-      // beta: pick newest non-draft release (prerelease or stable)
-      final req = await client.getUrl(Uri.parse(_githubApiList)).timeout(const Duration(seconds: 15));
-      req.headers.set('User-Agent', 'TeapodStream');
-      req.headers.set('Accept', 'application/vnd.github+json');
-      final resp = await req.close().timeout(const Duration(seconds: 15));
-      if (resp.statusCode != 200) return null;
-      final body = await resp.transform(utf8.decoder).join();
-      final releases = jsonDecode(body) as List<dynamic>;
-      // GitHub returns releases sorted newest-first; take first non-draft
-      for (final r in releases) {
-        final release = r as Map<String, dynamic>;
-        if (release['draft'] != true) return release;
-      }
-      return null;
-    }
+  /// Non-draft releases of [channel] as GitHub lists them, newest first: stable without prereleases, beta all.
+  Future<List<Map<String, dynamic>>> _fetchReleases(HttpClient client, UpdateChannel channel) async {
+    final req = await client.getUrl(Uri.parse(_githubApiList)).timeout(const Duration(seconds: 15));
+    req.headers.set('User-Agent', 'TeapodStream');
+    req.headers.set('Accept', 'application/vnd.github+json');
+    final resp = await req.close().timeout(const Duration(seconds: 15));
+    if (resp.statusCode != 200) return const [];
+    final body = await resp.transform(utf8.decoder).join();
+    return [
+      for (final r in jsonDecode(body) as List<dynamic>)
+        if (r is Map<String, dynamic> &&
+            r['draft'] != true &&
+            (channel == UpdateChannel.beta || r['prerelease'] != true))
+          r,
+    ];
   }
+
+  /// Notes of [releases] newer than [currentVersion] and not newer than [target], highest version first;
+  /// those of [target] alone when none is newer.
+  List<ReleaseNotes> _notes(List<Map<String, dynamic>> releases, Map<String, dynamic> target, String currentVersion) {
+    final targetVersion = _version(target);
+    final picked = [
+      for (final r in releases)
+        if (_compareVersions(_version(r), currentVersion) > 0 && _compareVersions(_version(r), targetVersion) <= 0) r,
+    ];
+    if (picked.isEmpty) picked.add(target);
+    picked.sort((a, b) => _compareVersions(_version(b), _version(a)));
+    return [
+      for (final r in picked)
+        if ((r['body'] as String? ?? '').trim() case final body when body.isNotEmpty) ReleaseNotes(_version(r), body),
+    ];
+  }
+
+  static String _version(Map<String, dynamic> release) =>
+      (release['tag_name'] as String? ?? '').replaceFirst(RegExp(r'^v'), '');
 
   /// Resumable download. Sends Range header if destPath already has bytes.
   /// Pass [socksPort] to route through the active VPN SOCKS5 proxy.

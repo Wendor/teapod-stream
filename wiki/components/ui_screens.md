@@ -5,6 +5,11 @@
 A "console" look on Material 3: mono + sans fonts, hex section addresses (`0x10 diagnostics`), square switches,
 breadcrumbs. Dark, light or system theme with an accent color.
 
+Widgets import `package:flutter/material.dart` (and `app.dart` the `flutter_localizations` delegates), which Flutter
+deprecates in favour of the `material_ui` package; each such line carries `// ignore: deprecated_member_use`. Moving to
+`material_ui` is a separate change: fl_chart and mobile_scanner still build on the SDK's Material library, and two
+copies of `Theme` would not see each other.
+
 ## Navigation
 
 ```

@@ -7,16 +7,13 @@ plugins {
 
 android {
     namespace = "com.teapodstream.teapodstream"
-    compileSdk = flutter.compileSdkVersion
+    // permission_handler 13 needs 37; Flutter defaults to 36
+    compileSdk = 37
     ndkVersion = "28.2.13676358"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
     externalNativeBuild {
@@ -43,6 +40,8 @@ android {
 
     packaging {
         jniLibs {
+            // Native libraries are extracted on install (AGP 9 refuses android:extractNativeLibs in the manifest)
+            useLegacyPackaging = true
             // teapod-core ships only arm64-v8a and x86_64
             excludes.add("lib/x86/**")
             excludes.add("lib/armeabi-v7a/**")
@@ -68,6 +67,12 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
 }
 

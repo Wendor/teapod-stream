@@ -474,12 +474,12 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
   });
 
   // ─── Reorder ───
+  // `newIndex` is the item's index after the move, as `ReorderableListView.onReorderItem` reports it.
 
   Future<void> reorderSubscriptions(int oldIndex, int newIndex) => _serial(() async {
     final current = state.maybeWhen(data: (d) => d, orElse: () => null);
     if (current == null) return;
     final subs = List<Subscription>.from(current.subscriptions);
-    if (oldIndex < newIndex) newIndex -= 1;
     final item = subs.removeAt(oldIndex);
     subs.insert(newIndex, item);
     await storage.saveSubscriptions(subs);
@@ -492,7 +492,6 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     final groupConfigs = List<VpnConfig>.from(
       subId == null ? current.standaloneConfigs : (current.configsBySubscription[subId] ?? []),
     );
-    if (oldIndex < newIndex) newIndex -= 1;
     final item = groupConfigs.removeAt(oldIndex);
     groupConfigs.insert(newIndex.clamp(0, groupConfigs.length), item);
     final allConfigs = List<VpnConfig>.from(current.configs);

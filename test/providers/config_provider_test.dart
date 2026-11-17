@@ -295,7 +295,7 @@ void main() {
   group('reorder', () {
     test('subscriptions', () async {
       await boot(subs: [_sub('a'), _sub('b'), _sub('c')]);
-      await n().reorderSubscriptions(0, 3);
+      await n().reorderSubscriptions(0, 2);
       expect(s().subscriptions.map((x) => x.id), ['b', 'c', 'a']);
       await n().reorderSubscriptions(2, 0);
       expect((await storage.loadSubscriptions()).map((x) => x.id), ['a', 'b', 'c']);
@@ -314,7 +314,7 @@ void main() {
       // The group gathers into a contiguous block at the place of its first config.
       await n().reorderGroupConfigs('s', 2, 0);
       expect(s().configs.map((c) => c.id), ['l1', 's3', 's1', 's2', 'l2']);
-      await n().reorderGroupConfigs(null, 0, 2);
+      await n().reorderGroupConfigs(null, 0, 1);
       expect(s().configs.map((c) => c.id), ['l2', 'l1', 's3', 's1', 's2']);
       expect((await storage.loadConfigs()).map((c) => c.id), ['l2', 'l1', 's3', 's1', 's2']);
     });

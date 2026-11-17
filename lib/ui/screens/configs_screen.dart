@@ -1,3 +1,4 @@
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import '../widgets/core_support_gate.dart';
 import '../widgets/core_sheet.dart';
@@ -237,7 +238,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
     return ReorderableListView(
       buildDefaultDragHandles: false,
       padding: EdgeInsets.zero,
-      onReorder: (old, nw) {
+      onReorderItem: (old, nw) {
         if (old < localOffset) return;
         final safeNew = nw < localOffset ? localOffset : nw;
         ref.read(configProvider.notifier).reorderSubscriptions(old - localOffset, safeNew - localOffset);
@@ -399,7 +400,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
       configs: cs.standaloneConfigs,
       subscriptions: cs.subscriptions,
     );
-    await Share.share(bundle.toCompactDeeplink(), subject: 'teapod configs');
+    await SharePlus.instance.share(ShareParams(text: bundle.toCompactDeeplink(), subject: 'teapod configs'));
   }
 
   Future<void> _pingAll(List<VpnConfig> configs) async {
@@ -493,7 +494,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
               label: context.l10n.configsShare,
               onTap: () async {
                 Navigator.pop(ctx);
-                if (config.rawUri != null) await Share.share(config.rawUri!);
+                if (config.rawUri != null) await SharePlus.instance.share(ShareParams(text: config.rawUri!));
               },
             ),
             _SheetTile(
@@ -1008,7 +1009,7 @@ class _LocalGroup extends StatelessWidget {
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     buildDefaultDragHandles: false,
-                    onReorder: onReorderConfigs,
+                    onReorderItem: onReorderConfigs,
                     children: [
                       for (var i = 0; i < configs.length; i++)
                         _ConfigRow(
@@ -1276,7 +1277,7 @@ class _SubGroup extends StatelessWidget {
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     buildDefaultDragHandles: false,
-                    onReorder: onReorderConfigs,
+                    onReorderItem: onReorderConfigs,
                     children: [
                       for (var i = 0; i < configs.length; i++)
                         _ConfigRow(

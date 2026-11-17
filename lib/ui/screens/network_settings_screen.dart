@@ -1,3 +1,4 @@
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import '../../core/cores/core_backend.dart';
 import '../widgets/feature_gate.dart';

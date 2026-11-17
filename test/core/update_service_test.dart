@@ -99,6 +99,33 @@ void main() {
       expect(_versions(u), ['1.8.0']);
     });
 
+    test('stable falls back to the latest release when the page holds prereleases only', () async {
+      server.handler = (r) async {
+        r.response.write(
+          jsonEncode(
+            r.uri.path.endsWith('/latest')
+                ? _release('v1.8.0')
+                : [for (var i = 30; i > 0; i--) _release('v1.9.$i', prerelease: true)],
+          ),
+        );
+        await r.response.close();
+      };
+      final u = (await check('1.7.3'))!;
+      expect(u.version, '1.8.0');
+      expect(_versions(u), ['1.8.0']);
+      expect(server.paths, [
+        '/repos/Wendor/teapod-stream/releases?per_page=30',
+        '/repos/Wendor/teapod-stream/releases/latest',
+      ]);
+    });
+
+    test('a prerelease suffix keeps its number', () async {
+      server.serve(jsonEncode([_release('v1.9.2-beta', prerelease: true), _release('v1.9.1'), _release('v1.8.0')]));
+      final u = (await check('1.8.0', channel: UpdateChannel.beta))!;
+      expect(_versions(u), ['1.9.2-beta', '1.9.1']);
+      expect(await check('1.9.2', channel: UpdateChannel.beta), isNull);
+    });
+
     test('beta takes the newest non-draft release', () async {
       server.serve(
         jsonEncode([_release('v2.0.0', draft: true), _release('v1.9.0-beta', prerelease: true), _release('v1.8.0')]),
@@ -140,6 +167,12 @@ void main() {
     test('falls back to English', () {
       expect(const ReleaseNotes('1.8.0', body).forLanguage('de'), '- one\n- two');
       expect(const ReleaseNotes('1.8.0', '### English\n- one\n### Русский\n').forLanguage('ru'), '- one');
+    });
+
+    test('only a language name starts a section', () {
+      const notes = ReleaseNotes('1.8.0', '### English\n- one\n### Fixes\n- two\n### Русский\n- раз\n');
+      expect(notes.forLanguage('en'), '- one\n### Fixes\n- two');
+      expect(notes.forLanguage('ru'), '- раз');
     });
 
     test('a body without language sections is shown whole', () {

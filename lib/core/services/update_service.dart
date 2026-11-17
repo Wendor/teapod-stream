@@ -21,9 +21,10 @@ class ReleaseNotes {
     final sections = <String, List<String>>{};
     List<String>? current;
     for (final line in body.split(RegExp(r'\r?\n'))) {
-      final heading = RegExp(r'^###\s+(.+?)\s*$').firstMatch(line);
-      if (heading != null) {
-        current = sections.putIfAbsent(heading.group(1)!, () => []);
+      final heading = RegExp(r'^###\s+(.+?)\s*$').firstMatch(line)?.group(1);
+      // Only a language name starts a section: another `###` inside the notes stays in the current one.
+      if (heading != null && releaseNotesLanguages.containsValue(heading)) {
+        current = sections.putIfAbsent(heading, () => []);
       } else {
         current?.add(line);
       }
@@ -57,6 +58,7 @@ class DownloadProgress {
 }
 
 class UpdateService {
+  static const _githubApiLatest = 'https://api.github.com/repos/Wendor/teapod-stream/releases/latest';
   // Newest first; 30 covers the versions a user may have skipped.
   static const _githubApiList = 'https://api.github.com/repos/Wendor/teapod-stream/releases?per_page=30';
 
@@ -118,20 +120,35 @@ class UpdateService {
   }
 
   /// Non-draft releases of [channel] as GitHub lists them, newest first: stable without prereleases, beta all.
+  /// Stable falls back to `/releases/latest` when the page holds prereleases only.
   Future<List<Map<String, dynamic>>> _fetchReleases(HttpClient client, UpdateChannel channel) async {
-    final req = await client.getUrl(Uri.parse(_githubApiList)).timeout(const Duration(seconds: 15));
+    final list = await _getJson(client, _githubApiList);
+    final releases = [
+      if (list is List<dynamic>)
+        for (final r in list)
+          if (r is Map<String, dynamic> &&
+              r['draft'] != true &&
+              (channel == UpdateChannel.beta || r['prerelease'] != true))
+            r,
+    ];
+    if (releases.isEmpty && channel == UpdateChannel.stable) {
+      final latest = await _getJson(client, _githubApiLatest);
+      if (latest is Map<String, dynamic>) releases.add(latest);
+    }
+    return releases;
+  }
+
+  /// Decoded JSON of a GitHub API [url]; null on an error status.
+  Future<Object?> _getJson(HttpClient client, String url) async {
+    final req = await client.getUrl(Uri.parse(url)).timeout(const Duration(seconds: 15));
     req.headers.set('User-Agent', 'TeapodStream');
     req.headers.set('Accept', 'application/vnd.github+json');
     final resp = await req.close().timeout(const Duration(seconds: 15));
-    if (resp.statusCode != 200) return const [];
-    final body = await resp.transform(utf8.decoder).join();
-    return [
-      for (final r in jsonDecode(body) as List<dynamic>)
-        if (r is Map<String, dynamic> &&
-            r['draft'] != true &&
-            (channel == UpdateChannel.beta || r['prerelease'] != true))
-          r,
-    ];
+    if (resp.statusCode != 200) {
+      await resp.drain<void>();
+      return null;
+    }
+    return jsonDecode(await resp.transform(utf8.decoder).join());
   }
 
   /// Notes of [releases] newer than [currentVersion] and not newer than [target], highest version first;
@@ -202,8 +219,11 @@ class UpdateService {
 
   /// Returns positive if a > b, negative if a < b, 0 if equal.
   int _compareVersions(String a, String b) {
-    final ap = a.split('.').map((s) => int.tryParse(s) ?? 0).toList();
-    final bp = b.split('.').map((s) => int.tryParse(s) ?? 0).toList();
+    // The leading digits of each part: "2-beta" is 2.
+    List<int> parts(String v) =>
+        v.split('.').map((s) => int.tryParse(RegExp(r'^\d+').stringMatch(s) ?? '') ?? 0).toList();
+    final ap = parts(a);
+    final bp = parts(b);
     for (int i = 0; i < 3; i++) {
       final av = i < ap.length ? ap[i] : 0;
       final bv = i < bp.length ? bp[i] : 0;

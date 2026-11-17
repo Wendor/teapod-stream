@@ -50,8 +50,11 @@ says how, and what counts.
 (`storage_migrated_v2`); on a Keystore error the flag isn't set and it retries next launch.
 
 flutter_secure_storage moves data written by its v9 (EncryptedSharedPreferences) to its own cipher on first
-access; if that fails it keeps reading the old store. `StorageSecureService.androidOptions` (shared by every instance)
-sets `resetOnError: false`: the plugin's default deletes all secure data on a read error.
+access; if that fails, reads fail for that launch and the migration runs again on the next one.
+`StorageSecureService.androidOptions` (shared by every instance) sets `resetOnError: false` (the plugin's default
+deletes all secure data on a read error) and leaves `migrateWithBackup` off (that path never migrates v9 data and
+reads a v9-only store as empty). Accepted risk: the migration moves key by key without a progress marker, so a
+process killed in the middle of it (milliseconds on the first launch) can leave the rest unreadable.
 
 ## Rules for contributors
 

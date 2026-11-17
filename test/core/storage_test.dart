@@ -147,7 +147,7 @@ void main() {
       expect(opts['resetOnError'], 'false');
       // Data written by v9 (EncryptedSharedPreferences) moves to the new cipher on first access.
       expect(opts['migrateOnAlgorithmChange'], 'true');
-      // The backup path has no fallback to the old store when the migration fails.
+      // The backup path never migrates v9 data: a v9-only store would read as empty.
       expect(opts['migrateWithBackup'], 'false');
     });
   });

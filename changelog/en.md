@@ -144,3 +144,51 @@
 - The "Sites" and "RU services" rules apply even when the other routing rules are off
 - A custom DNS with an IPv6 address is no longer truncated
 - Dropped the armeabi-v7a build (it seems it never really worked)
+
+## 1.6
+
+- Reworked interface; the tunnel is no longer recreated on reconnect, less battery drain
+- Automatic switch to a live server when the tunnel breaks; candidates are checked with a real connection through the protocol
+- Heartbeat: pick the check type (SOCKS, measured inside the core, passive) and the target (Cloudflare, Google, Apple or your own URL)
+- Settings → Network: TLS ClientHello fragmentation, noise UDP packets for Hysteria2 and QUIC, Mux
+- Split tunneling "All except selected": excluded apps no longer get into the tunnel; a "Share through VPN" option
+- Fixed: Hysteria2 without SNI, the insecure parameter of VLESS/VMess/Trojan, the port of a custom DNS-over-TLS, DNS with the ad blocker on
+
+## 1.5
+
+- Managed subscriptions: the provider's ready xray configs (balancers, observatory, routing) merged safely, with ad blocking and no traffic bypassing the VPN
+- TLS fingerprint (uTLS) setting; a custom User-Agent for subscriptions
+- The kill switch also protects during an automatic reconnect; a failed reconnect is retried up to 3 times
+- Fixed the main cause of a "stuck VPN": after ~1000 connections the tunnel stopped accepting new ones
+- Hung connections are closed, long downloads no longer break at the 5th minute; with xtls-rprx-vision QUIC is blocked so the browser goes over TCP right away
+- IPv6 in the tunnel (option), a tunnel diagnostics snapshot on the logs screen, logs survive a reconnect
+
+## 1.4
+
+- New design with a big round button, a font size setting
+- Profiles and deep links for them (#97); export of all configs
+- Always-on VPN and start on device boot; CONNECT / DISCONNECT for automation and other apps
+- Subscriptions: automatic update, automatic server selection, sorting by ping, drag and drop, a view without groups
+- Routing: custom GeoIP/GeoSite (presets or a URL), service presets, a "Sites" section, a "Russian services" checkbox, a wider ad blocker
+- Network: MTU, sniffing, DNS strategy, disabling QUIC, blocking ICMP, resetting connections on a network change; DNS leaks closed
+- Heartbeat over an HTTP request and tunnel watchdogs: a stuck VPN reconnects by itself
+- The extra URI parameter (XHTTP), serviceName for Trojan + gRPC, allowInsecure and pinSHA256 for Hysteria2; tethering fixed
+
+## 1.3
+
+- xray-core inside the teapod-core AAR, armeabi-v7a support
+- App auto-update
+- Incoming and outgoing traffic graph
+- Configs in secure storage
+- Routing by geoip and geosite, geo database updates, ready network sets (Cloudflare, Google, Telegram and more)
+- A quick settings tile; a long tap on it opens the app
+- Instant reaction to a network change, heartbeat; built-in DoH/DoT addresses, a better ad blocker
+- QUIC over IPv6 works (YouTube) while unknown UDP stays out of the tunnel; fixed a leak through UDP relay
+
+## 1.0–1.2
+
+- First versions: VLESS, VMess, Trojan and Shadowsocks through xray-core and tun2socks
+- Transports TCP, WebSocket, gRPC, H2, QUIC, XHTTP, HTTPUpgrade, SplitHTTP; TLS and Reality
+- Subscriptions, adding by QR code, traffic statistics
+- Split tunneling, selected apps first in the list
+- Shadowsocks with the Outline prefix, self-signed certificates, a SOCKS-only mode

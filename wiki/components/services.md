@@ -64,8 +64,15 @@ file; when `logsEnabled` is off it writes only warnings and errors.
 
 ## UpdateService
 
-`checkForUpdate(currentVersion, abi, {channel, socks…})` → `UpdateInfo?` from GitHub releases: `stable` takes
-`/releases/latest`, `beta` the first non-draft of `/releases`. The APK asset is chosen by ABI. `downloadApk` streams
+`checkForUpdate(currentVersion, abi, {channel, socks…})` → `UpdateInfo?` from GitHub `/releases?per_page=30`
+(newest first, drafts dropped; `stable` also drops prereleases and falls back to `/releases/latest` when the page has
+no stable release): the first one is the update, its APK asset is chosen by ABI. Versions compare by the leading
+digits of each part (`1.9.2-beta` is `1.9.2`). `UpdateInfo.notes` holds the bodies of every listed release newer than the installed version up to the update,
+highest version first (the update's own when nothing is newer, i.e. a reinstall). `ReleaseNotes.forLanguage(code)`
+splits a body at its `### <language name>` headings (other `###` lines stay in their section) (`releaseNotesLanguages`: `en` → `English`, `ru` → `Русский`, the
+H1s of `changelog/*.md`, [release notes](ci.md#release-notes)) and returns the section of the app's language, else
+English, else the whole body (releases before per-language notes). The app reads notes only through the GitHub API:
+`raw.githubusercontent.com` is often unreachable in Russia. `downloadApk` streams
 `DownloadProgress`, resumes with `Range`, and fails after 30 s without data (otherwise a stalled download — and its
 cancel — hung forever). Both go through the tunnel when connected. [UpdateProvider](update_provider.md).
 

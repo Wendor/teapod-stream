@@ -59,6 +59,11 @@ issue numbers like `(#76)`.
 English first, `### <its H1>` and the bullets of its `## X.Y.Z` section. `./build.sh push|pushpre` creates the release
 with this body and stops before publishing when a file has no section for the version.
 
+The app shows the section of its language from the release body ([UpdateService](services.md#updateservice)) and
+bundles `changelog/` as an asset for Settings → about → changelog. A language is added with its file and an entry in
+`releaseNotesLanguages` (`update_service.dart`); `test/core/changelog_test.dart` checks that the files, their H1s
+and the map match and that every file has the same versions.
+
 `build.sh` takes `JAVA_HOME` / `ANDROID_HOME` from the environment (Homebrew paths by default). `core/build.sh` uses
 `$ANDROID_HOME/ndk/$NDK_VERSION` (default 28.2.13676358; the workflows pass the same `NDK_VERSION`).
 

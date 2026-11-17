@@ -1922,6 +1922,18 @@ abstract class AppLocalizations {
   /// **'Couldn\'t recognize the configuration. Supported: vless://, vmess://, trojan://, ss://, hy2://, wireguard://, vpn:// (AmneziaVPN) and WireGuard .conf'**
   String get addParseFailed;
 
+  /// No description provided for @whatsNewTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'What\'s new'**
+  String get whatsNewTitle;
+
+  /// No description provided for @whatsNewTagline.
+  ///
+  /// In en, this message translates to:
+  /// **'RELEASE NOTES · ALL VERSIONS'**
+  String get whatsNewTagline;
+
   /// No description provided for @subsTagline.
   ///
   /// In en, this message translates to:

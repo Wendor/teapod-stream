@@ -1037,6 +1037,12 @@ class AppLocalizationsRu extends AppLocalizations {
       'Не удалось распознать конфигурацию. Поддерживаются: vless://, vmess://, trojan://, ss://, hy2://, wireguard://, vpn:// (AmneziaVPN) и .conf WireGuard';
 
   @override
+  String get whatsNewTitle => 'Что нового';
+
+  @override
+  String get whatsNewTagline => 'ИЗМЕНЕНИЯ · ВСЕ ВЕРСИИ';
+
+  @override
   String get subsTagline => 'ПОДПИСКИ · ОБНОВЛЕНИЕ';
 
   @override

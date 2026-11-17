@@ -84,7 +84,7 @@ void main() {
     });
 
     test('newer release is available, old APKs are cleaned, partial one kept', () async {
-      server.serve(jsonEncode(_release('1.8.0')));
+      server.serve(jsonEncode([_release('1.8.0')]));
       final stale = File('${support.path}/teapod-update-arm64-v8a-1.7.0.apk')..writeAsStringSync('x');
       final partial = File('${support.path}/teapod-update-arm64-v8a-1.8.0.apk')..writeAsStringSync('abc');
       final unrelated = File('${support.path}/other.apk')..writeAsStringSync('x');
@@ -98,7 +98,7 @@ void main() {
     });
 
     test('same version is up to date', () async {
-      server.serve(jsonEncode(_release('1.7.3')));
+      server.serve(jsonEncode([_release('1.7.3')]));
       await redirected(() => n().checkForUpdate());
       expect((st() as UpdateUpToDate).info.version, '1.7.3');
     });

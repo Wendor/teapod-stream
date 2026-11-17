@@ -39,9 +39,9 @@ It must have reviewed the commit you are reviewing. The `CodeRabbit` check alone
 skipped (rate limit, "Action not completed") the check still passes.
 
 ```bash
-gh api --paginate --slurp repos/Wendor/teapod-stream/pulls/<n>/reviews \
-  | jq '[.[][] | select(.user.login=="coderabbitai[bot]" and (.body | length) > 0) | .commit_id] | last'
-# must equal headRefOid; its replies in threads leave empty reviews on the head commit — they are not reviews
+gh api --paginate repos/Wendor/teapod-stream/issues/<n>/comments \
+  --jq '.[] | select(.user.login=="coderabbitai[bot]") | .body' \
+  | grep -oE '"coveredCommitId":"[0-9a-f]{40}"' | tail -1   # the commit it last reviewed: must equal headRefOid
 gh api --paginate repos/Wendor/teapod-stream/issues/<n>/comments \
   --jq '.[] | select(.user.login=="coderabbitai[bot]") | .body' | grep -iE 'not completed|rate limit|skipped|paused'
 ```

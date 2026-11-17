@@ -144,10 +144,8 @@ class UpdateService {
     req.headers.set('User-Agent', 'TeapodStream');
     req.headers.set('Accept', 'application/vnd.github+json');
     final resp = await req.close().timeout(const Duration(seconds: 15));
-    if (resp.statusCode != 200) {
-      await resp.drain<void>();
-      return null;
-    }
+    // The body of an error is not read: it may never end; the caller closes the client.
+    if (resp.statusCode != 200) return null;
     return jsonDecode(await resp.transform(utf8.decoder).join());
   }
 

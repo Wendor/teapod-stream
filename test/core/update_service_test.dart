@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -88,6 +89,18 @@ void main() {
       expect(await check('1.0.0'), isNull);
       server.serve('{}', status: 403);
       expect(await check('1.0.0'), isNull);
+    });
+
+    test('an error whose body never ends gives null', () async {
+      server.handler = (r) async {
+        r.response
+          ..statusCode = 403
+          ..contentLength = 1000
+          ..write('x');
+        await r.response.flush();
+        await Completer<void>().future; // the body never completes
+      };
+      expect(await check('1.0.0').timeout(const Duration(seconds: 5)), isNull);
     });
 
     test('stable skips drafts and prereleases', () async {

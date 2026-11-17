@@ -1,0 +1,63 @@
+name: Update check
+
+# Monthly: compares the pinned cores, toolchains and libraries with upstream releases and keeps one open
+# "[ai] deps: monthly update check" issue (an Agent task) up to date. Nothing to update → the issue is left as is.
+on:
+  schedule:
+    - cron: "0 6 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: update-check
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: 3.41.6   # as in ci.yml; the check compares ci.yml's value with the latest stable
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: core/go.mod
+          cache-dependency-path: core/go.sum
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      # The directory is declared in pubspec
+      - run: mkdir -p assets/binaries
+      - name: Prepare xray-core
+        working-directory: core
+        run: ./build.sh prepare
+      - name: Check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/check-updates.sh > "$RUNNER_TEMP/updates.md"
+      - name: Open or update the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          body="$RUNNER_TEMP/updates.md"
+          if [ ! -s "$body" ]; then echo "Everything is current" >> "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          gh label create dependencies --color 0366D6 --description "Updates of cores, toolchains and libraries" 2>/dev/null || true
+          printf '\nCo-Authored-By: github-actions[bot] <github-actions[bot]@users.noreply.github.com>\n' >> "$body"
+          title="[ai] deps: monthly update check"
+          n=$(gh issue list --state open --label dependencies --search "in:title \"$title\"" --json number,title \
+            --jq "[.[] | select(.title == \"$title\") | .number][0] // empty")
+          if [ -n "$n" ]; then
+            gh issue edit "$n" --body-file "$body"
+            echo "Updated #$n" >> "$GITHUB_STEP_SUMMARY"
+          else
+            gh issue create --title "$title" --label ai --label dependencies --body-file "$body"
+          fi
+          cat "$body" >> "$GITHUB_STEP_SUMMARY"

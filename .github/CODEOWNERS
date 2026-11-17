@@ -1,2 +1,3 @@
-# Every change needs the maintainer's review
+# GitHub requests the maintainer's review on every PR. Branch protection doesn't require it: one approval from
+# anyone with write access (the maintainer or the wendor-ai-reviewer app) is enough. See wiki/components/ci.md.
 *                     @Wendor

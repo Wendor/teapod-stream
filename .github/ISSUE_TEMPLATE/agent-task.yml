@@ -1,0 +1,86 @@
+name: Agent task
+description: Work for an AI agent — the goal, the scope, how to split it into pull requests and when it is done
+title: "[ai] <area>: <what should change>"
+labels: [ai]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A task written for an AI agent working by [AGENTS.md](https://github.com/Wendor/teapod-stream/blob/master/AGENTS.md). The agent takes this issue as
+        its brief, so state the result, not the steps you'd type yourself. Keep it to one subsystem; a bigger job is
+        several issues. No server addresses, subscription links, UUIDs or keys.
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What is true when the task is done, for the user or for the code. One or two sentences.
+      placeholder: A stalled delay probe fails within its timeout instead of hanging the server list.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Why it matters and where to look — wiki pages, files and functions, related issues, PRs, logs (masked).
+      placeholder: |
+        - wiki: wiki/components/teapod_core.md#delay-probe
+        - code: core/delay.go `measureDelay`
+        - found by CodeRabbit in #165
+    validations:
+      required: true
+  - type: textarea
+    id: items
+    attributes:
+      label: Work items
+      description: One line per finding or step. The agent ticks them off in this issue as the PRs merge.
+      value: |
+        - [ ] 
+    validations:
+      required: true
+  - type: textarea
+    id: plan
+    attributes:
+      label: Pull requests
+      description: |
+        How to split the work and in which order. Items that touch the same file go into one PR, or the next PR is
+        opened only after the previous one is merged (a rebase dismisses the approval). Leave empty for a single PR.
+      placeholder: |
+        1. core: items 1–2 (core/delay.go) — first
+        2. tun2socks: items 3–5 (core/tun2socks/engine.go) — one PR, after 1 is merged
+        3. wiki: item 6 — any time
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+      description: How the result is checked — tests that fail before and pass after, wiki pages to update, behaviour to see.
+      placeholder: |
+        - a Go test with a stalled body fails before the fix and passes after
+        - wiki/components/teapod_core.md describes the timeout
+    validations:
+      required: true
+  - type: textarea
+    id: out
+    attributes:
+      label: Out of scope
+      description: What the agent must not change on the way. The AGENTS.md hands-off list always applies.
+      placeholder: No changes to the probe URL or its settings UI.
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Risk
+      description: Sets how deep the review goes and whether a device run is needed before release.
+      options:
+        - Low — docs, translations, UI text, tests only
+        - Medium — Dart logic, providers, config builders
+        - High — native service, cores, TUN, kill switch, routing, stored data
+    validations:
+      required: true
+  - type: checkboxes
+    id: allowed
+    attributes:
+      label: Allowed beyond the defaults
+      description: Tick only what this task really needs; name the files in Context.
+      options:
+        - label: Files on the AGENTS.md hands-off list (build scripts, `.github/`, version, signing) — only in a PR a maintainer opens or runs the agent for; `PR rules` fails such a PR from anyone else
+        - label: A new dependency (pubspec or Gradle)
+        - label: A PR over ~500 changed lines

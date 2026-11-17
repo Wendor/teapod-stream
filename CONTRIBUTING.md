@@ -8,6 +8,7 @@ agent. Agents also read [AGENTS.md](AGENTS.md).
 - **Bugs:** open an issue with the bug template first, unless the fix is small and obvious.
 - **Features, new protocols, new cores, UI redesigns:** open an issue and wait for a maintainer to agree on the
   approach. A large PR nobody asked for will be closed, however good it is.
+- **Work for an AI agent:** the *Agent task* issue template — goal, scope, how to split it into PRs, when it is done.
 - **Security problems:** don't open a public issue — use
   [private vulnerability reporting](https://github.com/Wendor/teapod-stream/security/advisories/new).
 
@@ -55,8 +56,9 @@ AI tools are welcome. The rules don't change:
 
 - **You own every line.** You have read the whole diff, you understand it and you can answer review questions
   without asking the AI again.
-- **Say so:** tick the *AI was used* box in the PR template. Commits an agent wrote carry a trailer naming it
-  (`Co-Authored-By: <agent> <email>`), and comments an agent posts end with the same line.
+- **Say so:** tick the *AI was used* box in the PR template. A PR or issue an agent opened has `[ai] ` in front of
+  its title. Commits an agent wrote carry a trailer naming it (`Co-Authored-By: <agent> <email>`), and comments an
+  agent posts end with the same line.
 - **The description is about the change, not the process.** Short, specific, verified — no generated essays,
   no claims you haven't checked ("tested on a device" means you did).
 - Point your agent at [AGENTS.md](AGENTS.md); Claude Code reads it through `CLAUDE.md`.
@@ -73,8 +75,9 @@ AI tools are welcome. The rules don't change:
 ## Review
 
 [CodeRabbit](https://coderabbit.ai) reviews every PR automatically once it is out of draft. Answer each of its
-comments — fix it, or reply why it doesn't apply — before asking for a human review. Then the maintainer reviews. Expect questions about *why*, about the device test, and requests to split
-large PRs. PRs that ignore these rules may be closed with a pointer to this file — you're welcome to reopen once
+comments — fix it, or reply why it doesn't apply — and resolve the thread once it is settled: GitHub won't merge a
+PR with an open conversation. Then the maintainer (or the maintainer's review bot) reviews; a push after the approval
+needs a new one. Expect questions about *why*, about the device test, and requests to split large PRs. PRs that ignore these rules may be closed with a pointer to this file — you're welcome to reopen once
 they're addressed.
 
 ## License

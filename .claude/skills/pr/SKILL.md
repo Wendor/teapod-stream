@@ -37,8 +37,8 @@ Rules: [CONTRIBUTING.md](../../../CONTRIBUTING.md). Template: [.github/pull_requ
 ## Open and update
 
 ```bash
-gh pr create --draft --base master --title "area: what changed" --body-file <filled template>
-gh pr ready <n>            # when checks pass and the description is complete
+gh pr create --draft --base master --title "[ai] area: what changed" --body-file <filled template>
+gh pr ready <n>            # when checks pass and the description is complete; at most 3 of yours out of draft
 gh pr edit <n> --body-file <updated description>   # after every push that changes what the PR does
 ```
 
@@ -46,7 +46,8 @@ The description states the PR as it is now; review history stays in the comments
 
 ## CodeRabbit
 
-It reviews when the PR leaves draft and again after each push.
+It reviews when the PR leaves draft and again after each push. It is rate-limited: when its comment says the review
+was not completed or skipped, the `CodeRabbit` check is still green — post `@coderabbitai review` and wait.
 
 ```bash
 gh pr checks <n> --watch                       # wait until the CodeRabbit check finishes
@@ -58,3 +59,19 @@ gh api repos/Wendor/teapod-stream/pulls/<n>/reviews --jq '.[] | select(.user.log
 For each comment: check it against the code and the wiki. Valid → fix in a new commit. Wrong or out of scope →
 reply on the thread with the reason (`gh api repos/Wendor/teapod-stream/pulls/<n>/comments/<id>/replies -f body=...`).
 Never apply a suggestion you haven't verified; never leave one unanswered. Repeat after its re-review.
+Outside-diff and nitpick items from review bodies: fix them, or answer them in one PR comment.
+
+Resolve a thread when it is fixed, or when CodeRabbit replied that it accepts your reason. If it still disagrees,
+leave the thread open and say so in a PR comment: the maintainer decides. GitHub won't merge while a thread is open.
+
+```bash
+gh api graphql --paginate -F n=<n> -f query='query($n:Int!,$endCursor:String){repository(owner:"Wendor",
+  name:"teapod-stream"){pullRequest(number:$n){reviewThreads(first:100,after:$endCursor){
+  nodes{id isResolved path comments(last:1){nodes{author{login} body}}} pageInfo{hasNextPage endCursor}}}}}'
+gh api graphql -F id=<thread id> -f query='mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{isResolved}}}'
+```
+
+## Approval
+
+A maintainer or the reviewer bot approves the latest commit. Any push after that dismisses the approval: finish all
+fixes first, then ask for the review once.

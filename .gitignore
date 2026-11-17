@@ -63,7 +63,7 @@ Thumbs.db
 !.claude/
 .claude/*
 !.claude/skills/
-.claude/skills/approve-pr/
+.claude/skills/approve-pr
 CLAUDE.local.md
 wiki/.obsidian/
 wiki/research/

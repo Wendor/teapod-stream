@@ -54,7 +54,7 @@ gh api --paginate repos/Wendor/teapod-stream/issues/<n>/comments \
 
 ```bash
 gh api --paginate repos/Wendor/teapod-stream/pulls/<n>/reviews --jq '.[] | select(.user.login=="coderabbitai[bot]") | {commit_id, body}'
-gh api --paginate repos/Wendor/teapod-stream/issues/<n>/comments --jq '.[] | {user: .user.login, body: .body[0:400]}'
+gh api --paginate repos/Wendor/teapod-stream/issues/<n>/comments --jq '.[] | {user: .user.login, body}'
 gh api graphql --paginate -F n=<n> -f query='query($n:Int!,$endCursor:String){repository(owner:"Wendor",
   name:"teapod-stream"){pullRequest(number:$n){reviewThreads(first:100,after:$endCursor){
   nodes{isResolved path comments(first:100){nodes{author{login} body}}} pageInfo{hasNextPage endCursor}}}}}'

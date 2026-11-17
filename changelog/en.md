@@ -1,5 +1,12 @@
 # English
 
+## 1.8.1
+
+- What's new: the update notes come in the app's language and cover every version since yours; the full history is in Settings → about → changelog (#184)
+- Updated cores: xray-core 26.11.9, xray-rust 0.10.0, AmneziaWG; the "chrome" TLS fingerprint is now Chrome 155
+- Saved configs and subscriptions move to a new encryption on the first launch, nothing to do on your side
+- Updated Flutter, the Android build tools and libraries
+
 ## 1.8.0
 
 - The interface is in English and Russian: pick the language in Settings → Appearance (system / English / Русский); notifications and the tile are translated too

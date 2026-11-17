@@ -44,21 +44,37 @@ gh pr edit <n> --body-file <updated description>   # after every push that chang
 
 The description states the PR as it is now; review history stays in the comments.
 
-## CodeRabbit
+## The review loop
 
-It reviews when the PR leaves draft and again after each push. It is rate-limited: when its comment says the review
-was not completed or skipped, the `CodeRabbit` check is still green — post `@coderabbitai review` and wait.
+Don't write your own polling: [`scripts/wait-review.sh <n>`](scripts/wait-review.sh) waits (up to 40 minutes) and
+says what to do next. Run it after `gh pr ready`, after every push and after every batch of thread replies.
+
+| Result | Meaning | Next |
+|---|---|---|
+| `READY` (0) | Checks passed, CodeRabbit reviewed the head commit, every thread you replied to has its answer | Read and act (below), then run the script again — or ask for approval when nothing is left |
+| `FAILED` (1) | A required check failed | Read the log, fix, push, run again |
+| `SKIPPED` (2) | CodeRabbit finished without reviewing the head (rate limit, or a push with nothing to review) | Rate limit: post `@coderabbitai review`, run again. Nothing to review (e.g. only a merge from `master`): its previous review stands |
+| `TIMEOUT` (3) | Something is still pending after 40 minutes | Tell the person you work for what is stuck |
+
+How it knows, if you need to check by hand:
+
+- **Reviewed commit:** `coveredCommitId` in CodeRabbit's summary comment on the PR. The green `CodeRabbit` check,
+  its review list and empty reviews from its thread replies don't tell which commit it reviewed.
+- **Thread answered:** the thread's last comment is CodeRabbit's. It posts a reply only when it's complete; the
+  collapsed "Analysis chain" at its top is part of the final answer, not a draft.
+
+On `READY`, read everything new:
 
 ```bash
-gh pr checks <n> --watch                       # wait until the CodeRabbit check finishes
-gh api repos/Wendor/teapod-stream/pulls/<n>/comments --jq '.[] | select(.user.login|test("coderabbit")) | {id, path, line, body}'
-gh api repos/Wendor/teapod-stream/pulls/<n>/reviews --jq '.[] | select(.user.login|test("coderabbit")) | .body'
-                                               # every review body: outside-diff and nitpick items live only here
+gh api --paginate repos/Wendor/teapod-stream/pulls/<n>/comments --jq '.[] | select(.user.login=="coderabbitai[bot]") | {id, in_reply_to_id, path, line, body}'
+gh api --paginate repos/Wendor/teapod-stream/pulls/<n>/reviews --jq '.[] | select(.user.login=="coderabbitai[bot]") | {commit_id, body}'
+                                               # outside-diff and nitpick items live only in review bodies
 ```
 
 For each comment: check it against the code and the wiki. Valid → fix in a new commit. Wrong or out of scope →
 reply on the thread with the reason (`gh api repos/Wendor/teapod-stream/pulls/<n>/comments/<id>/replies -f body=...`).
-Never apply a suggestion you haven't verified; never leave one unanswered. Repeat after its re-review.
+Never apply a suggestion you haven't verified; never leave one unanswered. Collect all fixes of a round into one
+push: every push costs a review from the hourly limit.
 Outside-diff and nitpick items from review bodies: fix them, or answer them in one PR comment.
 
 Resolve a thread when it is fixed, or when CodeRabbit replied that it accepts your reason. If it still disagrees,
@@ -73,5 +89,7 @@ gh api graphql -F id=<thread id> -f query='mutation($id:ID!){resolveReviewThread
 
 ## Approval
 
-A maintainer or the reviewer bot approves the latest commit. Any push after that dismisses the approval: finish all
-fixes first, then ask for the review once.
+Ask for it when the script says `READY` and nothing is left: every finding fixed or answered, fixed and accepted
+threads resolved, disputed ones left open with a PR comment. A maintainer or the reviewer bot approves the latest
+commit; any push after that dismisses the approval, so ask once, after the last push. Waiting for CodeRabbit to
+come round on a thread it still disputes is not a reason to hold the approval request.

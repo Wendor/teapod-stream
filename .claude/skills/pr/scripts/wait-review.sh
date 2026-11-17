@@ -9,14 +9,14 @@ deadline=$(( $(date +%s) + ${2:-40} * 60 ))
 repo=Wendor/teapod-stream
 bot='coderabbitai[bot]'
 
-threads() {  # unresolved threads: "<id> <path> <who started it> <who spoke last>"
+threads() {  # unresolved threads, tab-separated: id, who started it, who spoke last, path
   # GraphQL names the bot "coderabbitai", REST "coderabbitai[bot]".
   gh api graphql --paginate -F n="$n" -f query='query($n:Int!,$endCursor:String){repository(owner:"Wendor",
     name:"teapod-stream"){pullRequest(number:$n){reviewThreads(first:100,after:$endCursor){nodes{id isResolved path
     first:comments(first:1){nodes{author{login}}} last:comments(last:1){nodes{author{login}}}}
     pageInfo{hasNextPage endCursor}}}}}' \
     --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved | not)
-      | "\(.id) \(.path) \(.first.nodes[0].author.login) \(.last.nodes[0].author.login)"'
+      | [.id, .first.nodes[0].author.login, .last.nodes[0].author.login, .path] | @tsv'
 }
 
 while :; do
@@ -46,13 +46,16 @@ while :; do
     # so a thread is answered when its last comment is CodeRabbit's.
     # A thread waits for CodeRabbit when CodeRabbit started it and someone else spoke last; threads people started
     # are theirs to answer.
-    if ! open=$(threads); then echo "thread query failed; retrying" >&2; sleep 30; continue; fi
-    waiting=$(awk '$3 == "coderabbitai" && $4 != "coderabbitai"' <<< "$open" | sed '/^$/d')
+    if open=$(threads); then
+      waiting=$(awk -F'\t' '$2 == "coderabbitai" && $3 != "coderabbitai"' <<< "$open" | sed '/^$/d')
+    else
+      waiting="(the thread query failed; retrying)"  # never READY on data we couldn't read
+    fi
     # A push between the reads above and now makes them stale.
     if [ -z "$waiting" ] && [ "$(gh pr view "$n" --json headRefOid --jq .headRefOid)" = "$head" ]; then
       echo "READY: CodeRabbit reviewed ${head:0:7}; checks passed."
       if [ -n "$open" ]; then
-        echo "Unresolved threads (id, path, started by, last comment by):"
+        echo "Unresolved threads (id, started by, last comment by, path):"
         sed 's/^/  /' <<< "$open"
       fi
       gh api --paginate "repos/$repo/pulls/$n/reviews" \

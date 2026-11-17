@@ -40,7 +40,8 @@ skipped (rate limit, "Action not completed") the check still passes.
 
 ```bash
 gh api --paginate --slurp repos/Wendor/teapod-stream/pulls/<n>/reviews \
-  | jq '[.[][] | select(.user.login=="coderabbitai[bot]") | .commit_id] | last'   # must equal headRefOid
+  | jq '[.[][] | select(.user.login=="coderabbitai[bot]" and (.body | length) > 0) | .commit_id] | last'
+# must equal headRefOid; its replies in threads leave empty reviews on the head commit — they are not reviews
 gh api --paginate repos/Wendor/teapod-stream/issues/<n>/comments \
   --jq '.[] | select(.user.login=="coderabbitai[bot]") | .body' | grep -iE 'not completed|rate limit|skipped|paused'
 ```

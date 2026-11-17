@@ -38,7 +38,7 @@ Rules: [CONTRIBUTING.md](../../../CONTRIBUTING.md). Template: [.github/pull_requ
 
 ```bash
 gh pr create --draft --base master --title "[ai] area: what changed" --body-file <filled template>
-gh pr ready <n>            # when checks pass and the description is complete; at most 3 of yours out of draft
+gh pr ready <n>            # when checks pass and the description is complete; at most 3 in the repo out of draft (`gh pr list --search draft:false`)
 gh pr edit <n> --body-file <updated description>   # after every push that changes what the PR does
 ```
 

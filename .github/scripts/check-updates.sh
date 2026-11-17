@@ -81,11 +81,11 @@ Found by the monthly update check (\`.github/workflows/updates.yml\`) on $(date 
 $(printf '%s\n' "${rows[@]}")
 
 - xray-core is built with \`core/patches/xray-core/*.patch\` applied (\`core/build.sh prepare\`): every patch must
-  apply and keep its tests passing — [teapod_core](wiki/components/teapod_core.md).
+  apply and keep its tests passing — [teapod_core](https://github.com/Wendor/teapod-stream/blob/master/wiki/components/teapod_core.md).
 - sing-box uses SagerNet's modified gvisor, quic-go and others: take the versions its release requires.
 - Read the upstream release notes for breaking config changes; the config builders must keep producing valid configs.
 - A major version of a package that stores data (\`flutter_secure_storage\`) must keep reading what users already
-  have — [models](wiki/components/models.md).
+  have — [models](https://github.com/Wendor/teapod-stream/blob/master/wiki/components/models.md).
 
 ### Work items
 

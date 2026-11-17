@@ -1,11 +1,15 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-/// Secure key-value storage backed by Android Keystore (EncryptedSharedPreferences).
+/// Secure key-value storage backed by Android Keystore (flutter_secure_storage's AES-GCM cipher).
 /// Stores raw JSON strings — callers handle parsing.
 class StorageSecureService {
-  static const _opts = AndroidOptions(encryptedSharedPreferences: true);
+  /// Shared by every `FlutterSecureStorage` of the app ([DeviceService] too): instances over the same file must agree.
+  /// Data written by flutter_secure_storage 9 (EncryptedSharedPreferences) is migrated on first access; if the
+  /// migration fails the plugin keeps reading the old store (`migrateWithBackup` would take another path without that
+  /// fallback). `resetOnError: false`: a read error must not wipe the configs (the plugin's default deletes everything).
+  static const androidOptions = AndroidOptions(resetOnError: false);
 
-  final _storage = const FlutterSecureStorage(aOptions: _opts);
+  final _storage = const FlutterSecureStorage(aOptions: androidOptions);
 
   static const _profilesKey = 'profiles_v1';
   static const _configsKey = 'vpn_configs_v2';

@@ -38,7 +38,7 @@ says how, and what counts.
 
 | Data | Storage | Class |
 |---|---|---|
-| Configs (`password`, `uuid`, keys, `rawUri`), subscription URLs, profiles, pins, active ids | EncryptedSharedPreferences via `StorageSecureService` (Keystore AES-256-GCM): `vpn_configs_v2`, `subscriptions_v2`, `profiles_v1`, `pinned_refs_v1`, `active_*_v2` | SECRET |
+| Configs (`password`, `uuid`, keys, `rawUri`), subscription URLs, profiles, pins, active ids | flutter_secure_storage via `StorageSecureService` (AES-GCM, key wrapped by a Keystore RSA key): `vpn_configs_v2`, `subscriptions_v2`, `profiles_v1`, `pinned_refs_v1`, `active_*_v2` | SECRET |
 | SOCKS user / password | `socks_user_v2`, `socks_password_v2` (encrypted) | SENSITIVE |
 | HWID cache | `device_id_v2`, `device_info_v2` (encrypted) | SENSITIVE |
 | Other settings (ports, DNS, split tunneling, kill switch, …) | SharedPreferences | PUBLIC |
@@ -48,6 +48,10 @@ says how, and what counts.
 
 `StorageMigrationService` moved data from plaintext SharedPreferences to encrypted storage once
 (`storage_migrated_v2`); on a Keystore error the flag isn't set and it retries next launch.
+
+flutter_secure_storage moves data written by its v9 (EncryptedSharedPreferences) to its own cipher on first
+access; if that fails it keeps reading the old store. `StorageSecureService.androidOptions` (shared by every instance)
+sets `resetOnError: false`: the plugin's default deletes all secure data on a read error.
 
 ## Rules for contributors
 

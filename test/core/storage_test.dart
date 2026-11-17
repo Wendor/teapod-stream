@@ -140,6 +140,16 @@ void main() {
       await s.writeDeviceId(null);
       expect(await s.readDeviceId(), isNull);
     });
+
+    test('Android options keep data on errors and migrate the v9 store', () {
+      final opts = StorageSecureService.androidOptions.toMap();
+      // flutter_secure_storage ≥ 10 deletes everything on a read error unless told otherwise.
+      expect(opts['resetOnError'], 'false');
+      // Data written by v9 (EncryptedSharedPreferences) moves to the new cipher on first access.
+      expect(opts['migrateOnAlgorithmChange'], 'true');
+      // The backup path has no fallback to the old store when the migration fails.
+      expect(opts['migrateWithBackup'], 'false');
+    });
   });
 
   group('ProfileStorageService', () {

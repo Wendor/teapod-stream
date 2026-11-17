@@ -2,11 +2,12 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../constants/app_constants.dart';
+import 'storage_secure_service.dart';
 import 'subscription_service.dart';
 
 class DeviceService {
   static const _channel = MethodChannel(AppConstants.methodChannel);
-  static const _storage = FlutterSecureStorage(aOptions: AndroidOptions(encryptedSharedPreferences: true));
+  static const _storage = FlutterSecureStorage(aOptions: StorageSecureService.androidOptions);
   static const _deviceIdKey = 'cached_device_id';
   static const _deviceInfoKey = 'cached_device_info';
 

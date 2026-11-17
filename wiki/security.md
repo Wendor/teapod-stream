@@ -2,7 +2,8 @@
 
 **Threat model.** A malicious app on the same device wants to learn that a VPN is on, find the server, or learn the
 real IP; a link or a subscription tries to change security-relevant settings. A rooted device is out of scope.
-Vulnerabilities are reported privately (GitHub security advisories), not in issues.
+Vulnerabilities are reported privately (GitHub security advisories), not in issues: [SECURITY.md](../SECURITY.md)
+says how, and what counts.
 
 ## Protections
 

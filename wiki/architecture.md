@@ -119,6 +119,7 @@ lib/
 └── ui/                       screens, widgets, theme
 android/app/src/main/kotlin/com/teapodstream/teapodstream/   service, activity, cores, receivers, tile
 tool/itest/                   on-device integration test runner
+changelog/                    release notes, one file per language (CI/CD → release notes)
 ```
 
 ## Constraints

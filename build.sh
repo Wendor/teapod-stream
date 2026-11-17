@@ -10,6 +10,7 @@ set -euo pipefail
 #    ./build.sh run          — run on the connected device
 #    ./build.sh itest        — build and install the …itest package for integration tests
 #    ./build.sh bump X.Y.Z   — app version
+#    ./build.sh notes [X.Y.Z] — release body from changelog/ (default: the pubspec version)
 #    ./build.sh core         — build the teapod-core AAR from core/ (Go, gomobile, NDK)
 #    ./build.sh binaries     — teapod-core AAR for core/ (cache → release asset → build) + geodata
 #    ./build.sh clean        — clean build artifacts
@@ -226,6 +227,27 @@ rename_apks() {
   fi
 }
 
+# Release body from changelog/<lang>.md: for each file (English first) "### <its H1>" and the bullets of
+# its "## <version>" section. Fails when a file has no H1 or no bullets for the version.
+release_notes() {
+  local version="$1" files=() f name bullets
+  [[ -f changelog/en.md ]] && files+=(changelog/en.md)
+  for f in changelog/*.md; do
+    [[ "$f" == changelog/en.md ]] || files+=("$f")
+  done
+  [[ ${#files[@]} -gt 0 ]] || err "No changelog/*.md files" >&2
+  for f in "${files[@]}"; do
+    name=$(awk '/^# /{sub(/^# +/, ""); print; exit}' "$f")
+    [[ -n "$name" ]] || err "$f: no '# <language name>' heading" >&2
+    bullets=$(awk -v v="$version" '
+      /^## / { h = $0; sub(/^## +/, "", h); sub(/[[:space:]]+$/, "", h); s = (h == v); next }
+      s && /^[[:space:]]*$/ { next }
+      s { print }' "$f")
+    [[ -n "$bullets" ]] || err "$f: no '## $version' section — write the release notes in changelog/ first" >&2
+    printf '### %s\n\n%s\n\n' "$name" "$bullets"
+  done
+}
+
 push_release() {
   local is_pre=${1:-false}
   local dir="build/app/outputs/flutter-apk"
@@ -241,6 +263,8 @@ push_release() {
   key=$(core_key)
   [[ -n "$key" && -f "$CORE_OUTPUTS/teapod-core-$key.aar" ]] || err "No teapod-core AAR for core/ ${key:-(uncommitted)} — run ./build.sh binaries"
   apks+=("$CORE_OUTPUTS/teapod-core-$key.aar")
+  local notes
+  notes=$(release_notes "$VERSION") || exit 1
 
   # Check if gh is installed
   if ! command -v gh &>/dev/null; then
@@ -263,7 +287,7 @@ push_release() {
     local head
     head=$(git -C "$SCRIPT_DIR" rev-parse HEAD)
     [[ -n "$(git -C "$SCRIPT_DIR" branch -r --contains "$head")" ]] || err "Commit $head is not pushed — git push first"
-    local flags=("--title" "TeapodStream $VERSION" "--generate-notes" "--target" "$head")
+    local flags=("--title" "TeapodStream $VERSION" "--notes" "$notes" "--target" "$head")
     [[ "$is_pre" == "true" ]] && flags+=("--prerelease")
     gh release create "$tag" "${flags[@]}" "${apks[@]}"
   fi
@@ -353,6 +377,10 @@ case "${1:-help}" in
     bump_version "${2:-}"
     ;;
 
+  notes)
+    release_notes "${2:-$VERSION}"
+    ;;
+
   push)
     push_release false
     ;;
@@ -373,6 +401,7 @@ case "${1:-help}" in
     echo ""
     echo "  Commands:"
     echo "    ./build.sh bump X.Y.Z   App version"
+    echo "    ./build.sh notes [X.Y.Z] Release body from changelog/ (default: the pubspec version)"
     echo "    ./build.sh binaries     teapod-core AAR for core/ (cache, release asset or build) + geodata"
     echo "    ./build.sh core         Build the teapod-core AAR from core/"
     echo "    ./build.sh debug        Build a debug APK"

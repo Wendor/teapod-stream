@@ -49,6 +49,16 @@ Order: version from `pubspec.yaml` → signing key → JDK, NDK → teapod-core 
 `teapod-core-<core/ hash>.aar`, which `./build.sh binaries` downloads elsewhere) → obfuscation symbols as artifact
 `symbols-<version>`.
 
+### Release notes
+
+Written in `changelog/` **before** the release, one file per language: `en.md`, `ru.md`. The H1 is the language's own
+name (`# English`, `# Русский`), then `## X.Y.Z` per version, newest first, `- ` bullets only: what a user notices,
+issue numbers like `(#76)`.
+
+`./build.sh notes [X.Y.Z]` prints the release body for a version (default: the `pubspec.yaml` one): for each file,
+English first, `### <its H1>` and the bullets of its `## X.Y.Z` section. `./build.sh push|pushpre` creates the release
+with this body and stops before publishing when a file has no section for the version.
+
 `build.sh` takes `JAVA_HOME` / `ANDROID_HOME` from the environment (Homebrew paths by default). `core/build.sh` uses
 `$ANDROID_HOME/ndk/$NDK_VERSION` (default 28.2.13676358; the workflows pass the same `NDK_VERSION`).
 

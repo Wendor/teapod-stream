@@ -37,9 +37,9 @@ It must have reviewed the commit you are reviewing. The `CodeRabbit` check alone
 skipped (rate limit, "Action not completed") the check still passes.
 
 ```bash
-gh api repos/Wendor/teapod-stream/pulls/<n>/reviews \
-  --jq '[.[] | select(.user.login=="coderabbitai[bot]") | .commit_id] | last'        # must equal headRefOid
-gh api repos/Wendor/teapod-stream/issues/<n>/comments \
+gh api --paginate --slurp repos/Wendor/teapod-stream/pulls/<n>/reviews \
+  | jq '[.[][] | select(.user.login=="coderabbitai[bot]") | .commit_id] | last'   # must equal headRefOid
+gh api --paginate repos/Wendor/teapod-stream/issues/<n>/comments \
   --jq '.[] | select(.user.login=="coderabbitai[bot]") | .body' | grep -iE 'not completed|rate limit|skipped|paused'
 ```
 
@@ -53,10 +53,11 @@ gh api repos/Wendor/teapod-stream/issues/<n>/comments \
   comment. Unanswered → an issue.
 
 ```bash
-gh api repos/Wendor/teapod-stream/pulls/<n>/reviews --jq '.[] | select(.user.login=="coderabbitai[bot]") | {commit_id, body}'
-gh api repos/Wendor/teapod-stream/issues/<n>/comments --jq '.[] | {user: .user.login, body: .body[0:400]}'
-gh api graphql -F n=<n> -f query='query($n:Int!){repository(owner:"Wendor",name:"teapod-stream"){pullRequest(number:$n){
-  reviewThreads(first:100){nodes{isResolved path comments(first:20){nodes{author{login} body}}}}}}}'
+gh api --paginate repos/Wendor/teapod-stream/pulls/<n>/reviews --jq '.[] | select(.user.login=="coderabbitai[bot]") | {commit_id, body}'
+gh api --paginate repos/Wendor/teapod-stream/issues/<n>/comments --jq '.[] | {user: .user.login, body: .body[0:400]}'
+gh api graphql --paginate -F n=<n> -f query='query($n:Int!,$endCursor:String){repository(owner:"Wendor",
+  name:"teapod-stream"){pullRequest(number:$n){reviewThreads(first:100,after:$endCursor){
+  nodes{isResolved path comments(first:100){nodes{author{login} body}}} pageInfo{hasNextPage endCursor}}}}}'
 ```
 
 ## 4. Wiki

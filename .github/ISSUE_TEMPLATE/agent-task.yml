@@ -81,6 +81,6 @@ body:
       label: Allowed beyond the defaults
       description: Tick only what this task really needs; name the files in Context.
       options:
-        - label: Files on the AGENTS.md hands-off list (build scripts, `.github/`, version, signing)
+        - label: Files on the AGENTS.md hands-off list (build scripts, `.github/`, version, signing) — only in a PR a maintainer opens or runs the agent for; `PR rules` fails such a PR from anyone else
         - label: A new dependency (pubspec or Gradle)
         - label: A PR over ~500 changed lines

@@ -65,8 +65,9 @@ Resolve a thread when it is fixed, or when CodeRabbit replied that it accepts yo
 leave the thread open and say so in a PR comment: the maintainer decides. GitHub won't merge while a thread is open.
 
 ```bash
-gh api graphql -F n=<n> -f query='query($n:Int!){repository(owner:"Wendor",name:"teapod-stream"){pullRequest(number:$n){
-  reviewThreads(first:100){nodes{id isResolved path comments(last:1){nodes{author{login} body}}}}}}}'
+gh api graphql --paginate -F n=<n> -f query='query($n:Int!,$endCursor:String){repository(owner:"Wendor",
+  name:"teapod-stream"){pullRequest(number:$n){reviewThreads(first:100,after:$endCursor){
+  nodes{id isResolved path comments(last:1){nodes{author{login} body}}} pageInfo{hasNextPage endCursor}}}}}'
 gh api graphql -F id=<thread id> -f query='mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{isResolved}}}'
 ```
 

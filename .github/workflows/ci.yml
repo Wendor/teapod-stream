@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 env:
-  FLUTTER_VERSION: 3.41.6
+  FLUTTER_VERSION: 3.50.0
   NDK_VERSION: 28.2.13676358
 
 jobs:

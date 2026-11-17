@@ -19,7 +19,7 @@ permissions:
   contents: write
 
 env:
-  FLUTTER_VERSION: 3.41.6
+  FLUTTER_VERSION: 3.50.0
   NDK_VERSION: 28.2.13676358
   # SHA-256 of the signing certificate of all released APKs: another key would break updates for users
   CERT_SHA256: 1a9d47fabd88aacda435d2ae0098cf3f0666358113da858a974b2483fdd5eaaf

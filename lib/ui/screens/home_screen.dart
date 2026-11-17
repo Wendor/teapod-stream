@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import '../../providers/core_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

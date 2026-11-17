@@ -7,6 +7,8 @@ analyzer:
     strict-raw-types: true
   exclude:
     - lib/l10n/app_localizations*.dart
+    - build/**
+    - android/**
 
 formatter:
   page_width: 120

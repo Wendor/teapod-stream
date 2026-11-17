@@ -1,3 +1,4 @@
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'core/services/third_party_licenses.dart';
 import 'package:flutter/services.dart';

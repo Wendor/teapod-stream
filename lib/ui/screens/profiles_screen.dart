@@ -1,4 +1,5 @@
 import 'dart:io';
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -474,7 +475,7 @@ Future<void> _shareAsFile(BuildContext context, Profile profile, ProfileBundle b
   final safeName = profile.name.replaceAll(RegExp(r'[^a-zA-Z0-9а-яА-Я_\- ]'), '_');
   final file = File('${dir.path}/$safeName.json');
   await file.writeAsString(const JsonEncoder.withIndent('  ').convert(bundle.toJson()));
-  await Share.shareXFiles([XFile(file.path)], text: 'Teapod profile: ${profile.name}');
+  await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: 'Teapod profile: ${profile.name}'));
 }
 
 void _confirmDelete(BuildContext context, WidgetRef ref, Profile profile, TeapodTokens t) {

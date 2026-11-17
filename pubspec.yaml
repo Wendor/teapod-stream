@@ -13,14 +13,14 @@ dependencies:
     sdk: flutter
 
   # State management
-  flutter_riverpod: ^3.3.1
+  flutter_riverpod: ^3.5.0
 
   # Storage
   shared_preferences: ^2.3.2
   flutter_secure_storage: ^9.2.2
 
   # Sharing
-  share_plus: ^10.1.4
+  share_plus: ^12.0.2
 
   # QR code scanning
   mobile_scanner: ^7.2.0
@@ -30,18 +30,18 @@ dependencies:
 
   # Utilities
   uuid: ^4.5.1
-  intl: ^0.20.2
+  intl: ^0.20.3
 
   # Charts for speed graph
   fl_chart: ^1.2.0
 
   # Typography
-  google_fonts: ^6.2.1
+  google_fonts: ^9.0.0
 
   # Permissions
-  permission_handler: ^12.0.1
+  permission_handler: ^13.0.2
   package_info_plus: ^9.0.1
-  url_launcher_android: ^6.3.29
+  url_launcher_android: ^6.3.33
   url_launcher: ^6.3.2
   path_provider: ^2.1.5
   socks5_proxy: ^2.1.1

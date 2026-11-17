@@ -1,4 +1,5 @@
 import 'dart:io';
+// ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
@@ -75,7 +76,12 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
         '_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}.txt';
     final tmp = File('${(await getTemporaryDirectory()).path}/$name');
     await src.copy(tmp.path);
-    await Share.shareXFiles([XFile(tmp.path, mimeType: 'text/plain')], subject: 'TeapodStream Log');
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(tmp.path, mimeType: 'text/plain')],
+        subject: 'TeapodStream Log',
+      ),
+    );
   }
 
   Color _lvlColor(LogLevel lvl, TeapodTokens t) => switch (lvl) {

@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  FLUTTER_VERSION: 3.41.6   # as in ci.yml; the check compares ci.yml's value with the latest stable
+  FLUTTER_VERSION: 3.50.0   # as in ci.yml; the check compares ci.yml's value with the latest stable
 
 jobs:
   check:

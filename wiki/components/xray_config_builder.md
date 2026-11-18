@@ -116,11 +116,12 @@ Shown to the user on Home: their DNS settings and ad block via DNS don't apply; 
 - **Go** (`XrayGoBackend.checkConfig` → `XrayConfigBuilder.unsupportedReason`): refuses what xray v26 rejects at start
   — `h2`/`http`/`quic` transports, `allowInsecure` without a pin, a broken pin, sing-box-only protocols.
 - **Rust** (`XrayRustBackend`, `RustConfigBuilder.unsupportedReason`): VLESS, Trojan, VMess AEAD, Shadowsocks 2022,
-  Hysteria2; no raw configs, no link `finalmask` (the builder assembles its own subset), no `mux=on` in the link, no
-  Vision on non-RAW transports without VLESS encryption. Unsupported features (`CoreFeature`): proxy-only, ICMP toggle,
-  MTU, Mux, observatory, raw config. The Rust core reads the TUN fd itself, so `RustConfigBuilder` adds the TUN inbound,
-  removes the Go-only UDP rule (it has `_blockTunUdp`), strips `sockopt`, and converts `udphop` back to
-  `quicParams.udpHop`. `buildProbe` makes a password-protected probe inbound for latency measurement.
+  Hysteria2; no raw configs, no link `finalmask` (the builder assembles its own subset), no `mux=on` in the link (except
+  Hysteria2), no Vision on non-RAW transports without VLESS encryption. Unsupported features (`CoreFeature`):
+  proxy-only, ICMP toggle, MTU, Mux, observatory, raw config. The Rust core reads the TUN fd itself, so
+  `RustConfigBuilder` adds the TUN inbound, removes the Go-only UDP rule (it has `_blockTunUdp`), strips `sockopt`, and
+  converts `udphop` back to `quicParams.udpHop`. `buildProbe` makes a password-protected probe inbound for latency
+  measurement.
 
 ## Related
 

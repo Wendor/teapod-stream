@@ -77,7 +77,22 @@ class VpnState2 {
 }
 
 /// Tunnel SOCKS for own downloads (subscriptions, geo databases); null — VPN not connected.
-final tunnelSocksProvider = Provider<TunnelSocks?>((ref) => ref.watch(vpnProvider).tunnelSocks);
+/// [VpnNotifier] fills it rather than it watching [vpnProvider]: configProvider reads it, and
+/// vpnProvider depends on configProvider through activeCoreProvider — a watch would close a cycle.
+final tunnelSocksProvider = NotifierProvider<TunnelSocksNotifier, TunnelSocks?>(TunnelSocksNotifier.new);
+
+class TunnelSocksNotifier extends Notifier<TunnelSocks?> {
+  @override
+  TunnelSocks? build() => null;
+
+  /// Only a real change is written: the first call comes while vpnProvider is built inside a widget build, where
+  /// notifying other providers isn't allowed.
+  void set(TunnelSocks? socks) {
+    final cur = state;
+    if (cur?.port == socks?.port && cur?.user == socks?.user && cur?.password == socks?.password) return;
+    state = socks;
+  }
+}
 
 class VpnNotifier extends Notifier<VpnState2> {
   late final XrayEngine _engine;
@@ -118,6 +133,7 @@ class VpnNotifier extends Notifier<VpnState2> {
   @override
   VpnState2 build() {
     _engine = XrayEngine();
+    listenSelf((_, next) => ref.read(tunnelSocksProvider.notifier).set(next.tunnelSocks));
     // The active profile's core changed (priority, disabling, pinning).
     ref.listen(activeCoreProvider, (prev, next) {
       if (prev != null && next != null && prev != next) _onCoreChanged();

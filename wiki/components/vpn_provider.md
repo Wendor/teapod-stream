@@ -20,11 +20,11 @@ them.
 `blocked` — the kill switch keeps the TUN sink after a drop. It is terminal like `error`; `connect()` from it is
 allowed, `disconnect()` closes the sink. Native `reconnecting` maps to `connecting`.
 
-Derived providers: `vpnConnectionStateProvider`, `vpnStatsProvider`, `tunnelSocksProvider`,
-`pendingReconnectProvider` — `connected` and the fingerprint of the current settings differs from
-`appliedFingerprint` → `ReconnectBanner`. Only connection-relevant settings are fingerprinted (ports, credentials,
-proxy-only, UDP/ICMP/QUIC, MTU, IPv6, TLS fingerprint, logging, sniffing, DNS, routing, split tunneling, kill
-switch, notification, core) — not theme, auto-connect, subscription or geo settings.
+Derived providers: `vpnConnectionStateProvider`, `vpnStatsProvider`, `pendingReconnectProvider` — `connected` and the
+fingerprint of the current settings differs from `appliedFingerprint` → `ReconnectBanner`. Only connection-relevant
+settings are fingerprinted (ports, credentials, proxy-only, UDP/ICMP/QUIC, MTU, IPv6, TLS fingerprint, logging,
+sniffing, DNS, routing, split tunneling, kill switch, notification, core) — not theme, auto-connect, subscription or
+geo settings. `tunnelSocksProvider` is not derived: `VpnNotifier` fills it ([services](services.md#tunnelsocks)).
 
 ## Choosing the core
 

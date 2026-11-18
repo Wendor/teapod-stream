@@ -39,8 +39,10 @@ leave from the real IP.
 - `orDirect(socks, run)` — through the tunnel, retried directly **only** on a transport failure
   (`isTransportError`: socket, timeout, TLS, HTTP client and SOCKS errors). A server answer (HTTP error, untrusted
   certificate) is not retried, otherwise a live tunnel could be bypassed.
-- Provided by `tunnelSocksProvider` (`vpn_provider.dart`), a separate provider so that `ConfigNotifier` and
-  `GeoNotifier` don't depend on `VpnNotifier` (tests override it with `null`).
+- Provided by `tunnelSocksProvider` (`vpn_provider.dart`): a holder that `VpnNotifier` fills on every state change
+  (`listenSelf`), with no dependencies of its own. `ConfigNotifier` and `GeoNotifier` read it; if it watched
+  `vpnProvider`, the read would close a cycle (`vpnProvider` → `activeCoreProvider` → `configProvider`), which Riverpod
+  refuses in debug builds.
 
 ## Storage
 

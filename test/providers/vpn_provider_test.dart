@@ -726,6 +726,21 @@ void main() {
   });
 
   group('misc', () {
+    test('tunnel SOCKS follows the connection and a subscription fetch can read it', () async {
+      await connected();
+      final socks = c.read(tunnelSocksProvider);
+      expect((socks?.port, socks?.user, socks?.password), (2080, 'su', 'sp'));
+      // configProvider reads tunnelSocksProvider while vpnProvider depends on configProvider (through
+      // activeCoreProvider): in debug Riverpod refuses the read if tunnelSocksProvider depends on vpnProvider.
+      await expectLater(
+        c.read(configProvider.notifier).addSubscriptionFromUrl('http://127.0.0.1:1/sub'),
+        throwsA(predicate((Object e) => !e.toString().contains('CircularDependencyError'))),
+      );
+      emit({'type': 'state', 'value': 'disconnected'});
+      await _settle();
+      expect(c.read(tunnelSocksProvider), isNull);
+    });
+
     test('syncNativeState adopts native credentials', () async {
       await boot();
       native.state = {'state': 'connected', 'socksPort': 7000, 'socksUser': 'x', 'socksPassword': 'y'};

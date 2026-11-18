@@ -1,5 +1,10 @@
 # English
 
+## 1.8.2
+
+- A server link may carry `mux=on` or `mux=off`: Mux for this server regardless of the global switch, xhttp included (xray-core only)
+- Update notes: short summaries of versions 1.0–1.6
+
 ## 1.8.1
 
 - What's new: the update notes come in the app's language and cover every version since yours; the full history is in Settings → about → changelog (#184)

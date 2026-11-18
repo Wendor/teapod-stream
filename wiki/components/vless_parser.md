@@ -17,7 +17,8 @@ Multi-line subscription bodies are split and decoded in `SubscriptionService` ([
 | `hysteria2://`, `hy2://` | `password@host:port?sni&insecure&obfs-password&pinSHA256`; port hopping: a range/list in the authority (`20000-30000`, `443,5000-6000`) or `mport` → `hopPorts`, the first port → `port`; an unparsable port rejects the link, an unparsable `mport` is ignored |
 
 `VlessParser.linkParams` / `vmessJson` re-read details that aren't model fields (e.g. TCP `headerType=http`) from
-`rawUri` at build time.
+`rawUri` at build time. `linkMux` reads `mux=on|off` (also `true`/`false`, `1`/`0`) — Mux for this server regardless
+of the global setting ([xray_config_builder](xray_config_builder.md#fragment-noise-mux)).
 
 **Names** come from the fragment: percent-encoded or raw Unicode — `_decodeName` falls back to the raw text when
 `Uri.decodeComponent` throws. IPv6 hosts in brackets are supported.

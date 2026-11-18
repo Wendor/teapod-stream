@@ -69,7 +69,10 @@ and security (`tls` with `serverName`, `fingerprint`, `alpn`, `echConfigList`; `
 - Fragment or noise active (and `isValid` — garbage values stop xray from starting) → a freedom outbound
   `dialer-out` with `fragment` / `noises`, and the proxy outbound gets `sockopt.dialerProxy = dialer-out`. Fragment
   works on the TCP leg (not Hysteria2), noise on UDP (Hysteria2, QUIC); port 53 isn't noised.
-- Mux (`_muxApplies`): not for Hysteria2 (QUIC multiplexes itself) and not for xhttp (own xmux). With
+- Mux (`_muxApplies`): never for Hysteria2 (QUIC multiplexes itself). The global switch skips xhttp: it has its own
+  xmux, and Xray's xhttp inbounds refuse TCP inside Mux. `mux=on` / `mux=off` in the link
+  (`VlessParser.linkMux`) overrides the switch for one server, xhttp included: a server behind a GET-only CDN that
+  buffers responses pads the download with Mux KeepAlive frames, so the client must use Mux. With
   `xtls-rprx-vision` TCP Mux is forced off (`concurrency: -1`) — the server breaks Mux connections carrying TCP;
   only XUDP stays.
 
@@ -113,11 +116,12 @@ Shown to the user on Home: their DNS settings and ad block via DNS don't apply; 
 - **Go** (`XrayGoBackend.checkConfig` → `XrayConfigBuilder.unsupportedReason`): refuses what xray v26 rejects at start
   — `h2`/`http`/`quic` transports, `allowInsecure` without a pin, a broken pin, sing-box-only protocols.
 - **Rust** (`XrayRustBackend`, `RustConfigBuilder.unsupportedReason`): VLESS, Trojan, VMess AEAD, Shadowsocks 2022,
-  Hysteria2; no raw configs, no link `finalmask` (the builder assembles its own subset), no Vision on non-RAW
-  transports without VLESS encryption. Unsupported features (`CoreFeature`): proxy-only, ICMP toggle, MTU, Mux,
-  observatory, raw config. The Rust core reads the TUN fd itself, so `RustConfigBuilder` adds the TUN inbound,
-  removes the Go-only UDP rule (it has `_blockTunUdp`), strips `sockopt`, and converts `udphop` back to
-  `quicParams.udpHop`. `buildProbe` makes a password-protected probe inbound for latency measurement.
+  Hysteria2; no raw configs, no link `finalmask` (the builder assembles its own subset), no `mux=on` in the link (except
+  Hysteria2), no Vision on non-RAW transports without VLESS encryption. Unsupported features (`CoreFeature`):
+  proxy-only, ICMP toggle, MTU, Mux, observatory, raw config. The Rust core reads the TUN fd itself, so
+  `RustConfigBuilder` adds the TUN inbound, removes the Go-only UDP rule (it has `_blockTunUdp`), strips `sockopt`, and
+  converts `udphop` back to `quicParams.udpHop`. `buildProbe` makes a password-protected probe inbound for latency
+  measurement.
 
 ## Related
 

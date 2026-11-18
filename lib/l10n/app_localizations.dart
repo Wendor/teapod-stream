@@ -2198,6 +2198,12 @@ abstract class AppLocalizations {
   /// **'The xray-rust core doesn\'t apply the link\'s fm (finalmask) parameter. Set fragmentation and noise in network settings.'**
   String get rustNoFinalmask;
 
+  /// No description provided for @rustLinkMux.
+  ///
+  /// In en, this message translates to:
+  /// **'The link asks for Mux (mux=on), which isn\'t available in the xray-rust core.'**
+  String get rustLinkMux;
+
   /// No description provided for @rustVlessEncryption.
   ///
   /// In en, this message translates to:
@@ -2593,6 +2599,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Advanced Xray settings (finalmask/extra) aren\'t available in the sing-box core.'**
   String get singboxNoXrayExtra;
+
+  /// No description provided for @singboxLinkMux.
+  ///
+  /// In en, this message translates to:
+  /// **'The link asks for Xray Mux (mux=on), which the sing-box core doesn\'t have.'**
+  String get singboxLinkMux;
 
   /// No description provided for @singboxNoCertPin.
   ///

@@ -11,6 +11,7 @@ import 'package:teapodstream/core/services/settings_service.dart';
 import 'package:teapodstream/protocols/parsers/naive_parser.dart';
 import 'package:teapodstream/protocols/parsers/ssh_parser.dart';
 import 'package:teapodstream/protocols/singbox/singbox_config_builder.dart';
+import 'package:teapodstream/protocols/xray/vless_parser.dart';
 
 final _trojan = VpnConfig(
   id: 't',
@@ -263,5 +264,14 @@ void main() {
     expect(level(LogLevel.warning), 'warn');
     expect(level(LogLevel.error), 'error');
     expect(level(LogLevel.debug), 'debug');
+  });
+
+  test('a link that asks for Xray Mux is refused', () {
+    VpnConfig ws(String extra) => VlessParser.parseUri(
+      'vless://11111111-2222-4333-8444-555555555555@server.example:443?type=ws&path=%2Fs&security=tls&encryption=none$extra#x',
+    )!;
+    expect(SingBoxConfigBuilder.unsupportedReason(ws('&mux=on')), contains('mux=on'));
+    expect(SingBoxConfigBuilder.unsupportedReason(ws('&mux=off')), isNull);
+    expect(SingBoxConfigBuilder.unsupportedReason(ws('')), isNull);
   });
 }

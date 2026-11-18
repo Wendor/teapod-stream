@@ -1207,6 +1207,9 @@ class AppLocalizationsRu extends AppLocalizations {
       'Параметр fm (finalmask) из ссылки ядро xray-rust не применяет. Фрагментацию и шумы задай в настройках сети.';
 
   @override
+  String get rustLinkMux => 'Ссылка требует Mux (mux=on), а в ядре xray-rust его нет.';
+
+  @override
   String get rustVlessEncryption => 'Ядро xray-rust пока принимает VLESS с encryption=none.';
 
   @override
@@ -1440,6 +1443,9 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get singboxNoXrayExtra => 'Расширенные настройки Xray (finalmask/extra) недоступны в ядре sing-box.';
+
+  @override
+  String get singboxLinkMux => 'Ссылка требует Mux Xray (mux=on), а в ядре sing-box его нет.';
 
   @override
   String get singboxNoCertPin =>

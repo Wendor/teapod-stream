@@ -504,6 +504,15 @@ class VlessParser {
     }
   }
 
+  /// `mux=on` / `mux=off` in the link: Mux for this server regardless of the global setting,
+  /// over xhttp too (a server behind a GET-only CDN pads the download with Mux frames).
+  /// null — no parameter or an unknown value.
+  static bool? linkMux(VpnConfig config) => switch (linkParams(config)['mux']?.trim().toLowerCase()) {
+    'on' || 'true' || '1' => true,
+    'off' || 'false' || '0' => false,
+    _ => null,
+  };
+
   /// JSON body of `vmess://BASE64(JSON)` the profile was read from.
   static Map<String, dynamic> vmessJson(VpnConfig config) {
     final raw = config.rawUri;

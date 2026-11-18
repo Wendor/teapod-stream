@@ -82,6 +82,9 @@ abstract final class SingBoxConfigBuilder {
     if ((config.xhttpExtra?.isNotEmpty ?? false) || (config.finalmask?.isNotEmpty ?? false)) {
       return L10n.current.singboxNoXrayExtra;
     }
+    if (config.protocol != VpnProtocol.hysteria2 && (VlessParser.linkMux(config) ?? false)) {
+      return L10n.current.singboxLinkMux;
+    }
     if (config.pinSHA256?.trim().isNotEmpty ?? false) {
       return L10n.current.singboxNoCertPin;
     }

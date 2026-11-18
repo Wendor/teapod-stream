@@ -30,9 +30,9 @@
 ## Refused on sing-box (config disabled)
 
 XHTTP / SplitHTTP, TCP with HTTP header obfuscation, VLESS Encryption, flows other than `xtls-rprx-vision`,
-`rawXrayConfig`, `finalmask` / `xhttpExtra`, SS plugins and unknown methods, **certificate pins** (sing-box pins only
-public keys — connecting without the check is not an option), AmneziaWG `HeaderProtectionKey` with `S1`–`S4` < 12,
-`reserved` together with AWG.
+`rawXrayConfig`, `finalmask` / `xhttpExtra`, `mux=on` in the link (Xray Mux; not for Hysteria2), SS plugins and
+unknown methods, **certificate pins** (sing-box pins only public keys — connecting without the check is not an
+option), AmneziaWG `HeaderProtectionKey` with `S1`–`S4` < 12, `reserved` together with AWG.
 
 Reality `pqv` doesn't block: the ML-DSA signature is an extra certificate extension and the main Reality HMAC check is
 the same, so the config works without the post-quantum check — `checkOptions` warns.

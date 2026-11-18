@@ -298,10 +298,13 @@ class XrayConfigBuilder {
   static bool _dialerApplies(VpnConfig config, VpnEngineOptions options) =>
       _fragmentApplies(config, options) || _noiseApplies(options);
 
-  /// Mux is useless over hysteria2 (QUIC multiplexes itself) and xhttp
-  /// (its own xmux; upstream doesn't recommend double multiplexing).
-  static bool _muxApplies(VpnConfig config, VpnEngineOptions options) =>
-      options.mux.enabled && config.protocol != VpnProtocol.hysteria2 && config.transport != VpnTransport.xhttp;
+  /// Mux is useless over hysteria2 (QUIC multiplexes itself). The global setting skips xhttp: it has
+  /// its own xmux, and Xray's xhttp inbounds refuse TCP inside Mux. `mux=on|off` in the link
+  /// overrides both for one server ([VlessParser.linkMux]).
+  static bool _muxApplies(VpnConfig config, VpnEngineOptions options) {
+    if (config.protocol == VpnProtocol.hysteria2) return false;
+    return VlessParser.linkMux(config) ?? (options.mux.enabled && config.transport != VpnTransport.xhttp);
+  }
 
   /// TCP_USER_TIMEOUT: a connection where DPI silently drops packets breaks after
   /// 30 s of unacknowledged data instead of hanging in retransmission until tcp_retries2.

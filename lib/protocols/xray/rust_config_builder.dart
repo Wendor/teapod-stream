@@ -52,6 +52,9 @@ class RustConfigBuilder {
     if (config.finalmask?.isNotEmpty ?? false) {
       return L10n.current.rustNoFinalmask;
     }
+    if (config.protocol != VpnProtocol.hysteria2 && (VlessParser.linkMux(config) ?? false)) {
+      return L10n.current.rustLinkMux;
+    }
     return switch (config.protocol) {
       VpnProtocol.hysteria2 => _hysteria2UnsupportedReason(config),
       VpnProtocol.vless => _vlessUnsupportedReason(config),

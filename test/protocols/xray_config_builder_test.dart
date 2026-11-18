@@ -8,6 +8,7 @@ import 'package:teapodstream/core/models/routing_settings.dart';
 import 'package:teapodstream/core/interfaces/vpn_engine.dart';
 import 'package:teapodstream/core/models/dns_config.dart';
 import 'package:teapodstream/core/models/vpn_log_entry.dart' show LogLevel;
+import 'package:teapodstream/core/models/xray_tuning.dart';
 
 VpnConfig _vlessConfig({String address = '1.2.3.4', int port = 443}) => VpnConfig(
   id: 'id',
@@ -683,6 +684,49 @@ void main() {
       expect(cfg['outbounds'][0]['streamSettings']['tlsSettings'], {'serverName': 's'});
       expect(cfg['inbounds'][0]['listen'], '127.0.0.1');
       expect(() => XrayConfigBuilder.mergeWithRaw('{"inbounds": {}}', _defaultOptions()), throwsFormatException);
+    });
+  });
+
+  group('Mux from the link', () {
+    const base =
+        'vless://11111111-2222-4333-8444-555555555555@cdn.example:443?security=tls&sni=cdn.example&encryption=none';
+    Map<String, dynamic>? mux(String query, VpnEngineOptions options) {
+      final json = XrayConfigBuilder.build(VlessParser.parseUri('$base$query#x')!, options);
+      final proxy = (json['outbounds'] as List).firstWhere((o) => (o as Map)['tag'] == 'proxy') as Map;
+      return proxy['mux'] as Map<String, dynamic>?;
+    }
+
+    final globalOn = _defaultOptions().copyWith(mux: const MuxSettings(enabled: true, concurrency: 16));
+
+    test('mux=on turns Mux on over xhttp, which the global setting skips', () {
+      expect(mux('&type=xhttp&path=%2Fs', globalOn), isNull);
+      expect(mux('&type=xhttp&path=%2Fs&mux=on', _defaultOptions()), {
+        'enabled': true,
+        'concurrency': 8,
+        'xudpConcurrency': 16,
+        'xudpProxyUDP443': 'reject',
+      });
+      expect(mux('&type=xhttp&path=%2Fs&mux=true', globalOn)?['concurrency'], 16);
+    });
+
+    test('mux=off turns the global Mux off for one server', () {
+      expect(mux('&type=ws&path=%2Fs', globalOn), isNotNull);
+      expect(mux('&type=ws&path=%2Fs&mux=off', globalOn), isNull);
+      expect(mux('&type=ws&path=%2Fs&mux=0', globalOn), isNull);
+    });
+
+    test('an unknown value leaves the global setting', () {
+      expect(mux('&type=ws&path=%2Fs&mux=maybe', globalOn), isNotNull);
+      expect(mux('&type=ws&path=%2Fs&mux=maybe', _defaultOptions()), isNull);
+    });
+
+    test('Hysteria2 never gets Mux', () {
+      final json = XrayConfigBuilder.build(
+        VlessParser.parseUri('hy2://pass@hy.example:443/?sni=s&mux=on#x')!,
+        globalOn,
+      );
+      final proxy = (json['outbounds'] as List).firstWhere((o) => (o as Map)['tag'] == 'proxy') as Map;
+      expect(proxy.containsKey('mux'), isFalse);
     });
   });
 }

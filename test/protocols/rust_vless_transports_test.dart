@@ -127,4 +127,10 @@ void main() {
       }
     }
   });
+
+  test('a link that asks for Mux is refused: the Rust core has no Mux', () {
+    final config = VlessParser.parseUri(link('xhttp', 'tls', extra: '&mux=on'))!;
+    expect(RustConfigBuilder.unsupportedReason(config), contains('mux=on'));
+    expect(RustConfigBuilder.unsupportedReason(VlessParser.parseUri(link('xhttp', 'tls', extra: '&mux=off'))!), isNull);
+  });
 }

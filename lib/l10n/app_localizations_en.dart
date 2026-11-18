@@ -1181,6 +1181,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'The xray-rust core doesn\'t apply the link\'s fm (finalmask) parameter. Set fragmentation and noise in network settings.';
 
   @override
+  String get rustLinkMux => 'The link asks for Mux (mux=on), which isn\'t available in the xray-rust core.';
+
+  @override
   String get rustVlessEncryption => 'The xray-rust core only accepts VLESS with encryption=none so far.';
 
   @override
@@ -1415,6 +1418,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get singboxNoXrayExtra => 'Advanced Xray settings (finalmask/extra) aren\'t available in the sing-box core.';
+
+  @override
+  String get singboxLinkMux => 'The link asks for Xray Mux (mux=on), which the sing-box core doesn\'t have.';
 
   @override
   String get singboxNoCertPin =>

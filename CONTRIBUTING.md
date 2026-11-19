@@ -15,7 +15,7 @@ agent. Agents also read [AGENTS.md](AGENTS.md).
 
 ## Setup
 
-Flutter (the version in `.github/workflows/ci.yml`), JDK 21, Android SDK with NDK `28.2.13676358`, a device or
+Flutter (the version in `.github/workflows/ci.yml`), JDK 21, Android SDK with NDK `30.0.16248370`, a device or
 emulator on Android 10+ (arm64-v8a or x86_64). Changing `core/` (the Go engines) also needs Go and gomobile —
 `core/README.md`.
 

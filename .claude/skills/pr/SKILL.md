@@ -53,7 +53,7 @@ says what to do next. Run it after `gh pr ready`, after every push and after eve
 |---|---|---|
 | `READY` (0) | Checks passed, CodeRabbit reviewed the head commit, every thread you replied to has its answer or got none for `WAIT_REVIEW_IDLE` minutes (default 10; listed separately — it may have answered in a sibling thread) | Read and act (below), then run the script again — or ask for approval when nothing is left |
 | `FAILED` (1) | A required check failed | Read the log, fix, push, run again |
-| `SKIPPED` (2) | CodeRabbit finished without reviewing the head (rate limit, or a push with nothing to review) | Rate limit: post `@coderabbitai review`, run again. Nothing to review (e.g. only a merge from `master`): its previous review stands |
+| `SKIPPED` (2) | CodeRabbit finished without reviewing the head (rate limit, "Reviews paused" after many pushes, or a push with nothing to review) | Rate limit or paused: post `@coderabbitai review`, run again — a request newer than CodeRabbit's last result counts as pending, so the script waits for that review. Nothing to review (e.g. only a merge from `master`): its previous review stands |
 | `TIMEOUT` (3) | Something is still pending after 40 minutes | Tell the person you work for what is stuck |
 
 How it knows, if you need to check by hand:

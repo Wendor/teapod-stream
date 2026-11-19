@@ -25,7 +25,7 @@ threads() {  # unresolved threads, tab-separated: id, who started it, who spoke 
 
 while :; do
   head=$(gh pr view "$n" --json headRefOid --jq .headRefOid || true)
-  checks=$(gh pr checks "$n" --json name,bucket 2>/dev/null || echo '[]')
+  checks=$(gh pr checks "$n" --json name,bucket,completedAt 2>/dev/null || echo '[]')
   failed=$(jq -r '[.[] | select(.bucket == "fail" or .bucket == "cancel") | .name] | join(", ")' <<< "$checks")
   if [ -n "$failed" ]; then
     echo "FAILED: $failed"
@@ -42,12 +42,28 @@ while :; do
   else
     covered=unknown
   fi
+  # After '@coderabbitai review' the CodeRabbit check keeps its old result (paused, rate limited) until the
+  # requested review starts: while the head isn't covered, a request newer than that result is still pending.
+  # A failed lookup counts as pending too — never SKIPPED or READY on data we couldn't read.
+  if [ -n "$head" ] && [ "$covered" != "$head" ]; then
+    finished=$(jq -r '.[] | select(.name == "CodeRabbit") | .completedAt // ""' <<< "$checks")
+    if requested=$(gh api --paginate "repos/$repo/issues/$n/comments" \
+      --jq ".[] | select(.user.login != \"$bot\" and (.body | startswith(\"@coderabbitai review\"))) | .created_at"); then
+      requested=$(tail -1 <<< "$requested")
+      if [ -n "$requested" ] && [ -n "$finished" ] && [[ "$requested" > "$finished" ]]; then
+        running=$(( running + 1 ))
+      fi
+    else
+      running=$(( running + 1 ))
+    fi
+  fi
 
   if [ -n "$head" ] && [ "$covered" != unknown ] && [ "$running" = 0 ] && [ -n "$coderabbit" ]; then
     if [ "$covered" != "$head" ]; then
-      echo "SKIPPED: CodeRabbit finished without reviewing ${head:0:7} (rate limit, or nothing to review)."
-      echo "Next: read its latest comment on the PR. Rate limit → post '@coderabbitai review' (with your"
-      echo "Co-Authored-By line) and run this script again; it can take until the hourly limit resets."
+      echo "SKIPPED: CodeRabbit finished without reviewing ${head:0:7} (rate limit, paused reviews, or nothing to review)."
+      echo "Next: read its latest comment on the PR. Rate limit or \"Reviews paused\" → post '@coderabbitai review'"
+      echo "(with your Co-Authored-By line) and run this script again — it waits for that review to start; a rate"
+      echo "limit can take until the hourly limit resets."
       exit 2
     fi
     # CodeRabbit posts a reply only when it is complete (the "Analysis chain" block is part of the final reply),

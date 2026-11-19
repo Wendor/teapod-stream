@@ -121,7 +121,7 @@ Teapodcore.startTun2Socks(fd, mtu, port, "", "", true, false, object : TunValida
 This directory is part of the TeapodStream repository; the AAR is built from the repository root.
 
 Requirements: Go (the version in `go.mod`), gomobile and gobind of the `golang.org/x/mobile` version in `go.mod`,
-JDK, Android NDK 28.2.13676358 in `$ANDROID_HOME/ndk`.
+JDK, Android NDK 30.0.16248370 in `$ANDROID_HOME/ndk`.
 
 ```bash
 m=$(awk '$1=="golang.org/x/mobile"{print $2}' go.mod)

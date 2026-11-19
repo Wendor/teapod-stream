@@ -14,7 +14,7 @@ permissions:
 
 env:
   FLUTTER_VERSION: 3.50.0
-  NDK_VERSION: 28.2.13676358
+  NDK_VERSION: 30.0.16248370
 
 jobs:
   dart:

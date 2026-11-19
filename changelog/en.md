@@ -1,5 +1,10 @@
 # English
 
+## 1.8.3
+
+- Profiles remember their server: switching a profile selects the server last used with it and, while connected, reconnects with the new server and settings (#199)
+- Bundled geodata and the Android build tools updated
+
 ## 1.8.2
 
 - A server link may carry `mux=on` or `mux=off`: Mux for this server regardless of the global switch, xhttp included (xray-core only)

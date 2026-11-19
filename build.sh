@@ -192,7 +192,7 @@ download_geodata() {
   fi
   log "Downloading $name $GEODATA_VERSION..."
   curl -fL --progress-bar "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/download/$GEODATA_VERSION/$name" \
-    -o "$dst.download"
+    -o "$dst.download" || { rm -f "$dst.download"; err "$name: download failed"; }
   [[ "$(shasum -a 256 "$dst.download" | cut -d' ' -f1)" == "$sha" ]] \
     || { rm -f "$dst.download"; err "$name: SHA-256 mismatch"; }
   mv "$dst.download" "$dst"

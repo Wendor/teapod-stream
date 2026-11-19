@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../core/services/settings_service.dart';
 import 'profile_provider.dart';
 
@@ -14,12 +15,14 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
         .read(profileProvider.future)
         .then<ProfileState?>((p) => p, onError: (Object _) => null);
     if (profileState?.isReadonly == true) return;
+    // Captured before the write: a profile switch may finish while it runs.
+    final profileId = profileState?.activeProfileId;
 
     await _service.save(settings);
     state = AsyncData(settings);
 
     // Keep profile snapshot in sync
-    ref.read(profileProvider.notifier).syncActiveSettings(settings);
+    ref.read(profileProvider.notifier).syncActiveSettings(settings, profileId: profileId);
   }
 
   Future<void> cleanGhostPackages(Set<String> installedPackages) async {

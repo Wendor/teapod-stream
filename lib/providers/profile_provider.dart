@@ -1,6 +1,8 @@
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../core/models/profile.dart';
 import '../core/models/profile_bundle.dart';
 import '../core/models/connections_bundle.dart';
@@ -82,17 +84,27 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
   /// Applies the profile's settings and its remembered server. A live tunnel is rebuilt when
   /// either of them changes what it runs.
   Future<void> switchProfile(String id) async {
-    // The selection is restored inside the queue: the next switch must see this profile's server,
-    // not the previous one's.
-    final switched = await _serial(() async {
-      final target = await _switch(id);
-      if (target?.selection != null) await ref.read(configProvider.notifier).applySelection(target!.selection!);
-      return target != null;
-    }).whenComplete(() => ref.invalidate(settingsProvider));
-    // No VPN notifier — nothing is connected (it lives as long as the app UI).
-    if (switched && ref.read(vpnProvider.exists)) {
-      await ref.read(settingsProvider.future);
-      await ref.read(vpnProvider.notifier).reconnectIfStale();
+    var switched = false;
+    try {
+      // The selection is restored inside the queue: the next switch must see this profile's server,
+      // not the previous one's.
+      await _serial(() async {
+        final target = await _switch(id);
+        switched = target != null;
+        final selection = target?.selection;
+        if (selection != null) await ref.read(configProvider.notifier).applySelection(selection);
+      });
+    } finally {
+      // Also when restoring the server failed: the profile is already switched, so its settings and
+      // the tunnel follow it (a retry can't — the profile is active).
+      if (switched) {
+        ref.invalidate(settingsProvider);
+        // No VPN notifier — nothing is connected (it lives as long as the app UI).
+        if (ref.read(vpnProvider.exists)) {
+          await ref.read(settingsProvider.future);
+          await ref.read(vpnProvider.notifier).reconnectIfStale();
+        }
+      }
     }
   }
 
@@ -141,8 +153,9 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
       _update((current) => current.profiles.map((p) => p.id == id ? p.copyWith(readonly: !p.readonly) : p).toList());
 
   /// Settings go to the profile active when they were saved, even if a switch runs first.
-  Future<void> syncActiveSettings(AppSettings settings) {
-    final id = _current?.activeProfileId;
+  /// [profileId] — the profile active when the caller started saving; by default the active one now.
+  Future<void> syncActiveSettings(AppSettings settings, {String? profileId}) {
+    final id = profileId ?? _current?.activeProfileId;
     if (id == null) return Future.value();
     return _update((current) => current.profiles.map((p) => p.id == id ? p.copyWith(settings: settings) : p).toList());
   }

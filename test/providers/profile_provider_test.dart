@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -45,12 +46,12 @@ const _foreign = AppSettings(
   heartbeat: HeartbeatSettings(failureThreshold: 8, target: HeartbeatTarget.custom, customUrl: 'http://attacker/log'),
 );
 
-VpnConfig _cfg(String id, {String? name, String? subId}) => VpnConfig(
+VpnConfig _cfg(String id, {String? name, String? subId, String? address}) => VpnConfig(
   id: id,
   name: name ?? id,
   subscriptionId: subId,
   protocol: VpnProtocol.trojan,
-  address: 'h$id',
+  address: address ?? 'h$id',
   port: 443,
   uuid: '',
   password: 'p',
@@ -74,7 +75,12 @@ void main() {
   Future<AppSettings> settings() => c.read(settingsProvider.future);
 
   /// [keepStorage] — storage was already seeded by the test.
-  Future<void> boot({List<Profile>? stored, String? activeId, bool keepStorage = false}) async {
+  Future<void> boot({
+    List<Profile>? stored,
+    String? activeId,
+    bool keepStorage = false,
+    List<Override> overrides = const [],
+  }) async {
     if (!keepStorage) {
       SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
       FlutterSecureStorage.setMockInitialValues({});
@@ -82,7 +88,7 @@ void main() {
     await SettingsService().save(_local);
     if (stored != null) await profiles.saveProfiles(stored);
     if (activeId != null) await profiles.saveActiveProfileId(activeId);
-    c = ProviderContainer();
+    c = ProviderContainer(overrides: overrides);
     addTearDown(c.dispose);
     await c.read(profileProvider.future);
     await settings();
@@ -218,8 +224,9 @@ void main() {
     test('of two configs with the same name and endpoint the chosen one is restored', () async {
       SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
       FlutterSecureStorage.setMockInitialValues({});
-      await seed([_cfg('d1', name: 'Dup'), _cfg('d2', name: 'Dup')], activeId: 'd1');
-      final twin = _cfg('d2', name: 'Dup');
+      // same name and endpoint, different credentials (ids)
+      await seed([_cfg('d1', name: 'Dup', address: 'same'), _cfg('d2', name: 'Dup', address: 'same')], activeId: 'd1');
+      final twin = _cfg('d2', name: 'Dup', address: 'same');
       await boot(
         stored: [
           profile('a'),
@@ -326,6 +333,23 @@ void main() {
       expect(stored.first.selection!.configId, 'x');
       expect(stored.last.selection!.configId, 'x');
       expect((await settings()).mtu, const AppSettings().mtu);
+    });
+
+    test('a failed server restore still applies the profile settings', () async {
+      await boot(
+        stored: [
+          profile('a', settings: _local),
+          profile(
+            'b',
+            settings: const AppSettings(mtu: 1300),
+          ).copyWith(selection: const ConfigSelection(configId: 'x')),
+        ],
+        activeId: 'a',
+        overrides: [configProvider.overrideWith(_FailingSelection.new)],
+      );
+      await expectLater(n().switchProfile('b'), throwsA(isA<StateError>()));
+      expect(s().activeProfileId, 'b');
+      expect((await settings()).mtu, 1300);
     });
 
     test('a vanished server leaves the current selection', () async {
@@ -480,4 +504,9 @@ void main() {
       expect(s().activeProfile!.name, 'Default');
     });
   });
+}
+
+class _FailingSelection extends ConfigNotifier {
+  @override
+  Future<void> applySelection(ConfigSelection selection) async => throw StateError('storage write failed');
 }

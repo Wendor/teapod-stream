@@ -3,12 +3,14 @@ import 'dart:convert';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:teapodstream/core/constants/app_constants.dart';
 import 'package:teapodstream/core/cores/core_backend.dart';
 import 'package:teapodstream/core/interfaces/vpn_engine.dart';
+import 'package:teapodstream/core/models/config_selection.dart';
 import 'package:teapodstream/core/models/connection_fingerprint.dart';
 import 'package:teapodstream/core/models/core_kind.dart';
 import 'package:teapodstream/core/models/heartbeat_settings.dart';
@@ -144,6 +146,7 @@ void main() {
     String? activeId,
     List<PinnedRef> pins = const [],
     AppSettings settings = _settings,
+    List<Override> overrides = const [],
   }) async {
     SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
     FlutterSecureStorage.setMockInitialValues({});
@@ -152,7 +155,7 @@ void main() {
     await storage.saveConfigs(configs);
     await storage.saveActiveConfigId(activeId);
     await storage.savePins(pins);
-    final container = c = ProviderContainer();
+    final container = c = ProviderContainer(overrides: overrides);
     // Unfinished fire-and-forget operations (syncActiveSettings) must not
     // outlive the container.
     addTearDown(() async {
@@ -165,8 +168,17 @@ void main() {
     await _settle();
   }
 
-  Future<void> connected({List<VpnConfig>? configs, AppSettings settings = _settings}) async {
-    await boot(configs: configs ?? [_cfg('a')], activeId: (configs ?? [_cfg('a')]).first.id, settings: settings);
+  Future<void> connected({
+    List<VpnConfig>? configs,
+    AppSettings settings = _settings,
+    List<Override> overrides = const [],
+  }) async {
+    await boot(
+      configs: configs ?? [_cfg('a')],
+      activeId: (configs ?? [_cfg('a')]).first.id,
+      settings: settings,
+      overrides: overrides,
+    );
     await n().connect();
     emit({'type': 'state', 'value': 'connected', 'socksPort': 2080, 'socksUser': 'su', 'socksPassword': 'sp'});
     await _settle();
@@ -417,6 +429,27 @@ void main() {
       await _settle();
       expect(native.named('connect'), hasLength(2));
       expect(native.lastConnect()['xrayConfig'], contains('hb.example'));
+    });
+
+    test('a failed server restore still reconnects to the profile settings', () async {
+      await connected(overrides: [configProvider.overrideWith(_FailingSelection.new)]);
+      final profiles = c.read(profileProvider.notifier);
+      await c.read(profileProvider.future);
+      await profiles.createProfile('B');
+      final defaultId = c.read(profileProvider).value!.activeProfileId;
+      final bId = c.read(profileProvider).value!.profiles.last.id;
+      await profiles.switchProfile(bId); // B remembers the current server
+      await c.read(settingsProvider.notifier).save(_settings.copyWith(mtu: 1400));
+      await profiles.switchProfile(defaultId);
+      await _settle();
+      final before = native.named('connect').length;
+
+      _FailingSelection.fail = true;
+      addTearDown(() => _FailingSelection.fail = false);
+      await expectLater(profiles.switchProfile(bId), throwsA(isA<StateError>()));
+      await _settle();
+      expect(native.named('connect'), hasLength(before + 1));
+      expect(native.lastConnect()['mtu'], 1400);
     });
 
     test('reconnectIfStale rebuilds on changed settings, ignores an idle tunnel', () async {
@@ -853,4 +886,12 @@ void main() {
       });
     });
   });
+}
+
+class _FailingSelection extends ConfigNotifier {
+  static var fail = false;
+
+  @override
+  Future<void> applySelection(ConfigSelection selection) =>
+      fail ? Future.error(StateError('storage write failed')) : super.applySelection(selection);
 }

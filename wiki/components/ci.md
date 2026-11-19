@@ -54,10 +54,12 @@ issue lets the next run open a new one. The script runs locally the same way (ne
 Manual (`workflow_dispatch`): Actions → Release → Run workflow, or
 `gh workflow run release.yml --ref <branch> [-f prerelease=false]` (`prerelease` defaults to `true`).
 
-Order: version from `pubspec.yaml` → signing key → JDK, NDK → teapod-core AAR (the action: cache or build) →
-`./build.sh binaries` (geodata) → `./build.sh release` → signature check → `./build.sh push|pushpre` (APKs **and**
-`teapod-core-<core/ hash>.aar`, which `./build.sh binaries` downloads elsewhere) → obfuscation symbols as artifact
-`symbols-<version>`.
+Two jobs. `apk` runs once per ABI in parallel (matrix `arm64-v8a`, `x86_64`): signing key → JDK, NDK → teapod-core
+AAR (the action: cache or build) → `./build.sh binaries` (geodata) → `TARGET_PLATFORMS=<platform> ./build.sh release`
+→ signature check → artifact `build-<abi>` (the APK and its obfuscation symbols). `publish` then takes the AAR from the
+cache by the `core/` tree hash and both artifacts, runs `./build.sh push|pushpre` (APKs **and**
+`teapod-core-<core/ hash>.aar`, which `./build.sh binaries` downloads elsewhere) and uploads the symbols of both ABIs
+as artifact `symbols-<version>`. The APKs reach the release only through `publish`, so a failed ABI publishes nothing.
 
 ### Release notes
 

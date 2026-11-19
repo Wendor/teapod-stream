@@ -1,8 +1,8 @@
 name: Release
 
 # Manual run (Actions → Release → Run workflow or `gh workflow run release.yml`).
-# Builds the pubspec.yaml version: teapod-core AAR from core/ (cached by its tree hash) → APK → GitHub Release.
-# The release also carries the AAR as teapod-core-<core/ tree hash>.aar for ./build.sh binaries.
+# Builds the pubspec.yaml version: teapod-core AAR from core/ (cached by its tree hash) → one APK per ABI in parallel
+# jobs → GitHub Release. The release also carries the AAR as teapod-core-<core/ tree hash>.aar for ./build.sh binaries.
 on:
   workflow_dispatch:
     inputs:
@@ -25,15 +25,19 @@ env:
   CERT_SHA256: 1a9d47fabd88aacda435d2ae0098cf3f0666358113da858a974b2483fdd5eaaf
 
 jobs:
-  release:
+  apk:
+    name: apk (${{ matrix.abi }})
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    strategy:
+      matrix:
+        include:
+          - abi: arm64-v8a
+            platform: android-arm64
+          - abi: x86_64
+            platform: android-x64
     steps:
       - uses: actions/checkout@v7
-
-      - name: Version
-        id: ver
-        run: echo "version=$(awk '/^version:/{split($2,a,"+"); print a[1]; exit}' pubspec.yaml)" >> "$GITHUB_OUTPUT"
 
       - name: Signing key
         env:
@@ -64,6 +68,7 @@ jobs:
           [ -d "$ANDROID_HOME/ndk/$NDK_VERSION" ] \
             || "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" > /dev/null
 
+      # On a cache miss both jobs build the same AAR; one of them saves it for the publish job
       - uses: ./.github/actions/teapod-core
         with:
           ndk-version: ${{ env.NDK_VERSION }}
@@ -75,6 +80,8 @@ jobs:
           cache: true
 
       - name: Build APK
+        env:
+          TARGET_PLATFORMS: ${{ matrix.platform }}
         run: |
           ./build.sh binaries
           ./build.sh release
@@ -82,13 +89,51 @@ jobs:
       - name: Verify signature
         run: |
           signer="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
-          for apk in build/app/outputs/flutter-apk/teapod-stream-*-release-*.apk; do
+          apks=(build/app/outputs/flutter-apk/teapod-stream-${{ matrix.abi }}-release-*.apk)
+          [ -f "${apks[0]}" ] || { echo "::error::No ${{ matrix.abi }} APK"; exit 1; }
+          for apk in "${apks[@]}"; do
             out=$("$signer" verify --print-certs "$apk")
             grep -q "SHA-256 digest: $CERT_SHA256" <<< "$out" || {
               echo "$out"; find "$HOME" -name debug.keystore -not -path '*/.pub-cache/*' 2>/dev/null
               echo "::error::$apk is signed with the wrong key"; exit 1
             }
           done
+
+      # Paths are kept relative to build/app/outputs: flutter-apk/… and symbols/…
+      - uses: actions/upload-artifact@v7
+        with:
+          name: build-${{ matrix.abi }}
+          path: |
+            build/app/outputs/flutter-apk/teapod-stream-${{ matrix.abi }}-release-*.apk
+            build/app/outputs/symbols
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Version
+        id: ver
+        run: |
+          echo "version=$(awk '/^version:/{split($2,a,"+"); print a[1]; exit}' pubspec.yaml)" >> "$GITHUB_OUTPUT"
+          echo "core=$(git rev-parse --short=12 HEAD:core)" >> "$GITHUB_OUTPUT"
+
+      # The AAR the APKs were built with: the apk jobs left it in the cache
+      - uses: actions/cache/restore@v6
+        with:
+          path: core/outputs/teapod-core-${{ steps.ver.outputs.core }}.aar
+          key: teapod-core-${{ steps.ver.outputs.core }}
+          fail-on-cache-miss: true
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: build-*
+          path: build/app/outputs
+          merge-multiple: true
 
       - name: Publish
         env:

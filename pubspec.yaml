@@ -25,7 +25,7 @@ dependencies:
   share_plus: ^13.3.1
 
   # QR code scanning
-  mobile_scanner: ^7.2.0
+  mobile_scanner: ^7.4.1  # 7.4.1+ applies no Kotlin Gradle Plugin with built-in Kotlin (AGP 9)
 
   # Networking
   http: ^1.2.2

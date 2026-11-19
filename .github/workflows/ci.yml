@@ -56,11 +56,8 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-          cache: gradle
-          cache-dependency-path: |
-            android/*.gradle.kts
-            android/app/build.gradle.kts
-            android/gradle/wrapper/gradle-wrapper.properties
+
+      - uses: ./.github/actions/gradle-cache
 
       # From the cache by the core/ tree hash; built only when core/ changed
       - uses: ./.github/actions/teapod-core

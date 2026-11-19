@@ -27,7 +27,8 @@ CORE_OUTPUTS="core/outputs"
 GITHUB_REPO="Wendor/teapod-stream"
 NDK_VERSION="${NDK_VERSION:-28.2.13676358}"
 # Geodata bundled in the APK as the fallback (wiki/components/geo_provider.md): a pinned Loyalsoldier/v2ray-rules-dat
-# release, so one commit always builds the same APK. The monthly update check (.github/scripts/check-updates.sh) bumps it.
+# release, so one commit always builds the same APK. The monthly update check (.github/scripts/check-updates.sh) reports a
+# newer release; moving the pin (the tag and both checksums from the release's *.sha256sum) is a pull request.
 GEODATA_VERSION="202611182204"
 GEOIP_SHA256="304ac8a1cbcc8166e4f5a4f32955e4d0fb77a1bd713583e371b30ee27f3659d8"
 GEOSITE_SHA256="268f30619cfe5db5a925766bf966045f23b58b9a57bbc00c00396eb548011814"

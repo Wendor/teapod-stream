@@ -34,15 +34,6 @@ while :; do
   fi
   running=$(jq '[.[] | select(.bucket == "pending")] | length' <<< "$checks")
   coderabbit=$(jq -r '.[] | select(.name == "CodeRabbit") | .bucket' <<< "$checks")
-  # After '@coderabbitai review' the CodeRabbit check keeps its old result (paused, rate limited) until the
-  # requested review starts: a request newer than that result means the review is still pending.
-  finished=$(jq -r '.[] | select(.name == "CodeRabbit") | .completedAt // ""' <<< "$checks")
-  requested=$(gh api --paginate "repos/$repo/issues/$n/comments" \
-    --jq ".[] | select(.user.login != \"$bot\" and (.body | startswith(\"@coderabbitai review\"))) | .created_at" \
-    | tail -1 || true)
-  if [ -n "$requested" ] && [ -n "$finished" ] && [[ "$requested" > "$finished" ]]; then
-    running=$(( running + 1 ))
-  fi
   # The commit CodeRabbit last reviewed: its summary comment records it. A clean review posts no review body, and
   # its thread replies post empty reviews, so the reviews list can't tell.
   # A failed request leaves `covered` unknown: nothing is decided on it, the deadline check still runs.
@@ -50,6 +41,21 @@ while :; do
     covered=$(grep -oE '"coveredCommitId":"[0-9a-f]{40}"' <<< "$bodies" | tail -1 | cut -d'"' -f4)
   else
     covered=unknown
+  fi
+  # After '@coderabbitai review' the CodeRabbit check keeps its old result (paused, rate limited) until the
+  # requested review starts: while the head isn't covered, a request newer than that result is still pending.
+  # A failed lookup counts as pending too — never SKIPPED or READY on data we couldn't read.
+  if [ -n "$head" ] && [ "$covered" != "$head" ]; then
+    finished=$(jq -r '.[] | select(.name == "CodeRabbit") | .completedAt // ""' <<< "$checks")
+    if requested=$(gh api --paginate "repos/$repo/issues/$n/comments" \
+      --jq ".[] | select(.user.login != \"$bot\" and (.body | startswith(\"@coderabbitai review\"))) | .created_at"); then
+      requested=$(tail -1 <<< "$requested")
+      if [ -n "$requested" ] && [ -n "$finished" ] && [[ "$requested" > "$finished" ]]; then
+        running=$(( running + 1 ))
+      fi
+    else
+      running=$(( running + 1 ))
+    fi
   fi
 
   if [ -n "$head" ] && [ "$covered" != unknown ] && [ "$running" = 0 ] && [ -n "$coderabbit" ]; then

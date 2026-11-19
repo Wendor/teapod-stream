@@ -26,6 +26,12 @@ DEFAULT_ABI="arm64-v8a"
 CORE_OUTPUTS="core/outputs"
 GITHUB_REPO="Wendor/teapod-stream"
 NDK_VERSION="${NDK_VERSION:-30.0.16248370}"
+# Geodata bundled in the APK as the fallback (wiki/components/geo_provider.md): a pinned Loyalsoldier/v2ray-rules-dat
+# release, so one commit always builds the same APK. The monthly update check (.github/scripts/check-updates.sh) reports a
+# newer release; moving the pin (the tag and both checksums from the release's *.sha256sum) is a pull request.
+GEODATA_VERSION="202611182204"
+GEOIP_SHA256="304ac8a1cbcc8166e4f5a4f32955e4d0fb77a1bd713583e371b30ee27f3659d8"
+GEOSITE_SHA256="268f30619cfe5db5a925766bf966045f23b58b9a57bbc00c00396eb548011814"
 
 # ─── Version from pubspec.yaml (format: "1.0.0+5002") ───
 VERSION=$(grep "^version:" pubspec.yaml | head -1 | cut -d' ' -f2 | cut -d'+' -f1)
@@ -177,17 +183,30 @@ bump_version() {
   ok "Version $VERSION → $v (+$code)"
 }
 
+# download_geodata <file> <sha256>: the pinned release's file into assets/binaries/, kept when it already matches
+download_geodata() {
+  local name="$1" sha="$2" dst="assets/binaries/$1"
+  if [[ -f "$dst" && "$(shasum -a 256 "$dst" | cut -d' ' -f1)" == "$sha" ]]; then
+    ok "$name $GEODATA_VERSION"
+    return 0
+  fi
+  log "Downloading $name $GEODATA_VERSION..."
+  curl -fL --progress-bar "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/download/$GEODATA_VERSION/$name" \
+    -o "$dst.download" || { rm -f "$dst.download"; err "$name: download failed"; }
+  [[ "$(shasum -a 256 "$dst.download" | cut -d' ' -f1)" == "$sha" ]] \
+    || { rm -f "$dst.download"; err "$name: SHA-256 mismatch"; }
+  mv "$dst.download" "$dst"
+  ok "$name $GEODATA_VERSION"
+}
+
 download_binaries() {
   local ASSETS_BIN="assets/binaries"
 
   copy_teapod_core_binaries
 
   mkdir -p "$ASSETS_BIN"
-  log "Downloading geoip.dat..."
-  curl -L --progress-bar "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat" -o "$ASSETS_BIN/geoip.dat" && ok "geoip.dat"
-
-  log "Downloading geosite.dat..."
-  curl -L --progress-bar "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat" -o "$ASSETS_BIN/geosite.dat" && ok "geosite.dat"
+  download_geodata geoip.dat "$GEOIP_SHA256"
+  download_geodata geosite.dat "$GEOSITE_SHA256"
 
   echo ""
   log "Binaries in $JNILIBS_DIR"

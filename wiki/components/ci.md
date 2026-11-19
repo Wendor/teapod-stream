@@ -42,7 +42,8 @@ CodeRabbit (`.coderabbit.yaml`) reviews every non-draft PR; its guidelines are `
 ## `updates.yml` — monthly update check
 
 On the 1st of every month (and by hand). `.github/scripts/check-updates.sh` compares what the build pins with the
-latest upstream releases: xray-core (a release newer than the pinned commit), sing-box and xray-rust-mobile, Go,
+latest upstream releases: xray-core (a release newer than the pinned commit), sing-box and xray-rust-mobile, the
+bundled geodata (`GEODATA_VERSION` in `build.sh`), Go,
 Flutter, AGP, Kotlin, Gradle, the direct Go modules of `core/` and the direct Dart packages. If anything is behind,
 it opens the issue `[ai] deps: monthly update check` (labels `ai`, `dependencies`), written as an *Agent task* with a
 table of versions, or rewrites the body of the one already open. The maintainer hands it to an agent; closing the
@@ -55,7 +56,7 @@ Manual (`workflow_dispatch`): Actions → Release → Run workflow, or
 `gh workflow run release.yml --ref <branch> [-f prerelease=false]` (`prerelease` defaults to `true`).
 
 Two jobs. `apk` runs once per ABI in parallel (matrix `arm64-v8a`, `x86_64`): signing key → JDK, NDK → teapod-core
-AAR (the action: cache or build) → `./build.sh binaries` (geodata) → `TARGET_PLATFORMS=<platform> ./build.sh release`
+AAR (the action: cache or build) → `./build.sh binaries` (the pinned geodata) → `TARGET_PLATFORMS=<platform> ./build.sh release`
 → signature check → artifact `build-<abi>` (the APK and its obfuscation symbols); the arm64 job also uploads the AAR as
 artifact `teapod-core`. `publish` then downloads the three artifacts by name, runs `./build.sh push|pushpre` (APKs **and**
 `teapod-core-<core/ hash>.aar`, which `./build.sh binaries` downloads elsewhere) and uploads the symbols of both ABIs

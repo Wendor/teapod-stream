@@ -8,7 +8,9 @@ rules and ad blocking.
 State (sealed): `GeoMissing`, `GeoReady(lastUpdated)`, `GeoDownloading(downloaded, total)`, `GeoError(message)`.
 
 - **`check()`** on app start: both files present → `GeoReady`. Missing → native `prepareBinaries` copies the
-  fallback bundled in `assets/binaries/` (put there by `./build.sh binaries`), then checks again.
+  fallback bundled in `assets/binaries/` (put there by `./build.sh binaries` from the Loyalsoldier release pinned in
+  `build.sh`, `GEODATA_VERSION` with SHA-256 per file; the monthly update check reports a newer release, and the pin
+  is moved by a pull request), then checks again.
 - **`download()`** from `AppSettings.geoipUrl` / `geositeUrl`: HEAD for the total size, both files into `*.tmp`,
   then an atomic rename — a failure leaves the old files intact. While connected the download goes through the
   tunnel (`TunnelSocks.orDirect`, [services](services.md#tunnelsocks)): the app is excluded from TUN and GitHub's CDN

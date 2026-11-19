@@ -548,6 +548,24 @@ void main() {
       expect(st().error, isNotNull);
     });
 
+    test('a core change during a no-op switch is still handled', () async {
+      await connected(configs: [_cfg('r', rawXray: _visionRaw)]);
+      final profiles = c.read(profileProvider.notifier);
+      final activeId = (await c.read(profileProvider.future)).activeProfileId;
+      // nothing runs the raw config any more while the (no-op) switch is in flight
+      await n().duringProfileSwitch(() async {
+        await c
+            .read(settingsProvider.notifier)
+            .save(_settings.copyWith(disabledCores: {CoreKind.xrayGo, CoreKind.singBox}));
+        await _settle();
+        await profiles.switchProfile(activeId);
+        return false;
+      });
+      await _settle();
+      expect(native.named('disconnect'), hasLength(1));
+      expect(st().error, isNotNull);
+    });
+
     test('reconnectIfStale rebuilds on changed settings, ignores an idle tunnel', () async {
       await connected();
       await n().reconnectIfStale();

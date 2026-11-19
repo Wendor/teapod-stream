@@ -738,11 +738,13 @@ class VpnNotifier extends Notifier<VpnState2> {
       _anySwitched = true; // the profile may be switched with its server not restored
       rethrow;
     } finally {
-      if (--_profileSwitches == 0 && _anySwitched) {
+      if (--_profileSwitches == 0) {
         final core = ref.read(activeCoreProvider);
-        if ((state.isConnected || state.isConnecting) && core?.kind != null) {
+        final live = _anySwitched && (state.isConnected || state.isConnecting);
+        if (live && core?.kind != null) {
           await reconnectIfStale();
-        } else if (core != _coreBeforeSwitches || state.isConnected || state.isConnecting) {
+        } else if (live || core != _coreBeforeSwitches) {
+          // Also with nothing switched: a core change suppressed meanwhile is handled here.
           await _onCoreChanged();
         }
       }

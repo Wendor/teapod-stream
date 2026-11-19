@@ -198,7 +198,7 @@ rename_apks() {
   local dir="build/app/outputs/flutter-apk"
 
   echo ""
-  if ls "$dir"/app-arm64-v8a-release.apk 1>/dev/null 2>&1; then
+  if compgen -G "$dir/app-*-release.apk" >/dev/null; then
     for abi in arm64-v8a x86_64; do
       local src="$dir/app-$abi-release.apk"
       if [[ -f "$src" ]]; then
@@ -207,7 +207,7 @@ rename_apks() {
         ok "$dst"
       fi
     done
-  elif ls "$dir"/app-arm64-v8a-debug.apk 1>/dev/null 2>&1; then
+  elif compgen -G "$dir/app-*-debug.apk" >/dev/null; then
     for abi in arm64-v8a x86_64; do
       local src="$dir/app-$abi-debug.apk"
       if [[ -f "$src" ]]; then
@@ -328,7 +328,7 @@ case "${1:-help}" in
     ;;
 
   release)
-    log "Building RELEASE APK (arm64 + x86_64)..."
+    log "Building RELEASE APK (${TARGET_PLATFORMS:-android-arm64,android-x64})..."
     accept_sdk_licenses
     check_binaries || true
     ensure_pub
@@ -336,7 +336,9 @@ case "${1:-help}" in
     dir="build/app/outputs/flutter-apk"
     rm -f "$dir"/app-*-release.apk
 
-    flutter build apk --release --split-per-abi --no-pub --target-platform android-arm64,android-x64 \
+    # TARGET_PLATFORMS: a subset of the ABIs, e.g. one per CI job (release.yml)
+    flutter build apk --release --split-per-abi --no-pub \
+      --target-platform "${TARGET_PLATFORMS:-android-arm64,android-x64}" \
       --obfuscate --split-debug-info=build/app/outputs/symbols
 
     rename_apks

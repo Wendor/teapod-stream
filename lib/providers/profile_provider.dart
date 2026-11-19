@@ -256,6 +256,8 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
       return updated;
     });
     if (updated == null) return null;
+    // The active profile's settings were saved above; reload them before the import, which may fail.
+    if (profileId == _current?.activeProfileId) ref.invalidate(settingsProvider);
 
     if (bundle.hasConnections) {
       await ref
@@ -268,9 +270,6 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
             ),
           );
     }
-
-    // The active profile's settings were saved above; reload them.
-    if (profileId == _current?.activeProfileId) ref.invalidate(settingsProvider);
 
     return profileId;
   }

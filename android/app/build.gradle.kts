@@ -9,7 +9,7 @@ android {
     namespace = "com.teapodstream.teapodstream"
     // permission_handler 13 needs 37; Flutter defaults to 36
     compileSdk = 37
-    ndkVersion = "28.2.13676358"
+    ndkVersion = "30.0.16248370"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

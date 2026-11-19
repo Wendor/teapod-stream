@@ -77,7 +77,9 @@ bundles `changelog/` as an asset for Settings → about → changelog. A languag
 and the map match and that every file has the same versions.
 
 `build.sh` takes `JAVA_HOME` / `ANDROID_HOME` from the environment (Homebrew paths by default). `core/build.sh` uses
-`$ANDROID_HOME/ndk/$NDK_VERSION` (default 28.2.13676358; the workflows pass the same `NDK_VERSION`).
+`$ANDROID_HOME/ndk/$NDK_VERSION` (default 30.0.16248370; the workflows pass the same `NDK_VERSION`). The version is
+one the `ubuntu-latest` runner image ships, so the workflows' NDK steps install nothing; moving it to a version the
+image lacks costs ~30 s per job.
 
 ## Signing
 

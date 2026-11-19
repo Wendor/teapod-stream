@@ -25,7 +25,7 @@ ALL_ABIS=("arm64-v8a" "x86_64")
 DEFAULT_ABI="arm64-v8a"
 CORE_OUTPUTS="core/outputs"
 GITHUB_REPO="Wendor/teapod-stream"
-NDK_VERSION="${NDK_VERSION:-28.2.13676358}"
+NDK_VERSION="${NDK_VERSION:-30.0.16248370}"
 
 # ─── Version from pubspec.yaml (format: "1.0.0+5002") ───
 VERSION=$(grep "^version:" pubspec.yaml | head -1 | cut -d' ' -f2 | cut -d'+' -f1)

@@ -452,6 +452,39 @@ void main() {
       expect(native.lastConnect()['mtu'], 1400);
     });
 
+    test('switching between a sing-box profile and a raw-xray one keeps the tunnel up', () async {
+      final boxOnly = _settings.copyWith(disabledCores: {CoreKind.xrayGo, CoreKind.xrayRust});
+      await connected(
+        configs: [
+          _cfg('a'),
+          _cfg('r', rawXray: _visionRaw),
+        ],
+        settings: boxOnly,
+        overrides: [configProvider.overrideWith(_SlowSelection.new)],
+      );
+      final profiles = c.read(profileProvider.notifier);
+      await c.read(profileProvider.future);
+      await profiles.createProfile('B');
+      final boxId = c.read(profileProvider).value!.activeProfileId;
+      final bId = c.read(profileProvider).value!.profiles.last.id;
+      // B: Go enabled, raw xray server
+      await profiles.switchProfile(bId);
+      await c.read(settingsProvider.notifier).save(_settings);
+      await c.read(configProvider.notifier).setActiveConfig('r');
+      await _settle();
+
+      // in between, sing-box settings with the raw config (or the reverse) can't run
+      await profiles.switchProfile(boxId);
+      await _settle();
+      expect(native.lastConnect()['engine'], 'box');
+      await profiles.switchProfile(bId);
+      await _settle();
+      expect(native.named('disconnect'), isEmpty);
+      expect(st().error, isNull);
+      expect(native.lastConnect()['engine'], 'go');
+      expect(native.lastConnect()['xrayConfig'], contains('r.example'));
+    });
+
     test('reconnectIfStale rebuilds on changed settings, ignores an idle tunnel', () async {
       await connected();
       await n().reconnectIfStale();
@@ -894,4 +927,13 @@ class _FailingSelection extends ConfigNotifier {
   @override
   Future<void> applySelection(ConfigSelection selection) =>
       fail ? Future.error(StateError('storage write failed')) : super.applySelection(selection);
+}
+
+/// Real storage writes take event-loop turns: providers recompute in between.
+class _SlowSelection extends ConfigNotifier {
+  @override
+  Future<void> applySelection(ConfigSelection selection) async {
+    await super.applySelection(selection);
+    await Future<void>.delayed(Duration.zero);
+  }
 }

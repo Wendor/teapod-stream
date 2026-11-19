@@ -60,7 +60,10 @@ normal `ACTION_CONNECT` and rebuilds the session without closing TUN, so there i
 switch. A failure before native is called keeps the old session running and shows the error. Used by the server
 picker, the reconnect banner and the config switch below. `reconnectIfStale()` calls it only when needed: while
 `connecting`, or when `connected` and the effective config isn't the running one (`runsConfig`) or the settings
-fingerprint changed — a profile switch ([profiles](profiles.md#selected-server)).
+fingerprint changed. A profile switch runs inside `duringProfileSwitch`: it changes settings and the server one
+after the other, and the core resolved in between belongs to neither profile, so core changes are ignored until it
+ends; then a live tunnel goes through `reconnectIfStale`, an idle one through the core-change handling if the core
+differs ([profiles](profiles.md#selected-server)).
 
 `disconnect()` sets `disconnecting` with a **10 s** timeout that forces `disconnected`.
 

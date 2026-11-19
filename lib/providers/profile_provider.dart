@@ -81,32 +81,29 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
     return ProfileState(profiles: profiles, activeProfileId: activeId);
   }
 
-  /// Applies the profile's settings and its remembered server. A live tunnel is rebuilt when
-  /// either of them changes what it runs.
+  /// Applies the profile's settings and its remembered server. The VPN follows once both are in
+  /// place (`VpnNotifier.duringProfileSwitch`), also when restoring the server failed: the profile
+  /// is already switched, and a retry can't — it is active.
   Future<void> switchProfile(String id) async {
-    var switched = false;
-    try {
-      // The selection is restored inside the queue: the next switch must see this profile's server,
-      // not the previous one's.
-      await _serial(() async {
-        final target = await _switch(id);
-        switched = target != null;
-        final selection = target?.selection;
-        if (selection != null) await ref.read(configProvider.notifier).applySelection(selection);
-      });
-    } finally {
-      // Also when restoring the server failed: the profile is already switched, so its settings and
-      // the tunnel follow it (a retry can't — the profile is active).
-      if (switched) {
-        ref.invalidate(settingsProvider);
-        // No VPN notifier — nothing is connected (it lives as long as the app UI).
-        if (ref.read(vpnProvider.exists)) {
-          await ref.read(settingsProvider.future);
-          await ref.read(vpnProvider.notifier).reconnectIfStale();
-        }
-      }
+    // No VPN notifier — nothing is connected (it lives as long as the app UI).
+    if (!ref.read(vpnProvider.exists)) {
+      await _switchAndRestore(id);
+      return;
     }
+    await ref.read(vpnProvider.notifier).duringProfileSwitch(() => _switchAndRestore(id));
   }
+
+  /// false — nothing to switch. The selection is restored inside the queue: the next switch must
+  /// see this profile's server, not the previous one's.
+  Future<bool> _switchAndRestore(String id) => _serial(() async {
+    final target = await _switch(id);
+    if (target == null) return false;
+    ref.invalidate(settingsProvider);
+    await ref.read(settingsProvider.future);
+    final selection = target.selection;
+    if (selection != null) await ref.read(configProvider.notifier).applySelection(selection);
+    return true;
+  });
 
   /// Saves the switch; returns the incoming profile, null — nothing to switch.
   Future<Profile?> _switch(String id) async {

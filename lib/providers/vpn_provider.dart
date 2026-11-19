@@ -137,7 +137,7 @@ class VpnNotifier extends Notifier<VpnState2> {
     listenSelf((_, next) => ref.read(tunnelSocksProvider.notifier).set(next.tunnelSocks));
     // The active profile's core changed (priority, disabling, pinning).
     ref.listen(activeCoreProvider, (prev, next) {
-      if (prev != null && next != null && prev != next) _onCoreChanged();
+      if (prev != null && next != null && prev != next && !_profileSwitching) _onCoreChanged();
     });
 
     _eventSub = XrayEngine.events.listen(
@@ -716,6 +716,30 @@ class VpnNotifier extends Notifier<VpnState2> {
       }
     }
     await connect();
+  }
+
+  /// A profile switch changes the settings and the server one after the other: the core resolved
+  /// in between belongs to neither profile and must not disconnect the tunnel.
+  bool _profileSwitching = false;
+
+  /// Runs a profile switch ([body] returns false — nothing switched), then makes the VPN follow the
+  /// final state: a live tunnel is rebuilt if stale, an idle one handles a core change.
+  Future<void> duringProfileSwitch(Future<bool> Function() body) async {
+    final coreBefore = ref.read(activeCoreProvider);
+    _profileSwitching = true;
+    var switched = true;
+    try {
+      switched = await body();
+    } finally {
+      _profileSwitching = false;
+      if (switched) {
+        if (state.isConnected || state.isConnecting) {
+          await reconnectIfStale();
+        } else if (ref.read(activeCoreProvider) != coreBefore) {
+          await _onCoreChanged();
+        }
+      }
+    }
   }
 
   /// Rebuilds a live tunnel when what it runs differs from what would run now: another

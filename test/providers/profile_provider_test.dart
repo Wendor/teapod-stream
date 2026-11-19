@@ -214,6 +214,40 @@ void main() {
       expect(await storage.loadActiveSubscriptionId(), 's1');
     });
 
+    test('of two configs with the same name and endpoint the chosen one is restored', () async {
+      SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+      FlutterSecureStorage.setMockInitialValues({});
+      await seed([_cfg('d1', name: 'Dup'), _cfg('d2', name: 'Dup')], activeId: 'd1');
+      final twin = _cfg('d2', name: 'Dup');
+      await boot(
+        stored: [
+          profile('a'),
+          profile('b').copyWith(
+            selection: ConfigSelection(configId: 'd2', config: PinnedRef.of(twin)),
+          ),
+        ],
+        activeId: 'a',
+        keepStorage: true,
+      );
+      await n().switchProfile('b');
+      expect(configs().activeConfigId, 'd2');
+    });
+
+    test('a settings sync started before the switch is not lost', () async {
+      await boot(
+        stored: [
+          profile('a', settings: _local),
+          profile('b'),
+        ],
+        activeId: 'a',
+      );
+      final sync = n().syncActiveSettings(_local.copyWith(mtu: 1234));
+      await n().switchProfile('b');
+      await sync;
+      expect((await profiles.loadProfiles()).first.settings.mtu, 1234);
+      expect(s().profiles.first.settings.mtu, 1234);
+    });
+
     test('a vanished server leaves the current selection', () async {
       SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
       FlutterSecureStorage.setMockInitialValues({});

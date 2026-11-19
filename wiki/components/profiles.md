@@ -13,13 +13,14 @@ profiles that refresh from a URL, `selection` — the selected server.
 
 ## Selected server
 
-`selection` is a `ConfigSelection` (`config_selection.dart`): the chosen config as a `PinnedRef` (subscription,
-name, `address:port`; a subscription refresh issues new config ids, so an id would not survive) and the
-subscription in auto-select mode. It is recorded on switch, not on every selection change: `switchProfile` stores
+`selection` is a `ConfigSelection` (`config_selection.dart`): the chosen config — its id, and a `PinnedRef`
+(subscription, name, `address:port`) for when the id is gone after a subscription refresh — and the subscription
+in auto-select mode. It is recorded on switch, not on every selection change: `switchProfile` stores
 the current selection (`ConfigState.selection`) in the outgoing profile, and in the incoming one too if it has none
 yet (`null` — a profile created before this field, or never active). Then `ConfigNotifier.applySelection` restores
 the incoming profile's selection; whatever no longer exists is skipped, and if nothing of it is left the current
-selection stays. Bundles never carry it: export clears it, import doesn't read it.
+selection stays. Bundles never carry it: export clears it, import doesn't read it. The profile-list writes of
+`switchProfile` and `syncActiveSettings` run through one queue, so neither drops the other's change.
 
 ## ProfileNotifier
 

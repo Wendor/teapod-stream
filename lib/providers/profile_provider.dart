@@ -30,6 +30,16 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
 
   ProfileState? get _current => state.maybeWhen(data: (d) => d, orElse: () => null);
 
+  /// A switch and a settings sync both rewrite the profile list: run in parallel, the later
+  /// write would drop the other's change.
+  Future<void> _queue = Future.value();
+
+  Future<T> _serial<T>(Future<T> Function() op) {
+    final result = _queue.then((_) => op());
+    _queue = result.then((_) {}, onError: (_) {});
+    return result;
+  }
+
   @override
   Future<ProfileState> build() async {
     var profiles = await _storage.loadProfiles();
@@ -61,13 +71,28 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
   /// Applies the profile's settings and its remembered server. A live tunnel is rebuilt when
   /// either of them changes what it runs.
   Future<void> switchProfile(String id) async {
-    final current = _current;
-    if (current == null || current.activeProfileId == id) return;
-    final target = current.profiles.firstWhere((p) => p.id == id);
+    final target = await _serial(() => _switch(id));
+    if (target == null) return;
+    try {
+      if (target.selection != null) await ref.read(configProvider.notifier).applySelection(target.selection!);
+    } finally {
+      ref.invalidate(settingsProvider);
+      // No VPN notifier — nothing is connected (it lives as long as the app UI).
+      if (ref.read(vpnProvider.exists)) {
+        await ref.read(settingsProvider.future);
+        await ref.read(vpnProvider.notifier).reconnectIfStale();
+      }
+    }
+  }
 
+  /// Saves the switch; returns the incoming profile, null — nothing to switch.
+  Future<Profile?> _switch(String id) async {
     // The outgoing profile remembers the server selected under it; a profile that has none yet
     // takes the current one.
     final selection = (await ref.read(configProvider.future)).selection;
+    final current = _current;
+    if (current == null || current.activeProfileId == id) return null;
+    final target = current.profiles.firstWhere((p) => p.id == id);
     final profiles = [
       for (final p in current.profiles)
         if (p.id == current.activeProfileId || (p.id == id && p.selection == null))
@@ -79,15 +104,7 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
     await SettingsService().save(target.settings);
     await _storage.saveActiveProfileId(id);
     state = AsyncData(current.copyWith(profiles: profiles, activeProfileId: id));
-
-    if (target.selection != null) await ref.read(configProvider.notifier).applySelection(target.selection!);
-    ref.invalidate(settingsProvider);
-
-    // No VPN notifier — nothing is connected (it lives as long as the app UI).
-    if (ref.read(vpnProvider.exists)) {
-      await ref.read(settingsProvider.future);
-      await ref.read(vpnProvider.notifier).reconnectIfStale();
-    }
+    return target;
   }
 
   Future<void> createProfile(String name, {bool copyFromCurrent = true}) async {
@@ -133,14 +150,14 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
     state = AsyncData(current.copyWith(profiles: profiles));
   }
 
-  Future<void> syncActiveSettings(AppSettings settings) async {
+  Future<void> syncActiveSettings(AppSettings settings) => _serial(() async {
     final current = _current;
     if (current == null) return;
     final id = current.activeProfileId;
     await _storage.updateProfileSettings(id, settings);
     final profiles = current.profiles.map((p) => p.id == id ? p.copyWith(settings: settings) : p).toList();
     state = AsyncData(current.copyWith(profiles: profiles));
-  }
+  });
 
   ProfileBundle exportBundle(String profileId, {bool includeConnections = false}) {
     final current = _current!;

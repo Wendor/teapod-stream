@@ -31,7 +31,11 @@ class ConfigState {
 
   ConfigSelection get selection {
     final active = activeConfig;
-    return ConfigSelection(config: active == null ? null : PinnedRef.of(active), subscriptionId: activeSubscriptionId);
+    return ConfigSelection(
+      configId: active?.id,
+      config: active == null ? null : PinnedRef.of(active),
+      subscriptionId: activeSubscriptionId,
+    );
   }
 
   late final List<VpnConfig> standaloneConfigs = configs.where((c) => c.subscriptionId == null).toList();
@@ -181,7 +185,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
   Future<void> applySelection(ConfigSelection selection) => _serial(() async {
     final current = state.maybeWhen(data: (d) => d, orElse: () => null);
     if (current == null) return;
-    final config = selection.config?.resolve(current.configs);
+    final config = selection.resolve(current.configs);
     final subId = current.subscriptions.any((s) => s.id == selection.subscriptionId) ? selection.subscriptionId : null;
     if (config == null && subId == null) return;
     final activeId = config?.id ?? current.activeConfigId;

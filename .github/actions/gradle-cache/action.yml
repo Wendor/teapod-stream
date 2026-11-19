@@ -1,0 +1,16 @@
+name: Gradle cache
+description: >-
+  Restores and saves the Gradle User Home (dependencies, wrapper, build cache) by the hash of the Gradle files.
+  A miss restores the newest cache with the same prefix, so a change to the Gradle files starts from master's cache
+  instead of an empty one (setup-java's cache: gradle has no such fallback).
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache@v6
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: gradle-${{ runner.os }}-${{ hashFiles('android/*.gradle.kts', 'android/app/build.gradle.kts', 'android/gradle.properties', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+        restore-keys: gradle-${{ runner.os }}-

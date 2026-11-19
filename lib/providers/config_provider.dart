@@ -180,6 +180,9 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     await storage.saveActiveSubscriptionId(id);
   });
 
+  /// The selection after every mutation queued so far.
+  Future<ConfigSelection> currentSelection() => _serial(() async => (await future).selection);
+
   /// Restores a selection remembered by a profile. Whatever no longer exists is skipped;
   /// when nothing of it is left, the current selection stays.
   Future<void> applySelection(ConfigSelection selection) => _serial(() async {

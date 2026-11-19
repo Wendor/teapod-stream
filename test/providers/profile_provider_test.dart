@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -288,6 +289,43 @@ void main() {
       expect(configs().activeConfigId, 'z');
       final stored = {for (final p in await profiles.loadProfiles()) p.id: p.selection?.configId};
       expect(stored, {'a': 'x', 'b': 'y', 'c': 'z'});
+    });
+
+    test('the outgoing profile remembers a selection still queued in configs', () async {
+      SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+      FlutterSecureStorage.setMockInitialValues({});
+      await seed([_cfg('x'), _cfg('y')], activeId: 'x');
+      await boot(stored: [profile('a'), profile('b')], activeId: 'a', keepStorage: true);
+      final cn = c.read(configProvider.notifier);
+      await c.read(configProvider.future);
+      final busy = cn.updateConfig(_cfg('x'));
+      final select = cn.setActiveConfig('y');
+      await n().switchProfile('b');
+      await Future.wait([busy, select]);
+      expect((await profiles.loadProfiles()).first.selection!.configId, 'y');
+    });
+
+    test('a refresh finishing after a switch keeps the switch', () async {
+      SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+      FlutterSecureStorage.setMockInitialValues({});
+      await seed([_cfg('x')], activeId: 'x');
+      await boot(stored: [profile('a'), profile('b')], activeId: 'a', keepStorage: true);
+      final response = Completer<http.Response>();
+      final refreshing = http.runWithClient(
+        () => n().refreshProfile('a', 'https://src/profile.json'),
+        () => MockClient((_) => response.future),
+      );
+      await Future<void>.delayed(Duration.zero);
+      await n().switchProfile('b');
+      response.complete(http.Response(jsonEncode(_bundle().toJson()), 200));
+      expect(await refreshing, 'a');
+
+      expect(s().activeProfileId, 'b');
+      final stored = await profiles.loadProfiles();
+      expect(stored.first.name, 'Remote');
+      expect(stored.first.selection!.configId, 'x');
+      expect(stored.last.selection!.configId, 'x');
+      expect((await settings()).mtu, const AppSettings().mtu);
     });
 
     test('a vanished server leaves the current selection', () async {

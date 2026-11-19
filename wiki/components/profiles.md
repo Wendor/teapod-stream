@@ -19,9 +19,11 @@ in auto-select mode. It is recorded on switch, not on every selection change: `s
 the current selection (`ConfigState.selection`) in the outgoing profile, and in the incoming one too if it has none
 yet (`null` — a profile created before this field, or never active). Then `ConfigNotifier.applySelection` restores
 the incoming profile's selection; whatever no longer exists is skipped, and if nothing of it is left the current
-selection stays. Bundles never carry it: export clears it, import doesn't read it. The profile-list writes of
-`switchProfile` (with restoring the selection) and `syncActiveSettings` run through one queue, so neither drops the
-other's change; a sync writes to the profile that was active when the settings were saved.
+selection stays. Bundles never carry it: export clears it, import doesn't read it. Every write of the
+profile list (switch with restoring the selection, settings sync, create, rename, delete, read-only, import, the
+merge after a refresh download) runs through one queue and re-reads the state inside it, so none drops another's
+change; a sync writes to the profile that was active when the settings were saved, and the switch reads the
+outgoing selection through the configs queue (`ConfigNotifier.currentSelection`).
 
 ## ProfileNotifier
 

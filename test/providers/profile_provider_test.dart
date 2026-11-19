@@ -248,6 +248,48 @@ void main() {
       expect(s().profiles.first.settings.mtu, 1234);
     });
 
+    test('a settings sync saved during the switch stays with the outgoing profile', () async {
+      await boot(
+        stored: [
+          profile('a', settings: _local),
+          profile('b'),
+        ],
+        activeId: 'a',
+      );
+      final switching = n().switchProfile('b');
+      final sync = n().syncActiveSettings(_local.copyWith(mtu: 1234));
+      await switching;
+      await sync;
+      final stored = await profiles.loadProfiles();
+      expect(stored.first.settings.mtu, 1234);
+      expect(stored.last.settings.mtu, const AppSettings().mtu);
+    });
+
+    test('two quick switches keep each profile its own server', () async {
+      SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+      FlutterSecureStorage.setMockInitialValues({});
+      await seed([_cfg('x'), _cfg('y'), _cfg('z')], activeId: 'x');
+      ConfigSelection sel(String id) => ConfigSelection(configId: id, config: PinnedRef.of(_cfg(id)));
+      await boot(
+        stored: [
+          profile('a'),
+          profile('b').copyWith(selection: sel('y')),
+          profile('c').copyWith(selection: sel('z')),
+        ],
+        activeId: 'a',
+        keepStorage: true,
+      );
+      await c.read(configProvider.future);
+      // a config mutation delays restoring b's server
+      final busy = c.read(configProvider.notifier).updateConfig(_cfg('x'));
+      final toB = n().switchProfile('b');
+      final toC = n().switchProfile('c');
+      await Future.wait([busy, toB, toC]);
+      expect(configs().activeConfigId, 'z');
+      final stored = {for (final p in await profiles.loadProfiles()) p.id: p.selection?.configId};
+      expect(stored, {'a': 'x', 'b': 'y', 'c': 'z'});
+    });
+
     test('a vanished server leaves the current selection', () async {
       SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
       FlutterSecureStorage.setMockInitialValues({});

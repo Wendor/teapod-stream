@@ -20,7 +20,8 @@ the current selection (`ConfigState.selection`) in the outgoing profile, and in 
 yet (`null` — a profile created before this field, or never active). Then `ConfigNotifier.applySelection` restores
 the incoming profile's selection; whatever no longer exists is skipped, and if nothing of it is left the current
 selection stays. Bundles never carry it: export clears it, import doesn't read it. The profile-list writes of
-`switchProfile` and `syncActiveSettings` run through one queue, so neither drops the other's change.
+`switchProfile` (with restoring the selection) and `syncActiveSettings` run through one queue, so neither drops the
+other's change; a sync writes to the profile that was active when the settings were saved.
 
 ## ProfileNotifier
 

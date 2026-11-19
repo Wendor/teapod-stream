@@ -71,17 +71,17 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
   /// Applies the profile's settings and its remembered server. A live tunnel is rebuilt when
   /// either of them changes what it runs.
   Future<void> switchProfile(String id) async {
-    final target = await _serial(() => _switch(id));
-    if (target == null) return;
-    try {
-      if (target.selection != null) await ref.read(configProvider.notifier).applySelection(target.selection!);
-    } finally {
-      ref.invalidate(settingsProvider);
-      // No VPN notifier — nothing is connected (it lives as long as the app UI).
-      if (ref.read(vpnProvider.exists)) {
-        await ref.read(settingsProvider.future);
-        await ref.read(vpnProvider.notifier).reconnectIfStale();
-      }
+    // The selection is restored inside the queue: the next switch must see this profile's server,
+    // not the previous one's.
+    final switched = await _serial(() async {
+      final target = await _switch(id);
+      if (target?.selection != null) await ref.read(configProvider.notifier).applySelection(target!.selection!);
+      return target != null;
+    }).whenComplete(() => ref.invalidate(settingsProvider));
+    // No VPN notifier — nothing is connected (it lives as long as the app UI).
+    if (switched && ref.read(vpnProvider.exists)) {
+      await ref.read(settingsProvider.future);
+      await ref.read(vpnProvider.notifier).reconnectIfStale();
     }
   }
 
@@ -150,14 +150,18 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
     state = AsyncData(current.copyWith(profiles: profiles));
   }
 
-  Future<void> syncActiveSettings(AppSettings settings) => _serial(() async {
-    final current = _current;
-    if (current == null) return;
-    final id = current.activeProfileId;
-    await _storage.updateProfileSettings(id, settings);
-    final profiles = current.profiles.map((p) => p.id == id ? p.copyWith(settings: settings) : p).toList();
-    state = AsyncData(current.copyWith(profiles: profiles));
-  });
+  /// Settings go to the profile active when they were saved, even if a switch runs first.
+  Future<void> syncActiveSettings(AppSettings settings) {
+    final id = _current?.activeProfileId;
+    if (id == null) return Future.value();
+    return _serial(() async {
+      final current = _current;
+      if (current == null) return;
+      await _storage.updateProfileSettings(id, settings);
+      final profiles = current.profiles.map((p) => p.id == id ? p.copyWith(settings: settings) : p).toList();
+      state = AsyncData(current.copyWith(profiles: profiles));
+    });
+  }
 
   ProfileBundle exportBundle(String profileId, {bool includeConnections = false}) {
     final current = _current!;

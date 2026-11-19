@@ -109,6 +109,15 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+      # The AAR the APKs were built with, for the release; the same core/ tree in both jobs, so one copy
+      - if: matrix.abi == 'arm64-v8a'
+        uses: actions/upload-artifact@v7
+        with:
+          name: teapod-core
+          path: core/outputs/teapod-core-*.aar
+          if-no-files-found: error
+          retention-days: 1
+
   publish:
     needs: apk
     runs-on: ubuntu-latest
@@ -118,22 +127,21 @@ jobs:
 
       - name: Version
         id: ver
-        run: |
-          echo "version=$(awk '/^version:/{split($2,a,"+"); print a[1]; exit}' pubspec.yaml)" >> "$GITHUB_OUTPUT"
-          echo "core=$(git rev-parse --short=12 HEAD:core)" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(awk '/^version:/{split($2,a,"+"); print a[1]; exit}' pubspec.yaml)" >> "$GITHUB_OUTPUT"
 
-      # The AAR the APKs were built with: the apk jobs left it in the cache
-      - uses: actions/cache/restore@v6
-        with:
-          path: core/outputs/teapod-core-${{ steps.ver.outputs.core }}.aar
-          key: teapod-core-${{ steps.ver.outputs.core }}
-          fail-on-cache-miss: true
-
+      # By name: a missing ABI fails here instead of publishing a release without it
       - uses: actions/download-artifact@v8
         with:
-          pattern: build-*
+          name: build-arm64-v8a
           path: build/app/outputs
-          merge-multiple: true
+      - uses: actions/download-artifact@v8
+        with:
+          name: build-x86_64
+          path: build/app/outputs
+      - uses: actions/download-artifact@v8
+        with:
+          name: teapod-core
+          path: core/outputs
 
       - name: Publish
         env:

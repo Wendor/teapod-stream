@@ -79,7 +79,9 @@ and the map match and that every file has the same versions.
 
 `build.sh` takes `JAVA_HOME` / `ANDROID_HOME` from the environment (Homebrew paths by default). `core/build.sh` uses
 `$ANDROID_HOME/ndk/$NDK_VERSION` (default 30.0.16248370; the workflows pass the same `NDK_VERSION`). The version is
-one the `ubuntu-latest` runner image ships, so the workflows' NDK steps install nothing; moving it to a version the
+one the `ubuntu-latest` runner image ships, so the workflows' NDK steps install nothing; Flutter plugins with native
+code (`jni`) ask for Flutter's default NDK, and `android/build.gradle.kts` sets the app's `ndkVersion` on them, so the
+build never downloads a second NDK; moving it to a version the
 image lacks costs ~30 s per job.
 
 ## Signing

@@ -23,6 +23,12 @@ subprojects {
                     sourceCompatibility = JavaVersion.VERSION_17
                     targetCompatibility = JavaVersion.VERSION_17
                 }
+                // Plugins with native code (jni) ask for Flutter's default NDK: build them with the app's one,
+                // so the build needs a single NDK (the one CI's runner image ships, wiki/components/ci.md)
+                if (project.path != ":app") {
+                    ndkVersion = (project(":app").extensions.getByName("android") as com.android.build.gradle.BaseExtension)
+                        .ndkVersion
+                }
             }
         }
     }

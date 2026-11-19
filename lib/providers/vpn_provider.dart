@@ -137,7 +137,7 @@ class VpnNotifier extends Notifier<VpnState2> {
     listenSelf((_, next) => ref.read(tunnelSocksProvider.notifier).set(next.tunnelSocks));
     // The active profile's core changed (priority, disabling, pinning).
     ref.listen(activeCoreProvider, (prev, next) {
-      if (prev != null && next != null && prev != next && !_profileSwitching) _onCoreChanged();
+      if (prev != null && next != null && prev != next && _profileSwitches == 0) _onCoreChanged();
     });
 
     _eventSub = XrayEngine.events.listen(
@@ -718,24 +718,31 @@ class VpnNotifier extends Notifier<VpnState2> {
     await connect();
   }
 
-  /// A profile switch changes the settings and the server one after the other: the core resolved
-  /// in between belongs to neither profile and must not disconnect the tunnel.
-  bool _profileSwitching = false;
+  /// Profile switches in flight. A switch changes the settings and the server one after the other:
+  /// the core resolved in between belongs to neither profile and must not disconnect the tunnel.
+  int _profileSwitches = 0;
+  ({CoreKind? kind})? _coreBeforeSwitches;
+  bool _anySwitched = false;
 
-  /// Runs a profile switch ([body] returns false — nothing switched), then makes the VPN follow the
-  /// final state: a live tunnel is rebuilt if stale, an idle one handles a core change.
+  /// Runs a profile switch ([body] returns false — nothing switched). After the last of overlapping
+  /// switches the VPN follows the final state once: a profile no core runs disconnects (as a core
+  /// change does), a live tunnel is rebuilt if stale, an idle one handles a core change.
   Future<void> duringProfileSwitch(Future<bool> Function() body) async {
-    final coreBefore = ref.read(activeCoreProvider);
-    _profileSwitching = true;
-    var switched = true;
+    if (_profileSwitches++ == 0) {
+      _coreBeforeSwitches = ref.read(activeCoreProvider);
+      _anySwitched = false;
+    }
     try {
-      switched = await body();
+      if (await body()) _anySwitched = true;
+    } catch (_) {
+      _anySwitched = true; // the profile may be switched with its server not restored
+      rethrow;
     } finally {
-      _profileSwitching = false;
-      if (switched) {
-        if (state.isConnected || state.isConnecting) {
+      if (--_profileSwitches == 0 && _anySwitched) {
+        final core = ref.read(activeCoreProvider);
+        if ((state.isConnected || state.isConnecting) && core?.kind != null) {
           await reconnectIfStale();
-        } else if (ref.read(activeCoreProvider) != coreBefore) {
+        } else if (core != _coreBeforeSwitches || state.isConnected || state.isConnecting) {
           await _onCoreChanged();
         }
       }

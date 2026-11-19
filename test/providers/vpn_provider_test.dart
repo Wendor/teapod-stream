@@ -15,6 +15,8 @@ import 'package:teapodstream/core/models/connection_fingerprint.dart';
 import 'package:teapodstream/core/models/core_kind.dart';
 import 'package:teapodstream/core/models/heartbeat_settings.dart';
 import 'package:teapodstream/core/models/pinned_ref.dart';
+import 'package:teapodstream/core/services/profile_storage_service.dart';
+import 'package:teapodstream/core/models/profile.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/core/models/vpn_log_entry.dart';
 import 'package:teapodstream/core/services/config_storage_service.dart';
@@ -483,6 +485,67 @@ void main() {
       expect(st().error, isNull);
       expect(native.lastConnect()['engine'], 'go');
       expect(native.lastConnect()['xrayConfig'], contains('r.example'));
+    });
+
+    test('overlapping profile switches end on the last profile, tunnel up', () async {
+      final r2 = _cfg('r2', rawXray: _visionRaw.replaceAll('r.example', 'r2.example'));
+      await connected(
+        configs: [
+          _cfg('r', rawXray: _visionRaw),
+          r2,
+          _cfg('a'),
+        ],
+        overrides: [configProvider.overrideWith(_SlowSelection.new)],
+      );
+      ConfigSelection sel(VpnConfig cfg) => ConfigSelection(configId: cfg.id, config: PinnedRef.of(cfg));
+      final boxOnly = _settings.copyWith(disabledCores: {CoreKind.xrayGo, CoreKind.xrayRust});
+      await ProfileStorageService().saveProfiles([
+        Profile(id: 'X', name: 'X', settings: _settings, createdAt: DateTime(2026)),
+        Profile(id: 'W', name: 'W', settings: _settings, createdAt: DateTime(2026), selection: sel(r2)),
+        // Y's sing-box settings can't run W's raw server: the second switch passes an unsupported pair
+        Profile(id: 'Y', name: 'Y', settings: boxOnly, createdAt: DateTime(2026), selection: sel(_cfg('a'))),
+      ]);
+      await ProfileStorageService().saveActiveProfileId('X');
+      final profiles = c.read(profileProvider.notifier);
+      await c.read(profileProvider.future);
+
+      await Future.wait([profiles.switchProfile('W'), profiles.switchProfile('Y')]);
+      await _settle();
+      expect(native.named('disconnect'), isEmpty);
+      expect(st().error, isNull);
+      expect(native.lastConnect()['engine'], 'box');
+      expect(native.lastConnect()['xrayConfig'], contains('ha.example'));
+    });
+
+    test('switching to a profile no core runs disconnects like a core change', () async {
+      await connected(
+        configs: [
+          _cfg('a'),
+          _cfg('r', rawXray: _visionRaw),
+        ],
+        overrides: [configProvider.overrideWith(_SlowSelection.new)],
+      );
+      // B: the raw xray server, but only sing-box allowed — no core runs it
+      await ProfileStorageService().saveProfiles([
+        Profile(id: 'A', name: 'A', settings: _settings, createdAt: DateTime(2026)),
+        Profile(
+          id: 'B',
+          name: 'B',
+          settings: _settings.copyWith(disabledCores: {CoreKind.xrayGo, CoreKind.xrayRust}),
+          createdAt: DateTime(2026),
+          selection: ConfigSelection(
+            configId: 'r',
+            config: PinnedRef.of(_cfg('r', rawXray: _visionRaw)),
+          ),
+        ),
+      ]);
+      await ProfileStorageService().saveActiveProfileId('A');
+      await c.read(profileProvider.future);
+
+      await c.read(profileProvider.notifier).switchProfile('B');
+      await _settle();
+      expect(native.named('disconnect'), hasLength(1));
+      expect(st().error, isNotNull);
     });
 
     test('reconnectIfStale rebuilds on changed settings, ignores an idle tunnel', () async {

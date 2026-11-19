@@ -1,7 +1,7 @@
 name: Gradle cache
 description: >-
   Restores and saves the Gradle User Home (dependencies, wrapper, build cache) by the hash of the Gradle files.
-  A miss restores the newest cache with the same prefix (the run's own ref first, then the base branch), so a change
+  A miss restores the newest cache with the same prefix (the run's own ref, the base branch, then the default branch), so a change
   to the Gradle files starts from an earlier cache instead of an empty one (setup-java's cache: gradle has no fallback).
 
 runs:

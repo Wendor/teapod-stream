@@ -86,7 +86,8 @@ and the map match and that every file has the same versions.
 `$ANDROID_HOME/ndk/$NDK_VERSION` (default 30.0.16248370; the workflows pass the same `NDK_VERSION`). The version is
 one the `ubuntu-latest` runner image ships, so the workflows' NDK steps install nothing; Flutter plugins with native
 code (`jni`) ask for Flutter's default NDK, and `android/build.gradle.kts` sets the app's `ndkVersion` on them, so the
-build never downloads a second NDK; moving it to a version the
+build never downloads a second NDK; the CMake of the app's own native helper (`externalNativeBuild` in
+`android/app/build.gradle.kts`) is likewise one the image ships; moving it to a version the
 image lacks costs ~30 s per job.
 
 ## Signing

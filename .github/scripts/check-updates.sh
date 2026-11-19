@@ -30,6 +30,12 @@ rust=$(sed -n 's/^XRAY_RUST_VERSION="\(.*\)"/\1/p' core/build.sh)
 rust_latest=$(latest_tag aimalygin/xray-rust-mobile)
 newer "$rust" "$rust_latest" && add "xray-rust-mobile" "$rust" "${rust_latest#v}" "\`core/build.sh\` (\`XRAY_RUST_VERSION\`, \`XRAY_RUST_SHA256\`)"
 
+# Geodata bundled in the APK: Loyalsoldier publishes daily, the pin moves once a month.
+geodata=$(sed -n 's/^GEODATA_VERSION="\(.*\)"/\1/p' build.sh)
+geodata_latest=$(latest_tag Loyalsoldier/v2ray-rules-dat)
+newer "$geodata" "$geodata_latest" && add "geodata (Loyalsoldier)" "$geodata" "$geodata_latest" \
+  "\`build.sh\` (\`GEODATA_VERSION\`, \`GEOIP_SHA256\`, \`GEOSITE_SHA256\` from the release's \`*.sha256sum\`)"
+
 go_pinned=$(awk '$1=="go"{print $2; exit}' core/go.mod)
 go_latest=$(curl -fsSL 'https://go.dev/dl/?mode=json' | jq -r '[.[] | select(.stable)][0].version | ltrimstr("go")')
 go_minor=$(cut -d. -f1-2 <<< "$go_latest")

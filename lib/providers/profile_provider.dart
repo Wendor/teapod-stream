@@ -8,6 +8,7 @@ import '../core/services/profile_storage_service.dart';
 import '../core/services/settings_service.dart';
 import 'settings_provider.dart';
 import 'config_provider.dart';
+import 'vpn_provider.dart';
 import '../l10n/l10n.dart';
 
 class ProfileState {
@@ -57,16 +58,36 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
     return ProfileState(profiles: profiles, activeProfileId: activeId);
   }
 
+  /// Applies the profile's settings and its remembered server. A live tunnel is rebuilt when
+  /// either of them changes what it runs.
   Future<void> switchProfile(String id) async {
     final current = _current;
     if (current == null || current.activeProfileId == id) return;
-    final profile = current.profiles.firstWhere((p) => p.id == id);
+    final target = current.profiles.firstWhere((p) => p.id == id);
 
-    await SettingsService().save(profile.settings);
+    // The outgoing profile remembers the server selected under it; a profile that has none yet
+    // takes the current one.
+    final selection = (await ref.read(configProvider.future)).selection;
+    final profiles = [
+      for (final p in current.profiles)
+        if (p.id == current.activeProfileId || (p.id == id && p.selection == null))
+          p.copyWith(selection: selection)
+        else
+          p,
+    ];
+    await _storage.saveProfiles(profiles);
+    await SettingsService().save(target.settings);
     await _storage.saveActiveProfileId(id);
+    state = AsyncData(current.copyWith(profiles: profiles, activeProfileId: id));
 
-    state = AsyncData(current.copyWith(activeProfileId: id));
+    if (target.selection != null) await ref.read(configProvider.notifier).applySelection(target.selection!);
     ref.invalidate(settingsProvider);
+
+    // No VPN notifier — nothing is connected (it lives as long as the app UI).
+    if (ref.read(vpnProvider.exists)) {
+      await ref.read(settingsProvider.future);
+      await ref.read(vpnProvider.notifier).reconnectIfStale();
+    }
   }
 
   Future<void> createProfile(String name, {bool copyFromCurrent = true}) async {
@@ -125,7 +146,9 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
     final current = _current!;
     final stored = current.profiles.firstWhere((p) => p.id == profileId);
     // Local secrets don't go into the file (import ignores them anyway — _keepLocalSecurity).
+    // The remembered server is local too: config and subscription references mean nothing elsewhere.
     final profile = stored.copyWith(
+      clearSelection: true,
       settings: stored.settings.copyWith(
         socksUser: '',
         socksPassword: '',

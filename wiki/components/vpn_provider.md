@@ -58,7 +58,9 @@ a password-less SOCKS on localhost would be an open proxy for every app. In prox
 **Hot switch.** `reconnectWithNewConfig()` while `connected` calls `connect(switching: true)`: native receives a
 normal `ACTION_CONNECT` and rebuilds the session without closing TUN, so there is no leak window with the kill
 switch. A failure before native is called keeps the old session running and shows the error. Used by the server
-picker, the reconnect banner and the config switch below.
+picker, the reconnect banner and the config switch below. `reconnectIfStale()` calls it only when needed: while
+`connecting`, or when `connected` and the effective config isn't the running one (`runsConfig`) or the settings
+fingerprint changed — a profile switch ([profiles](profiles.md#selected-server)).
 
 `disconnect()` sets `disconnecting` with a **10 s** timeout that forces `disconnected`.
 

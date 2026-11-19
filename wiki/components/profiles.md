@@ -4,19 +4,28 @@
 `lib/core/models/connections_bundle.dart`, `lib/core/services/profile_storage_service.dart`,
 `lib/core/services/deeplink_router.dart`, `lib/core/services/deeplink_handler.dart`
 
-A profile is a named snapshot of `AppSettings`. There is always at least one (`id = 'default'`, `isDefault`, can't
-be deleted). Switching profiles writes its settings and reloads `settingsProvider`; it doesn't touch the VPN or the
-selected config.
+A profile is a named snapshot of `AppSettings` plus the server selected under it. There is always at least one
+(`id = 'default'`, `isDefault`, can't be deleted).
 
 **In a profile:** all `AppSettings`, `readonly` (settings can't be changed), `sourceUrl` + `lastFetchedAt` for
-profiles that refresh from a URL.
-**Not in a profile:** configs and subscriptions (global), the selected config, theme.
+profiles that refresh from a URL, `selection` — the selected server.
+**Not in a profile:** configs and subscriptions (global), theme.
+
+## Selected server
+
+`selection` is a `ConfigSelection` (`config_selection.dart`): the chosen config as a `PinnedRef` (subscription,
+name, `address:port`; a subscription refresh issues new config ids, so an id would not survive) and the
+subscription in auto-select mode. It is recorded on switch, not on every selection change: `switchProfile` stores
+the current selection (`ConfigState.selection`) in the outgoing profile, and in the incoming one too if it has none
+yet (`null` — a profile created before this field, or never active). Then `ConfigNotifier.applySelection` restores
+the incoming profile's selection; whatever no longer exists is skipped, and if nothing of it is left the current
+selection stays. Bundles never carry it: export clears it, import doesn't read it.
 
 ## ProfileNotifier
 
 | Method | What it does |
 |---|---|
-| `switchProfile(id)` | applies the profile's settings |
+| `switchProfile(id)` | remembers the outgoing profile's server, applies the profile's settings and server; a live tunnel is rebuilt through `VpnNotifier.reconnectIfStale` if the server or connection settings changed |
 | `syncActiveSettings(settings)` | called by `SettingsNotifier.save()`: keeps the active profile's snapshot current |
 | `refreshProfile(id, url)` | downloads the profile again, applies settings, imports its connections |
 | `importBundle(bundle, …)` | adds a profile and imports its connections through `ConfigNotifier.importBundle` (deduplicated by subscription URL / server) |

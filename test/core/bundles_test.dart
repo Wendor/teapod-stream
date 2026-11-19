@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:teapodstream/core/models/config_selection.dart';
 import 'package:teapodstream/core/models/connections_bundle.dart';
+import 'package:teapodstream/core/models/pinned_ref.dart';
 import 'package:teapodstream/core/models/profile.dart';
 import 'package:teapodstream/core/models/profile_bundle.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
@@ -93,6 +95,18 @@ void main() {
       expect(back.isDefault, isTrue);
       expect(back.readonly, isFalse);
       expect(back.isFromUrl, isFalse);
+    });
+
+    test('remembered server: round trip, absent in old json, cleared by copyWith', () {
+      const sel = ConfigSelection(
+        config: PinnedRef(subscriptionId: 's1', name: 'NL', endpoint: 'h:443'),
+        subscriptionId: 's1',
+      );
+      final p = _profile().copyWith(selection: sel);
+      expect(Profile.fromJson(p.toJson()).selection, sel);
+      expect(Profile.fromJson(_profile().toJson()).selection, isNull);
+      expect(p.copyWith(name: 'X').selection, sel);
+      expect(p.copyWith(clearSelection: true).selection, isNull);
     });
 
     test('copyWith keeps id, isDefault and createdAt', () {

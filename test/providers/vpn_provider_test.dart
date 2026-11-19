@@ -20,6 +20,7 @@ import 'package:teapodstream/core/services/log_service.dart';
 import 'package:teapodstream/core/services/settings_service.dart';
 import 'package:teapodstream/protocols/xray/xray_rust_backend.dart';
 import 'package:teapodstream/providers/config_provider.dart';
+import 'package:teapodstream/providers/profile_provider.dart';
 import 'package:teapodstream/providers/settings_provider.dart';
 import 'package:teapodstream/providers/vpn_provider.dart';
 
@@ -394,6 +395,37 @@ void main() {
       expect(st().isConnected, isTrue);
       expect(st().error, 'Empty password');
       expect(native.named('connect'), hasLength(1));
+    });
+
+    test('profile switch reconnects only when the server or settings change', () async {
+      await connected(configs: [_cfg('a'), _cfg('b')]);
+      final profiles = c.read(profileProvider.notifier);
+      await c.read(profileProvider.future);
+      await profiles.createProfile('B');
+      final defaultId = c.read(profileProvider).value!.activeProfileId;
+      final bId = c.read(profileProvider).value!.profiles.last.id;
+
+      // same server, same settings — the tunnel stays
+      await profiles.switchProfile(bId);
+      await c.read(configProvider.notifier).setActiveConfig('b');
+      await profiles.switchProfile(defaultId);
+      await _settle();
+      expect(native.named('connect'), hasLength(1));
+
+      // B remembered server b
+      await profiles.switchProfile(bId);
+      await _settle();
+      expect(native.named('connect'), hasLength(2));
+      expect(native.lastConnect()['xrayConfig'], contains('hb.example'));
+    });
+
+    test('reconnectIfStale rebuilds on changed settings, ignores an idle tunnel', () async {
+      await connected();
+      await n().reconnectIfStale();
+      expect(native.named('connect'), hasLength(1));
+      await c.read(settingsProvider.notifier).save(_settings.copyWith(mtu: 1400));
+      await n().reconnectIfStale();
+      expect(native.named('connect'), hasLength(2));
     });
 
     test('pending reconnect appears after a connection setting changes', () async {

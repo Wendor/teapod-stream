@@ -1,18 +1,23 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:teapodstream/core/constants/app_constants.dart';
 import 'package:teapodstream/core/cores/core_backend.dart';
 import 'package:teapodstream/core/interfaces/vpn_engine.dart';
+import 'package:teapodstream/core/models/config_selection.dart';
 import 'package:teapodstream/core/models/connection_fingerprint.dart';
 import 'package:teapodstream/core/models/core_kind.dart';
 import 'package:teapodstream/core/models/heartbeat_settings.dart';
 import 'package:teapodstream/core/models/pinned_ref.dart';
+import 'package:teapodstream/core/services/profile_storage_service.dart';
+import 'package:teapodstream/core/models/profile.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/core/models/vpn_log_entry.dart';
 import 'package:teapodstream/core/services/config_storage_service.dart';
@@ -20,6 +25,7 @@ import 'package:teapodstream/core/services/log_service.dart';
 import 'package:teapodstream/core/services/settings_service.dart';
 import 'package:teapodstream/protocols/xray/xray_rust_backend.dart';
 import 'package:teapodstream/providers/config_provider.dart';
+import 'package:teapodstream/providers/profile_provider.dart';
 import 'package:teapodstream/providers/settings_provider.dart';
 import 'package:teapodstream/providers/vpn_provider.dart';
 
@@ -143,6 +149,7 @@ void main() {
     String? activeId,
     List<PinnedRef> pins = const [],
     AppSettings settings = _settings,
+    List<Override> overrides = const [],
   }) async {
     SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
     FlutterSecureStorage.setMockInitialValues({});
@@ -151,7 +158,7 @@ void main() {
     await storage.saveConfigs(configs);
     await storage.saveActiveConfigId(activeId);
     await storage.savePins(pins);
-    final container = c = ProviderContainer();
+    final container = c = ProviderContainer(overrides: overrides);
     // Unfinished fire-and-forget operations (syncActiveSettings) must not
     // outlive the container.
     addTearDown(() async {
@@ -164,8 +171,26 @@ void main() {
     await _settle();
   }
 
-  Future<void> connected({List<VpnConfig>? configs, AppSettings settings = _settings}) async {
-    await boot(configs: configs ?? [_cfg('a')], activeId: (configs ?? [_cfg('a')]).first.id, settings: settings);
+  /// Native confirms every connect, like the real service does after the hot switch.
+  void confirmConnects([Future<void>? gate]) => native.onConnect = () async {
+    await gate;
+    Future.microtask(
+      () => emit({'type': 'state', 'value': 'connected', 'socksPort': 2080, 'socksUser': 'su', 'socksPassword': 'sp'}),
+    );
+    return null;
+  };
+
+  Future<void> connected({
+    List<VpnConfig>? configs,
+    AppSettings settings = _settings,
+    List<Override> overrides = const [],
+  }) async {
+    await boot(
+      configs: configs ?? [_cfg('a')],
+      activeId: (configs ?? [_cfg('a')]).first.id,
+      settings: settings,
+      overrides: overrides,
+    );
     await n().connect();
     emit({'type': 'state', 'value': 'connected', 'socksPort': 2080, 'socksUser': 'su', 'socksPassword': 'sp'});
     await _settle();
@@ -394,6 +419,202 @@ void main() {
       expect(st().isConnected, isTrue);
       expect(st().error, 'Empty password');
       expect(native.named('connect'), hasLength(1));
+    });
+
+    test('profile switch reconnects only when the server or settings change', () async {
+      await connected(configs: [_cfg('a'), _cfg('b')]);
+      final profiles = c.read(profileProvider.notifier);
+      await c.read(profileProvider.future);
+      await profiles.createProfile('B');
+      final defaultId = c.read(profileProvider).value!.activeProfileId;
+      final bId = c.read(profileProvider).value!.profiles.last.id;
+
+      // same server, same settings — the tunnel stays
+      await profiles.switchProfile(bId);
+      await c.read(configProvider.notifier).setActiveConfig('b');
+      await profiles.switchProfile(defaultId);
+      await _settle();
+      expect(native.named('connect'), hasLength(1));
+
+      // B remembered server b
+      await profiles.switchProfile(bId);
+      await _settle();
+      expect(native.named('connect'), hasLength(2));
+      expect(native.lastConnect()['xrayConfig'], contains('hb.example'));
+    });
+
+    test('a failed server restore still reconnects to the profile settings', () async {
+      await connected(overrides: [configProvider.overrideWith(_FailingSelection.new)]);
+      final profiles = c.read(profileProvider.notifier);
+      await c.read(profileProvider.future);
+      await profiles.createProfile('B');
+      final defaultId = c.read(profileProvider).value!.activeProfileId;
+      final bId = c.read(profileProvider).value!.profiles.last.id;
+      await profiles.switchProfile(bId); // B remembers the current server
+      await c.read(settingsProvider.notifier).save(_settings.copyWith(mtu: 1400));
+      await profiles.switchProfile(defaultId);
+      await _settle();
+      final before = native.named('connect').length;
+
+      _FailingSelection.fail = true;
+      addTearDown(() => _FailingSelection.fail = false);
+      await expectLater(profiles.switchProfile(bId), throwsA(isA<StateError>()));
+      await _settle();
+      expect(native.named('connect'), hasLength(before + 1));
+      expect(native.lastConnect()['mtu'], 1400);
+    });
+
+    test('switching between a sing-box profile and a raw-xray one keeps the tunnel up', () async {
+      final boxOnly = _settings.copyWith(disabledCores: {CoreKind.xrayGo, CoreKind.xrayRust});
+      await connected(
+        configs: [
+          _cfg('a'),
+          _cfg('r', rawXray: _visionRaw),
+        ],
+        settings: boxOnly,
+        overrides: [configProvider.overrideWith(_SlowSelection.new)],
+      );
+      final profiles = c.read(profileProvider.notifier);
+      await c.read(profileProvider.future);
+      await profiles.createProfile('B');
+      final boxId = c.read(profileProvider).value!.activeProfileId;
+      final bId = c.read(profileProvider).value!.profiles.last.id;
+      // B: Go enabled, raw xray server
+      await profiles.switchProfile(bId);
+      await c.read(settingsProvider.notifier).save(_settings);
+      await c.read(configProvider.notifier).setActiveConfig('r');
+      await _settle();
+
+      // in between, sing-box settings with the raw config (or the reverse) can't run
+      await profiles.switchProfile(boxId);
+      await _settle();
+      expect(native.lastConnect()['engine'], 'box');
+      await profiles.switchProfile(bId);
+      await _settle();
+      expect(native.named('disconnect'), isEmpty);
+      expect(st().error, isNull);
+      expect(native.lastConnect()['engine'], 'go');
+      expect(native.lastConnect()['xrayConfig'], contains('r.example'));
+    });
+
+    test('overlapping profile switches end on the last profile, tunnel up', () async {
+      final r2 = _cfg('r2', rawXray: _visionRaw.replaceAll('r.example', 'r2.example'));
+      await connected(
+        configs: [
+          _cfg('r', rawXray: _visionRaw),
+          r2,
+          _cfg('a'),
+        ],
+        overrides: [configProvider.overrideWith(_SlowSelection.new)],
+      );
+      ConfigSelection sel(VpnConfig cfg) => ConfigSelection(configId: cfg.id, config: PinnedRef.of(cfg));
+      final boxOnly = _settings.copyWith(disabledCores: {CoreKind.xrayGo, CoreKind.xrayRust});
+      await ProfileStorageService().saveProfiles([
+        Profile(id: 'X', name: 'X', settings: _settings, createdAt: DateTime(2026)),
+        Profile(id: 'W', name: 'W', settings: _settings, createdAt: DateTime(2026), selection: sel(r2)),
+        // Y's sing-box settings can't run W's raw server: the second switch passes an unsupported pair
+        Profile(id: 'Y', name: 'Y', settings: boxOnly, createdAt: DateTime(2026), selection: sel(_cfg('a'))),
+      ]);
+      await ProfileStorageService().saveActiveProfileId('X');
+      final profiles = c.read(profileProvider.notifier);
+      await c.read(profileProvider.future);
+      confirmConnects();
+
+      await Future.wait([profiles.switchProfile('W'), profiles.switchProfile('Y')]);
+      await _settle();
+      expect(native.named('disconnect'), isEmpty);
+      expect(st().error, isNull);
+      expect(native.lastConnect()['engine'], 'box');
+      expect(native.lastConnect()['xrayConfig'], contains('ha.example'));
+    });
+
+    test('switching to a profile no core runs disconnects like a core change', () async {
+      await connected(
+        configs: [
+          _cfg('a'),
+          _cfg('r', rawXray: _visionRaw),
+        ],
+        overrides: [configProvider.overrideWith(_SlowSelection.new)],
+      );
+      // B: the raw xray server, but only sing-box allowed — no core runs it
+      await ProfileStorageService().saveProfiles([
+        Profile(id: 'A', name: 'A', settings: _settings, createdAt: DateTime(2026)),
+        Profile(
+          id: 'B',
+          name: 'B',
+          settings: _settings.copyWith(disabledCores: {CoreKind.xrayGo, CoreKind.xrayRust}),
+          createdAt: DateTime(2026),
+          selection: ConfigSelection(
+            configId: 'r',
+            config: PinnedRef.of(_cfg('r', rawXray: _visionRaw)),
+          ),
+        ),
+      ]);
+      await ProfileStorageService().saveActiveProfileId('A');
+      await c.read(profileProvider.future);
+
+      await c.read(profileProvider.notifier).switchProfile('B');
+      await _settle();
+      expect(native.named('disconnect'), hasLength(1));
+      expect(st().error, isNotNull);
+    });
+
+    test('a later switch waits for the earlier one\'s connect', () async {
+      final r2 = _cfg('r2', rawXray: _visionRaw.replaceAll('r.example', 'r2.example'));
+      await connected(
+        configs: [
+          _cfg('r', rawXray: _visionRaw),
+          r2,
+          _cfg('a'),
+        ],
+      );
+      ConfigSelection sel(VpnConfig cfg) => ConfigSelection(configId: cfg.id, config: PinnedRef.of(cfg));
+      await ProfileStorageService().saveProfiles([
+        Profile(id: 'X', name: 'X', settings: _settings, createdAt: DateTime(2026)),
+        Profile(id: 'W', name: 'W', settings: _settings, createdAt: DateTime(2026), selection: sel(r2)),
+        Profile(id: 'Y', name: 'Y', settings: _settings, createdAt: DateTime(2026), selection: sel(_cfg('a'))),
+      ]);
+      await ProfileStorageService().saveActiveProfileId('X');
+      final profiles = c.read(profileProvider.notifier);
+      await c.read(profileProvider.future);
+      final before = native.named('connect').length;
+      final gate = Completer<void>();
+      confirmConnects(gate.future);
+
+      final switches = Future.wait([profiles.switchProfile('W'), profiles.switchProfile('Y')]);
+      await _settle();
+      expect(native.named('connect'), hasLength(before + 1)); // W's connect is still in flight
+      gate.complete();
+      await switches;
+      await _settle();
+      expect(native.named('connect'), hasLength(before + 2));
+      expect(native.lastConnect()['xrayConfig'], contains('ha.example'));
+      expect(n().runsConfig(_cfg('a')), isTrue);
+    });
+
+    test('a core change during a no-op switch is still handled', () async {
+      await connected(configs: [_cfg('r', rawXray: _visionRaw)]);
+      await c.read(profileProvider.future);
+      // nothing runs the raw config any more while a (no-op) switch is in flight
+      await n().duringProfileSwitch(() async {
+        await c
+            .read(settingsProvider.notifier)
+            .save(_settings.copyWith(disabledCores: {CoreKind.xrayGo, CoreKind.singBox}));
+        await _settle();
+        return false;
+      });
+      await _settle();
+      expect(native.named('disconnect'), hasLength(1));
+      expect(st().error, isNotNull);
+    });
+
+    test('reconnectIfStale rebuilds on changed settings, ignores an idle tunnel', () async {
+      await connected();
+      await n().reconnectIfStale();
+      expect(native.named('connect'), hasLength(1));
+      await c.read(settingsProvider.notifier).save(_settings.copyWith(mtu: 1400));
+      await n().reconnectIfStale();
+      expect(native.named('connect'), hasLength(2));
     });
 
     test('pending reconnect appears after a connection setting changes', () async {
@@ -821,4 +1042,21 @@ void main() {
       });
     });
   });
+}
+
+class _FailingSelection extends ConfigNotifier {
+  static var fail = false;
+
+  @override
+  Future<void> applySelection(ConfigSelection selection) =>
+      fail ? Future.error(StateError('storage write failed')) : super.applySelection(selection);
+}
+
+/// Real storage writes take event-loop turns: providers recompute in between.
+class _SlowSelection extends ConfigNotifier {
+  @override
+  Future<void> applySelection(ConfigSelection selection) async {
+    await super.applySelection(selection);
+    await Future<void>.delayed(Duration.zero);
+  }
 }

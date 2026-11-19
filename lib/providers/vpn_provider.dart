@@ -8,6 +8,7 @@ import '../core/models/vpn_config.dart';
 import '../core/constants/app_constants.dart';
 import '../core/models/vpn_stats.dart';
 import '../core/models/connection_fingerprint.dart';
+import '../core/models/core_kind.dart';
 import '../core/models/heartbeat_settings.dart';
 import '../core/models/vpn_log_entry.dart';
 import '../core/services/log_service.dart';
@@ -136,7 +137,7 @@ class VpnNotifier extends Notifier<VpnState2> {
     listenSelf((_, next) => ref.read(tunnelSocksProvider.notifier).set(next.tunnelSocks));
     // The active profile's core changed (priority, disabling, pinning).
     ref.listen(activeCoreProvider, (prev, next) {
-      if (prev != null && next != null && prev != next) _onCoreChanged();
+      if (prev != null && next != null && prev != next && !_profileSwitching) _onCoreChanged();
     });
 
     _eventSub = XrayEngine.events.listen(
@@ -717,6 +718,53 @@ class VpnNotifier extends Notifier<VpnState2> {
     await connect();
   }
 
+  /// A profile switch changes the settings and the server one after the other: the core resolved
+  /// in between belongs to neither profile and must not disconnect the tunnel.
+  bool _profileSwitching = false;
+
+  /// Switches run one at a time, each with its reconciliation: a later switch can't start while the
+  /// earlier one's connect is in flight.
+  Future<void> _profileSwitches = Future.value();
+
+  /// Runs a profile switch ([body] returns false — nothing switched), then makes the VPN follow the
+  /// final state: a profile no core runs disconnects (as a core change does), a live tunnel is
+  /// rebuilt if stale, a core change suppressed meanwhile is handled.
+  Future<void> duringProfileSwitch(Future<bool> Function() body) {
+    final run = _profileSwitches.then((_) => _profileSwitch(body));
+    _profileSwitches = run.then((_) {}, onError: (_) {});
+    return run;
+  }
+
+  Future<void> _profileSwitch(Future<bool> Function() body) async {
+    final coreBefore = ref.read(activeCoreProvider);
+    _profileSwitching = true;
+    var switched = true; // also on an error: the profile may be switched with its server not restored
+    try {
+      switched = await body();
+    } finally {
+      _profileSwitching = false;
+      final core = ref.read(activeCoreProvider);
+      final live = switched && (state.isConnected || state.isConnecting);
+      if (live && core?.kind != null) {
+        await reconnectIfStale();
+      } else if (live || core != coreBefore) {
+        await _onCoreChanged();
+      }
+    }
+  }
+
+  /// Rebuilds a live tunnel when what it runs differs from what would run now: another
+  /// effective config or changed connection settings (a profile switch changes both).
+  Future<void> reconnectIfStale() async {
+    if (state.isConnecting) return reconnectWithNewConfig();
+    if (!state.isConnected) return;
+    final config = ref.read(effectiveConfigProvider);
+    // Not pendingReconnectProvider: it watches this notifier.
+    final stale = _settingsStale(state, ref.read(settingsProvider).value, ref.read(activeCoreProvider));
+    if (config == null || (runsConfig(config) && !stale)) return;
+    await reconnectWithNewConfig();
+  }
+
   VpnConfig? _resolveEffectiveConfig(ConfigState? cs) => cs == null ? null : ref.read(effectiveConfigProvider);
 
   Future<void> pingAllConfigs() async {
@@ -814,10 +862,15 @@ final vpnStatsProvider = Provider<VpnStats>((ref) {
 
 /// true — connection settings changed after connecting,
 /// a reconnect is needed to apply them.
-final pendingReconnectProvider = Provider<bool>((ref) {
-  final vpn = ref.watch(vpnProvider);
-  if (!vpn.isConnected || vpn.appliedFingerprint == null) return false;
-  final s = ref.watch(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
-  if (s == null) return false;
-  return connectionFingerprint(s, core: ref.watch(activeCoreProvider)?.kind) != vpn.appliedFingerprint;
-});
+final pendingReconnectProvider = Provider<bool>(
+  (ref) => _settingsStale(
+    ref.watch(vpnProvider),
+    ref.watch(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null),
+    ref.watch(activeCoreProvider),
+  ),
+);
+
+bool _settingsStale(VpnState2 vpn, AppSettings? s, ({CoreKind? kind})? core) {
+  if (!vpn.isConnected || vpn.appliedFingerprint == null || s == null) return false;
+  return connectionFingerprint(s, core: core?.kind) != vpn.appliedFingerprint;
+}

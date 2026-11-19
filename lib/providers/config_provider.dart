@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/models/vpn_config.dart';
 import '../core/models/pinned_ref.dart';
+import '../core/models/config_selection.dart';
 import '../core/models/connections_bundle.dart';
 import '../core/services/config_storage_service.dart';
 import '../core/services/subscription_service.dart' show SubscriptionService, SubscriptionFetchResult, HwidDeviceInfo;
@@ -27,6 +28,15 @@ class ConfigState {
 
   VpnConfig? get activeConfig =>
       activeConfigId == null ? null : configs.where((c) => c.id == activeConfigId).firstOrNull;
+
+  ConfigSelection get selection {
+    final active = activeConfig;
+    return ConfigSelection(
+      configId: active?.id,
+      config: active == null ? null : PinnedRef.of(active),
+      subscriptionId: activeSubscriptionId,
+    );
+  }
 
   late final List<VpnConfig> standaloneConfigs = configs.where((c) => c.subscriptionId == null).toList();
 
@@ -168,6 +178,25 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     final current = state.maybeWhen(data: (d) => d, orElse: () => null) ?? ConfigState();
     state = AsyncData(current.copyWith(activeSubscriptionId: id, clearActiveSub: id == null));
     await storage.saveActiveSubscriptionId(id);
+  });
+
+  /// The selection after every mutation queued so far.
+  Future<ConfigSelection> currentSelection() => _serial(() async => (await future).selection);
+
+  /// Restores a selection remembered by a profile. Whatever no longer exists is skipped;
+  /// when nothing of it is left, the current selection stays.
+  Future<void> applySelection(ConfigSelection selection) => _serial(() async {
+    final current = state.maybeWhen(data: (d) => d, orElse: () => null);
+    if (current == null) return;
+    final config = selection.resolve(current.configs);
+    final subId = current.subscriptions.any((s) => s.id == selection.subscriptionId) ? selection.subscriptionId : null;
+    if (config == null && subId == null) return;
+    final activeId = config?.id ?? current.activeConfigId;
+    state = AsyncData(
+      current.copyWith(activeConfigId: activeId, activeSubscriptionId: subId, clearActiveSub: subId == null),
+    );
+    await storage.saveActiveConfigId(activeId);
+    await storage.saveActiveSubscriptionId(subId);
   });
 
   Future<void> updateConfig(VpnConfig updated) => _serial(() async {

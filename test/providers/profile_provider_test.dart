@@ -1,12 +1,16 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:teapodstream/core/models/config_selection.dart';
 import 'package:teapodstream/core/models/heartbeat_settings.dart';
+import 'package:teapodstream/core/models/pinned_ref.dart';
 import 'package:teapodstream/core/models/profile.dart';
 import 'package:teapodstream/core/models/profile_bundle.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
@@ -42,11 +46,12 @@ const _foreign = AppSettings(
   heartbeat: HeartbeatSettings(failureThreshold: 8, target: HeartbeatTarget.custom, customUrl: 'http://attacker/log'),
 );
 
-VpnConfig _cfg(String id) => VpnConfig(
+VpnConfig _cfg(String id, {String? name, String? subId, String? address}) => VpnConfig(
   id: id,
-  name: id,
+  name: name ?? id,
+  subscriptionId: subId,
   protocol: VpnProtocol.trojan,
-  address: 'h$id',
+  address: address ?? 'h$id',
   port: 443,
   uuid: '',
   password: 'p',
@@ -69,13 +74,21 @@ void main() {
   ProfileState s() => c.read(profileProvider).value!;
   Future<AppSettings> settings() => c.read(settingsProvider.future);
 
-  Future<void> boot({List<Profile>? stored, String? activeId}) async {
-    SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
-    FlutterSecureStorage.setMockInitialValues({});
+  /// [keepStorage] — storage was already seeded by the test.
+  Future<void> boot({
+    List<Profile>? stored,
+    String? activeId,
+    bool keepStorage = false,
+    List<Override> overrides = const [],
+  }) async {
+    if (!keepStorage) {
+      SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+      FlutterSecureStorage.setMockInitialValues({});
+    }
     await SettingsService().save(_local);
     if (stored != null) await profiles.saveProfiles(stored);
     if (activeId != null) await profiles.saveActiveProfileId(activeId);
-    c = ProviderContainer();
+    c = ProviderContainer(overrides: overrides);
     addTearDown(c.dispose);
     await c.read(profileProvider.future);
     await settings();
@@ -148,6 +161,215 @@ void main() {
     expect(await profiles.loadActiveProfileId(), 'b');
     expect((await settings()).mtu, 1300);
     expect((await SettingsService().load()).mtu, 1300);
+  });
+
+  group('switchProfile and the selected server', () {
+    final storage = ConfigStorageService();
+    ConfigState configs() => c.read(configProvider).value!;
+
+    Future<void> seed(List<VpnConfig> list, {String? activeId}) async {
+      await storage.saveConfigs(list);
+      await storage.saveActiveConfigId(activeId);
+      await storage.saveSubscriptions([
+        Subscription(id: 's1', name: 'S', url: 'https://s1', createdAt: DateTime(2026)),
+      ]);
+    }
+
+    test('each profile keeps its own server', () async {
+      SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+      FlutterSecureStorage.setMockInitialValues({});
+      await seed([_cfg('x'), _cfg('y')], activeId: 'x');
+      await boot(stored: [profile('a'), profile('b')], activeId: 'a', keepStorage: true);
+
+      // b has no remembered server yet — it takes the current one
+      await n().switchProfile('b');
+      expect(configs().activeConfigId, 'x');
+      await c.read(configProvider.notifier).setActiveConfig('y');
+
+      await n().switchProfile('a');
+      expect(configs().activeConfigId, 'x');
+      expect(await storage.loadActiveConfigId(), 'x');
+
+      await n().switchProfile('b');
+      expect(configs().activeConfigId, 'y');
+      final stored = {for (final p in await profiles.loadProfiles()) p.id: p.selection};
+      expect(stored['a']!.config!.name, 'x');
+      expect(stored['b']!.config!.name, 'y');
+    });
+
+    test('the remembered server survives new config ids and restores auto-select', () async {
+      SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+      FlutterSecureStorage.setMockInitialValues({});
+      // a subscription refresh issued new ids: the profile resolves by name and endpoint
+      await seed([_cfg('new1', name: 'NL', subId: 's1'), _cfg('loc')], activeId: 'loc');
+      final remembered = ConfigSelection(
+        config: PinnedRef.of(_cfg('old1', name: 'NL', subId: 's1')),
+        subscriptionId: 's1',
+      );
+      await boot(
+        stored: [
+          profile('a'),
+          profile('b').copyWith(selection: remembered),
+        ],
+        activeId: 'a',
+        keepStorage: true,
+      );
+
+      await n().switchProfile('b');
+      expect(configs().activeConfigId, 'new1');
+      expect(configs().activeSubscriptionId, 's1');
+      expect(await storage.loadActiveSubscriptionId(), 's1');
+    });
+
+    test('of two configs with the same name and endpoint the chosen one is restored', () async {
+      SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+      FlutterSecureStorage.setMockInitialValues({});
+      // same name and endpoint, different credentials (ids)
+      await seed([_cfg('d1', name: 'Dup', address: 'same'), _cfg('d2', name: 'Dup', address: 'same')], activeId: 'd1');
+      final twin = _cfg('d2', name: 'Dup', address: 'same');
+      await boot(
+        stored: [
+          profile('a'),
+          profile('b').copyWith(
+            selection: ConfigSelection(configId: 'd2', config: PinnedRef.of(twin)),
+          ),
+        ],
+        activeId: 'a',
+        keepStorage: true,
+      );
+      await n().switchProfile('b');
+      expect(configs().activeConfigId, 'd2');
+    });
+
+    test('a settings sync started before the switch is not lost', () async {
+      await boot(
+        stored: [
+          profile('a', settings: _local),
+          profile('b'),
+        ],
+        activeId: 'a',
+      );
+      final sync = n().syncActiveSettings(_local.copyWith(mtu: 1234));
+      await n().switchProfile('b');
+      await sync;
+      expect((await profiles.loadProfiles()).first.settings.mtu, 1234);
+      expect(s().profiles.first.settings.mtu, 1234);
+    });
+
+    test('a settings sync saved during the switch stays with the outgoing profile', () async {
+      await boot(
+        stored: [
+          profile('a', settings: _local),
+          profile('b'),
+        ],
+        activeId: 'a',
+      );
+      final switching = n().switchProfile('b');
+      final sync = n().syncActiveSettings(_local.copyWith(mtu: 1234));
+      await switching;
+      await sync;
+      final stored = await profiles.loadProfiles();
+      expect(stored.first.settings.mtu, 1234);
+      expect(stored.last.settings.mtu, const AppSettings().mtu);
+    });
+
+    test('two quick switches keep each profile its own server', () async {
+      SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+      FlutterSecureStorage.setMockInitialValues({});
+      await seed([_cfg('x'), _cfg('y'), _cfg('z')], activeId: 'x');
+      ConfigSelection sel(String id) => ConfigSelection(configId: id, config: PinnedRef.of(_cfg(id)));
+      await boot(
+        stored: [
+          profile('a'),
+          profile('b').copyWith(selection: sel('y')),
+          profile('c').copyWith(selection: sel('z')),
+        ],
+        activeId: 'a',
+        keepStorage: true,
+      );
+      await c.read(configProvider.future);
+      // a config mutation delays restoring b's server
+      final busy = c.read(configProvider.notifier).updateConfig(_cfg('x'));
+      final toB = n().switchProfile('b');
+      final toC = n().switchProfile('c');
+      await Future.wait([busy, toB, toC]);
+      expect(configs().activeConfigId, 'z');
+      final stored = {for (final p in await profiles.loadProfiles()) p.id: p.selection?.configId};
+      expect(stored, {'a': 'x', 'b': 'y', 'c': 'z'});
+    });
+
+    test('the outgoing profile remembers a selection still queued in configs', () async {
+      SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+      FlutterSecureStorage.setMockInitialValues({});
+      await seed([_cfg('x'), _cfg('y')], activeId: 'x');
+      await boot(stored: [profile('a'), profile('b')], activeId: 'a', keepStorage: true);
+      final cn = c.read(configProvider.notifier);
+      await c.read(configProvider.future);
+      final busy = cn.updateConfig(_cfg('x'));
+      final select = cn.setActiveConfig('y');
+      await n().switchProfile('b');
+      await Future.wait([busy, select]);
+      expect((await profiles.loadProfiles()).first.selection!.configId, 'y');
+    });
+
+    test('a refresh finishing after a switch keeps the switch', () async {
+      SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+      FlutterSecureStorage.setMockInitialValues({});
+      await seed([_cfg('x')], activeId: 'x');
+      await boot(stored: [profile('a'), profile('b')], activeId: 'a', keepStorage: true);
+      final response = Completer<http.Response>();
+      final refreshing = http.runWithClient(
+        () => n().refreshProfile('a', 'https://src/profile.json'),
+        () => MockClient((_) => response.future),
+      );
+      await Future<void>.delayed(Duration.zero);
+      await n().switchProfile('b');
+      response.complete(http.Response(jsonEncode(_bundle().toJson()), 200));
+      expect(await refreshing, 'a');
+
+      expect(s().activeProfileId, 'b');
+      final stored = await profiles.loadProfiles();
+      expect(stored.first.name, 'Remote');
+      expect(stored.first.selection!.configId, 'x');
+      expect(stored.last.selection!.configId, 'x');
+      expect((await settings()).mtu, const AppSettings().mtu);
+    });
+
+    test('a failed server restore still applies the profile settings', () async {
+      await boot(
+        stored: [
+          profile('a', settings: _local),
+          profile(
+            'b',
+            settings: const AppSettings(mtu: 1300),
+          ).copyWith(selection: const ConfigSelection(configId: 'x')),
+        ],
+        activeId: 'a',
+        overrides: [configProvider.overrideWith(_FailingSelection.new)],
+      );
+      await expectLater(n().switchProfile('b'), throwsA(isA<StateError>()));
+      expect(s().activeProfileId, 'b');
+      expect((await settings()).mtu, 1300);
+    });
+
+    test('a vanished server leaves the current selection', () async {
+      SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+      FlutterSecureStorage.setMockInitialValues({});
+      await seed([_cfg('x')], activeId: 'x');
+      final gone = ConfigSelection(config: PinnedRef.of(_cfg('gone')), subscriptionId: 'deleted');
+      await boot(
+        stored: [
+          profile('a'),
+          profile('b').copyWith(selection: gone),
+        ],
+        activeId: 'a',
+        keepStorage: true,
+      );
+
+      await n().switchProfile('b');
+      expect(configs().activeConfigId, 'x');
+      expect(configs().activeSubscriptionId, isNull);
+    });
   });
 
   group('settingsProvider', () {
@@ -225,7 +447,11 @@ void main() {
     await boot();
     await c.read(configProvider.future);
     await c.read(configProvider.notifier).addConfig(_cfg('mine'));
+    await n().createProfile('Other');
+    await n().switchProfile(s().profiles.last.id);
+    expect((await profiles.loadProfiles()).first.selection, isNotNull);
     final plain = n().exportBundle('default');
+    expect(plain.profile.selection, isNull);
     expect(plain.hasConnections, isFalse);
     expect(plain.profile.id, 'default');
     final full = n().exportBundle('default', includeConnections: true);
@@ -278,4 +504,9 @@ void main() {
       expect(s().activeProfile!.name, 'Default');
     });
   });
+}
+
+class _FailingSelection extends ConfigNotifier {
+  @override
+  Future<void> applySelection(ConfigSelection selection) async => throw StateError('storage write failed');
 }

@@ -68,7 +68,7 @@ locally. Rule order and per-core translation: [xray_config_builder](xray_config_
 | `HeartbeatSettings` | `heartbeat_settings.dart` | [settings_provider](settings_provider.md#heartbeat-heartbeat_settingsdart) |
 | `CoreKind` | `core_kind.dart` | `xrayGo`, `singBox`, `xrayRust`; `nativeId`, `defaultOrder`, `parseOrder` |
 | `PinnedRef` | `pinned_ref.dart` | [config_provider](config_provider.md#pins) |
-| `Profile`, `ProfileBundle` | `profile.dart`, `profile_bundle.dart` | [profiles](profiles.md) |
+| `Profile`, `ProfileBundle`, `ConfigSelection` | `profile.dart`, `profile_bundle.dart`, `config_selection.dart` | [profiles](profiles.md) |
 | `ConnectionsBundle` | `connections_bundle.dart` | [profiles](profiles.md#bundles-and-deep-links) |
 | `connectionFingerprint` | `connection_fingerprint.dart` | [vpn_provider](vpn_provider.md) |
 

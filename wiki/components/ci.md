@@ -3,10 +3,10 @@
 Workflows: `.github/workflows/`; the shared step that provides the teapod-core AAR: `.github/actions/teapod-core`
 (restore from the Actions cache by the `core/` tree hash, or build with Go, gomobile and the NDK on a miss).
 `.github/actions/gradle-cache` keeps the Gradle User Home in the Actions cache by the hash of the Gradle files; on a
-miss it restores the newest Gradle cache by prefix (`restore-keys`). GitHub searches the run's own ref first (a PR's
-merge ref, i.e. its earlier runs), then the PR's base branch, then the default branch (`master`): a PR that changes the
-Gradle files starts from the first match, and from an empty cache only when none of these has a Gradle cache. A cache
-saved by a PR run is visible only to later runs of that PR; one saved on `master` is visible to every branch.
+miss it restores a Gradle cache by prefix (`restore-keys`) if one is visible to the run: the run's own ref (a PR's
+merge ref, i.e. its earlier runs) is searched first, then the PR's base branch and the default branch (`master`). A PR
+that changes the Gradle files thus usually starts from an earlier cache; with no visible Gradle cache it starts empty.
+A cache saved by a PR run is visible only to later runs of that PR; one saved on `master` is visible to every branch.
 
 ## `ci.yml` — checks
 

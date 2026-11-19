@@ -2,6 +2,11 @@
 
 Workflows: `.github/workflows/`; the shared step that provides the teapod-core AAR: `.github/actions/teapod-core`
 (restore from the Actions cache by the `core/` tree hash, or build with Go, gomobile and the NDK on a miss).
+`.github/actions/gradle-cache` keeps the Gradle User Home in the Actions cache by the hash of the Gradle files; on a
+miss it restores a Gradle cache by prefix (`restore-keys`) if one is visible to the run: the run's own ref (a PR's
+merge ref, i.e. its earlier runs) is searched first, then the PR's base branch and the default branch (`master`). A PR
+that changes the Gradle files thus usually starts from an earlier cache; with no visible Gradle cache it starts empty.
+A cache saved by a PR run is visible only to later runs of that PR; one saved on `master` is visible to every branch.
 
 ## `ci.yml` — checks
 
@@ -10,7 +15,7 @@ On push to `master` and on pull requests (not on every branch push: with an open
 | Job | Steps |
 |---|---|
 | `dart` | `flutter gen-l10n` + `git diff --exit-code lib/l10n` (generated files match the ARB), `dart format --set-exit-if-changed lib test tool`, `flutter analyze`, `flutter test` |
-| `kotlin` | JDK 21 → teapod-core AAR (the action above; built only on a cache miss, i.e. the first run for a `core/` tree) → `flutter build apk --debug --config-only` → `./gradlew :app:testDebugUnitTest` |
+| `kotlin` | JDK 21 → Gradle cache → teapod-core AAR (the action above; built only on a cache miss, i.e. the first run for a `core/` tree) → `flutter build apk --debug --config-only` → `./gradlew :app:testDebugUnitTest` |
 | `core` | `core/build.sh prepare` (patched xray-core), `go vet ./...`, `go test ./...` in `core/`, plus the tests the xray-core patches add |
 
 `assets/binaries/` is created empty: it is declared in pubspec, tests don't need geodata.
@@ -55,7 +60,7 @@ issue lets the next run open a new one. The script runs locally the same way (ne
 Manual (`workflow_dispatch`): Actions → Release → Run workflow, or
 `gh workflow run release.yml --ref <branch> [-f prerelease=false]` (`prerelease` defaults to `true`).
 
-Two jobs. `apk` runs once per ABI in parallel (matrix `arm64-v8a`, `x86_64`): signing key → JDK, NDK → teapod-core
+Two jobs. `apk` runs once per ABI in parallel (matrix `arm64-v8a`, `x86_64`): signing key → JDK, Gradle cache, NDK → teapod-core
 AAR (the action: cache or build) → `./build.sh binaries` (the pinned geodata) → `TARGET_PLATFORMS=<platform> ./build.sh release`
 → signature check → artifact `build-<abi>` (the APK and its obfuscation symbols); the arm64 job also uploads the AAR as
 artifact `teapod-core`. `publish` then downloads the three artifacts by name, runs `./build.sh push|pushpre` (APKs **and**

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:fake_async/fake_async.dart';
@@ -169,6 +170,15 @@ void main() {
     c.listen(vpnProvider, (_, _) {});
     await _settle();
   }
+
+  /// Native confirms every connect, like the real service does after the hot switch.
+  void confirmConnects([Future<void>? gate]) => native.onConnect = () async {
+    await gate;
+    Future.microtask(
+      () => emit({'type': 'state', 'value': 'connected', 'socksPort': 2080, 'socksUser': 'su', 'socksPassword': 'sp'}),
+    );
+    return null;
+  };
 
   Future<void> connected({
     List<VpnConfig>? configs,
@@ -508,6 +518,7 @@ void main() {
       await ProfileStorageService().saveActiveProfileId('X');
       final profiles = c.read(profileProvider.notifier);
       await c.read(profileProvider.future);
+      confirmConnects();
 
       await Future.wait([profiles.switchProfile('W'), profiles.switchProfile('Y')]);
       await _settle();
@@ -548,17 +559,48 @@ void main() {
       expect(st().error, isNotNull);
     });
 
+    test('a later switch waits for the earlier one\'s connect', () async {
+      final r2 = _cfg('r2', rawXray: _visionRaw.replaceAll('r.example', 'r2.example'));
+      await connected(
+        configs: [
+          _cfg('r', rawXray: _visionRaw),
+          r2,
+          _cfg('a'),
+        ],
+      );
+      ConfigSelection sel(VpnConfig cfg) => ConfigSelection(configId: cfg.id, config: PinnedRef.of(cfg));
+      await ProfileStorageService().saveProfiles([
+        Profile(id: 'X', name: 'X', settings: _settings, createdAt: DateTime(2026)),
+        Profile(id: 'W', name: 'W', settings: _settings, createdAt: DateTime(2026), selection: sel(r2)),
+        Profile(id: 'Y', name: 'Y', settings: _settings, createdAt: DateTime(2026), selection: sel(_cfg('a'))),
+      ]);
+      await ProfileStorageService().saveActiveProfileId('X');
+      final profiles = c.read(profileProvider.notifier);
+      await c.read(profileProvider.future);
+      final before = native.named('connect').length;
+      final gate = Completer<void>();
+      confirmConnects(gate.future);
+
+      final switches = Future.wait([profiles.switchProfile('W'), profiles.switchProfile('Y')]);
+      await _settle();
+      expect(native.named('connect'), hasLength(before + 1)); // W's connect is still in flight
+      gate.complete();
+      await switches;
+      await _settle();
+      expect(native.named('connect'), hasLength(before + 2));
+      expect(native.lastConnect()['xrayConfig'], contains('ha.example'));
+      expect(n().runsConfig(_cfg('a')), isTrue);
+    });
+
     test('a core change during a no-op switch is still handled', () async {
       await connected(configs: [_cfg('r', rawXray: _visionRaw)]);
-      final profiles = c.read(profileProvider.notifier);
-      final activeId = (await c.read(profileProvider.future)).activeProfileId;
-      // nothing runs the raw config any more while the (no-op) switch is in flight
+      await c.read(profileProvider.future);
+      // nothing runs the raw config any more while a (no-op) switch is in flight
       await n().duringProfileSwitch(() async {
         await c
             .read(settingsProvider.notifier)
             .save(_settings.copyWith(disabledCores: {CoreKind.xrayGo, CoreKind.singBox}));
         await _settle();
-        await profiles.switchProfile(activeId);
         return false;
       });
       await _settle();

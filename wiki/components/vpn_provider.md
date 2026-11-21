@@ -52,7 +52,8 @@ it can → reconnect banner; disconnected → refresh or clear the saved quick-c
 5. `XrayEngine.connect(config, options)`; stores the SOCKS credentials and `appliedFingerprint`.
 
 **Attempt ownership.** A `connect()` that passes its entry guard (not busy, not connected unless switching) takes a
-new attempt number; a later such `connect()` or any `disconnect()` makes it stale. After each await of the attempt
+new attempt number; a later such `connect()`, any `disconnect()` or the 45 s connect timeout makes it stale. After
+each await of the attempt
 (notification permission, available cores, the native call) a stale attempt returns without calling native and
 without writing `_connectedConfig`, SOCKS credentials, `appliedFingerprint` or an `error`. Native state events carry
 no attempt number and are applied as they come.

@@ -704,6 +704,24 @@ void main() {
       expect(native.named('connect'), isEmpty);
       expect(st().connectionState, VpnState.disconnected);
     });
+
+    test('disconnect after native reported disconnected still drops the waiting connect', () async {
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      final permission = Completer<Map<int, int>>();
+      messenger.setMockMethodCallHandler(_permissions, (call) => permission.future);
+      final first = n().connect();
+      await _settle();
+      emit({'type': 'state', 'value': 'disconnected'});
+      await _settle();
+      expect(st().connectionState, VpnState.disconnected);
+
+      await n().disconnect(); // idle: no native call, but the waiting connect is dropped
+      permission.complete({17: 1});
+      await first;
+      await _settle();
+      expect(native.named('connect'), isEmpty);
+      expect(native.named('disconnect'), isEmpty);
+    });
   });
 
   group('disconnect', () {

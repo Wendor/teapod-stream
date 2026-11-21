@@ -581,7 +581,7 @@ class VpnNotifier extends Notifier<VpnState2> {
         appliedFingerprint: connectionFingerprint(settings, core: backend.kind),
       );
     } on PlatformException catch (e) {
-      fail(e.message ?? 'Connection failed');
+      fail(e.message ?? L10n.current.vpnConnectError);
     }
   }
 
@@ -656,11 +656,13 @@ class VpnNotifier extends Notifier<VpnState2> {
   }
 
   Future<void> disconnect() async {
+    // A connect still in flight must not dispatch or write state after this — also when native already reported
+    // `disconnected` while that connect waited.
+    _attempt++;
     if (state.connectionState == VpnState.disconnected || state.connectionState == VpnState.disconnecting) {
       return;
     }
 
-    _attempt++; // a connect still in flight must not dispatch or write state after this
     // Update state synchronously
     state = state.copyWith(connectionState: VpnState.disconnecting);
 

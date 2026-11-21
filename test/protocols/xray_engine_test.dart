@@ -7,7 +7,7 @@ import 'package:teapodstream/core/interfaces/vpn_engine.dart';
 import 'package:teapodstream/core/models/heartbeat_settings.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/core/models/vpn_log_entry.dart';
-import 'package:teapodstream/core/services/settings_service.dart';
+import 'package:teapodstream/core/models/app_settings.dart';
 import 'package:teapodstream/protocols/singbox/singbox_backend.dart';
 import 'package:teapodstream/protocols/xray/xray_engine.dart';
 import 'package:teapodstream/protocols/xray/xray_go_backend.dart';

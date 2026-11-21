@@ -4,7 +4,7 @@ import 'package:teapodstream/core/interfaces/vpn_engine.dart';
 import 'package:teapodstream/core/models/connection_fingerprint.dart';
 import 'package:teapodstream/core/models/core_kind.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
-import 'package:teapodstream/core/services/settings_service.dart';
+import 'package:teapodstream/core/models/app_settings.dart';
 import 'package:teapodstream/protocols/xray/xray_config_builder.dart';
 import 'package:teapodstream/protocols/xray/xray_go_backend.dart';
 

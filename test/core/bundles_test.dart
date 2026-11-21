@@ -5,8 +5,8 @@ import 'package:teapodstream/core/models/pinned_ref.dart';
 import 'package:teapodstream/core/models/profile.dart';
 import 'package:teapodstream/core/models/profile_bundle.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
-import 'package:teapodstream/core/services/config_storage_service.dart';
-import 'package:teapodstream/core/services/settings_service.dart';
+import 'package:teapodstream/core/models/subscription.dart';
+import 'package:teapodstream/core/models/app_settings.dart';
 
 VpnConfig _cfg(String id, {String? rawUri, String? subId}) => VpnConfig(
   id: id,

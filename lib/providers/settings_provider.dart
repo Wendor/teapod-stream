@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/services/settings_service.dart';
+import '../core/models/app_settings.dart';
 import 'profile_provider.dart';
 
 class SettingsNotifier extends AsyncNotifier<AppSettings> {

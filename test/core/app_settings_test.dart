@@ -9,7 +9,7 @@ import 'package:teapodstream/core/models/routing_settings.dart';
 import 'package:teapodstream/core/models/vpn_log_entry.dart';
 import 'package:teapodstream/core/models/xray_tuning.dart';
 import 'package:teapodstream/core/services/settings_service.dart';
-import 'package:teapodstream/core/services/update_service.dart';
+import 'package:teapodstream/core/models/app_settings.dart';
 
 /// Every field differs from its default, so a field lost in (de)serialization shows up.
 const _custom = AppSettings(

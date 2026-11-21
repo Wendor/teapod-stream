@@ -7,8 +7,9 @@ import 'package:teapodstream/core/models/pinned_ref.dart';
 import 'package:teapodstream/core/models/profile.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/core/services/config_storage_service.dart';
+import 'package:teapodstream/core/models/subscription.dart';
 import 'package:teapodstream/core/services/profile_storage_service.dart';
-import 'package:teapodstream/core/services/settings_service.dart';
+import 'package:teapodstream/core/models/app_settings.dart';
 import 'package:teapodstream/core/services/storage_secure_service.dart';
 
 VpnConfig _cfg(String id, {String? subId}) => VpnConfig(

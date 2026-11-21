@@ -11,7 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/models/connections_bundle.dart';
 import '../../core/models/vpn_config.dart';
 import '../../core/models/pinned_ref.dart';
-import '../../core/services/config_storage_service.dart';
+import '../../core/models/subscription.dart';
 import '../../core/services/subscription_service.dart';
 import '../../protocols/xray/vless_parser.dart';
 import '../../providers/config_provider.dart';

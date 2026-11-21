@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/routing_settings.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/geo_provider.dart';
-import '../../core/services/settings_service.dart' show AppSettings, GeoPresets, VpnMode;
+import '../../core/models/app_settings.dart' show AppSettings, GeoPresets, VpnMode;
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/hero_panel.dart';

@@ -14,7 +14,7 @@ import 'ui/screens/routing_screen.dart';
 import 'ui/screens/settings_screen.dart';
 import 'providers/config_provider.dart';
 import 'providers/vpn_provider.dart';
-import 'core/services/settings_service.dart';
+import 'core/models/app_settings.dart';
 import 'providers/settings_provider.dart';
 import 'providers/update_provider.dart';
 import 'providers/geo_provider.dart';

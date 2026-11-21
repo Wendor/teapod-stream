@@ -1,8 +1,7 @@
 import 'dart:io';
 import 'dart:convert';
 import 'package:socks5_proxy/socks.dart';
-
-enum UpdateChannel { stable, beta }
+import '../models/app_settings.dart' show UpdateChannel;
 
 /// Release notes languages: code → the language's own name. The name is the H1 of `changelog/<code>.md` and the
 /// `### <name>` heading of that language's section in a release body (`./build.sh notes`).

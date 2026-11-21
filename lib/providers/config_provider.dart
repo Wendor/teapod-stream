@@ -4,6 +4,7 @@ import '../core/models/pinned_ref.dart';
 import '../core/models/config_selection.dart';
 import '../core/models/connections_bundle.dart';
 import '../core/services/config_storage_service.dart';
+import '../core/models/subscription.dart';
 import '../core/services/subscription_service.dart' show SubscriptionService, SubscriptionFetchResult, HwidDeviceInfo;
 import '../core/services/device_service.dart';
 import '../core/services/log_service.dart';

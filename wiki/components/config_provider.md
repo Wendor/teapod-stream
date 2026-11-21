@@ -1,6 +1,6 @@
 # ConfigProvider — configs and subscriptions
 
-**Files:** `lib/providers/config_provider.dart`, `lib/core/models/pinned_ref.dart`,
+**Files:** `lib/providers/config_provider.dart`, `lib/core/models/pinned_ref.dart`, `lib/core/models/subscription.dart`,
 `lib/core/services/config_storage_service.dart`, `lib/core/services/subscription_service.dart`
 
 `ConfigNotifier` (`AsyncNotifier<ConfigState>`) owns the list of configs and subscriptions: loading, adding,

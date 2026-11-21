@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'profile.dart';
 import 'vpn_config.dart';
-import '../services/config_storage_service.dart' show Subscription;
+import '../models/subscription.dart' show Subscription;
 
 class ProfileBundle {
   static const int currentVersion = 1;

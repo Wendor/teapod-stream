@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:teapodstream/core/constants/app_constants.dart';
 import 'package:teapodstream/core/models/core_kind.dart';
 import 'package:teapodstream/core/services/settings_service.dart';
+import 'package:teapodstream/core/models/app_settings.dart';
 import 'package:teapodstream/providers/app_icon_provider.dart';
 import 'package:teapodstream/providers/app_info_provider.dart';
 import 'package:teapodstream/providers/apps_provider.dart';

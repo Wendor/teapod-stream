@@ -1,4 +1,4 @@
-import '../services/settings_service.dart';
+import '../models/app_settings.dart';
 import 'config_selection.dart';
 
 class Profile {

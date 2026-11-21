@@ -12,7 +12,7 @@ import '../core/models/core_kind.dart';
 import '../core/models/heartbeat_settings.dart';
 import '../core/models/vpn_log_entry.dart';
 import '../core/services/log_service.dart';
-import '../core/services/settings_service.dart';
+import '../core/models/app_settings.dart';
 import '../core/services/tunnel_socks.dart';
 import '../protocols/xray/xray_engine.dart';
 import '../core/cores/core_resolver.dart';

@@ -3,7 +3,7 @@ import 'dart:convert';
 import '../constants/app_constants.dart';
 import '../interfaces/vpn_engine.dart';
 import '../models/vpn_config.dart';
-import '../services/settings_service.dart';
+import '../models/app_settings.dart';
 import 'core_backend.dart';
 
 /// Connection options for [config] on core [backend] from settings.

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/profile.dart';
-import '../services/settings_service.dart';
+import '../models/app_settings.dart';
 import 'storage_secure_service.dart';
 
 class ProfileStorageService {

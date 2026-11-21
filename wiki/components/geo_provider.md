@@ -1,6 +1,6 @@
 # GeoProvider — geodata
 
-**Files:** `lib/providers/geo_provider.dart`, `GeoPresets` in `lib/core/services/settings_service.dart`
+**Files:** `lib/providers/geo_provider.dart`, `GeoPresets` in `lib/core/models/app_settings.dart`
 
 `GeoNotifier` manages `geoip.dat` and `geosite.dat` in `filesDir`, which the cores read for `geoip:` / `geosite:`
 rules and ad blocking.

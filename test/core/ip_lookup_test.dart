@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:teapodstream/core/services/ip_lookup.dart';
 
@@ -92,27 +93,56 @@ void main() {
   });
 
   group('timeouts', () {
-    test('a hanging service is skipped after the per-service timeout', () async {
-      final lookup = IpLookup(perService: const Duration(milliseconds: 50), total: const Duration(seconds: 5));
-      final r = await lookup.lookup('a', (url) {
-        if (url.host == 'ip-api.com') return Completer<String>().future; // never answers
-        return Future.value(jsonEncode({'ip': '1.1.1.1'}));
+    // Fake time: on a slow CI runner real timers let a third service in before the total timeout.
+    IpLookup fakeTimed(FakeAsync async, {required int perServiceMs, required int totalMs}) {
+      final start = DateTime(2026, 11, 21, 12);
+      return IpLookup(
+        perService: Duration(milliseconds: perServiceMs),
+        total: Duration(milliseconds: totalMs),
+        now: () => start.add(async.elapsed),
+      );
+    }
+
+    test('a hanging service is skipped after the per-service timeout', () {
+      fakeAsync((async) {
+        final lookup = fakeTimed(async, perServiceMs: 4000, totalMs: 10000);
+        IpLookupResult? r;
+        lookup
+            .lookup('a', (url) {
+              if (url.host == 'ip-api.com') return Completer<String>().future; // never answers
+              return Future.value(jsonEncode({'ip': '1.1.1.1'}));
+            })
+            .then((v) => r = v);
+        async.elapse(const Duration(milliseconds: 3999));
+        expect(r, isNull);
+        async.elapse(const Duration(milliseconds: 2));
+        expect(r?.ip, '1.1.1.1');
+        expect(lookup.orderFor('a').first, ipInfo);
       });
-      expect(r?.ip, '1.1.1.1');
-      expect(lookup.orderFor('a').first, ipInfo);
     });
 
-    test('the whole chain stops at the total timeout', () async {
-      final lookup = IpLookup(perService: const Duration(milliseconds: 80), total: const Duration(milliseconds: 120));
-      final asked = <String>[];
-      final watch = Stopwatch()..start();
-      final r = await lookup.lookup('a', (url) {
-        asked.add(url.host);
-        return Completer<String>().future;
+    test('the whole chain stops at the total timeout', () {
+      fakeAsync((async) {
+        final lookup = fakeTimed(async, perServiceMs: 4000, totalMs: 6000);
+        final asked = <String>[];
+        var done = false;
+        IpLookupResult? r;
+        lookup
+            .lookup('a', (url) {
+              asked.add(url.host);
+              return Completer<String>().future;
+            })
+            .then((v) {
+              r = v;
+              done = true;
+            });
+        async.elapse(const Duration(milliseconds: 5999));
+        expect(done, isFalse);
+        async.elapse(const Duration(milliseconds: 2));
+        expect(done, isTrue);
+        expect(r, isNull);
+        expect(asked, ['ip-api.com', 'ipinfo.io']); // the second gets only the 2 s left of the total
       });
-      expect(r, isNull);
-      expect(asked, ['ip-api.com', 'ipinfo.io']); // the second gets only what is left of the total
-      expect(watch.elapsedMilliseconds, lessThan(1000));
     });
   });
 }

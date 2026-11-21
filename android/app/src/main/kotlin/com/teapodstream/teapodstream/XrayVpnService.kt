@@ -413,18 +413,18 @@ class XrayVpnService : VpnService() {
                         false
                     }
                     // A stop stuck past the timeout (or still queued behind a stuck command) holds the queue:
-                    // close the sink without it, as long as no newer command took over.
-                    if (!stopped && sessionCommands.isLatest(command.id)) closeTunSink()
+                    // close the sink without it, as long as no newer connect took over.
+                    if (!stopped && !sessionCommands.connectAfter(command.id)) closeTunSink()
 
                     // Guarantee "disconnected" is always sent — unless a connect came in meanwhile: its
                     // session (and its attempt tag) is starting, and a late "disconnected" would claim it.
                     // On the main thread, like onStartCommand, so the check and ACTION_CONNECT can't interleave.
                     mainHandler.post {
-                        if (!sessionCommands.isLatest(command.id)) {
+                        if (sessionCommands.connectAfter(command.id)) {
                             log("info", "disconnect finished after a new connect: final state left to it")
                             return@post
                         }
-                        // Still the latest command: no newer session; answer the connect Flutter may wait for,
+                        // No newer connect: answer the connect Flutter may wait for,
                         // also when the queued stop hasn't run yet (timeout).
                         sessionAttempt = answers
                         setState("disconnected")
@@ -1284,6 +1284,7 @@ class XrayVpnService : VpnService() {
     /// Restart from saved parameters (CONNECT_QUICK, system restart) — queued in [sessionCommands] after the
     /// commands received before it. Won't begin on top of a live session or after the user disconnected.
     private fun startQuick(start: () -> Unit) {
+        requestedAttempt = 0 // the session it starts is untagged; a later disconnect answers no Flutter connect
         sessionCommands.submit(SessionCommands.Kind.QUICK) {
             if (userRequestedDisconnect.get() || isRunning.get()) {
                 log("info", "quick start skipped (disconnected by user or already running)")

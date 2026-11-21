@@ -87,6 +87,16 @@ class SessionCommandsTest {
     }
 
     @Test
+    fun `connectAfter sees only a later connect`() {
+        val d = submit(Kind.DISCONNECT, "d")
+        submit(Kind.QUICK, "q")
+        assertFalse(commands.connectAfter(d.id))
+        val c = submit(Kind.CONNECT, "c")
+        assertTrue(commands.connectAfter(d.id))
+        finish(c)
+    }
+
+    @Test
     fun `isLatest tracks the last command received`() {
         val a = submit(Kind.DISCONNECT, "a")
         assertTrue(commands.isLatest(a.id))

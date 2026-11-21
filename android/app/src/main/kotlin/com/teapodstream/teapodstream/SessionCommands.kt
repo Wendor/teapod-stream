@@ -53,4 +53,7 @@ internal class SessionCommands(
 
     /** Whether no command was received after [id]. */
     fun isLatest(id: Long): Boolean = issued.get() == id
+
+    /** Whether a connect was received after [id] — its session owns the state from then on. */
+    fun connectAfter(id: Long): Boolean = lastConnect > id
 }

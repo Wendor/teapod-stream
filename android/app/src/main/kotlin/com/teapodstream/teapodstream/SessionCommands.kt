@@ -11,8 +11,8 @@ import java.util.concurrent.atomic.AtomicLong
  * waiting for a lock don't enter in arrival order; a queue does, so a disconnect that waited behind a long start
  * can't stop the session of a connect received after it.
  *
- * A connect is skipped when a connect or a disconnect was received after it: the session it would start is replaced
- * right away. Disconnects and quick starts always run (quick starts check their own preconditions).
+ * A connect or a quick start is skipped when a connect or a disconnect was received after it: the session it would
+ * start is replaced right away. Disconnects always run.
  *
  * [submit] must be called on one thread (the main thread, `onStartCommand`): the numbers follow the queue order.
  */
@@ -40,7 +40,12 @@ internal class SessionCommands(
         }
         val done = executor.submit {
             synchronized(lock) {
-                if (kind == Kind.CONNECT && (lastConnect != id || lastDisconnect > id)) skipped() else block()
+                val replaced = when (kind) {
+                    Kind.CONNECT -> lastConnect != id || lastDisconnect > id
+                    Kind.QUICK -> lastConnect > id || lastDisconnect > id
+                    Kind.DISCONNECT -> false
+                }
+                if (replaced) skipped() else block()
             }
         }
         return Command(id, done)

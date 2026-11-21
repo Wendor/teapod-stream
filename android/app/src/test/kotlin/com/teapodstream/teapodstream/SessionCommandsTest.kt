@@ -94,4 +94,17 @@ class SessionCommandsTest {
         assertFalse(commands.isLatest(a.id))
         finish(b)
     }
+
+    @Test
+    fun `a quick start followed by a connect or a disconnect doesn't start`() {
+        val release = CountDownLatch(1)
+        longStart(release)
+        submit(Kind.QUICK, "quick 1")
+        submit(Kind.CONNECT, "connect")
+        submit(Kind.QUICK, "quick 2")
+        val last = submit(Kind.DISCONNECT, "disconnect")
+        release.countDown()
+        finish(last)
+        assertEquals(listOf("skip quick 1", "skip connect", "skip quick 2", "disconnect"), ran)
+    }
 }

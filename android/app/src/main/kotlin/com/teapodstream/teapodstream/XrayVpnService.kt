@@ -424,6 +424,9 @@ class XrayVpnService : VpnService() {
                             log("info", "disconnect finished after a new connect: final state left to it")
                             return@post
                         }
+                        // Still the latest command: no newer session; answer the connect Flutter may wait for,
+                        // also when the queued stop hasn't run yet (timeout).
+                        sessionAttempt = answers
                         setState("disconnected")
                         // Update notification to "Disconnected" ONLY after we've actually
                         // finished (or timed out) the stopping process.

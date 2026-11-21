@@ -51,10 +51,11 @@ it can → reconnect banner; disconnected → refresh or clear the saved quick-c
    quick-connect) → `checkOptions`: `blocking` fails the connect, `warnings` go to the log.
 5. `XrayEngine.connect(config, options)`; stores the SOCKS credentials and `appliedFingerprint`.
 
-**Attempt ownership.** Every `connect()` takes a new attempt number; a later `connect()` or a `disconnect()` makes it
-stale. After each await (notification permission, available cores, the native call) a stale attempt returns without
-calling native and without writing anything: no `_connectedConfig`, SOCKS credentials, `appliedFingerprint`, and no
-`error` from a late failure. So the session state always describes the latest request.
+**Attempt ownership.** A `connect()` that passes its entry guard (not busy, not connected unless switching) takes a
+new attempt number; a later such `connect()` or any `disconnect()` makes it stale. After each await of the attempt
+(notification permission, available cores, the native call) a stale attempt returns without calling native and
+without writing `_connectedConfig`, SOCKS credentials, `appliedFingerprint` or an `error`. Native state events carry
+no attempt number and are applied as they come.
 
 SOCKS credentials are random when `randomCredentials` is on **or** when the manual login is empty in TUN mode —
 a password-less SOCKS on localhost would be an open proxy for every app. In proxy-only mode empty credentials

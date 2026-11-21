@@ -821,6 +821,22 @@ void main() {
       expect(native.named('connect'), hasLength(1));
     });
 
+    test("a resume before the connect reaches the service ignores a natively started session's error", () async {
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      final permission = Completer<Map<int, int>>();
+      messenger.setMockMethodCallHandler(_permissions, (call) => permission.future);
+      final pending = n().connect();
+      await _settle();
+      // A session started from the tile failed before the connect; its untagged state is still there.
+      native.state = {'state': 'error', 'attempt': 0};
+      await n().syncNativeState();
+      await _settle();
+      expect(st().connectionState, VpnState.connecting);
+      permission.complete({17: 1});
+      await pending;
+      expect(native.named('connect'), hasLength(1));
+    });
+
     test('a connect settled by the startup sync follows a later idle snapshot', () async {
       final logsGate = Completer<void>();
       messenger.setMockMethodCallHandler(_method, (call) async {
@@ -1335,8 +1351,8 @@ void main() {
         async.flushMicrotasks();
         n().connect();
         async.flushMicrotasks();
-        // syncNativeState doesn't know whose connecting this is, and clears the timeout.
-        native.state = {'state': 'connecting'};
+        // syncNativeState doesn't know whether the pending session is reconnecting, and clears the timeout.
+        native.state = {'state': 'connecting', 'attempt': native.lastConnect()['attempt']};
         n().syncNativeState();
         async.flushMicrotasks();
         async.elapse(const Duration(seconds: 60));

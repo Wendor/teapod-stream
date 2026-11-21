@@ -191,12 +191,12 @@ class VpnNotifier extends Notifier<VpnState2> {
 
     final vpnState = await _engine.getVpnState();
     _seenNativeAttempt(vpnState.attempt);
-    if (_staleSnapshot(vpnState.attempt, vpnState.state)) return;
+    if (_staleSnapshot(vpnState.attempt)) return;
     if (vpnState.state == VpnState.connected && vpnState.socksPort > 0) {
       if (vpnState.connectedAtMs > 0) {
         _connectedAt = DateTime.fromMillisecondsSinceEpoch(vpnState.connectedAtMs);
       }
-      // A connect started before this sync settles with the session it finds.
+      // The pending connect's own session: it has settled.
       _awaiting = null;
       _connectTimeout?.cancel();
       _connectTimeout = null;
@@ -533,14 +533,11 @@ class VpnNotifier extends Notifier<VpnState2> {
   }
 
   /// A native snapshot (`getState`) while a Flutter connect waits that isn't about it: another attempt's session,
-  /// or an idle untagged service — the connect hasn't reached it yet (a resume after the notification-permission
-  /// dialog at the start of a connect). The pending connect owns the state. An untagged reconnect still applies.
-  /// Rejecting an idle snapshot re-arms the connect timeout: a resume sync of a native reconnect may have cancelled
-  /// it, and the pending connect must still end.
-  bool _staleSnapshot(int native, VpnState nativeState) {
-    if (_awaiting == null) return false;
-    if (native != 0) return native != _awaiting;
-    if (nativeState != VpnState.disconnected) return false;
+  /// or an untagged one — the service before the connect reached it (a resume after the notification-permission
+  /// dialog) or a natively started session the connect replaces. The pending connect owns the state; rejecting a
+  /// snapshot re-arms the connect timeout (a reconnect report may have cancelled it), so the wait still ends.
+  bool _staleSnapshot(int native) {
+    if (_awaiting == null || native == _awaiting) return false;
     _armConnectTimeout();
     return true;
   }
@@ -740,7 +737,7 @@ class VpnNotifier extends Notifier<VpnState2> {
     try {
       final native = await _engine.getVpnState();
       _seenNativeAttempt(native.attempt);
-      if (_staleSnapshot(native.attempt, native.state)) return;
+      if (_staleSnapshot(native.attempt)) return;
       if (native.state == VpnState.connected && native.socksPort > 0) {
         if (native.connectedAtMs > 0) {
           _connectedAt ??= DateTime.fromMillisecondsSinceEpoch(native.connectedAtMs);

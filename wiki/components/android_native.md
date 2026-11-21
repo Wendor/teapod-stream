@@ -57,12 +57,11 @@ skipped when a connect or a disconnect was received after it.
   (`abortQuickConnect`) the state is finished properly: kill switch → `blocked`, otherwise TUN is closed →
   `disconnected`, and the app opens.
 - **`ACTION_DISCONNECT`**: `userRequestedDisconnect` (+ `user_disconnected.flag` on disk, so a restarted process doesn't
-  reconnect), then in the queue: stop and close TUN (also an existing kill-switch sink). The supervisor waits 5 s for
-  it, then posts `disconnected` to the main thread — skipped when a connect arrived meanwhile (that session owns
-  the state; it answers that connect also when the queued stop hasn't run yet); after the timeout it closes the sink
-  itself. Its events carry the attempt of the last `ACTION_CONNECT`
-  received before it (`requestedAttempt`): a connect Flutter still waits for, cancelled from the notification or the
-  tile, gets its answer. Calls `ensureForeground()` first —
+  reconnect), then in the queue: stop, close TUN (also an existing kill-switch sink) and post `disconnected` to the
+  main thread — skipped when a connect or a quick start arrived meanwhile (that session owns the state). If the queued
+  stop hasn't finished in 5 s, a supervisor closes the sink and reports anyway. Its events carry the attempt of the
+  last `ACTION_CONNECT` received before it (`requestedAttempt`; a quick start resets it): a connect Flutter still waits
+  for, cancelled from the notification or the tile, gets its answer. Calls `ensureForeground()` first —
   it may arrive via `startForegroundService` into a fresh process.
 
 **Starting.** `Builder.establish()` → TUN (random `10.x.x.x/32`, IPv4 default route; IPv6 only with `ipv6Enabled`;

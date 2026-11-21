@@ -87,23 +87,17 @@ class SessionCommandsTest {
     }
 
     @Test
-    fun `connectAfter sees only a later connect`() {
+    fun `startAfter sees a later connect or quick start, not a disconnect`() {
         val d = submit(Kind.DISCONNECT, "d")
-        submit(Kind.QUICK, "q")
-        assertFalse(commands.connectAfter(d.id))
+        submit(Kind.DISCONNECT, "d2")
+        assertFalse(commands.startAfter(d.id))
+        val q = submit(Kind.QUICK, "q")
+        assertTrue(commands.startAfter(d.id))
         val c = submit(Kind.CONNECT, "c")
-        assertTrue(commands.connectAfter(d.id))
+        assertTrue(commands.startAfter(q.id))
         finish(c)
     }
 
-    @Test
-    fun `isLatest tracks the last command received`() {
-        val a = submit(Kind.DISCONNECT, "a")
-        assertTrue(commands.isLatest(a.id))
-        val b = submit(Kind.QUICK, "b")
-        assertFalse(commands.isLatest(a.id))
-        finish(b)
-    }
 
     @Test
     fun `a quick start followed by a connect or a disconnect doesn't start`() {

@@ -29,6 +29,7 @@ internal class SessionCommands(
     private val issued = AtomicLong(0)
     @Volatile private var lastConnect = 0L
     @Volatile private var lastDisconnect = 0L
+    @Volatile private var lastQuick = 0L
 
     /** Queues [block]; [skipped] runs instead (also in order, under [lock]) when a connect turns out superseded. */
     fun submit(kind: Kind, skipped: () -> Unit = {}, block: () -> Unit): Command {
@@ -36,7 +37,7 @@ internal class SessionCommands(
         when (kind) {
             Kind.CONNECT -> lastConnect = id
             Kind.DISCONNECT -> lastDisconnect = id
-            Kind.QUICK -> {}
+            Kind.QUICK -> lastQuick = id
         }
         val done = executor.submit {
             synchronized(lock) {
@@ -51,9 +52,6 @@ internal class SessionCommands(
         return Command(id, done)
     }
 
-    /** Whether no command was received after [id]. */
-    fun isLatest(id: Long): Boolean = issued.get() == id
-
-    /** Whether a connect was received after [id] — its session owns the state from then on. */
-    fun connectAfter(id: Long): Boolean = lastConnect > id
+    /** Whether a connect or a quick start was received after [id] — its session owns the state from then on. */
+    fun startAfter(id: Long): Boolean = lastConnect > id || lastQuick > id
 }

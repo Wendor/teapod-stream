@@ -394,43 +394,41 @@ class XrayVpnService : VpnService() {
                 setState("disconnecting")
                 // Stop in the session queue, after the commands received before this one. Go calls
                 // (stopTun2Socks/stopXray) can block if goroutines are stuck after long uptime or network changes.
-                val command = sessionCommands.submit(SessionCommands.Kind.DISCONNECT) {
+                lateinit var command: SessionCommands.Command
+                // "disconnected", on the main thread like onStartCommand (so the check and a new command can't
+                // interleave) — unless a start was received meanwhile: its session (and its attempt tag) owns the
+                // state. Answers the connect Flutter may wait for.
+                val report = {
+                    mainHandler.post {
+                        if (sessionCommands.startAfter(command.id)) {
+                            log("info", "disconnect finished after a new start: final state left to it")
+                        } else {
+                            sessionAttempt = answers
+                            setState("disconnected")
+                            showDisconnectedNotification()
+                        }
+                    }
+                }
+                command = sessionCommands.submit(SessionCommands.Kind.DISCONNECT) {
                     sessionAttempt = answers
                     stopVpn(explicit = true)
                     // From the blocked state stopVpn exits on the CAS (isRunning is already false),
                     // the kill switch's TUN sink must be closed explicitly.
                     closeTunSink()
+                    report()
                 }
+                // A stop stuck (or queued behind a stuck command) past 5 s: report anyway and close the sink
+                // without the queue, as long as no newer start took over. The queued stop reports again when done.
                 Thread {
-                    val stopped = try {
+                    try {
                         command.done.get(STOP_THREAD_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
-                        true
                     } catch (e: java.util.concurrent.TimeoutException) {
                         log("warning", "disconnect didn't finish in 5s, forcing disconnected state")
-                        false
+                        if (!sessionCommands.startAfter(command.id)) closeTunSink()
+                        report()
                     } catch (e: Exception) {
                         log("warning", "disconnect failed: ${e.message}")
-                        false
-                    }
-                    // A stop stuck past the timeout (or still queued behind a stuck command) holds the queue:
-                    // close the sink without it, as long as no newer connect took over.
-                    if (!stopped && !sessionCommands.connectAfter(command.id)) closeTunSink()
-
-                    // Guarantee "disconnected" is always sent — unless a connect came in meanwhile: its
-                    // session (and its attempt tag) is starting, and a late "disconnected" would claim it.
-                    // On the main thread, like onStartCommand, so the check and ACTION_CONNECT can't interleave.
-                    mainHandler.post {
-                        if (sessionCommands.connectAfter(command.id)) {
-                            log("info", "disconnect finished after a new connect: final state left to it")
-                            return@post
-                        }
-                        // No newer connect: answer the connect Flutter may wait for,
-                        // also when the queued stop hasn't run yet (timeout).
-                        sessionAttempt = answers
-                        setState("disconnected")
-                        // Update notification to "Disconnected" ONLY after we've actually
-                        // finished (or timed out) the stopping process.
-                        showDisconnectedNotification()
+                        report()
                     }
                 }.start()
                 return START_STICKY
@@ -1284,13 +1282,13 @@ class XrayVpnService : VpnService() {
     /// Restart from saved parameters (CONNECT_QUICK, system restart) — queued in [sessionCommands] after the
     /// commands received before it. Won't begin on top of a live session or after the user disconnected.
     private fun startQuick(start: () -> Unit) {
-        requestedAttempt = 0 // the session it starts is untagged; a later disconnect answers no Flutter connect
         sessionCommands.submit(SessionCommands.Kind.QUICK) {
             if (userRequestedDisconnect.get() || isRunning.get()) {
                 log("info", "quick start skipped (disconnected by user or already running)")
                 return@submit
             }
             sessionAttempt = 0
+            requestedAttempt = 0 // an untagged session: a later disconnect answers no Flutter connect
             start()
         }
     }

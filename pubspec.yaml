@@ -1,7 +1,7 @@
 name: teapodstream
 description: "Android VPN client with three proxy cores (xray-core, xray-rust, sing-box) and strict split tunneling"
 publish_to: 'none'
-version: 1.8.3+10803
+version: 1.8.4+10804
 
 environment:
   sdk: ^3.11.4

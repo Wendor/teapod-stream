@@ -3,16 +3,23 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:socks5_proxy/socks.dart';
 import '../core/interfaces/vpn_engine.dart';
+import '../core/services/ip_lookup.dart';
 import '../protocols/xray/xray_engine.dart';
+import 'config_provider.dart';
 import 'vpn_provider.dart';
 
 class IpInfo {
   final String ip;
-  final String country;
-  final String countryCode;
 
-  const IpInfo({required this.ip, required this.country, required this.countryCode});
+  /// Null when the service that answered doesn't report the country.
+  final String? country;
+  final String? countryCode;
+
+  const IpInfo({required this.ip, this.country, this.countryCode});
 }
+
+/// The lookup chain with its per-config order; lives as long as the app (the order is memory only).
+final ipLookupProvider = Provider<IpLookup>((ref) => IpLookup());
 
 class IpInfoNotifier extends AsyncNotifier<IpInfo?> {
   @override
@@ -43,33 +50,28 @@ class IpInfoNotifier extends AsyncNotifier<IpInfo?> {
 
   Future<IpInfo?> _fetch({required int socksPort, required String socksUser, required String socksPassword}) async {
     if (socksPort <= 0) return null;
+    final configId = ref.read(effectiveConfigProvider)?.id ?? '';
     final client = HttpClient();
-    if (socksPort > 0) {
-      SocksTCPClient.assignToHttpClient(client, [
-        ProxySettings(
-          InternetAddress.loopbackIPv4,
-          socksPort,
-          username: socksUser.isNotEmpty ? socksUser : null,
-          password: socksUser.isNotEmpty ? socksPassword : null,
-        ),
-      ]);
-    }
-    try {
-      final req = await client
-          .getUrl(Uri.parse('http://ip-api.com/json?fields=query,country,countryCode,status'))
-          .timeout(const Duration(seconds: 10));
+    SocksTCPClient.assignToHttpClient(client, [
+      ProxySettings(
+        InternetAddress.loopbackIPv4,
+        socksPort,
+        username: socksUser.isNotEmpty ? socksUser : null,
+        password: socksUser.isNotEmpty ? socksPassword : null,
+      ),
+    ]);
+    Future<String> fetch(Uri url) async {
+      final req = await client.getUrl(url);
       req.headers.set(HttpHeaders.userAgentHeader, 'TeapodStream');
-      final resp = await req.close().timeout(const Duration(seconds: 10));
+      final resp = await req.close();
       final body = await resp.transform(utf8.decoder).join();
-      final json = jsonDecode(body) as Map<String, dynamic>;
-      if (json['status'] != 'success') return null;
-      return IpInfo(
-        ip: json['query'] as String,
-        country: json['country'] as String,
-        countryCode: json['countryCode'] as String,
-      );
-    } catch (_) {
-      return null;
+      if (resp.statusCode != HttpStatus.ok) throw HttpException('HTTP ${resp.statusCode}', uri: url);
+      return body;
+    }
+
+    try {
+      final r = await ref.read(ipLookupProvider).lookup(configId, fetch);
+      return r == null ? null : IpInfo(ip: r.ip, country: r.country, countryCode: r.countryCode);
     } finally {
       client.close(force: true);
     }

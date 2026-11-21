@@ -14,8 +14,8 @@
 
 - Inbound `mixed` `socks-in` on 127.0.0.1 with a password; tun2socks feeds it, as for the Go core.
 - Route: `sniff` → `hijack-dns` (port 53 from tun2socks) → reject UDP when UDP is off → `ip_is_private` → zones /
-  geosite / geoip / sites / Russian services (`selectedOut`) → in `onlySelected` the probe hosts and `ip-api.com`
-  through the proxy; `final` is `direct` for `onlySelected`, otherwise `proxy`.
+  geosite / geoip / sites / Russian services (`selectedOut`) → in `onlySelected` the probe hosts and the IP lookup hosts
+  (`IpLookupSource.hosts`) through the proxy; `final` is `direct` for `onlySelected`, otherwise `proxy`.
 - DNS: `dns-main` by `DnsType` (`detour: proxy` in proxy mode), `dns-local` — the system resolver and
   `default_domain_resolver`. SSH and Naive carry no UDP, so in proxy mode a UDP `dns-main` becomes TCP.
 - Ad block: DNS rule `predefined NOERROR` for `geosite-category-ads-all` / `geosite-win-spy`.

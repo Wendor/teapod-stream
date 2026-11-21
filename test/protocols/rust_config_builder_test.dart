@@ -125,6 +125,20 @@ void main() {
     expect(stream['xhttpSettings']['extra']['xPaddingBytes'], '100-1000');
   });
 
+  test('selected-only mode sends every IP lookup host through the proxy on Go and Rust', () {
+    final opts = options(routing: const RoutingSettings(direction: RoutingDirection.onlySelected));
+    for (final json in [
+      XrayConfigBuilder.build(VlessParser.parseUri(profile())!, opts),
+      RustConfigBuilder.build(VlessParser.parseUri(profile())!, opts),
+    ]) {
+      final rule = (json['routing']['rules'] as List).singleWhere(
+        (dynamic r) => (r['domain'] as List?)?.contains('full:cp.cloudflare.com') == true,
+      );
+      expect(rule['domain'], containsAll(['full:ip-api.com', 'full:ipinfo.io', 'full:api.ipify.org']));
+      expect(rule['outboundTag'], 'proxy');
+    }
+  });
+
   for (final direction in [RoutingDirection.bypass, RoutingDirection.onlySelected]) {
     test('geo rules choose the expected outbound in $direction mode', () {
       final json = RustConfigBuilder.build(

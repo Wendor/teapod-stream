@@ -52,11 +52,14 @@ class GeoPresets {
   static const v2fly = (name: 'v2fly', geoipUrl: _v2Geoip, geositeUrl: _v2Geosite);
   static final all = [loyalsoldier, runetfreedom, v2fly];
 
+  /// [nameOf] for URLs that match no preset; the UI shows its own label for it.
+  static const custom = 'custom';
+
   static String nameOf(String geoipUrl, String geositeUrl) {
     for (final p in all) {
       if (p.geoipUrl == geoipUrl && p.geositeUrl == geositeUrl) return p.name;
     }
-    return 'custom';
+    return custom;
   }
 }
 

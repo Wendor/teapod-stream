@@ -21,6 +21,10 @@ Rules: [CONTRIBUTING.md](../../../CONTRIBUTING.md). Template: [.github/pull_requ
    ```
 4. Wiki pages for the touched area still true? Fix them in this branch.
 5. Grep the diff for secrets: `git diff master...HEAD | grep -nE 'vless://|vmess://|trojan://|ss://|hy2://|[0-9a-f]{8}-[0-9a-f]{4}-'`.
+6. Get a second review of the branch before CodeRabbit sees it, if you have another model or agent at hand: give
+   it `git diff master...HEAD`, the issue and sections 1 and 4–6 of the [review-pr checklist](../review-pr/SKILL.md),
+   and ask for concrete problems only. Verify each finding like a CodeRabbit comment and fix what holds up. Repeat
+   before each fix push. CodeRabbit reviews only so many commits an hour: a clean first push saves a review round.
 
 ## The description
 
@@ -51,7 +55,7 @@ says what to do next. Run it after `gh pr ready`, after every push and after eve
 
 | Result | Meaning | Next |
 |---|---|---|
-| `READY` (0) | Checks passed, CodeRabbit reviewed the head commit, every thread you replied to has its answer or got none for `WAIT_REVIEW_IDLE` minutes (default 10; listed separately — it may have answered in a sibling thread) | Read and act (below), then run the script again — or ask for approval when nothing is left |
+| `READY` (0) | Checks passed, CodeRabbit reviewed the head commit, every thread you replied to has its answer (a reply, or a 🚀 / 👍 reaction on your comment — listed as accepted) or got none for `WAIT_REVIEW_IDLE` minutes (default 10; listed separately — it may have answered in a sibling thread) | Read and act (below), then run the script again — or ask for approval when nothing is left |
 | `FAILED` (1) | A required check failed | Read the log, fix, push, run again |
 | `SKIPPED` (2) | CodeRabbit finished without reviewing the head (rate limit, "Reviews paused" after many pushes, or a push with nothing to review) | Rate limit or paused: post `@coderabbitai review`, run again — a request newer than CodeRabbit's last result counts as pending, so the script waits for that review. Nothing to review (e.g. only a merge from `master`): its previous review stands |
 | `TIMEOUT` (3) | Something is still pending after 40 minutes | Tell the person you work for what is stuck |
@@ -60,7 +64,8 @@ How it knows, if you need to check by hand:
 
 - **Reviewed commit:** `coveredCommitId` in CodeRabbit's summary comment on the PR. The green `CodeRabbit` check,
   its review list and empty reviews from its thread replies don't tell which commit it reviewed.
-- **Thread answered:** the thread's last comment is CodeRabbit's. It posts a reply only when it's complete; the
+- **Thread answered:** the thread's last comment is CodeRabbit's, or CodeRabbit put 🚀 / 👍 on your reply (it accepts
+  a reply that way; 👀 only means it is working on it). It posts a reply only when it's complete; the
   collapsed "Analysis chain" at its top is part of the final answer, not a draft.
 
 On `READY`, read everything new:

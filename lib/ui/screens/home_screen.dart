@@ -250,9 +250,13 @@ class _StateInfo extends ConsumerWidget {
     } else if (isError) {
       subtitle = '${error ?? l.homeConnectError}\n${l.homeTapToRetry}';
     } else if (isConn) {
-      final ipStr = ipAsync.maybeWhen(data: (d) => d?.ip, orElse: () => null) ?? '—';
-      final cc = ipAsync.maybeWhen(data: (d) => d?.countryCode.toLowerCase(), orElse: () => null) ?? '—';
-      subtitle = pingMs != null ? '${pingMs}ms · $cc · $ipStr' : '$cc · $ipStr';
+      // Loading: placeholders; the chain gave up: say so; no country from the service: the IP alone.
+      final ipText = switch (ipAsync) {
+        AsyncData(value: final info?) => [?info.countryCode?.toLowerCase(), info.ip].join(' · '),
+        AsyncData() || AsyncError() => l.homeIpUnknown,
+        _ => '— · —',
+      };
+      subtitle = pingMs != null ? '${pingMs}ms · $ipText' : ipText;
     } else if (isConnecting) {
       subtitle = l.homeConnecting;
     } else if (isDisconnecting) {

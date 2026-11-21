@@ -182,6 +182,12 @@ abstract class AppLocalizations {
   /// **'tap to connect'**
   String get homeTapToConnect;
 
+  /// No description provided for @homeIpUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'IP not detected'**
+  String get homeIpUnknown;
+
   /// No description provided for @homeDisconnectButton.
   ///
   /// In en, this message translates to:
@@ -775,6 +781,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'SOURCE'**
   String get routingSource;
+
+  /// No description provided for @routingSourceCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get routingSourceCustom;
 
   /// No description provided for @countryRu.
   ///

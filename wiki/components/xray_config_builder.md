@@ -79,7 +79,7 @@ and security (`tls` with `serverName`, `fingerprint`, `alpn`, `echConfigList`; `
 ### Routing
 
 In order: DNS rules → `geoip:private` → direct (`bypassLocal`) → `domain:<zone>` → `geosite:` → `geoip:` → sites →
-Russian services list → diagnostic hosts → proxy (only `onlySelected`, so connectivity checks see the tunnel) →
+Russian services list → diagnostic hosts (probe, `IpLookupSource.hosts`) → proxy (only `onlySelected`, so connectivity checks see the tunnel) →
 catch-all. Matched traffic goes to `selectedOut` (`direct` for `bypass`, `proxy` for `onlySelected`); the catch-all
 goes to `proxy` for `global`/`bypass` and `direct` for `onlySelected`.
 

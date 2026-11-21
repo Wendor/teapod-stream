@@ -409,6 +409,7 @@ class VpnNotifier extends Notifier<VpnState2> {
           if (state.connectionState == VpnState.connecting) {
             state = state.copyWith(connectionState: VpnState.error, error: L10n.current.vpnConnectTimeout);
             _connectTimeout = null;
+            _attempt++; // the timed-out attempt's late answer must not replace the timeout error
             _engine.disconnect().ignore();
           }
         });
@@ -504,10 +505,19 @@ class VpnNotifier extends Notifier<VpnState2> {
     state = state.copyWith(stats: state.stats.copyWith(speedHistory: _history));
   }
 
+  /// The latest connect attempt; a newer attempt or a disconnect bumps it. An attempt that is no
+  /// longer the latest neither calls native nor writes state.
+  int _attempt = 0;
+
   /// [switching] — changing server/settings on a live tunnel: native rebuilds
   /// the session without closing TUN. A refusal before the native call keeps the old connection.
   Future<void> connect({bool switching = false}) async {
     if (state.isBusy || (state.isConnected && !switching)) return;
+    final attempt = ++_attempt;
+    bool superseded() => attempt != _attempt;
+    void fail(String reason) {
+      if (!superseded()) _failConnect(reason, switching: switching);
+    }
 
     // Update state synchronously — button turns yellow in the same frame as tap
     state = state.copyWith(connectionState: VpnState.connecting, error: null);
@@ -518,28 +528,31 @@ class VpnNotifier extends Notifier<VpnState2> {
       if (state.connectionState == VpnState.connecting) {
         state = state.copyWith(connectionState: VpnState.error, error: L10n.current.vpnConnectTimeout);
         _connectTimeout = null;
+        _attempt++; // the timed-out attempt's late answer must not replace the timeout error
         _engine.disconnect().ignore();
       }
     });
 
     // Notification permission for foreground service (Android 13+) — best-effort
     await Permission.notification.request();
+    if (superseded()) return;
 
     final configState = ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
     final config = _resolveEffectiveConfig(configState);
     if (config == null) {
-      return _failConnect(L10n.current.vpnNoConfigSelected, switching: switching);
+      return fail(L10n.current.vpnNoConfigSelected);
     }
 
     final validationError = config.validate();
-    if (validationError != null) return _failConnect(validationError, switching: switching);
+    if (validationError != null) return fail(validationError);
 
     final settings = ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null) ?? const AppSettings();
 
     await ref.read(availableCoresProvider.future);
+    if (superseded()) return;
     final resolution = ref.read(coreResolverProvider).resolve(config);
     final backend = resolution.backend;
-    if (backend == null) return _failConnect(resolution.reason!, switching: switching);
+    if (backend == null) return fail(resolution.reason!);
     _engine.backend = backend;
     _logCoreChoice(resolution);
 
@@ -552,13 +565,14 @@ class VpnNotifier extends Notifier<VpnState2> {
       credentials: credentials,
     );
     final check = backend.checkOptions(config, options);
-    if (check.blocking != null) return _failConnect(check.blocking!, switching: switching);
+    if (check.blocking != null) return fail(check.blocking!);
     for (final w in check.warnings) {
       ref.read(logServiceProvider.notifier).addWarning(w, source: 'core');
     }
 
     try {
       await _engine.connect(config, options);
+      if (superseded()) return;
       _connectedConfig = config;
       if (switching) _connectedAt = null;
       // Polling is started in _onNativeState when connected
@@ -569,7 +583,7 @@ class VpnNotifier extends Notifier<VpnState2> {
         appliedFingerprint: connectionFingerprint(settings, core: backend.kind),
       );
     } on PlatformException catch (e) {
-      _failConnect(e.message ?? 'Connection failed', switching: switching);
+      fail(e.message ?? L10n.current.vpnConnectError);
     }
   }
 
@@ -644,6 +658,9 @@ class VpnNotifier extends Notifier<VpnState2> {
   }
 
   Future<void> disconnect() async {
+    // A connect still in flight must not dispatch or write state after this — also when native already reported
+    // `disconnected` while that connect waited.
+    _attempt++;
     if (state.connectionState == VpnState.disconnected || state.connectionState == VpnState.disconnecting) {
       return;
     }

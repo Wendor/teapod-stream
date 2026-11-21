@@ -7,6 +7,7 @@ import '../../core/models/dns_config.dart';
 import '../../core/models/routing_settings.dart';
 import '../../core/models/app_settings.dart';
 import 'singbox_outbound.dart';
+import '../../core/services/ip_lookup.dart';
 
 /// sing-box 1.14 DNS and routing: the same rules as xray, in sing-box notation.
 abstract final class SingBoxRoute {
@@ -156,7 +157,7 @@ abstract final class SingBoxRoute {
     final isIp = InternetAddress.tryParse(host) != null;
     return [
       {
-        'domain': ['cp.cloudflare.com', 'ip-api.com', if (host.isNotEmpty && !isIp) host],
+        'domain': ['cp.cloudflare.com', ...IpLookupSource.hosts, if (host.isNotEmpty && !isIp) host],
         'outbound': SingBoxOutbound.tag,
       },
       if (isIp)

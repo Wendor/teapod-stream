@@ -56,6 +56,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get homeTapToConnect => 'нажмите для подключения';
 
   @override
+  String get homeIpUnknown => 'IP не определён';
+
+  @override
   String get homeDisconnectButton => 'ОТКЛЮЧИТЬ';
 
   @override
@@ -413,6 +416,9 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get routingSource => 'ИСТОЧНИК';
+
+  @override
+  String get routingSourceCustom => 'Свой';
 
   @override
   String get countryRu => 'Россия';

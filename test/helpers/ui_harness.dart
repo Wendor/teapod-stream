@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -101,12 +102,12 @@ Future<FakeNative> setUpScreenTest({
 }
 
 /// Renders [screen] in the app theme. Returns the container for state checks.
-Future<ProviderContainer> pumpScreen(WidgetTester tester, Widget screen) async {
+Future<ProviderContainer> pumpScreen(WidgetTester tester, Widget screen, {List<Override> overrides = const []}) async {
   // The test font is wider than the real one: on a narrow screen overflows would be false positives.
   tester.view.physicalSize = const Size(1500, 3000);
   tester.view.devicePixelRatio = 2.5;
   addTearDown(tester.view.reset);
-  final container = ProviderContainer();
+  final container = ProviderContainer(overrides: overrides);
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,

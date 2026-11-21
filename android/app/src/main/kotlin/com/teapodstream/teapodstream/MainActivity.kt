@@ -418,8 +418,8 @@ class MainActivity : FlutterActivity() {
         socksUser: String,
         socksPassword: String,
         params: ConnectionParams,
-        configName: String? = null,
-        attempt: Long = 0,
+        configName: String?,
+        attempt: Long,
     ) {
         requestBatteryOptimizationExemption()
         val intent = Intent(this, XrayVpnService::class.java).apply {

@@ -56,6 +56,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homeTapToConnect => 'tap to connect';
 
   @override
+  String get homeIpUnknown => 'IP not detected';
+
+  @override
   String get homeDisconnectButton => 'DISCONNECT';
 
   @override

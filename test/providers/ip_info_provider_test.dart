@@ -8,6 +8,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:teapodstream/core/constants/app_constants.dart';
+import 'package:teapodstream/core/services/ip_lookup.dart';
 import 'package:teapodstream/providers/ip_info_provider.dart';
 
 /// Minimal SOCKS5 (user/pass) server: after CONNECT it answers the HTTP request itself.
@@ -102,7 +103,14 @@ void main() {
     );
     SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
     FlutterSecureStorage.setMockInitialValues({});
-    c = ProviderContainer();
+    // Short timeouts: the https services can't complete a TLS handshake with the plain-HTTP test proxy.
+    c = ProviderContainer(
+      overrides: [
+        ipLookupProvider.overrideWithValue(
+          IpLookup(perService: const Duration(milliseconds: 300), total: const Duration(seconds: 1)),
+        ),
+      ],
+    );
     addTearDown(c.dispose);
   });
 
@@ -121,14 +129,15 @@ void main() {
     final info = await read();
     expect((info?.ip, info?.country, info?.countryCode), ('203.0.113.7', 'Netherlands', 'NL'));
     expect(socks.auth.single, ('su', 'sp'));
-    expect(socks.targets.single, endsWith(':80'));
+    expect(socks.targets.single, 'ip-api.com:80');
   });
 
-  test('failed lookup gives null', () async {
+  test('failed lookup tries the next services, then gives null', () async {
     final socks = await _Socks5.start(jsonEncode({'status': 'fail'}));
     addTearDown(socks.close);
     nativeState = {'state': 'connected', 'socksPort': socks.port, 'socksUser': 'su', 'socksPassword': 'sp'};
     expect(await read(), isNull);
+    expect(socks.targets, ['ip-api.com:80', 'ipinfo.io:443', 'api.ipify.org:443']);
   });
 
   test('dead proxy gives null', () async {

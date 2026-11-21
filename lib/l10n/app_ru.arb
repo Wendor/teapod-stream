@@ -15,6 +15,7 @@
   "homeDisconnecting": "завершение сеанса…",
   "homeNoConfigAdd": "нет конфигурации — добавьте",
   "homeTapToConnect": "нажмите для подключения",
+  "homeIpUnknown": "IP не определён",
   "homeDisconnectButton": "ОТКЛЮЧИТЬ",
   "homeActionReconnect": "переподключить",
   "homeActionDisconnect": "отключить",

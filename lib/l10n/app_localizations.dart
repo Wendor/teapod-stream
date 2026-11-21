@@ -182,6 +182,12 @@ abstract class AppLocalizations {
   /// **'tap to connect'**
   String get homeTapToConnect;
 
+  /// No description provided for @homeIpUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'IP not detected'**
+  String get homeIpUnknown;
+
   /// No description provided for @homeDisconnectButton.
   ///
   /// In en, this message translates to:

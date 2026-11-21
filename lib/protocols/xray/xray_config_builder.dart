@@ -10,6 +10,7 @@ import '../../core/models/vpn_log_entry.dart' show LogLevel;
 import '../../core/models/app_settings.dart' show DnsQueryStrategy, TlsFingerprint;
 import 'vless_parser.dart';
 import '../../l10n/l10n.dart';
+import '../../core/services/ip_lookup.dart';
 
 class XrayConfigBuilder {
   /// Profiles xray-core v26 rejects at startup (`PrintRemovedFeatureError`
@@ -114,7 +115,7 @@ class XrayConfigBuilder {
               'type': 'field',
               'domain': [
                 'full:cp.cloudflare.com',
-                'full:ip-api.com',
+                for (final h in IpLookupSource.hosts) 'full:$h',
                 if (probeHost.isNotEmpty && !_isIpAddress(probeHost)) 'full:$probeHost',
               ],
               'outboundTag': 'proxy',

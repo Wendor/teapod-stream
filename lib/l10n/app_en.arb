@@ -22,6 +22,7 @@
   "homeDisconnecting": "closing session…",
   "homeNoConfigAdd": "no configuration — add one",
   "homeTapToConnect": "tap to connect",
+  "homeIpUnknown": "IP not detected",
   "homeDisconnectButton": "DISCONNECT",
   "homeActionReconnect": "reconnect",
   "homeActionDisconnect": "disconnect",

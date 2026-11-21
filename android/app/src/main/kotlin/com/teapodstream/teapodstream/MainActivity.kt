@@ -221,6 +221,20 @@ class MainActivity : FlutterActivity() {
                         }.start()
                     }
 
+                    // Country of an IP by the geoip.dat the cores route with; null when unknown.
+                    // Reads the whole file, so off the main thread.
+                    "countryForIp" -> {
+                        val ip = call.argument<String>("ip") ?: ""
+                        Thread {
+                            val code = try {
+                                teapodcore.Teapodcore.countryForIp(filesDir.absolutePath, ip)
+                            } catch (_: Throwable) {
+                                ""
+                            }
+                            runOnUiThread { result.success(code.ifEmpty { null }) }
+                        }.start()
+                    }
+
                     "getDeviceId" -> {
                         val deviceId = android.provider.Settings.Secure.getString(
                             contentResolver,

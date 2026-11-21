@@ -85,7 +85,7 @@ cancel — hung forever). Both go through the tunnel when connected. [UpdateProv
 ## PlatformService
 
 Typed wrappers for the native calls on `com.teapodstream/vpn` that aren't about the tunnel: `binaryVersions`,
-`availableEngines`, `installedApps`, `appIcon`, `filesDir`, `prepareBinaries`, `abi`, `installApk`, `deviceId`,
+`availableEngines`, `installedApps`, `appIcon`, `filesDir`, `prepareBinaries`, `countryForIp`, `abi`, `installApk`, `deviceId`,
 `deviceInfo`. Channel errors reach the caller, which keeps its own fallback. Providers read it through
 `platformServiceProvider`, so tests override the service instead of mocking the channel; `main.dart` and the static
 `DeviceService` use a `const PlatformService()`.

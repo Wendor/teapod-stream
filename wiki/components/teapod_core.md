@@ -32,6 +32,7 @@ RustCore:          TUN fd → xray-rust → server
 | xray | `StartXray(config, cb)`, `StopXray`, `GetXrayVersion`, `QueryXrayStats(tag, dir)`, `MeasureXrayDelay(url)`, `MeasureOutboundDelay(config, url)` |
 | sing-box | `StartBox(config, dataDir, cb)`, `StopBox`, `GetBoxVersion`, `MeasureBoxDelay(url)`, `MeasureBoxOutboundDelay(config, dataDir, url)` |
 | tun2socks | `StartTun2Socks(fd, mtu, socksPort, user, pass, allowICMP, blockQuic, validator)`, `StopTun2Socks`, `IsTunRunning`, `GetTunUpload/DownloadBytes`, `GetTunLastRxActivityMs`, `TunActiveConnections`, `ForceTunCloseAllConnections`, `GetTunStatsLine`, `GetTunDiagnostics`, `GetTunCacheSize`, `SetTunLogEnabled` |
+| Geodata | `CountryForIp(datDir, ip)` — upper-case country code of `ip` from `datDir/geoip.dat` (most specific two-letter entry; lists like `private` and reverse-match entries don't count), `""` when unknown; reads the file on every call |
 | Diagnostics | `DumpGoroutines()` — stacks of all goroutines; itest saves it on failure |
 
 `XrayCallback.onStatus(0 | -1, message)` reports start/stop. Log lines from Go goroutines arrive in

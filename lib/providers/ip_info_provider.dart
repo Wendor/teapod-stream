@@ -7,6 +7,7 @@ import '../core/services/ip_lookup.dart';
 import '../protocols/xray/xray_engine.dart';
 import 'config_provider.dart';
 import 'vpn_provider.dart';
+import '../core/services/platform_service.dart';
 
 class IpInfo {
   final String ip;
@@ -36,7 +37,7 @@ class IpInfoNotifier extends AsyncNotifier<IpInfo?> {
       }
     }
     // Fallback: Quick Tile started VPN — native state may be ahead of Flutter state
-    final engine = XrayEngine();
+    final engine = ref.read(xrayEngineProvider);
     final nativeState = await engine.getVpnState();
     if (nativeState.state == VpnState.connected && nativeState.socksPort > 0) {
       return _fetch(
@@ -71,9 +72,20 @@ class IpInfoNotifier extends AsyncNotifier<IpInfo?> {
 
     try {
       final r = await ref.read(ipLookupProvider).lookup(configId, fetch);
-      return r == null ? null : IpInfo(ip: r.ip, country: r.country, countryCode: r.countryCode);
+      if (r == null) return null;
+      // The service gave no country: take it from the geoip.dat the cores route with.
+      final code = r.countryCode ?? await _countryFromGeoip(r.ip);
+      return IpInfo(ip: r.ip, country: r.country, countryCode: code);
     } finally {
       client.close(force: true);
+    }
+  }
+
+  Future<String?> _countryFromGeoip(String ip) async {
+    try {
+      return await ref.read(platformServiceProvider).countryForIp(ip);
+    } catch (_) {
+      return null;
     }
   }
 }

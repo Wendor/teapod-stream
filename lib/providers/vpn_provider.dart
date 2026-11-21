@@ -133,7 +133,7 @@ class VpnNotifier extends Notifier<VpnState2> {
 
   @override
   VpnState2 build() {
-    _engine = XrayEngine();
+    _engine = ref.read(xrayEngineProvider);
     listenSelf((_, next) => ref.read(tunnelSocksProvider.notifier).set(next.tunnelSocks));
     // The active profile's core changed (priority, disabling, pinning).
     ref.listen(activeCoreProvider, (prev, next) {
@@ -553,7 +553,6 @@ class VpnNotifier extends Notifier<VpnState2> {
     final resolution = ref.read(coreResolverProvider).resolve(config);
     final backend = resolution.backend;
     if (backend == null) return fail(resolution.reason!);
-    _engine.backend = backend;
     _logCoreChoice(resolution);
 
     final credentials = _socksCredentials(settings);
@@ -571,7 +570,7 @@ class VpnNotifier extends Notifier<VpnState2> {
     }
 
     try {
-      await _engine.connect(config, options);
+      await _engine.connect(config, backend, options);
       if (superseded()) return;
       _connectedConfig = config;
       if (switching) _connectedAt = null;
@@ -638,9 +637,9 @@ class VpnNotifier extends Notifier<VpnState2> {
           ref.read(logServiceProvider.notifier).addError('Core: $unsupported');
           state = state.copyWith(error: unsupported);
         case CoreSwitchAction.saveQuickConnect:
-          _engine.backend = backend!;
           await _engine.saveQuickConnect(
             config!,
+            backend!,
             buildEngineOptions(
               settings,
               config,

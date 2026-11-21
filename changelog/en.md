@@ -1,5 +1,13 @@
 # English
 
+## 1.8.4
+
+- The exit IP on the home screen comes from a chain of services (ip-api.com → ipinfo.io → api.ipify.org) and works where one of them is blocked; the country comes from the geodata when the service gives none; "IP unknown" instead of dashes (#198)
+- Quick connect, disconnect and server switches run in the order they were tapped: the tunnel no longer stays down while the screen says connected, and an old attempt's error no longer replaces a newer connection
+- A second connect while the VPN-permission dialog is open no longer opens another dialog, and a grant after a disconnect no longer starts the VPN
+- Heartbeat: the SOCKS check no longer waits 10 s for nothing when the login is empty
+- Routing: a custom geodata source is labelled in the app's language
+
 ## 1.8.3
 
 - Profiles remember their server: switching a profile selects the server last used with it and, while connected, reconnects with the new server and settings (#199)

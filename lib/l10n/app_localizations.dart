@@ -776,6 +776,12 @@ abstract class AppLocalizations {
   /// **'SOURCE'**
   String get routingSource;
 
+  /// No description provided for @routingSourceCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get routingSourceCustom;
+
   /// No description provided for @countryRu.
   ///
   /// In en, this message translates to:

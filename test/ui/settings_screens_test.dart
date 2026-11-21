@@ -196,6 +196,16 @@ void main() {
       expect(_settings(c).routing.bypassLocal, isTrue);
       await unmount(tester, c);
     });
+
+    testWidgets('a custom geodata source is labelled from ARB', (tester) async {
+      await setUpScreenTest(
+        settings: const AppSettings(geoipUrl: 'https://geo.test/geoip.dat', geositeUrl: 'https://geo.test/geosite.dat'),
+      );
+      final c = await pumpScreen(tester, const RoutingScreen());
+      await tester.scrollUntilVisible(find.text('Custom'), 200);
+      expect(find.text('custom'), findsNothing);
+      await unmount(tester, c);
+    });
   });
 
   group('settings', () {

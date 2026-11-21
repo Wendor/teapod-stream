@@ -355,7 +355,10 @@ class _RoutingBody extends StatelessWidget {
                         style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1),
                       ),
                       const SizedBox(width: 10),
-                      Text(GeoPresets.nameOf(geoipUrl, geositeUrl), style: AppTheme.mono(size: 10, color: t.textDim)),
+                      Text(
+                        _geoSourceLabel(context, GeoPresets.nameOf(geoipUrl, geositeUrl)),
+                        style: AppTheme.mono(size: 10, color: t.textDim),
+                      ),
                       const Spacer(),
                       Text('›', style: AppTheme.mono(size: 16, color: t.textMuted)),
                     ],
@@ -1443,7 +1446,7 @@ class _GeoSourceSheetState extends State<_GeoSourceSheet> {
   late final TextEditingController _geoipCtrl;
   late final TextEditingController _geositeCtrl;
 
-  bool get _isCustom => GeoPresets.nameOf(_geoipUrl, _geositeUrl) == 'custom';
+  bool get _isCustom => GeoPresets.nameOf(_geoipUrl, _geositeUrl) == GeoPresets.custom;
 
   @override
   void initState() {
@@ -1508,14 +1511,14 @@ class _GeoSourceSheetState extends State<_GeoSourceSheet> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
-                    color: currentName == 'custom' ? t.accentSoft : null,
-                    border: Border.all(color: currentName == 'custom' ? t.accent : t.line),
+                    color: currentName == GeoPresets.custom ? t.accentSoft : null,
+                    border: Border.all(color: currentName == GeoPresets.custom ? t.accent : t.line),
                   ),
                   child: Text(
-                    'Custom',
+                    context.l10n.routingSourceCustom,
                     style: AppTheme.mono(
                       size: 11,
-                      color: currentName == 'custom' ? t.accent : t.textDim,
+                      color: currentName == GeoPresets.custom ? t.accent : t.textDim,
                       letterSpacing: 0.5,
                     ),
                   ),
@@ -1523,7 +1526,7 @@ class _GeoSourceSheetState extends State<_GeoSourceSheet> {
               ),
             ],
           ),
-          if (currentName == 'custom') ...[
+          if (currentName == GeoPresets.custom) ...[
             const SizedBox(height: 16),
             Text('GEOIP URL', style: AppTheme.mono(size: 9, color: t.textMuted, letterSpacing: 1)),
             const SizedBox(height: 6),
@@ -1591,3 +1594,7 @@ class _GeoSourceSheetState extends State<_GeoSourceSheet> {
     );
   }
 }
+
+/// A geodata preset's name, or the localized label for a custom source.
+String _geoSourceLabel(BuildContext context, String name) =>
+    name == GeoPresets.custom ? context.l10n.routingSourceCustom : name;

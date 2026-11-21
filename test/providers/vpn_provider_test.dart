@@ -1285,6 +1285,29 @@ void main() {
       });
     });
 
+    test('an idle snapshot after a reconnect report keeps the pending connect bounded', () {
+      fakeAsync((async) {
+        boot(configs: [_cfg('a')], activeId: 'a');
+        async.flushMicrotasks();
+        n().connect();
+        async.flushMicrotasks();
+        final attempt = native.lastConnect()['attempt'] as int;
+        // A resume sync sees the pending session connecting: treated as a reconnect, the timeout is cancelled.
+        native.state = {'state': 'connecting', 'attempt': attempt};
+        n().syncNativeState();
+        async.flushMicrotasks();
+        // The service died: an idle untagged snapshot is rejected, the connect still ends.
+        native.state = {'state': 'disconnected', 'attempt': 0};
+        n().syncNativeState();
+        async.flushMicrotasks();
+        expect(st().connectionState, VpnState.connecting);
+        async.elapse(const Duration(seconds: 46));
+        expect(st().connectionState, VpnState.error);
+        expect(st().error, 'Connection timeout');
+        c.dispose();
+      });
+    });
+
     test('native reconnect cycle cancels the connect timeout', () {
       fakeAsync((async) {
         boot(configs: [_cfg('a')], activeId: 'a');

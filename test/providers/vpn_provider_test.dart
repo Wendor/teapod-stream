@@ -1107,6 +1107,28 @@ void main() {
       });
     });
 
+    test("a timed-out connect's late answer doesn't replace the timeout error", () {
+      fakeAsync((async) {
+        boot(configs: [_cfg('a')], activeId: 'a');
+        async.flushMicrotasks();
+        final gate = Completer<void>();
+        // The VPN-permission dialog is still open; the timeout's disconnect makes native answer CANCELLED.
+        native.onConnect = () async {
+          await gate.future;
+          throw PlatformException(code: 'CANCELLED', message: 'VPN start CANCELLED');
+        };
+        n().connect();
+        async.flushMicrotasks();
+        async.elapse(const Duration(seconds: 46));
+        expect(st().error, 'Connection timeout');
+        gate.complete();
+        async.flushMicrotasks();
+        expect(st().connectionState, VpnState.error);
+        expect(st().error, 'Connection timeout');
+        c.dispose();
+      });
+    });
+
     test('native reconnect cycle cancels the connect timeout', () {
       fakeAsync((async) {
         boot(configs: [_cfg('a')], activeId: 'a');

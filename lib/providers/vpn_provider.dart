@@ -409,6 +409,7 @@ class VpnNotifier extends Notifier<VpnState2> {
           if (state.connectionState == VpnState.connecting) {
             state = state.copyWith(connectionState: VpnState.error, error: L10n.current.vpnConnectTimeout);
             _connectTimeout = null;
+            _attempt++; // the timed-out attempt's late answer must not replace the timeout error
             _engine.disconnect().ignore();
           }
         });
@@ -527,6 +528,7 @@ class VpnNotifier extends Notifier<VpnState2> {
       if (state.connectionState == VpnState.connecting) {
         state = state.copyWith(connectionState: VpnState.error, error: L10n.current.vpnConnectTimeout);
         _connectTimeout = null;
+        _attempt++; // the timed-out attempt's late answer must not replace the timeout error
         _engine.disconnect().ignore();
       }
     });

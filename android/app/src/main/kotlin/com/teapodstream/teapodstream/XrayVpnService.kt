@@ -51,26 +51,10 @@ class XrayVpnService : VpnService() {
         const val ACTION_CONNECT_QUICK = "com.teapodstream.CONNECT_QUICK" // reconnect from notification
         const val ACTION_ITEST_DROP = "com.teapodstream.ITEST_DROP" // itest: unexpected drop
         const val EXTRA_XRAY_CONFIG = "xray_config"
-        const val EXTRA_SOCKS_PORT = "socks_port"
         const val EXTRA_SOCKS_USER = "socks_user"
         const val EXTRA_SOCKS_PASSWORD = "socks_password"
-        const val EXTRA_EXCLUDED_PACKAGES = "excluded_packages"
-        const val EXTRA_INCLUDED_PACKAGES = "included_packages"
-        const val EXTRA_VPN_MODE = "vpn_mode"
-        const val EXTRA_SS_PREFIX = "ss_prefix" // hex-encoded Outline prefix bytes
-        const val EXTRA_PROXY_ONLY = "proxy_only" // start only SOCKS proxy, no VPN tunnel
-        const val EXTRA_SHOW_NOTIFICATION = "show_notification" // show rich notification with speed
-        const val EXTRA_KILL_SWITCH = "kill_switch" // block traffic when VPN drops unexpectedly
-        const val EXTRA_ALLOW_ICMP = "allow_icmp" // allow ICMP echo (ping) through the tunnel
-        const val EXTRA_BLOCK_QUIC = "block_quic" // reject UDP/443 inside the TUN via ICMP Port Unreachable
-        const val EXTRA_IPV6 = "ipv6_enabled" // add IPv6 address/route to the TUN interface
-        const val EXTRA_ALLOW_TETHERING = "allow_tethering" // allExcept: let unowned (tethered) flows in
-        const val EXTRA_MTU = "mtu" // TUN MTU size
-        const val EXTRA_HEARTBEAT_PROBE = "heartbeat_probe"      // "socks" | "xrayDelay" | "passive"
-        const val EXTRA_HEARTBEAT_ACTION = "heartbeat_action"    // "reconnect" | "switchConfig"
-        const val EXTRA_HEARTBEAT_THRESHOLD = "heartbeat_threshold" // consecutive failures before action
-        const val EXTRA_HEARTBEAT_URL = "heartbeat_url"          // where the probe goes
-        const val EXTRA_ENGINE = "engine"                        // "go" | "rust"
+        /** [ConnectionParams.toJson] of the session: everything but the config and the SOCKS login. */
+        const val EXTRA_PARAMS = "params"
         const val EXTRA_CONFIG_NAME = "config_name"              // config name for the tile
 
         // Static state tracker for querying from Dart
@@ -159,7 +143,6 @@ class XrayVpnService : VpnService() {
         private const val NOTIFICATION_CHANNEL_MINIMAL_ID = "vpn_service_minimal"
         private const val NOTIFICATION_ID = 1
 
-        private const val DEFAULT_HEARTBEAT_URL = "http://cp.cloudflare.com/generate_204"
         private const val CONNECTIVITY_CHECK_HOST = "8.8.8.8"
         private const val HEARTBEAT_INTERVAL_MS = 15_000L
         // Screen off: nobody is watching, the radio should be allowed to idle between
@@ -323,7 +306,7 @@ class XrayVpnService : VpnService() {
     // "switchConfig" — leave the decision to Flutter (it picks a live config).
     private var heartbeatAction: String = "reconnect"
     private var heartbeatThreshold: Int = 3
-    private var heartbeatUrl: String = DEFAULT_HEARTBEAT_URL
+    private var heartbeatUrl: String = ConnectionParams.DEFAULT_HEARTBEAT_URL
     @Volatile private var allowTethering = false
     private var lastTunnelDeadNotifyAt = 0L
     private val wakeProbeRunning = AtomicBoolean(false)
@@ -419,33 +402,23 @@ class XrayVpnService : VpnService() {
                 return START_STICKY
             }
             ACTION_CONNECT -> {
-                showNotification = intent.getBooleanExtra(EXTRA_SHOW_NOTIFICATION, true)
                 val xrayConfig = intent.getStringExtra(EXTRA_XRAY_CONFIG) ?: ""
-                val socksPort = intent.getIntExtra(EXTRA_SOCKS_PORT, 10808)
                 val socksUser = intent.getStringExtra(EXTRA_SOCKS_USER) ?: ""
                 val socksPassword = intent.getStringExtra(EXTRA_SOCKS_PASSWORD) ?: ""
-                val excludedPackages = intent.getStringArrayListExtra(EXTRA_EXCLUDED_PACKAGES) ?: arrayListOf()
-                val includedPackages = intent.getStringArrayListExtra(EXTRA_INCLUDED_PACKAGES) ?: arrayListOf()
-                val vpnMode = intent.getStringExtra(EXTRA_VPN_MODE) ?: "allExcept"
-                val ssPrefix = intent.getStringExtra(EXTRA_SS_PREFIX)
-                val proxyOnly = intent.getBooleanExtra(EXTRA_PROXY_ONLY, false)
-                val killSwitch = intent.getBooleanExtra(EXTRA_KILL_SWITCH, false)
-                val allowIcmp = intent.getBooleanExtra(EXTRA_ALLOW_ICMP, true)
-                val blockQuic = intent.getBooleanExtra(EXTRA_BLOCK_QUIC, false)
-                val ipv6Enabled = intent.getBooleanExtra(EXTRA_IPV6, false)
-                val mtu = intent.getIntExtra(EXTRA_MTU, 1500).coerceIn(576, 9000)
-                heartbeatProbe = intent.getStringExtra(EXTRA_HEARTBEAT_PROBE) ?: "socks"
-                heartbeatAction = intent.getStringExtra(EXTRA_HEARTBEAT_ACTION) ?: "reconnect"
-                heartbeatThreshold = intent.getIntExtra(EXTRA_HEARTBEAT_THRESHOLD, 3).coerceIn(1, 10)
-                heartbeatUrl = intent.getStringExtra(EXTRA_HEARTBEAT_URL)?.takeIf { it.isNotEmpty() }
-                    ?: DEFAULT_HEARTBEAT_URL
-                allowTethering = intent.getBooleanExtra(EXTRA_ALLOW_TETHERING, false)
-                val engine = CoreKind.fromId(intent.getStringExtra(EXTRA_ENGINE)).id
+                val params = try {
+                    ConnectionParams.fromJson(org.json.JSONObject(intent.getStringExtra(EXTRA_PARAMS) ?: ""))
+                } catch (e: Exception) {
+                    log("error", "CONNECT without valid parameters: ${e.message}")
+                    return START_NOT_STICKY
+                }
+                showNotification = params.showNotification
+                heartbeatProbe = params.heartbeatProbe
+                heartbeatAction = params.heartbeatAction
+                heartbeatThreshold = params.heartbeatThreshold
+                heartbeatUrl = params.heartbeatUrl
+                allowTethering = params.allowTethering
                 // Persist non-sensitive params for CONNECT_QUICK reconnect (no credentials)
-                ConnectionParams(socksPort, excludedPackages, includedPackages,
-                    vpnMode, ssPrefix, proxyOnly, showNotification, killSwitch, allowIcmp, blockQuic, ipv6Enabled, mtu,
-                    heartbeatProbe, heartbeatAction, heartbeatThreshold, heartbeatUrl, allowTethering, engine)
-                    .save(filesDir, ::log)
+                params.save(filesDir, ::log)
                 // Together with the quick-reconnect parameters — the tile shows what it will connect.
                 VpnTileService.saveConfigName(this, intent.getStringExtra(EXTRA_CONFIG_NAME))
                 userRequestedDisconnect.set(false)
@@ -462,9 +435,10 @@ class XrayVpnService : VpnService() {
                             return@Thread
                         }
                         if (isRunning.get()) stopVpn(reconnecting = true)
-                        startVpn(xrayConfig, socksPort, socksUser, socksPassword,
-                            excludedPackages, includedPackages, vpnMode, ssPrefix, proxyOnly, killSwitch,
-                            allowIcmp, blockQuic, ipv6Enabled, mtu = mtu, engine = engine)
+                        startVpn(xrayConfig, params.socksPort, socksUser, socksPassword,
+                            params.excludedPackages, params.includedPackages, params.vpnMode, params.ssPrefix,
+                            params.proxyOnly, params.killSwitch, params.allowIcmp, params.blockQuic,
+                            params.ipv6Enabled, mtu = params.mtu, engine = params.engine)
                     }
                 }.start()
                 return START_STICKY

@@ -80,42 +80,18 @@ class MainActivity : FlutterActivity() {
                             result.error("INVALID_ARGS", "xrayConfig required", null)
                             return@setMethodCallHandler
                         }
-                        val socksPort = call.argument<Int>("socksPort") ?: 10808
                         val socksUser = call.argument<String>("socksUser") ?: ""
                         val socksPassword = call.argument<String>("socksPassword") ?: ""
-                        val excludedPackages = call.argument<List<String>>("excludedPackages") ?: emptyList()
-                        val includedPackages = call.argument<List<String>>("includedPackages") ?: emptyList()
-                        val vpnMode = call.argument<String>("vpnMode") ?: "allExcept"
-                        val ssPrefix = call.argument<String>("ssPrefix")
-                        val proxyOnly = call.argument<Boolean>("proxyOnly") ?: false
-                        val showNotification = call.argument<Boolean>("showNotification") ?: true
-                        val killSwitch = call.argument<Boolean>("killSwitch") ?: false
-                        val allowIcmp = call.argument<Boolean>("allowIcmp") ?: true
-                        val blockQuic = call.argument<Boolean>("blockQuic") ?: false
-                        val ipv6Enabled = call.argument<Boolean>("ipv6Enabled") ?: false
-                        val allowTethering = call.argument<Boolean>("allowTethering") ?: false
-                        val heartbeatProbe = call.argument<String>("heartbeatProbe") ?: "socks"
-                        val heartbeatAction = call.argument<String>("heartbeatAction") ?: "reconnect"
-                        val heartbeatThreshold = call.argument<Int>("heartbeatThreshold") ?: 3
-                        val heartbeatUrl = call.argument<String>("heartbeatUrl") ?: ""
-                        val engine = CoreKind.fromId(call.argument<String>("engine")).id
-                        val mtu = call.argument<Int>("mtu") ?: 1500
-
+                        val params = ConnectionParams.fromArgs(call.arguments as Map<*, *>)
                         val start = {
                             startVpnService(
-                                xrayConfig, socksPort, socksUser, socksPassword,
-                                excludedPackages, includedPackages, vpnMode,
-                                ssPrefix, proxyOnly = proxyOnly, showNotification = showNotification,
-                                killSwitch = killSwitch, allowIcmp = allowIcmp,
-                                blockQuic = blockQuic, ipv6Enabled = ipv6Enabled, allowTethering = allowTethering,
-                                heartbeatProbe = heartbeatProbe, heartbeatAction = heartbeatAction,
-                                heartbeatThreshold = heartbeatThreshold, heartbeatUrl = heartbeatUrl,
-                                engine = engine, mtu = mtu, configName = call.argument<String>("configName"),
+                                xrayConfig, socksUser, socksPassword, params,
+                                configName = call.argument<String>("configName"),
                             )
                             result.success(null)
                         }
                         // Proxy-only: no TUN tunnel, no VPN permission needed
-                        if (proxyOnly) {
+                        if (params.proxyOnly) {
                             pendingVpnStart.cancel(PendingVpnStart.SUPERSEDED)
                             start()
                         } else {
@@ -145,30 +121,11 @@ class MainActivity : FlutterActivity() {
                             result.error("INVALID_ARGS", "xrayConfig required", null)
                             return@setMethodCallHandler
                         }
-                        ConnectionParams(
-                            socksPort = call.argument<Int>("socksPort") ?: 10808,
-                            excludedPackages = call.argument<List<String>>("excludedPackages") ?: emptyList(),
-                            includedPackages = call.argument<List<String>>("includedPackages") ?: emptyList(),
-                            vpnMode = call.argument<String>("vpnMode") ?: "allExcept",
-                            ssPrefix = call.argument<String>("ssPrefix"),
-                            proxyOnly = call.argument<Boolean>("proxyOnly") ?: false,
-                            showNotification = call.argument<Boolean>("showNotification") ?: true,
-                            killSwitch = call.argument<Boolean>("killSwitch") ?: false,
-                            allowIcmp = call.argument<Boolean>("allowIcmp") ?: true,
-                            blockQuic = call.argument<Boolean>("blockQuic") ?: false,
-                            ipv6Enabled = call.argument<Boolean>("ipv6Enabled") ?: false,
-                            mtu = (call.argument<Int>("mtu") ?: 1500).coerceIn(576, 9000),
-                            heartbeatProbe = call.argument<String>("heartbeatProbe") ?: "socks",
-                            heartbeatAction = call.argument<String>("heartbeatAction") ?: "reconnect",
-                            heartbeatThreshold = call.argument<Int>("heartbeatThreshold") ?: 3,
-                            heartbeatUrl = (call.argument<String>("heartbeatUrl") ?: "")
-                                .ifEmpty { "http://cp.cloudflare.com/generate_204" },
-                            allowTethering = call.argument<Boolean>("allowTethering") ?: false,
-                            engine = CoreKind.fromId(call.argument<String>("engine")).id,
-                        ).save(filesDir) { _, msg -> android.util.Log.w("TeapodVPN", msg) }
+                        val params = ConnectionParams.fromArgs(call.arguments as Map<*, *>)
+                        params.save(filesDir) { _, msg -> android.util.Log.w("TeapodVPN", msg) }
                         File(filesDir, "xray_config.json").writeText(xrayConfig)
                         File(filesDir, "socks_creds.json").writeText(org.json.JSONObject().apply {
-                            put("port", call.argument<Int>("socksPort") ?: 10808)
+                            put("port", params.socksPort)
                             put("user", call.argument<String>("socksUser") ?: "")
                             put("pass", call.argument<String>("socksPassword") ?: "")
                         }.toString())
@@ -443,52 +400,18 @@ class MainActivity : FlutterActivity() {
 
     private fun startVpnService(
         xrayConfig: String,
-        socksPort: Int,
         socksUser: String,
         socksPassword: String,
-        excludedPackages: List<String>,
-        includedPackages: List<String>,
-        vpnMode: String,
-        ssPrefix: String? = null,
-        proxyOnly: Boolean = false,
-        showNotification: Boolean = true,
-        killSwitch: Boolean = false,
-        allowIcmp: Boolean = false,
-        blockQuic: Boolean = false,
-        ipv6Enabled: Boolean = false,
-        allowTethering: Boolean = false,
-        heartbeatProbe: String = "socks",
-        heartbeatAction: String = "reconnect",
-        heartbeatThreshold: Int = 3,
-        heartbeatUrl: String = "",
-        engine: String = "go",
-        mtu: Int = 1500,
+        params: ConnectionParams,
         configName: String? = null,
     ) {
         requestBatteryOptimizationExemption()
         val intent = Intent(this, XrayVpnService::class.java).apply {
             action = XrayVpnService.ACTION_CONNECT
             putExtra(XrayVpnService.EXTRA_XRAY_CONFIG, xrayConfig)
-            putExtra(XrayVpnService.EXTRA_SOCKS_PORT, socksPort)
             putExtra(XrayVpnService.EXTRA_SOCKS_USER, socksUser)
             putExtra(XrayVpnService.EXTRA_SOCKS_PASSWORD, socksPassword)
-            putExtra(XrayVpnService.EXTRA_EXCLUDED_PACKAGES, ArrayList(excludedPackages))
-            putExtra(XrayVpnService.EXTRA_INCLUDED_PACKAGES, ArrayList(includedPackages))
-            putExtra(XrayVpnService.EXTRA_VPN_MODE, vpnMode)
-            if (ssPrefix != null) putExtra(XrayVpnService.EXTRA_SS_PREFIX, ssPrefix)
-            putExtra(XrayVpnService.EXTRA_PROXY_ONLY, proxyOnly)
-            putExtra(XrayVpnService.EXTRA_SHOW_NOTIFICATION, showNotification)
-            putExtra(XrayVpnService.EXTRA_KILL_SWITCH, killSwitch)
-            putExtra(XrayVpnService.EXTRA_ALLOW_ICMP, allowIcmp)
-            putExtra(XrayVpnService.EXTRA_BLOCK_QUIC, blockQuic)
-            putExtra(XrayVpnService.EXTRA_IPV6, ipv6Enabled)
-            putExtra(XrayVpnService.EXTRA_ALLOW_TETHERING, allowTethering)
-            putExtra(XrayVpnService.EXTRA_HEARTBEAT_PROBE, heartbeatProbe)
-            putExtra(XrayVpnService.EXTRA_HEARTBEAT_ACTION, heartbeatAction)
-            putExtra(XrayVpnService.EXTRA_HEARTBEAT_THRESHOLD, heartbeatThreshold)
-            putExtra(XrayVpnService.EXTRA_HEARTBEAT_URL, heartbeatUrl)
-            putExtra(XrayVpnService.EXTRA_ENGINE, engine)
-            putExtra(XrayVpnService.EXTRA_MTU, mtu)
+            putExtra(XrayVpnService.EXTRA_PARAMS, params.toJson().toString())
             putExtra(XrayVpnService.EXTRA_CONFIG_NAME, configName)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

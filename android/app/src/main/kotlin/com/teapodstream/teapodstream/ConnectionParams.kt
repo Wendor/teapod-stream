@@ -1,6 +1,9 @@
 package com.teapodstream.teapodstream
 
+import com.teapodstream.teapodstream.core.CoreKind
 import java.io.File
+import org.json.JSONArray
+import org.json.JSONObject
 
 internal data class ConnectionParams(
     val socksPort: Int,
@@ -21,70 +24,90 @@ internal data class ConnectionParams(
     /// Flutter to pick a live config (the tunnel_dead event).
     val heartbeatAction: String = "reconnect",
     val heartbeatThreshold: Int = 3,
-    val heartbeatUrl: String = "http://cp.cloudflare.com/generate_204",
+    val heartbeatUrl: String = DEFAULT_HEARTBEAT_URL,
     /// allExcept: let ownerless flows through (tethering) when exclusions are non-empty.
     val allowTethering: Boolean = false,
     /// "go" | "rust" — the session core; quick-reconnect brings up the same core.
     val engine: String = "go",
 ) {
+    /** The persisted and Intent form; [fromJson] reads it back. */
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("socksPort", socksPort)
+        put("excludedPackages", JSONArray(excludedPackages))
+        put("includedPackages", JSONArray(includedPackages))
+        put("vpnMode", vpnMode)
+        if (ssPrefix != null) put("ssPrefix", ssPrefix)
+        put("proxyOnly", proxyOnly)
+        put("showNotification", showNotification)
+        put("killSwitch", killSwitch)
+        put("allowIcmp", allowIcmp)
+        put("blockQuic", blockQuic)
+        put("ipv6Enabled", ipv6Enabled)
+        put("allowTethering", allowTethering)
+        put("mtu", mtu)
+        put("heartbeatProbe", heartbeatProbe)
+        put("heartbeatAction", heartbeatAction)
+        put("heartbeatThreshold", heartbeatThreshold)
+        put("heartbeatUrl", heartbeatUrl)
+        put("engine", engine)
+    }
+
     fun save(dir: File, log: (String, String) -> Unit) {
         try {
-            val json = org.json.JSONObject().apply {
-                put("socksPort", socksPort)
-                put("excludedPackages", org.json.JSONArray(excludedPackages))
-                put("includedPackages", org.json.JSONArray(includedPackages))
-                put("vpnMode", vpnMode)
-                if (ssPrefix != null) put("ssPrefix", ssPrefix)
-                put("proxyOnly", proxyOnly)
-                put("showNotification", showNotification)
-                put("killSwitch", killSwitch)
-                put("allowIcmp", allowIcmp)
-                put("blockQuic", blockQuic)
-                put("ipv6Enabled", ipv6Enabled)
-                put("allowTethering", allowTethering)
-                put("mtu", mtu)
-                put("heartbeatProbe", heartbeatProbe)
-                put("heartbeatAction", heartbeatAction)
-                put("heartbeatThreshold", heartbeatThreshold)
-                put("heartbeatUrl", heartbeatUrl)
-                put("engine", engine)
-            }
-            File(dir, "last_connection_meta.json").writeText(json.toString())
+            File(dir, FILE).writeText(toJson().toString())
         } catch (e: Exception) {
             log("warning", "Failed to save connection params: ${e.message}")
         }
     }
 
     companion object {
+        private const val FILE = "last_connection_meta.json"
+        const val DEFAULT_HEARTBEAT_URL = "http://cp.cloudflare.com/generate_204"
+
+        /**
+         * The one place for defaults and limits: the file, the service Intent and Flutter's connect arguments all
+         * go through here. Throws when `socksPort` or the package lists are missing.
+         */
+        fun fromJson(json: JSONObject): ConnectionParams = ConnectionParams(
+            socksPort = json.getInt("socksPort"),
+            excludedPackages = json.getJSONArray("excludedPackages").strings(),
+            includedPackages = json.getJSONArray("includedPackages").strings(),
+            vpnMode = json.optString("vpnMode", "allExcept").ifEmpty { "allExcept" },
+            ssPrefix = json.optString("ssPrefix").takeIf { it.isNotEmpty() },
+            proxyOnly = json.optBoolean("proxyOnly", false),
+            showNotification = json.optBoolean("showNotification", true),
+            killSwitch = json.optBoolean("killSwitch", false),
+            allowIcmp = json.optBoolean("allowIcmp", false),
+            blockQuic = json.optBoolean("blockQuic", false),
+            ipv6Enabled = json.optBoolean("ipv6Enabled", false),
+            allowTethering = json.optBoolean("allowTethering", false),
+            mtu = json.optInt("mtu", 1500).coerceIn(576, 9000),
+            heartbeatProbe = json.optString("heartbeatProbe", "socks").ifEmpty { "socks" },
+            heartbeatAction = json.optString("heartbeatAction", "reconnect").ifEmpty { "reconnect" },
+            heartbeatThreshold = json.optInt("heartbeatThreshold", 3).coerceIn(1, 10),
+            heartbeatUrl = json.optString("heartbeatUrl", DEFAULT_HEARTBEAT_URL).ifEmpty { DEFAULT_HEARTBEAT_URL },
+            engine = CoreKind.fromId(json.optString("engine")).id,
+        )
+
+        /**
+         * Flutter's `connect` / `saveQuickConnect` arguments. Missing `socksPort` and lists get the same defaults
+         * the Dart side would send; secrets (`xrayConfig`, SOCKS login) stay out.
+         */
+        fun fromArgs(args: Map<*, *>): ConnectionParams {
+            val json = JSONObject()
+            for ((k, v) in args) if (k is String && v != null) json.put(k, JSONObject.wrap(v))
+            if (!json.has("socksPort")) json.put("socksPort", 10808)
+            if (!json.has("excludedPackages")) json.put("excludedPackages", JSONArray())
+            if (!json.has("includedPackages")) json.put("includedPackages", JSONArray())
+            return fromJson(json)
+        }
+
         fun load(dir: File): ConnectionParams? = try {
-            val json = org.json.JSONObject(File(dir, "last_connection_meta.json").readText())
-            val excluded = json.getJSONArray("excludedPackages")
-                .let { arr -> List(arr.length()) { arr.getString(it) } }
-            val included = json.getJSONArray("includedPackages")
-                .let { arr -> List(arr.length()) { arr.getString(it) } }
-            ConnectionParams(
-                socksPort = json.getInt("socksPort"),
-                excludedPackages = excluded,
-                includedPackages = included,
-                vpnMode = json.optString("vpnMode", "allExcept"),
-                ssPrefix = json.optString("ssPrefix").takeIf { it.isNotEmpty() },
-                proxyOnly = json.optBoolean("proxyOnly", false),
-                showNotification = json.optBoolean("showNotification", true),
-                killSwitch = json.optBoolean("killSwitch", false),
-                allowIcmp = json.optBoolean("allowIcmp", false),
-                blockQuic = json.optBoolean("blockQuic", false),
-                ipv6Enabled = json.optBoolean("ipv6Enabled", false),
-                allowTethering = json.optBoolean("allowTethering", false),
-                mtu = json.optInt("mtu", 1500).coerceIn(576, 9000),
-                heartbeatProbe = json.optString("heartbeatProbe", "socks"),
-                heartbeatAction = json.optString("heartbeatAction", "reconnect"),
-                heartbeatThreshold = json.optInt("heartbeatThreshold", 3).coerceIn(1, 10),
-                heartbeatUrl = json.optString("heartbeatUrl", "http://cp.cloudflare.com/generate_204")
-                    .ifEmpty { "http://cp.cloudflare.com/generate_204" },
-                engine = json.optString("engine", "go").ifEmpty { "go" },
-            )
+            fromJson(JSONObject(File(dir, FILE).readText()))
         } catch (_: Exception) {
             null
         }
+
+        private fun JSONArray.strings() = List(length()) { getString(it) }
     }
 }

@@ -21,13 +21,11 @@ import android.os.PowerManager
 import android.system.OsConstants
 import android.util.LruCache
 import androidx.core.app.NotificationCompat
-import java.io.BufferedReader
 import java.io.File
 import com.teapodstream.teapodstream.core.CoreKind
 import com.teapodstream.teapodstream.core.CoreStartParams
 import com.teapodstream.teapodstream.core.VpnCore
 import com.teapodstream.teapodstream.core.VpnCores
-import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -161,7 +159,6 @@ class XrayVpnService : VpnService() {
         private const val NOTIFICATION_CHANNEL_MINIMAL_ID = "vpn_service_minimal"
         private const val NOTIFICATION_ID = 1
 
-        private const val HEARTBEAT_URL_HOST = "cp.cloudflare.com"
         private const val DEFAULT_HEARTBEAT_URL = "http://cp.cloudflare.com/generate_204"
         private const val CONNECTIVITY_CHECK_HOST = "8.8.8.8"
         private const val HEARTBEAT_INTERVAL_MS = 15_000L
@@ -1573,26 +1570,6 @@ class XrayVpnService : VpnService() {
         heartbeatFailures.set(0)
     }
 
-    /// Parsing the probe URL: host, port and path. Presets are plain (http), but the user
-    /// can set any custom URL — https won't go through the SOCKS probe,
-    /// so such a URL is served only by the in-core measurement.
-    private data class ProbeUrl(val host: String, val port: Int, val path: String, val https: Boolean)
-
-    private fun parseProbeUrl(raw: String): ProbeUrl {
-        return try {
-            val u = java.net.URI(raw)
-            val https = u.scheme.equals("https", ignoreCase = true)
-            ProbeUrl(
-                host = u.host ?: HEARTBEAT_URL_HOST,
-                port = if (u.port > 0) u.port else if (https) 443 else 80,
-                path = if (u.path.isNullOrEmpty()) "/" else u.path,
-                https = https,
-            )
-        } catch (_: Exception) {
-            ProbeUrl(HEARTBEAT_URL_HOST, 80, "/generate_204", false)
-        }
-    }
-
     /// Active probe of the selected type. Throws on failure —
     /// the heartbeat loop counts it as a failure.
     private fun runProbe(port: Int) {
@@ -1608,8 +1585,8 @@ class XrayVpnService : VpnService() {
     }
 
     private fun checkTunnelConnectivity(port: Int) {
-        val probeUrl = parseProbeUrl(heartbeatUrl)
-        if (probeUrl.https) {
+        val target = SocksHttpProbe.parseUrl(heartbeatUrl)
+        if (target.https) {
             // The probe itself speaks plain HTTP over SOCKS5 — it can't do TLS.
             // For an https URL it's more honest to measure via the core than to fake success.
             val ms = core.measureDelay(heartbeatUrl)
@@ -1617,92 +1594,15 @@ class XrayVpnService : VpnService() {
             log("debug", "Heartbeat OK (https url, measured in core: ${ms}ms)")
             return
         }
-        var stage = "init"
-        val socket = Socket()
+        val creds = _socksCredentials.get()
         try {
-            socket.soTimeout = 10000
-            stage = "tcp_connect"
-            socket.connect(InetSocketAddress("127.0.0.1", port), 10000)
-            val out = socket.getOutputStream()
-            val inp = socket.getInputStream()
-
-            stage = "socks_greeting"
-            out.write(byteArrayOf(5, 2, 0, 2))
-            val resp = ByteArray(2)
-            readFully(inp, resp)
-            if (resp[0] != 5.toByte()) throw Exception("SOCKS ver mismatch")
-
-            when (resp[1].toInt()) {
-                0 -> {}
-                2 -> {
-                    stage = "socks_auth"
-                    val creds = _socksCredentials.get()
-                    if (creds.user.isNotEmpty()) {
-                        val u = creds.user.toByteArray()
-                        val p = creds.password.toByteArray()
-                        out.write(byteArrayOf(1, u.size.toByte()) + u + byteArrayOf(p.size.toByte()) + p)
-                        readFully(inp, resp)
-                        if (resp[1] != 0.toByte()) throw Exception("SOCKS auth failed")
-                    }
-                }
-                else -> throw Exception("SOCKS auth not supported")
-            }
-
-            stage = "socks_connect"
-            val destHost = probeUrl.host
-            val destPort = probeUrl.port
-            val domainBytes = destHost.toByteArray()
-            out.write(
-                byteArrayOf(5, 1, 0, 3, domainBytes.size.toByte()) +
-                domainBytes +
-                byteArrayOf((destPort shr 8).toByte(), destPort.toByte())
-            )
-
-            val reply = ByteArray(4)
-            readFully(inp, reply)
-            val replyRep = reply[1].toInt() and 0xFF
-            if (reply[0].toInt() != 5 || replyRep != 0) throw Exception("SOCKS connect failed: $replyRep")
-            // BND.ADDR + BND.PORT; readFully throws on EOF (previously -1 looped the read)
-            val bndLen = when (reply[3].toInt()) {
-                1 -> 6
-                4 -> 18
-                3 -> inp.read().also { if (it < 0) throw Exception("EOF while reading SOCKS response") } + 2
-                else -> 0
-            }
-            readFully(inp, ByteArray(bndLen))
-
-            stage = "http_request"
-            val request = "GET ${probeUrl.path} HTTP/1.1\r\nHost: $destHost\r\nConnection: close\r\n\r\n"
-            out.write(request.toByteArray())
-            out.flush()
-
-            stage = "http_response"
-            val reader = BufferedReader(InputStreamReader(inp))
-            val line = reader.readLine()
-            val code = line?.split(" ")?.getOrNull(1)?.toIntOrNull()
-            if (code == null || code !in 200..299) {
-                throw Exception("Invalid HTTP response: $line")
-            }
-
-            heartbeatFailures.set(0)
-            log("debug", "Heartbeat OK")
-        } catch (e: Exception) {
-            log("warning", "Heartbeat check failed at [$stage]: ${e.message}")
+            SocksHttpProbe.check(port, creds.user, creds.password, target)
+        } catch (e: SocksHttpProbe.Failure) {
+            log("warning", "Heartbeat check failed at [${e.stage}]: ${e.message}")
             throw e
-        } finally {
-            socket.close()
         }
-    }
-
-    // InputStream.read may return fewer bytes than requested (partial read) —
-    // a heartbeat probe must not misread a split SOCKS reply as a failure.
-    private fun readFully(inp: java.io.InputStream, buf: ByteArray) {
-        var off = 0
-        while (off < buf.size) {
-            val n = inp.read(buf, off, buf.size - off)
-            if (n < 0) throw Exception("EOF while reading SOCKS response")
-            off += n
-        }
+        heartbeatFailures.set(0)
+        log("debug", "Heartbeat OK")
     }
 
     private fun unregisterNetworkCallback() {

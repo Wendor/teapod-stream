@@ -45,7 +45,7 @@ void main() {
 
   test('typed results, with empty values for a null reply', () async {
     reply = (c) => switch (c.method) {
-      'getBinaryVersions' => {'xray': '26', 'tun2socks': 1},
+      'getBinaryVersions' => {'xray': '26', 'tun2socks': 1, 'box': null},
       'getAvailableEngines' => ['go', 'box'],
       'getInstalledApps' => [
         {'packageName': 'a.b', 'appName': 'A', 'isSystem': false},

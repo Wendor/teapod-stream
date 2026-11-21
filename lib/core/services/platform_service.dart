@@ -10,10 +10,14 @@ class PlatformService {
 
   static const _channel = MethodChannel(AppConstants.methodChannel);
 
-  /// Versions of the bundled binaries by key (`xray`, `tun2socks`, … — see `CoreKind.versionKey`).
+  /// Versions of the bundled binaries by key (`xray`, `tun2socks`, … — see `CoreKind.versionKey`); null values are
+  /// dropped.
   Future<Map<String, String>> binaryVersions() async {
     final result = await _channel.invokeMethod<Map<Object?, Object?>>('getBinaryVersions');
-    return {for (final e in (result ?? const {}).entries) '${e.key}': '${e.value}'};
+    return {
+      for (final e in (result ?? const {}).entries)
+        if (e.value != null) '${e.key}': '${e.value}',
+    };
   }
 
   /// Native ids (`CoreKind.nativeId`) of the cores whose libraries load on this device.

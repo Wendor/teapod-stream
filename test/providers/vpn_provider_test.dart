@@ -821,6 +821,27 @@ void main() {
       expect(native.named('connect'), hasLength(1));
     });
 
+    test('a connect settled by the startup sync follows a later idle snapshot', () async {
+      final logsGate = Completer<void>();
+      messenger.setMockMethodCallHandler(_method, (call) async {
+        if (call.method == 'getLogs') await logsGate.future;
+        return native.handle(call);
+      });
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      // The startup sync waits for the logs; a connect starts meanwhile and native brings it up.
+      await n().connect();
+      final attempt = native.lastConnect()['attempt'] as int;
+      native.state = {'state': 'connected', 'socksPort': 2080, 'attempt': attempt};
+      logsGate.complete();
+      await _settle();
+      expect(st().isConnected, isTrue);
+      // The service died: the idle snapshot of a resume applies.
+      native.state = {'state': 'disconnected', 'attempt': 0};
+      await n().syncNativeState();
+      await _settle();
+      expect(st().connectionState, VpnState.disconnected);
+    });
+
     test('tagged events outside a newer connect and untagged events apply as before', () async {
       await boot(configs: [_cfg('a')], activeId: 'a');
       await n().connect();

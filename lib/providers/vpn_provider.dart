@@ -196,6 +196,10 @@ class VpnNotifier extends Notifier<VpnState2> {
       if (vpnState.connectedAtMs > 0) {
         _connectedAt = DateTime.fromMillisecondsSinceEpoch(vpnState.connectedAtMs);
       }
+      // A connect started before this sync settles with the session it finds.
+      _awaiting = null;
+      _connectTimeout?.cancel();
+      _connectTimeout = null;
       state = VpnState2(
         connectionState: VpnState.connected,
         activeSocksPort: vpnState.socksPort,

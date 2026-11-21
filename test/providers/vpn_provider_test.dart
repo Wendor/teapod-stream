@@ -628,6 +628,84 @@ void main() {
     });
   });
 
+  group('superseded connect attempts', () {
+    /// The first native connect waits for [gate] and then answers with [first]; later ones answer at once.
+    void holdFirstConnect(Completer<void> gate, Object? Function() first) {
+      var n = 0;
+      native.onConnect = () async {
+        if (n++ > 0) return null;
+        await gate.future;
+        return first();
+      };
+    }
+
+    Future<void> disconnectNow() async {
+      final d = n().disconnect();
+      emit({'type': 'state', 'value': 'disconnected'});
+      await d;
+      await _settle();
+    }
+
+    test('an earlier connect finishing after a newer one changes nothing', () async {
+      await boot(configs: [_cfg('a'), _cfg('b')], activeId: 'a');
+      final gate = Completer<void>();
+      holdFirstConnect(gate, () => null);
+      final first = n().connect();
+      await _settle();
+      expect(native.named('connect'), hasLength(1));
+
+      await disconnectNow();
+      await c.read(configProvider.notifier).setActiveConfig('b');
+      await n().connect();
+      emit({'type': 'state', 'value': 'connected', 'socksPort': 2080, 'socksUser': 'su', 'socksPassword': 'sp'});
+      await _settle();
+      expect(n().runsConfig(_cfg('b')), isTrue);
+
+      gate.complete();
+      await first;
+      await _settle();
+      expect(n().runsConfig(_cfg('b')), isTrue);
+      expect(n().runsConfig(_cfg('a')), isFalse);
+      expect(st().isConnected, isTrue);
+    });
+
+    test("a superseded attempt's failure doesn't set an error", () async {
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      final gate = Completer<void>();
+      holdFirstConnect(gate, () => throw PlatformException(code: 'X', message: 'late failure'));
+      final first = n().connect();
+      await _settle();
+
+      await disconnectNow();
+      await n().connect();
+      emit({'type': 'state', 'value': 'connected', 'socksPort': 2080, 'socksUser': 'su', 'socksPassword': 'sp'});
+      await _settle();
+
+      gate.complete();
+      await first;
+      await _settle();
+      expect(st().connectionState, VpnState.connected);
+      expect(st().error, isNull);
+      expect(logs().where((l) => l.message.contains('late failure')), isEmpty);
+    });
+
+    test('disconnect while a connect waits before native: the connect is never dispatched', () async {
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      final permission = Completer<Map<int, int>>();
+      messenger.setMockMethodCallHandler(_permissions, (call) => permission.future);
+      final first = n().connect();
+      await _settle();
+      expect(st().connectionState, VpnState.connecting);
+
+      await disconnectNow();
+      permission.complete({17: 1});
+      await first;
+      await _settle();
+      expect(native.named('connect'), isEmpty);
+      expect(st().connectionState, VpnState.disconnected);
+    });
+  });
+
   group('disconnect', () {
     test('waits for native and resets state', () async {
       await connected();

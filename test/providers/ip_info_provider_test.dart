@@ -40,10 +40,15 @@ class _Socks5 {
       }
     }
 
-    s.listen((d) {
-      buf.addAll(d);
-      pump();
-    }, onError: (_) {});
+    var closed = false;
+    s.listen(
+      (d) {
+        buf.addAll(d);
+        pump();
+      },
+      onError: (_) => closed = true,
+      onDone: () => closed = true,
+    );
     Future<List<int>> take(int n) {
       final c = Completer<List<int>>();
       waiters.add((n, c));
@@ -66,10 +71,17 @@ class _Socks5 {
       _ => '?',
     };
     final port = await take(2);
-    targets.add('$host:${port[0] << 8 | port[1]}');
+    final portNumber = port[0] << 8 | port[1];
+    targets.add('$host:$portNumber');
+    // The proxy speaks plain HTTP only: an https service fails its TLS handshake here, as a blocked one would.
+    if (portNumber == 443) {
+      s.destroy();
+      return;
+    }
     s.add([5, 0, 0, 1, 0, 0, 0, 0, 0, 0]);
     // Wait for the end of the HTTP headers and answer.
     while (!latin1.decode(buf).contains('\r\n\r\n')) {
+      if (closed) return;
       await Future<void>.delayed(const Duration(milliseconds: 5));
     }
     s.add(

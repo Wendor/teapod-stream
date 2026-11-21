@@ -20,7 +20,7 @@ import 'providers/update_provider.dart';
 import 'providers/geo_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/locale_provider.dart';
-import 'core/services/deeplink_handler.dart';
+import 'ui/deeplink_handler.dart';
 import 'protocols/xray/xray_engine.dart';
 import 'itest/itest_agent.dart';
 import 'itest/itest_protocol.dart';

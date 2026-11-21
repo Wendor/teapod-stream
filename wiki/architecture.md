@@ -108,7 +108,7 @@ lib/
 │   ├── cores/                CoreBackend, CoreResolver, engine options, sanitizer, core switching
 │   ├── interfaces/           VpnEngine, VpnEngineOptions, VpnState
 │   ├── models/               VpnConfig, AppSettings and its parts, subscriptions, profiles, bundles, stats, logs
-│   └── services/             storage, subscriptions, tunnel SOCKS, updates, deep links, logs
+│   └── services/             storage, subscriptions, tunnel SOCKS, updates, deep-link parsing, logs
 ├── protocols/
 │   ├── xray/                 XrayEngine, Go/Rust backends and builders, VlessParser
 │   ├── singbox/              sing-box backend, builder, outbounds, route
@@ -116,7 +116,7 @@ lib/
 ├── providers/                Riverpod notifiers and derived providers
 ├── itest/                    integration-test agent (…itest build only)
 ├── l10n/                     ARB files and generated localizations
-└── ui/                       screens, widgets, theme
+└── ui/                       screens, widgets, theme, deep-link import dialogs
 android/app/src/main/kotlin/com/teapodstream/teapodstream/   service, activity, cores, receivers, tile
 tool/itest/                   on-device integration test runner
 changelog/                    release notes, one file per language (CI/CD → release notes)

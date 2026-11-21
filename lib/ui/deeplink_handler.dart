@@ -1,14 +1,14 @@
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'deeplink_router.dart';
-import '../models/profile_bundle.dart';
-import '../models/connections_bundle.dart';
-import '../../providers/profile_provider.dart';
-import '../../providers/config_provider.dart';
-import '../../ui/theme/app_theme.dart';
-import '../../ui/theme/app_colors.dart';
-import '../../l10n/l10n.dart';
+import '../core/services/deeplink_router.dart';
+import '../core/models/profile_bundle.dart';
+import '../core/models/connections_bundle.dart';
+import '../providers/profile_provider.dart';
+import '../providers/config_provider.dart';
+import 'theme/app_theme.dart';
+import 'theme/app_colors.dart';
+import '../l10n/l10n.dart';
 
 class DeeplinkHandler {
   final WidgetRef ref;

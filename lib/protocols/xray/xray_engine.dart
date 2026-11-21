@@ -112,8 +112,9 @@ class XrayEngine {
     return (user: 'u${randomString(8)}', password: randomString(AppConstants.socksAuthPasswordLength));
   }
 
-  /// Get current VPN state with SOCKS credentials (for sync on app start).
-  Future<({VpnState state, int socksPort, String socksUser, String socksPassword, int connectedAtMs})>
+  /// Get current VPN state with SOCKS credentials (for sync on app start). `attempt` — the connect attempt that
+  /// started the native session (0 — started natively).
+  Future<({VpnState state, int socksPort, String socksUser, String socksPassword, int connectedAtMs, int attempt})>
   getVpnState() async {
     try {
       final result = await _channel.invokeMethod<Map<Object?, Object?>>('getState');
@@ -125,10 +126,11 @@ class XrayEngine {
           socksUser: result['socksUser'] as String? ?? '',
           socksPassword: result['socksPassword'] as String? ?? '',
           connectedAtMs: (result['connectedAtMs'] as num?)?.toInt() ?? 0,
+          attempt: (result['attempt'] as num?)?.toInt() ?? 0,
         );
       }
     } catch (_) {}
-    return (state: VpnState.disconnected, socksPort: 0, socksUser: '', socksPassword: '', connectedAtMs: 0);
+    return (state: VpnState.disconnected, socksPort: 0, socksUser: '', socksPassword: '', connectedAtMs: 0, attempt: 0);
   }
 
   /// JSON snapshot of tun2socks state (counters, per-connection activity).

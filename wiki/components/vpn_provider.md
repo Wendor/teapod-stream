@@ -56,9 +56,13 @@ new attempt number; a later such `connect()`, any `disconnect()` or the 45 s con
 each await of the attempt
 (notification permission, available cores, the native call) a stale attempt returns without calling native and
 without writing `_connectedConfig`, SOCKS credentials, `appliedFingerprint` or an `error`. The attempt number goes
-to native with `connect`; state events of the session it starts carry it back (`attempt`). While a newer attempt is
-connecting, a state event tagged with another attempt (an old session's start failing late) is dropped. Untagged
-events (sessions started natively: tile, boot, restart) and events outside a connect apply as they come.
+to native with `connect`; state events of the session it starts carry it back (`attempt`), and `getState` reports
+it. Numbers start at the notifier's creation time (µs) and are raised above the native session's on every state
+sync, so a notifier recreated with the UI never reuses one. While a Flutter connect waits for its outcome
+(`_awaiting`, cleared by a settled state, a failure, the timeout or a disconnect), a state event tagged with another
+attempt — an old session's start failing late — is dropped. Untagged events (sessions started natively: tile, boot,
+restart) and events outside a pending connect (native reconnects, a session surviving a UI restart) apply as they
+come.
 
 SOCKS credentials are random when `randomCredentials` is on **or** when the manual login is empty in TUN mode —
 a password-less SOCKS on localhost would be an open proxy for every app. In proxy-only mode empty credentials

@@ -190,6 +190,7 @@ class VpnNotifier extends Notifier<VpnState2> {
     }
 
     final vpnState = await _engine.getVpnState();
+    _seenNativeAttempt(vpnState.attempt);
     if (vpnState.state == VpnState.connected && vpnState.socksPort > 0) {
       if (vpnState.connectedAtMs > 0) {
         _connectedAt = DateTime.fromMillisecondsSinceEpoch(vpnState.connectedAtMs);
@@ -259,10 +260,10 @@ class VpnNotifier extends Notifier<VpnState2> {
     switch (type) {
       case 'state':
         // A late event of a session a newer connect replaced (its start failing after the user moved on): while
-        // the newer attempt is connecting, it owns the state. Untagged events — sessions started natively — and
-        // events outside a connect apply as before.
+        // a Flutter connect waits for its outcome, it owns the state. Untagged events — sessions started natively —
+        // and events outside a pending connect (native reconnects, a session surviving a UI restart) apply as before.
         final tagged = (event['attempt'] as num?)?.toInt();
-        if (tagged != null && tagged != _attempt && state.isConnecting) {
+        if (tagged != null && _awaiting != null && tagged != _awaiting) {
           ref.read(logServiceProvider.notifier).addDebug('Ignored ${event['value']} of connect attempt $tagged');
           return;
         }
@@ -391,6 +392,8 @@ class VpnNotifier extends Notifier<VpnState2> {
 
   /// [error] — the native reason for a failed start (for error/blocked).
   void _onNativeState(VpnState nativeState, {bool isReconnect = false, String? error}) {
+    // A settled state ends the wait of the pending connect (its own outcome, or an untagged one that replaced it).
+    if (nativeState != VpnState.connecting && nativeState != VpnState.disconnecting) _awaiting = null;
     if (nativeState == VpnState.connected) {
       _connectedAt ??= DateTime.now();
       _connectTimeout?.cancel();
@@ -418,6 +421,7 @@ class VpnNotifier extends Notifier<VpnState2> {
             state = state.copyWith(connectionState: VpnState.error, error: L10n.current.vpnConnectTimeout);
             _connectTimeout = null;
             _attempt++; // the timed-out attempt's late answer must not replace the timeout error
+            _awaiting = null;
             _engine.disconnect().ignore();
           }
         });
@@ -520,11 +524,23 @@ class VpnNotifier extends Notifier<VpnState2> {
   /// the process, and a notifier recreated with the UI must not reuse a number an older session still reports.
   int _attempt = DateTime.now().microsecondsSinceEpoch;
 
+  /// The Flutter connect attempt still waiting for its outcome; null — none. Only while it waits are native state
+  /// events tagged with another attempt dropped: a native reconnect or a session surviving a UI restart must still
+  /// reach the state.
+  int? _awaiting;
+
+  /// Keeps attempt numbers above the one the surviving native session reports (the time seed could repeat after a
+  /// clock change). Not while a connect waits: raising the counter would make that attempt stale.
+  void _seenNativeAttempt(int native) {
+    if (_awaiting == null && native > _attempt) _attempt = native;
+  }
+
   /// [switching] — changing server/settings on a live tunnel: native rebuilds
   /// the session without closing TUN. A refusal before the native call keeps the old connection.
   Future<void> connect({bool switching = false}) async {
     if (state.isBusy || (state.isConnected && !switching)) return;
     final attempt = ++_attempt;
+    _awaiting = attempt;
     bool superseded() => attempt != _attempt;
     void fail(String reason) {
       if (!superseded()) _failConnect(reason, switching: switching);
@@ -540,6 +556,7 @@ class VpnNotifier extends Notifier<VpnState2> {
         state = state.copyWith(connectionState: VpnState.error, error: L10n.current.vpnConnectTimeout);
         _connectTimeout = null;
         _attempt++; // the timed-out attempt's late answer must not replace the timeout error
+        _awaiting = null;
         _engine.disconnect().ignore();
       }
     });
@@ -599,6 +616,7 @@ class VpnNotifier extends Notifier<VpnState2> {
 
   /// The connection wasn't started. With [switching] native continues the previous session.
   void _failConnect(String reason, {bool switching = false}) {
+    _awaiting = null;
     ref.read(logServiceProvider.notifier).addError(reason);
     state = state.copyWith(connectionState: switching ? VpnState.connected : VpnState.error, error: reason);
     _connectTimeout?.cancel();
@@ -671,6 +689,7 @@ class VpnNotifier extends Notifier<VpnState2> {
     // A connect still in flight must not dispatch or write state after this — also when native already reported
     // `disconnected` while that connect waited.
     _attempt++;
+    _awaiting = null;
     if (state.connectionState == VpnState.disconnected || state.connectionState == VpnState.disconnecting) {
       return;
     }
@@ -705,6 +724,7 @@ class VpnNotifier extends Notifier<VpnState2> {
   Future<void> syncNativeState() async {
     try {
       final native = await _engine.getVpnState();
+      _seenNativeAttempt(native.attempt);
       if (native.state == VpnState.connected && native.socksPort > 0) {
         if (native.connectedAtMs > 0) {
           _connectedAt ??= DateTime.fromMillisecondsSinceEpoch(native.connectedAtMs);

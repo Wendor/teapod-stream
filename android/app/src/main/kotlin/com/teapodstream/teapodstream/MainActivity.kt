@@ -266,6 +266,7 @@ class MainActivity : FlutterActivity() {
                             "socksUser" to socks["user"],
                             "socksPassword" to socks["password"],
                             "connectedAtMs" to socks["connectedAtMs"],
+                            "attempt" to XrayVpnService.sessionAttempt,
                         ))
                     }
 

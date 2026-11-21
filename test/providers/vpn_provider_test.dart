@@ -760,6 +760,26 @@ void main() {
       expect(native.lastConnect()['attempt'] as int, greaterThan(before));
     });
 
+    test('after a UI restart a native reconnect of the surviving session and its disconnect still apply', () async {
+      native.state = {'state': 'connected', 'socksPort': 2080, 'socksUser': 'su', 'socksPassword': 'sp', 'attempt': 5};
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      expect(st().isConnected, isTrue);
+      emit({'type': 'state', 'value': 'reconnecting', 'attempt': 5});
+      await _settle();
+      expect(st().connectionState, VpnState.connecting);
+      emit({'type': 'state', 'value': 'disconnected', 'attempt': 5});
+      await _settle();
+      expect(st().connectionState, VpnState.disconnected);
+    });
+
+    test('attempt numbers stay above the one the native session reports', () async {
+      const nativeAttempt = 1 << 60; // far above the time seed, as after the clock went back
+      native.state = {'state': 'disconnected', 'attempt': nativeAttempt};
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      await n().connect();
+      expect(native.lastConnect()['attempt'] as int, greaterThan(nativeAttempt));
+    });
+
     test('tagged events outside a newer connect and untagged events apply as before', () async {
       await boot(configs: [_cfg('a')], activeId: 'a');
       await n().connect();

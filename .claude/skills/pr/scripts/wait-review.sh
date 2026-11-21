@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Usage: wait-review.sh <pr> [minutes, default 40]
 # Waits until the PR is ready for your next step and prints that step. Ready means: the required checks finished,
-# CodeRabbit reviewed the head commit, and every unresolved CodeRabbit thread someone replied to has its answer —
-# or has gone unanswered for WAIT_REVIEW_IDLE minutes (default 10): CodeRabbit sometimes answers two threads in
+# CodeRabbit reviewed the head commit, and every unresolved CodeRabbit thread someone replied to has its answer
+# (a reply, or a 🚀 / 👍 reaction on the last comment: CodeRabbit accepts a reply that way) — or has gone unanswered for WAIT_REVIEW_IDLE minutes (default 10): CodeRabbit sometimes answers two threads in
 # one of them and never comes back to the other, so waiting longer only burns time.
 # Exit codes: 0 ready, 1 a check failed, 2 CodeRabbit skipped the head commit, 3 timed out.
 set -uo pipefail
@@ -12,15 +12,20 @@ repo=Wendor/teapod-stream
 bot='coderabbitai[bot]'
 idle=$(( ${WAIT_REVIEW_IDLE:-10} * 60 ))
 
-threads() {  # unresolved threads, tab-separated: id, who started it, who spoke last, path, seconds since then
+threads() {  # unresolved threads, tab-separated: id, who started it, who spoke last, path, seconds since then,
+             # whether CodeRabbit accepted the last comment with a reaction (1/0)
   # GraphQL names the bot "coderabbitai", REST "coderabbitai[bot]".
   gh api graphql --paginate -F n="$n" -f query='query($n:Int!,$endCursor:String){repository(owner:"Wendor",
     name:"teapod-stream"){pullRequest(number:$n){reviewThreads(first:100,after:$endCursor){nodes{id isResolved path
-    first:comments(first:1){nodes{author{login}}} last:comments(last:1){nodes{author{login} createdAt}}}
+    first:comments(first:1){nodes{author{login}}} last:comments(last:1){nodes{author{login} createdAt
+    reactions(first:20){nodes{content user{login}}}}}}
     pageInfo{hasNextPage endCursor}}}}}' \
     --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved | not)
       | [.id, .first.nodes[0].author.login, .last.nodes[0].author.login, .path,
-         (now - (.last.nodes[0].createdAt | fromdate) | floor)] | @tsv'
+         (now - (.last.nodes[0].createdAt | fromdate) | floor),
+         # Reactions name the bot "coderabbitai[bot]"; 👀 only means it is working on the thread.
+         ([.last.nodes[0].reactions.nodes[] | select((.user.login | startswith("coderabbitai"))
+           and (.content == "ROCKET" or .content == "THUMBS_UP"))] | if length > 0 then 1 else 0 end)] | @tsv'
 }
 
 while :; do
@@ -71,20 +76,25 @@ while :; do
     # A thread waits for CodeRabbit when CodeRabbit started it and someone else spoke last; threads people started
     # are theirs to answer.
     if open=$(threads); then
-      waiting=$(awk -F'\t' -v idle="$idle" '$2 == "coderabbitai" && $3 != "coderabbitai" && $5 < idle' <<< "$open" \
-        | sed '/^$/d')
-      silent=$(awk -F'\t' -v idle="$idle" '$2 == "coderabbitai" && $3 != "coderabbitai" && $5 >= idle' <<< "$open" \
-        | cut -f1,4 | sed '/^$/d')
+      replied='$2 == "coderabbitai" && $3 != "coderabbitai"'
+      waiting=$(awk -F'\t' -v idle="$idle" "$replied"' && $6 == 0 && $5 < idle' <<< "$open" | sed '/^$/d')
+      silent=$(awk -F'\t' -v idle="$idle" "$replied"' && $6 == 0 && $5 >= idle' <<< "$open" | cut -f1,4 | sed '/^$/d')
+      accepted=$(awk -F'\t' "$replied"' && $6 == 1' <<< "$open" | cut -f1,4 | sed '/^$/d')
     else
       silent=""
+      accepted=""
       waiting="(the thread query failed; retrying)"  # never READY on data we couldn't read
     fi
     # A push between the reads above and now makes them stale.
     if [ -z "$waiting" ] && [ "$(gh pr view "$n" --json headRefOid --jq .headRefOid)" = "$head" ]; then
       echo "READY: CodeRabbit reviewed ${head:0:7}; checks passed."
       if [ -n "$open" ]; then
-        echo "Unresolved threads (id, started by, last comment by, path, seconds since):"
+        echo "Unresolved threads (id, started by, last comment by, path, seconds since, accepted by reaction):"
         sed 's/^/  /' <<< "$open"
+      fi
+      if [ -n "$accepted" ]; then
+        echo "CodeRabbit accepted your reply with a reaction (resolve these threads):"
+        sed 's/^/  /' <<< "$accepted"
       fi
       if [ -n "$silent" ]; then
         echo "No answer from CodeRabbit for $(( idle / 60 ))+ min (check whether it answered in a sibling thread):"

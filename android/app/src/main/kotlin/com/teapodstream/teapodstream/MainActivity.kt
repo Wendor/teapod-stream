@@ -32,7 +32,7 @@ class MainActivity : FlutterActivity() {
         private const val VPN_PERMISSION_REQUEST = 1001
     }
 
-    private var pendingResult: MethodChannel.Result? = null
+    private val pendingVpnStart = PendingVpnStart()
     private var pendingDeeplink: String? = null
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
@@ -115,10 +115,17 @@ class MainActivity : FlutterActivity() {
                             result.success(null)
                         }
                         // Proxy-only: no TUN tunnel, no VPN permission needed
-                        if (proxyOnly) start() else requestVpnPermission(result, start)
+                        if (proxyOnly) {
+                            pendingVpnStart.cancel(PendingVpnStart.SUPERSEDED)
+                            start()
+                        } else {
+                            requestVpnPermission(result, start)
+                        }
                     }
 
                     "disconnect" -> {
+                        // A connect still waiting for the permission dialog must not start after this.
+                        pendingVpnStart.cancel(PendingVpnStart.CANCELLED)
                         stopVpnService()
                         result.success(null)
                     }
@@ -377,8 +384,6 @@ class MainActivity : FlutterActivity() {
             }
     }
 
-    private var pendingVpnAction: (() -> Unit)? = null
-
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (ItestBridge.onIntent(this, intent)) return
@@ -395,12 +400,15 @@ class MainActivity : FlutterActivity() {
     private fun requestVpnPermission(result: MethodChannel.Result, action: () -> Unit) {
         val intent = VpnService.prepare(this)
         if (intent != null) {
-            // Need to ask for permission
-            pendingResult = result
-            pendingVpnAction = action
-            startActivityForResult(intent, VPN_PERMISSION_REQUEST)
+            // Need to ask for permission; a connect arriving while the dialog is open replaces the waiting one.
+            val reject = { code: String ->
+                val message = if (code == PendingVpnStart.DENIED) "User denied VPN permission" else "VPN start $code"
+                result.error(code, message, null)
+            }
+            if (pendingVpnStart.offer(action, reject)) startActivityForResult(intent, VPN_PERMISSION_REQUEST)
         } else {
             // Already have permission
+            pendingVpnStart.cancel(PendingVpnStart.SUPERSEDED)
             action()
         }
     }
@@ -409,15 +417,7 @@ class MainActivity : FlutterActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == VPN_PERMISSION_REQUEST) {
-            if (resultCode == Activity.RESULT_OK) {
-                pendingVpnAction?.invoke()
-                pendingVpnAction = null
-                pendingResult = null
-            } else {
-                pendingResult?.error("VPN_PERMISSION_DENIED", "User denied VPN permission", null)
-                pendingResult = null
-                pendingVpnAction = null
-            }
+            pendingVpnStart.complete(granted = resultCode == Activity.RESULT_OK)
         }
     }
 

@@ -61,7 +61,8 @@ it. Numbers start at the notifier's creation time (µs) and are raised above the
 sync, so a notifier recreated with the UI never reuses one. While a Flutter connect waits for its outcome
 (`_awaiting`, cleared by a settled state, a failure, the timeout or a disconnect), a state event tagged with another
 attempt — an old session's start failing late — is dropped, and so is a `getState` snapshot of another attempt's
-session during a resume sync. Untagged events (sessions started natively: tile, boot,
+session during a resume sync, or of an idle untagged service the connect hasn't reached yet (a resume after the
+notification-permission dialog). Untagged events (sessions started natively: tile, boot,
 restart) and events outside a pending connect (native reconnects, a session surviving a UI restart) apply as they
 come.
 

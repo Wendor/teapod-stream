@@ -40,7 +40,16 @@ class PendingVpnStartTest {
         pending.cancel(PendingVpnStart.CANCELLED)
         pending.complete(granted = true)
         assertEquals(listOf("reject a ${PendingVpnStart.CANCELLED}"), events)
-        assertTrue(offer("b")) // the next connect shows the dialog again
+        assertTrue(offer("b")) // the dialog has answered: the next connect shows it again
+    }
+
+    @Test
+    fun `a connect after a cancel waits for the dialog still on screen`() {
+        assertTrue(offer("a"))
+        pending.cancel(PendingVpnStart.CANCELLED)
+        assertFalse(offer("b")) // no second dialog: the open one answers for b
+        pending.complete(granted = true)
+        assertEquals(listOf("reject a ${PendingVpnStart.CANCELLED}", "start b"), events)
     }
 
     @Test

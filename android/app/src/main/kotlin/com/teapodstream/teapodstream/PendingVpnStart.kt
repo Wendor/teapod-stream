@@ -9,9 +9,16 @@ internal class PendingVpnStart {
     private var start: (() -> Unit)? = null
     private var reject: ((String) -> Unit)? = null
 
-    /** Holds [start] until the dialog answers; returns true when the dialog must be shown (none is open yet). */
+    // The system dialog stays on screen after a cancel: only its answer closes it.
+    private var dialogOpen = false
+
+    /**
+     * Holds [start] until the dialog answers; returns true when the dialog must be shown (none is open yet — one
+     * opened for a cancelled request is still on screen, and its answer goes to this request).
+     */
     fun offer(start: () -> Unit, reject: (String) -> Unit): Boolean {
-        val showDialog = this.start == null
+        val showDialog = !dialogOpen
+        dialogOpen = true
         this.reject?.invoke(SUPERSEDED)
         this.start = start
         this.reject = reject
@@ -30,6 +37,7 @@ internal class PendingVpnStart {
         val s = start
         val r = reject
         clear()
+        dialogOpen = false
         if (granted) s?.invoke() else r?.invoke(DENIED)
     }
 

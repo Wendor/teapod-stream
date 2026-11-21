@@ -99,16 +99,23 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   late Map<String, Object?> nativeState;
+  final geoipAsked = <Object?>[];
+  String? geoipCountry;
   late ProviderContainer c;
 
   setUp(() {
     // The binding replaces HttpClient with a stub (400) — a real one is needed.
     HttpOverrides.global = null;
     nativeState = {'state': 'disconnected'};
-    messenger.setMockMethodCallHandler(
-      const MethodChannel(AppConstants.methodChannel),
-      (call) async => call.method == 'getState' ? nativeState : null,
-    );
+    geoipAsked.clear();
+    geoipCountry = null;
+    messenger.setMockMethodCallHandler(const MethodChannel(AppConstants.methodChannel), (call) async {
+      if (call.method == 'countryForIp') {
+        geoipAsked.add((call.arguments as Map)['ip']);
+        return geoipCountry;
+      }
+      return call.method == 'getState' ? nativeState : null;
+    });
     messenger.setMockStreamHandler(
       const EventChannel('${AppConstants.methodChannel}/events'),
       MockStreamHandler.inline(onListen: (_, _) {}),
@@ -140,8 +147,27 @@ void main() {
     nativeState = {'state': 'connected', 'socksPort': socks.port, 'socksUser': 'su', 'socksPassword': 'sp'};
     final info = await read();
     expect((info?.ip, info?.country, info?.countryCode), ('203.0.113.7', 'Netherlands', 'NL'));
+    expect(geoipAsked, isEmpty); // the service gave the country
     expect(socks.auth.single, ('su', 'sp'));
     expect(socks.targets.single, 'ip-api.com:80');
+  });
+
+  test('a service without the country: the country comes from geoip.dat', () async {
+    final socks = await _Socks5.start(jsonEncode({'status': 'success', 'query': '203.0.113.7'}));
+    addTearDown(socks.close);
+    nativeState = {'state': 'connected', 'socksPort': socks.port, 'socksUser': 'su', 'socksPassword': 'sp'};
+    geoipCountry = 'NL';
+    final info = await read();
+    expect((info?.ip, info?.countryCode), ('203.0.113.7', 'NL'));
+    expect(geoipAsked, ['203.0.113.7']);
+  });
+
+  test('geoip.dat without the IP leaves the country empty', () async {
+    final socks = await _Socks5.start(jsonEncode({'status': 'success', 'query': '203.0.113.7'}));
+    addTearDown(socks.close);
+    nativeState = {'state': 'connected', 'socksPort': socks.port, 'socksUser': 'su', 'socksPassword': 'sp'};
+    final info = await read();
+    expect((info?.ip, info?.countryCode), ('203.0.113.7', null));
   });
 
   test('failed lookup tries the next services, then gives null', () async {

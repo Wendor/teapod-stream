@@ -39,6 +39,9 @@ class PlatformService {
   /// Extracts the bundled binaries and fallback geodata into [filesDir].
   Future<void> prepareBinaries() => _channel.invokeMethod<void>('prepareBinaries');
 
+  /// Upper-case country code of [ip] by the `geoip.dat` the cores route with; null when unknown.
+  Future<String?> countryForIp(String ip) => _channel.invokeMethod<String>('countryForIp', {'ip': ip});
+
   Future<String?> abi() => _channel.invokeMethod<String>('getAbi');
 
   Future<void> installApk(String filePath) => _channel.invokeMethod<void>('installApk', {'filePath': filePath});

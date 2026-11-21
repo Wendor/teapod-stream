@@ -35,10 +35,12 @@ void main() {
     await p.abi();
     await p.deviceId();
     await p.deviceInfo();
+    await p.countryForIp('203.0.113.7');
     expect(
       [for (final c in calls) c.method],
-      ['getAppIcon', 'installApk', 'prepareBinaries', 'getAbi', 'getDeviceId', 'getDeviceInfo'],
+      ['getAppIcon', 'installApk', 'prepareBinaries', 'getAbi', 'getDeviceId', 'getDeviceInfo', 'countryForIp'],
     );
+    expect(calls.last.arguments, {'ip': '203.0.113.7'});
     expect(calls[0].arguments, {'packageName': 'a.b'});
     expect(calls[1].arguments, {'filePath': '/f/app.apk'});
   });

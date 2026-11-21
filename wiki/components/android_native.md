@@ -43,14 +43,17 @@ from the saved config (`SocksCredentials.xray` / `.singBox`), the `?prefix=` add
 
 All starts and stops run under `sessionLock`.
 
-- **`ACTION_CONNECT`** (from Flutter): parameters → `ConnectionParams.save`; if a session is running this is a **hot
+- **`ACTION_CONNECT`** (from Flutter): parameters → `ConnectionParams.save`; under `sessionLock`, before the old session
+  stops, `sessionAttempt` takes Flutter's connect attempt (`EXTRA_ATTEMPT`), and every state event of the session
+  carries it as `attempt` (quick starts reset it to 0 — untagged); if a session is running this is a **hot
   switch** — `stopVpn(reconnecting=true)` keeps TUN as a sink until the new session is up, no leak window.
 - **`ACTION_CONNECT_QUICK`** (tile, notification, boot, `reconnectInternal`, START_STICKY restart): parameters from
   `last_connection_meta.json`. Ignored while a session is running. Without a config or VPN permission
   (`abortQuickConnect`) the state is finished properly: kill switch → `blocked`, otherwise TUN is closed →
   `disconnected`, and the app opens.
 - **`ACTION_DISCONNECT`**: `userRequestedDisconnect` (+ `user_disconnected.flag` on disk, so a restarted process doesn't
-  reconnect), stop, close TUN (also an existing kill-switch sink), `disconnected`. Calls `ensureForeground()` first —
+  reconnect), stop, close TUN (also an existing kill-switch sink), `disconnected` — posted to the main thread and
+  skipped when an `ACTION_CONNECT` arrived meanwhile (`connectRequests`): that session owns the state. Calls `ensureForeground()` first —
   it may arrive via `startForegroundService` into a fresh process.
 
 **Starting.** `Builder.establish()` → TUN (random `10.x.x.x/32`, IPv4 default route; IPv6 only with `ipv6Enabled`;

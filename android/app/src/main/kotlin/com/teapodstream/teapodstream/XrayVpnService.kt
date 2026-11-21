@@ -55,6 +55,8 @@ class XrayVpnService : VpnService() {
         const val EXTRA_SOCKS_PASSWORD = "socks_password"
         /** [ConnectionParams.toJson] of the session: everything but the config and the SOCKS login. */
         const val EXTRA_PARAMS = "params"
+        /** Flutter's connect attempt (> 0); state events of the session it starts carry it back. */
+        const val EXTRA_ATTEMPT = "attempt"
         const val EXTRA_CONFIG_NAME = "config_name"              // config name for the tile
 
         // Static state tracker for querying from Dart
@@ -92,6 +94,13 @@ class XrayVpnService : VpnService() {
         // Epoch-ms when VPN became connected; 0 when disconnected. Survives UI restarts because
         // the foreground service process stays alive. Flutter uses this to restore the timer.
         @Volatile var connectedAtMs: Long = 0
+            private set
+
+        /**
+         * Flutter's connect attempt that started the current session; 0 — started natively (tile, boot, restart).
+         * State events carry it, so Flutter can drop a late event of a session a newer connect replaced.
+         */
+        @Volatile var sessionAttempt: Long = 0
             private set
 
         /**
@@ -307,6 +316,9 @@ class XrayVpnService : VpnService() {
     private var heartbeatAction: String = "reconnect"
     private var heartbeatThreshold: Int = 3
     private var heartbeatUrl: String = ConnectionParams.DEFAULT_HEARTBEAT_URL
+    private val mainHandler = Handler(Looper.getMainLooper())
+    /** ACTION_CONNECT intents received; read and changed only on the main thread (see ACTION_DISCONNECT). */
+    private var connectRequests = 0L
     @Volatile private var allowTethering = false
     private var lastTunnelDeadNotifyAt = 0L
     private val wakeProbeRunning = AtomicBoolean(false)
@@ -375,6 +387,8 @@ class XrayVpnService : VpnService() {
                 // even when triggered from the notification (no Flutter-side handler).
                 setState("disconnecting")
 
+                // A connect that arrives while this stop runs owns what comes after it.
+                val connectsBefore = connectRequests
                 // Run cleanup off the main thread — Go calls (stopTun2Socks/stopXray)
                 // can block if goroutines are stuck after long uptime or network changes.
                 Thread {
@@ -393,11 +407,19 @@ class XrayVpnService : VpnService() {
                     // the kill switch's TUN sink must be closed explicitly.
                     closeTunSink()
 
-                    // Guarantee "disconnected" is always sent
-                    setState("disconnected")
-                    // Update notification to "Disconnected" ONLY after we've actually
-                    // finished (or timed out) the stopping process.
-                    showDisconnectedNotification()
+                    // Guarantee "disconnected" is always sent — unless a connect came in meanwhile: its
+                    // session (and its attempt tag) is starting, and a late "disconnected" would claim it.
+                    // On the main thread, like onStartCommand, so the check and ACTION_CONNECT can't interleave.
+                    mainHandler.post {
+                        if (connectRequests != connectsBefore) {
+                            log("info", "disconnect finished after a new connect: final state left to it")
+                            return@post
+                        }
+                        setState("disconnected")
+                        // Update notification to "Disconnected" ONLY after we've actually
+                        // finished (or timed out) the stopping process.
+                        showDisconnectedNotification()
+                    }
                 }.start()
                 return START_STICKY
             }
@@ -405,12 +427,14 @@ class XrayVpnService : VpnService() {
                 val xrayConfig = intent.getStringExtra(EXTRA_XRAY_CONFIG) ?: ""
                 val socksUser = intent.getStringExtra(EXTRA_SOCKS_USER) ?: ""
                 val socksPassword = intent.getStringExtra(EXTRA_SOCKS_PASSWORD) ?: ""
+                val attempt = intent.getLongExtra(EXTRA_ATTEMPT, 0)
                 val params = try {
                     ConnectionParams.fromJson(org.json.JSONObject(intent.getStringExtra(EXTRA_PARAMS) ?: ""))
                 } catch (e: Exception) {
                     log("error", "CONNECT without valid parameters: ${e.message}")
                     return START_NOT_STICKY
                 }
+                connectRequests++
                 showNotification = params.showNotification
                 heartbeatProbe = params.heartbeatProbe
                 heartbeatAction = params.heartbeatAction
@@ -432,8 +456,13 @@ class XrayVpnService : VpnService() {
                         // The user managed to disconnect while we waited for the lock.
                         if (userRequestedDisconnect.get()) {
                             log("info", "CONNECT cancelled: user disconnected meanwhile")
+                            // Flutter waits for this attempt; the disconnect's own events carry the old tag.
+                            sessionAttempt = attempt
+                            setState("disconnected")
                             return@Thread
                         }
+                        // Before the old session stops: its events from here on belong to this attempt.
+                        sessionAttempt = attempt
                         if (isRunning.get()) stopVpn(reconnecting = true)
                         startVpn(xrayConfig, params.socksPort, socksUser, socksPassword,
                             params.excludedPackages, params.includedPackages, params.vpnMode, params.ssPrefix,
@@ -1260,6 +1289,7 @@ class XrayVpnService : VpnService() {
             log("info", "quick start skipped (disconnected by user or already running)")
             return@synchronized
         }
+        sessionAttempt = 0
         start()
     }
 

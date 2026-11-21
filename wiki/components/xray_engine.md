@@ -14,10 +14,10 @@ engine instead of mocking the channel.
 
 | Dart | Channel method | Notes |
 |---|---|---|
-| `connect(config, backend, options)` | `connect` | `backend.buildConfig` → `xrayConfig` + `engine` (`CoreKind.nativeId`), config name, SOCKS, split tunneling (`vpnMode`, `excludedPackages`, `includedPackages`), proxy-only, notification, kill switch, ICMP, QUIC block, tethering, MTU, heartbeat (`probe`, `action`, `threshold`, `url`), `ssPrefix`. A `FormatException`/`StateError` from the builder becomes `PlatformException('UNSUPPORTED_CONFIG')` |
+| `connect(config, backend, options, attempt:)` | `connect` | `backend.buildConfig` → `xrayConfig` + `engine` (`CoreKind.nativeId`), `attempt` (the caller's connect attempt; state events of the session carry it back, [vpn_provider](vpn_provider.md#connectswitching)), config name, SOCKS, split tunneling (`vpnMode`, `excludedPackages`, `includedPackages`), proxy-only, notification, kill switch, ICMP, QUIC block, tethering, MTU, heartbeat (`probe`, `action`, `threshold`, `url`), `ssPrefix`. A `FormatException`/`StateError` from the builder becomes `PlatformException('UNSUPPORTED_CONFIG')` |
 | `saveQuickConnect(config, backend, options)` / `clearQuickConnect` | same | parameters for reconnect from the tile, boot or service restart, without connecting |
 | `disconnect()` | `disconnect` | |
-| `getVpnState()` | `getState` | state, SOCKS credentials, `connectedAtMs` |
+| `getVpnState()` | `getState` | state, SOCKS credentials, `connectedAtMs`, `attempt` (the connect attempt of the native session) |
 | `getStats()` / `getStatsHistory(epoch, since)` | same | history is incremental: `(epoch, seq)` |
 | `pingConfig(config)` | `ping` | ICMP `ping`, TCP connect as fallback; direct, not through the tunnel |
 | `measureOutbound(config, backend, options, url)` | `measureOutbound` | real request through a temporary core instance (config switch, urltest) |

@@ -20,8 +20,9 @@ class XrayEngine {
     '${AppConstants.methodChannel}/events',
   ).receiveBroadcastStream();
 
-  /// Starts [config] on [backend]'s core.
-  Future<void> connect(VpnConfig config, CoreBackend backend, VpnEngineOptions options) async {
+  /// Starts [config] on [backend]'s core. [attempt] — the caller's connect attempt; state events of the session it
+  /// starts carry it back (`attempt` field), 0 — untagged.
+  Future<void> connect(VpnConfig config, CoreBackend backend, VpnEngineOptions options, {int attempt = 0}) async {
     final String xrayConfig;
     try {
       xrayConfig = backend.buildConfig(config, options);
@@ -30,7 +31,7 @@ class XrayEngine {
     } on StateError catch (e) {
       throw PlatformException(code: 'UNSUPPORTED_CONFIG', message: e.message);
     }
-    await _channel.invokeMethod('connect', _connectArgs(xrayConfig, config, backend, options));
+    await _channel.invokeMethod('connect', {..._connectArgs(xrayConfig, config, backend, options), 'attempt': attempt});
   }
 
   /// Quick-reconnect config (tile, autostart) for the current core without connecting.
@@ -111,8 +112,9 @@ class XrayEngine {
     return (user: 'u${randomString(8)}', password: randomString(AppConstants.socksAuthPasswordLength));
   }
 
-  /// Get current VPN state with SOCKS credentials (for sync on app start).
-  Future<({VpnState state, int socksPort, String socksUser, String socksPassword, int connectedAtMs})>
+  /// Get current VPN state with SOCKS credentials (for sync on app start). `attempt` — the connect attempt that
+  /// started the native session (0 — started natively).
+  Future<({VpnState state, int socksPort, String socksUser, String socksPassword, int connectedAtMs, int attempt})>
   getVpnState() async {
     try {
       final result = await _channel.invokeMethod<Map<Object?, Object?>>('getState');
@@ -124,10 +126,11 @@ class XrayEngine {
           socksUser: result['socksUser'] as String? ?? '',
           socksPassword: result['socksPassword'] as String? ?? '',
           connectedAtMs: (result['connectedAtMs'] as num?)?.toInt() ?? 0,
+          attempt: (result['attempt'] as num?)?.toInt() ?? 0,
         );
       }
     } catch (_) {}
-    return (state: VpnState.disconnected, socksPort: 0, socksUser: '', socksPassword: '', connectedAtMs: 0);
+    return (state: VpnState.disconnected, socksPort: 0, socksUser: '', socksPassword: '', connectedAtMs: 0, attempt: 0);
   }
 
   /// JSON snapshot of tun2socks state (counters, per-connection activity).

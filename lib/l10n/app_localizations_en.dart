@@ -394,6 +394,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get routingSource => 'SOURCE';
 
   @override
+  String get routingSourceCustom => 'Custom';
+
+  @override
   String get countryRu => 'Russia';
 
   @override

@@ -114,6 +114,7 @@
   "routingRuServicesHint": "Яндекс, VK, Сбер, Ozon, Авито и др. → выбранный outbound",
   "routingKillSwitchHint": "Блокировать трафик при обрыве VPN",
   "routingSource": "ИСТОЧНИК",
+  "routingSourceCustom": "Свой",
   "countryRu": "Россия",
   "countryBy": "Беларусь",
   "countryKz": "Казахстан",

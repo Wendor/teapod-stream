@@ -250,6 +250,7 @@
   "routingRuServicesHint": "Yandex, VK, Sber, Ozon, Avito, etc. → selected outbound",
   "routingKillSwitchHint": "Block traffic when the VPN drops",
   "routingSource": "SOURCE",
+  "routingSourceCustom": "Custom",
   "countryRu": "Russia",
   "countryBy": "Belarus",
   "countryKz": "Kazakhstan",

@@ -12,6 +12,7 @@ import 'package:teapodstream/core/models/profile_bundle.dart';
 import 'package:teapodstream/ui/deeplink_handler.dart';
 import 'package:teapodstream/core/models/app_settings.dart';
 import 'package:teapodstream/providers/config_provider.dart';
+import 'package:teapodstream/providers/ip_info_provider.dart';
 import 'package:teapodstream/providers/profile_provider.dart';
 import 'package:teapodstream/providers/settings_provider.dart';
 import 'package:teapodstream/providers/vpn_provider.dart';
@@ -171,6 +172,18 @@ void main() {
     await unmount(tester, c);
   });
 
+  testWidgets('home shows the IP alone when the service gave no country', (tester) async {
+    final native = await setUpScreenTest(configs: [testConfig('1')], activeId: '1');
+    native.state = {'state': 'connected', 'socksPort': 2000, 'socksUser': 'u', 'socksPassword': 'p'};
+    final c = await pumpScreen(
+      tester,
+      const HomeScreen(),
+      overrides: [ipInfoProvider.overrideWith(() => _FixedIp(const IpInfo(ip: '203.0.113.9')))],
+    );
+    expect(find.text('203.0.113.9'), findsOneWidget);
+    await unmount(tester, c);
+  });
+
   testWidgets('reconnect banner appears after a setting change and reconnects', (tester) async {
     final native = await setUpScreenTest(configs: [testConfig('1')], activeId: '1');
     native.state = {'state': 'connected', 'socksPort': 2000, 'socksUser': 'u', 'socksPassword': 'p'};
@@ -202,4 +215,12 @@ void main() {
     expect(find.textContaining('Travel'), findsWidgets);
     await unmount(tester, c);
   });
+}
+
+class _FixedIp extends IpInfoNotifier {
+  _FixedIp(this.info);
+  final IpInfo info;
+
+  @override
+  Future<IpInfo?> build() async => info;
 }

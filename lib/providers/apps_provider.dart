@@ -1,20 +1,17 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../core/constants/app_constants.dart';
 import '../core/models/app_info.dart';
 import 'settings_provider.dart';
+import '../core/services/platform_service.dart';
 
 final installedAppsProvider = FutureProvider<List<AppInfo>>((ref) async {
-  const channel = MethodChannel(AppConstants.methodChannel);
   try {
-    final result = await channel.invokeMethod<List<Object?>>('getInstalledApps');
-    if (result == null) return [];
+    final result = await ref.read(platformServiceProvider).installedApps();
 
     final settings = ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
     final excluded = settings?.excludedPackages ?? {};
 
-    return result.map((item) {
-      final map = Map<String, dynamic>.from(item as Map);
+    return result.map((map) {
       final pkg = map['packageName'] as String;
       return AppInfo(
         packageName: pkg,

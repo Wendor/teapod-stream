@@ -230,13 +230,11 @@ void main() {
 
     test('simple getters with fallbacks', () async {
       reply = (c) => switch (c.method) {
-        'getBinaryVersions' => {'xray': '26', 'tun2socks': '1'},
         'getTunnelDiag' => '{"a":1}',
         'getLogFilePath' => '/f/log.txt',
         _ => null,
       };
       final e = XrayEngine();
-      expect(await e.getBinaryVersions(), {'xray': '26', 'tun2socks': '1'});
       expect(await e.getTunnelDiag(), '{"a":1}');
       expect(await e.getLogFilePath(), '/f/log.txt');
       await e.setLogsEnabled(false);
@@ -245,7 +243,6 @@ void main() {
       expect(calls[calls.length - 2].arguments, {'enabled': false});
 
       reply = (_) => throw PlatformException(code: 'X');
-      expect(await e.getBinaryVersions(), {'xray': '—', 'tun2socks': '—'});
       expect(await e.getTunnelDiag(), '');
       expect(await e.getLogFilePath(), isNull);
       await e.setLogsEnabled(true);

@@ -3,12 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/models/core_kind.dart';
 import '../../providers/core_provider.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../providers/app_info_provider.dart';
 import '../../providers/update_provider.dart';
-import '../../core/constants/app_constants.dart';
 import '../../core/models/dns_config.dart';
 import '../../core/services/update_service.dart' show UpdateInfo;
 import '../../core/models/app_settings.dart';
@@ -27,6 +25,7 @@ import '../widgets/reconnect_banner.dart';
 import 'subscription_settings_screen.dart';
 import 'whats_new_screen.dart';
 import '../../l10n/l10n.dart';
+import '../../core/services/platform_service.dart';
 
 // ── Screen ────────────────────────────────────────────────────────
 
@@ -48,11 +47,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _loadBinaryVersions() async {
     try {
-      const channel = MethodChannel(AppConstants.methodChannel);
-      final result = await channel.invokeMethod<Map<Object?, Object?>>('getBinaryVersions');
-      if (result != null && mounted) {
+      final result = await ref.read(platformServiceProvider).binaryVersions();
+      if (mounted) {
         setState(() {
-          _coreVersions = result.map((k, v) => MapEntry('$k', '$v'));
+          _coreVersions = result;
         });
       }
     } catch (_) {

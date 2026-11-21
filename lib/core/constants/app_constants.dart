@@ -4,7 +4,7 @@ class AppConstants {
   /// Populated at startup from PackageInfo (pubspec version).
   static String appVersion = '';
 
-  /// Populated at startup from the xray binary via getBinaryVersions().
+  /// Populated at startup from the xray binary via `PlatformService.binaryVersions`.
   static String xrayCoreVersion = '';
 
   /// User-Agent sent with subscription HTTP requests.

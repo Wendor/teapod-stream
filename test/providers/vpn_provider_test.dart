@@ -749,6 +749,17 @@ void main() {
       expect(st().isConnected, isTrue);
     });
 
+    test('a recreated notifier never reuses an attempt number an older session reports', () async {
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      await n().connect();
+      final before = native.lastConnect()['attempt'] as int;
+      // The UI is recreated while the native session lives on.
+      c.dispose();
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      await n().connect();
+      expect(native.lastConnect()['attempt'] as int, greaterThan(before));
+    });
+
     test('tagged events outside a newer connect and untagged events apply as before', () async {
       await boot(configs: [_cfg('a')], activeId: 'a');
       await n().connect();

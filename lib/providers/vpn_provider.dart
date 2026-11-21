@@ -515,7 +515,10 @@ class VpnNotifier extends Notifier<VpnState2> {
 
   /// The latest connect attempt; a newer attempt or a disconnect bumps it. An attempt that is no
   /// longer the latest neither calls native nor writes state.
-  int _attempt = 0;
+  ///
+  /// Starts at the creation time in microseconds, not 0: native keeps the running session's attempt for the life of
+  /// the process, and a notifier recreated with the UI must not reuse a number an older session still reports.
+  int _attempt = DateTime.now().microsecondsSinceEpoch;
 
   /// [switching] — changing server/settings on a live tunnel: native rebuilds
   /// the session without closing TUN. A refusal before the native call keeps the old connection.

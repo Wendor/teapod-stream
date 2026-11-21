@@ -52,7 +52,8 @@ All starts and stops run under `sessionLock`.
   (`abortQuickConnect`) the state is finished properly: kill switch → `blocked`, otherwise TUN is closed →
   `disconnected`, and the app opens.
 - **`ACTION_DISCONNECT`**: `userRequestedDisconnect` (+ `user_disconnected.flag` on disk, so a restarted process doesn't
-  reconnect), stop, close TUN (also an existing kill-switch sink), `disconnected`. Calls `ensureForeground()` first —
+  reconnect), stop, close TUN (also an existing kill-switch sink), `disconnected` — posted to the main thread and
+  skipped when an `ACTION_CONNECT` arrived meanwhile (`connectRequests`): that session owns the state. Calls `ensureForeground()` first —
   it may arrive via `startForegroundService` into a fresh process.
 
 **Starting.** `Builder.establish()` → TUN (random `10.x.x.x/32`, IPv4 default route; IPv6 only with `ipv6Enabled`;

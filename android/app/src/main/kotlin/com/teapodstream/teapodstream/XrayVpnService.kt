@@ -316,6 +316,9 @@ class XrayVpnService : VpnService() {
     private var heartbeatAction: String = "reconnect"
     private var heartbeatThreshold: Int = 3
     private var heartbeatUrl: String = ConnectionParams.DEFAULT_HEARTBEAT_URL
+    private val mainHandler = Handler(Looper.getMainLooper())
+    /** ACTION_CONNECT intents received; read and changed only on the main thread (see ACTION_DISCONNECT). */
+    private var connectRequests = 0L
     @Volatile private var allowTethering = false
     private var lastTunnelDeadNotifyAt = 0L
     private val wakeProbeRunning = AtomicBoolean(false)
@@ -384,6 +387,8 @@ class XrayVpnService : VpnService() {
                 // even when triggered from the notification (no Flutter-side handler).
                 setState("disconnecting")
 
+                // A connect that arrives while this stop runs owns what comes after it.
+                val connectsBefore = connectRequests
                 // Run cleanup off the main thread — Go calls (stopTun2Socks/stopXray)
                 // can block if goroutines are stuck after long uptime or network changes.
                 Thread {
@@ -402,11 +407,19 @@ class XrayVpnService : VpnService() {
                     // the kill switch's TUN sink must be closed explicitly.
                     closeTunSink()
 
-                    // Guarantee "disconnected" is always sent
-                    setState("disconnected")
-                    // Update notification to "Disconnected" ONLY after we've actually
-                    // finished (or timed out) the stopping process.
-                    showDisconnectedNotification()
+                    // Guarantee "disconnected" is always sent — unless a connect came in meanwhile: its
+                    // session (and its attempt tag) is starting, and a late "disconnected" would claim it.
+                    // On the main thread, like onStartCommand, so the check and ACTION_CONNECT can't interleave.
+                    mainHandler.post {
+                        if (connectRequests != connectsBefore) {
+                            log("info", "disconnect finished after a new connect: final state left to it")
+                            return@post
+                        }
+                        setState("disconnected")
+                        // Update notification to "Disconnected" ONLY after we've actually
+                        // finished (or timed out) the stopping process.
+                        showDisconnectedNotification()
+                    }
                 }.start()
                 return START_STICKY
             }
@@ -421,6 +434,7 @@ class XrayVpnService : VpnService() {
                     log("error", "CONNECT without valid parameters: ${e.message}")
                     return START_NOT_STICKY
                 }
+                connectRequests++
                 showNotification = params.showNotification
                 heartbeatProbe = params.heartbeatProbe
                 heartbeatAction = params.heartbeatAction

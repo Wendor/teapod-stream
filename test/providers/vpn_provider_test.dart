@@ -780,6 +780,31 @@ void main() {
       expect(native.lastConnect()['attempt'] as int, greaterThan(nativeAttempt));
     });
 
+    test("a resume sync during a pending connect ignores another session's snapshot", () async {
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      await n().connect();
+      final attempt = native.lastConnect()['attempt'] as int;
+      native.state = {'state': 'error', 'attempt': attempt - 1}; // an older session failed meanwhile
+      await n().syncNativeState();
+      await _settle();
+      expect(st().connectionState, VpnState.connecting);
+      expect(st().error, isNull);
+      // The older session's later events are still dropped; the pending connect's own outcome applies.
+      emit({'type': 'state', 'value': 'error', 'error': 'old', 'attempt': attempt - 1});
+      await _settle();
+      expect(st().connectionState, VpnState.connecting);
+      emit({
+        'type': 'state',
+        'value': 'connected',
+        'socksPort': 2080,
+        'socksUser': 'su',
+        'socksPassword': 'sp',
+        'attempt': attempt,
+      });
+      await _settle();
+      expect(st().isConnected, isTrue);
+    });
+
     test('tagged events outside a newer connect and untagged events apply as before', () async {
       await boot(configs: [_cfg('a')], activeId: 'a');
       await n().connect();

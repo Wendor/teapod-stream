@@ -191,6 +191,7 @@ class VpnNotifier extends Notifier<VpnState2> {
 
     final vpnState = await _engine.getVpnState();
     _seenNativeAttempt(vpnState.attempt);
+    if (_staleSnapshot(vpnState.attempt)) return;
     if (vpnState.state == VpnState.connected && vpnState.socksPort > 0) {
       if (vpnState.connectedAtMs > 0) {
         _connectedAt = DateTime.fromMillisecondsSinceEpoch(vpnState.connectedAtMs);
@@ -535,6 +536,10 @@ class VpnNotifier extends Notifier<VpnState2> {
     if (_awaiting == null && native > _attempt) _attempt = native;
   }
 
+  /// A native snapshot (`getState`) of another attempt's session while a Flutter connect waits: the same rule as
+  /// for tagged events — the pending connect owns the state.
+  bool _staleSnapshot(int native) => native != 0 && _awaiting != null && native != _awaiting;
+
   /// [switching] — changing server/settings on a live tunnel: native rebuilds
   /// the session without closing TUN. A refusal before the native call keeps the old connection.
   Future<void> connect({bool switching = false}) async {
@@ -725,6 +730,7 @@ class VpnNotifier extends Notifier<VpnState2> {
     try {
       final native = await _engine.getVpnState();
       _seenNativeAttempt(native.attempt);
+      if (_staleSnapshot(native.attempt)) return;
       if (native.state == VpnState.connected && native.socksPort > 0) {
         if (native.connectedAtMs > 0) {
           _connectedAt ??= DateTime.fromMillisecondsSinceEpoch(native.connectedAtMs);

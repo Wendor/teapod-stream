@@ -1282,13 +1282,19 @@ class XrayVpnService : VpnService() {
     /// Restart from saved parameters (CONNECT_QUICK, system restart) — queued in [sessionCommands] after the
     /// commands received before it. Won't begin on top of a live session or after the user disconnected.
     private fun startQuick(start: () -> Unit) {
+        // Not queued after the user disconnected: it would only skip itself, and as a start received after the
+        // disconnect it would take the disconnect's final state.
+        if (userRequestedDisconnect.get()) {
+            log("info", "quick start skipped: disconnected by user")
+            return
+        }
+        requestedAttempt = 0 // main thread, like ACTION_CONNECT: a later disconnect answers no Flutter connect
         sessionCommands.submit(SessionCommands.Kind.QUICK) {
             if (userRequestedDisconnect.get() || isRunning.get()) {
                 log("info", "quick start skipped (disconnected by user or already running)")
                 return@submit
             }
             sessionAttempt = 0
-            requestedAttempt = 0 // an untagged session: a later disconnect answers no Flutter connect
             start()
         }
     }

@@ -53,6 +53,16 @@ class PendingVpnStartTest {
     }
 
     @Test
+    fun `a dialog that fails to open rejects the request and lets the next one try again`() {
+        assertTrue(offer("a"))
+        pending.dialogFailed()
+        assertEquals(listOf("reject a ${PendingVpnStart.UNAVAILABLE}"), events)
+        assertTrue(offer("b"))
+        pending.complete(granted = true)
+        assertEquals("start b", events.last())
+    }
+
+    @Test
     fun `cancel and complete with nothing waiting do nothing`() {
         pending.cancel(PendingVpnStart.CANCELLED)
         pending.complete(granted = true)

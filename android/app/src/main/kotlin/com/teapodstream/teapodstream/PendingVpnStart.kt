@@ -18,10 +18,11 @@ internal class PendingVpnStart {
      */
     fun offer(start: () -> Unit, reject: (String) -> Unit): Boolean {
         val showDialog = !dialogOpen
+        val previous = this.reject
         dialogOpen = true
-        this.reject?.invoke(SUPERSEDED)
         this.start = start
         this.reject = reject
+        previous?.invoke(SUPERSEDED)
         return showDialog
     }
 
@@ -41,6 +42,14 @@ internal class PendingVpnStart {
         if (granted) s?.invoke() else r?.invoke(DENIED)
     }
 
+    /** The dialog couldn't be shown: rejects the waiting request with [UNAVAILABLE]; the next one tries again. */
+    fun dialogFailed() {
+        val r = reject
+        clear()
+        dialogOpen = false
+        r?.invoke(UNAVAILABLE)
+    }
+
     private fun clear() {
         start = null
         reject = null
@@ -50,5 +59,6 @@ internal class PendingVpnStart {
         const val SUPERSEDED = "SUPERSEDED"
         const val CANCELLED = "CANCELLED"
         const val DENIED = "VPN_PERMISSION_DENIED"
+        const val UNAVAILABLE = "VPN_PERMISSION_UNAVAILABLE"
     }
 }

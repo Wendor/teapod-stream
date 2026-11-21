@@ -405,7 +405,14 @@ class MainActivity : FlutterActivity() {
                 val message = if (code == PendingVpnStart.DENIED) "User denied VPN permission" else "VPN start $code"
                 result.error(code, message, null)
             }
-            if (pendingVpnStart.offer(action, reject)) startActivityForResult(intent, VPN_PERMISSION_REQUEST)
+            if (pendingVpnStart.offer(action, reject)) {
+                try {
+                    startActivityForResult(intent, VPN_PERMISSION_REQUEST)
+                } catch (e: Exception) {
+                    android.util.Log.w("TeapodVPN", "VPN permission dialog failed: ${e.message}")
+                    pendingVpnStart.dialogFailed()
+                }
+            }
         } else {
             // Already have permission
             pendingVpnStart.cancel(PendingVpnStart.SUPERSEDED)

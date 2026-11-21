@@ -191,7 +191,7 @@ class VpnNotifier extends Notifier<VpnState2> {
 
     final vpnState = await _engine.getVpnState();
     _seenNativeAttempt(vpnState.attempt);
-    if (_staleSnapshot(vpnState.attempt)) return;
+    if (_staleSnapshot(vpnState.attempt, vpnState.state)) return;
     if (vpnState.state == VpnState.connected && vpnState.socksPort > 0) {
       if (vpnState.connectedAtMs > 0) {
         _connectedAt = DateTime.fromMillisecondsSinceEpoch(vpnState.connectedAtMs);
@@ -417,15 +417,7 @@ class VpnNotifier extends Notifier<VpnState2> {
         _connectTimeout?.cancel();
         _connectTimeout = null;
       } else {
-        _connectTimeout ??= Timer(const Duration(seconds: 45), () {
-          if (state.connectionState == VpnState.connecting) {
-            state = state.copyWith(connectionState: VpnState.error, error: L10n.current.vpnConnectTimeout);
-            _connectTimeout = null;
-            _attempt++; // the timed-out attempt's late answer must not replace the timeout error
-            _awaiting = null;
-            _engine.disconnect().ignore();
-          }
-        });
+        _armConnectTimeout();
       }
     } else if (nativeState == VpnState.disconnecting) {
       _disconnectTimeout ??= Timer(const Duration(seconds: 10), () {
@@ -536,9 +528,31 @@ class VpnNotifier extends Notifier<VpnState2> {
     if (_awaiting == null && native > _attempt) _attempt = native;
   }
 
-  /// A native snapshot (`getState`) of another attempt's session while a Flutter connect waits: the same rule as
-  /// for tagged events — the pending connect owns the state.
-  bool _staleSnapshot(int native) => native != 0 && _awaiting != null && native != _awaiting;
+  /// A native snapshot (`getState`) while a Flutter connect waits that isn't about it: another attempt's session,
+  /// or an idle untagged service — the connect hasn't reached it yet (a resume after the notification-permission
+  /// dialog at the start of a connect). The pending connect owns the state. An untagged reconnect still applies.
+  /// Rejecting an idle snapshot re-arms the connect timeout: a resume sync of a native reconnect may have cancelled
+  /// it, and the pending connect must still end.
+  bool _staleSnapshot(int native, VpnState nativeState) {
+    if (_awaiting == null) return false;
+    if (native != 0) return native != _awaiting;
+    if (nativeState != VpnState.disconnected) return false;
+    _armConnectTimeout();
+    return true;
+  }
+
+  /// Safety timeout of a connect: if native never confirms, force error after 45 s. Keeps a running timer.
+  void _armConnectTimeout() {
+    _connectTimeout ??= Timer(const Duration(seconds: 45), () {
+      if (state.connectionState == VpnState.connecting) {
+        state = state.copyWith(connectionState: VpnState.error, error: L10n.current.vpnConnectTimeout);
+        _connectTimeout = null;
+        _attempt++; // the timed-out attempt's late answer must not replace the timeout error
+        _awaiting = null;
+        _engine.disconnect().ignore();
+      }
+    });
+  }
 
   /// [switching] — changing server/settings on a live tunnel: native rebuilds
   /// the session without closing TUN. A refusal before the native call keeps the old connection.
@@ -554,17 +568,9 @@ class VpnNotifier extends Notifier<VpnState2> {
     // Update state synchronously — button turns yellow in the same frame as tap
     state = state.copyWith(connectionState: VpnState.connecting, error: null);
 
-    // Safety timeout — if native never confirms, force error after 45s
     _connectTimeout?.cancel();
-    _connectTimeout = Timer(const Duration(seconds: 45), () {
-      if (state.connectionState == VpnState.connecting) {
-        state = state.copyWith(connectionState: VpnState.error, error: L10n.current.vpnConnectTimeout);
-        _connectTimeout = null;
-        _attempt++; // the timed-out attempt's late answer must not replace the timeout error
-        _awaiting = null;
-        _engine.disconnect().ignore();
-      }
-    });
+    _connectTimeout = null;
+    _armConnectTimeout();
 
     // Notification permission for foreground service (Android 13+) — best-effort
     await Permission.notification.request();
@@ -730,7 +736,7 @@ class VpnNotifier extends Notifier<VpnState2> {
     try {
       final native = await _engine.getVpnState();
       _seenNativeAttempt(native.attempt);
-      if (_staleSnapshot(native.attempt)) return;
+      if (_staleSnapshot(native.attempt, native.state)) return;
       if (native.state == VpnState.connected && native.socksPort > 0) {
         if (native.connectedAtMs > 0) {
           _connectedAt ??= DateTime.fromMillisecondsSinceEpoch(native.connectedAtMs);

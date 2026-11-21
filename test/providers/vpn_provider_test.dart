@@ -805,6 +805,22 @@ void main() {
       expect(st().isConnected, isTrue);
     });
 
+    test('a resume before the connect reaches the service keeps the pending connect', () async {
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      final permission = Completer<Map<int, int>>();
+      messenger.setMockMethodCallHandler(_permissions, (call) => permission.future);
+      final pending = n().connect();
+      await _settle();
+      // The notification-permission dialog closes: the app resumes, native still reports the idle service.
+      native.state = {'state': 'disconnected', 'attempt': 0};
+      await n().syncNativeState();
+      await _settle();
+      expect(st().connectionState, VpnState.connecting);
+      permission.complete({17: 1});
+      await pending;
+      expect(native.named('connect'), hasLength(1));
+    });
+
     test('tagged events outside a newer connect and untagged events apply as before', () async {
       await boot(configs: [_cfg('a')], activeId: 'a');
       await n().connect();
@@ -1263,6 +1279,29 @@ void main() {
         expect(st().error, 'Connection timeout');
         gate.complete();
         async.flushMicrotasks();
+        expect(st().connectionState, VpnState.error);
+        expect(st().error, 'Connection timeout');
+        c.dispose();
+      });
+    });
+
+    test('an idle snapshot after a reconnect report keeps the pending connect bounded', () {
+      fakeAsync((async) {
+        boot(configs: [_cfg('a')], activeId: 'a');
+        async.flushMicrotasks();
+        n().connect();
+        async.flushMicrotasks();
+        final attempt = native.lastConnect()['attempt'] as int;
+        // A resume sync sees the pending session connecting: treated as a reconnect, the timeout is cancelled.
+        native.state = {'state': 'connecting', 'attempt': attempt};
+        n().syncNativeState();
+        async.flushMicrotasks();
+        // The service died: an idle untagged snapshot is rejected, the connect still ends.
+        native.state = {'state': 'disconnected', 'attempt': 0};
+        n().syncNativeState();
+        async.flushMicrotasks();
+        expect(st().connectionState, VpnState.connecting);
+        async.elapse(const Duration(seconds: 46));
         expect(st().connectionState, VpnState.error);
         expect(st().error, 'Connection timeout');
         c.dispose();

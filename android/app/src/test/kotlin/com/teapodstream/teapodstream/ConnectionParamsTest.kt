@@ -119,4 +119,56 @@ class ConnectionParamsTest {
         ).save(missing) { level, _ -> logged += level }
         assertEquals(listOf("warning"), logged)
     }
+
+    private val full = ConnectionParams(
+        socksPort = 4321, excludedPackages = listOf("a.b"), includedPackages = listOf("c.d"),
+        vpnMode = "onlySelected", ssPrefix = "1603", proxyOnly = true, showNotification = false,
+        killSwitch = true, allowIcmp = true, blockQuic = true, ipv6Enabled = true, mtu = 1400,
+        heartbeatProbe = "xrayDelay", heartbeatAction = "switchConfig", heartbeatThreshold = 5,
+        heartbeatUrl = "http://probe/204", allowTethering = true, engine = "box",
+    )
+
+    /** The arguments `XrayEngine` sends for [full], with the secrets the params must leave out. */
+    private val fullArgs = mapOf(
+        "xrayConfig" to "{}", "socksUser" to "u", "socksPassword" to "secret", "configName" to "n",
+        "socksPort" to 4321, "excludedPackages" to listOf("a.b"), "includedPackages" to listOf("c.d"),
+        "vpnMode" to "onlySelected", "ssPrefix" to "1603", "proxyOnly" to true, "showNotification" to false,
+        "killSwitch" to true, "allowIcmp" to true, "blockQuic" to true, "ipv6Enabled" to true, "mtu" to 1400,
+        "heartbeatProbe" to "xrayDelay", "heartbeatAction" to "switchConfig", "heartbeatThreshold" to 5,
+        "heartbeatUrl" to "http://probe/204", "allowTethering" to true, "engine" to "box",
+    )
+
+    @Test
+    fun flutterArgumentsMapEveryFieldAndLeaveSecretsOut() {
+        val p = ConnectionParams.fromArgs(fullArgs)
+        assertEquals(full, p)
+        val json = p.toJson().toString()
+        for (secret in listOf("xrayConfig", "socksUser", "socksPassword", "secret")) {
+            assertEquals(false, json.contains(secret))
+        }
+    }
+
+    @Test
+    fun intentJsonRoundTripKeepsEveryField() {
+        assertEquals(full, ConnectionParams.fromJson(org.json.JSONObject(full.toJson().toString())))
+    }
+
+    @Test
+    fun missingArgumentsGetTheSameDefaultsAsTheFile() {
+        val dir = tempDir()
+        meta(dir, minimal)
+        assertEquals(ConnectionParams.load(dir), ConnectionParams.fromArgs(emptyMap<String, Any?>()))
+        val nulls = mapOf("ssPrefix" to null, "heartbeatUrl" to "", "engine" to null)
+        assertEquals(ConnectionParams.load(dir), ConnectionParams.fromArgs(nulls))
+    }
+
+    @Test
+    fun flutterArgumentsAreClampedLikeTheFile() {
+        val low = ConnectionParams.fromArgs(mapOf("mtu" to 100, "heartbeatThreshold" to 50))
+        assertEquals(576, low.mtu)
+        assertEquals(10, low.heartbeatThreshold)
+        val high = ConnectionParams.fromArgs(mapOf("mtu" to 65000, "heartbeatThreshold" to 0))
+        assertEquals(9000, high.mtu)
+        assertEquals(1, high.heartbeatThreshold)
+    }
 }

@@ -120,7 +120,7 @@ void main() {
     expect(rules[8]['domain'], contains('go.yandex'));
     expect(rules[8]['domain_suffix'], contains('avito.ru'));
     expect(rules[9], {
-      'domain': ['cp.cloudflare.com', 'ip-api.com', 'probe.example.org'],
+      'domain': ['cp.cloudflare.com', 'ip-api.com', 'ipinfo.io', 'api.ipify.org', 'probe.example.org'],
       'outbound': 'proxy',
     });
     final route = json['route'] as Map<String, dynamic>;

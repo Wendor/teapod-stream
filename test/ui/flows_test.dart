@@ -9,7 +9,7 @@ import 'package:http/testing.dart';
 import 'package:teapodstream/core/models/connections_bundle.dart';
 import 'package:teapodstream/core/models/profile.dart';
 import 'package:teapodstream/core/models/profile_bundle.dart';
-import 'package:teapodstream/core/services/deeplink_handler.dart';
+import 'package:teapodstream/ui/deeplink_handler.dart';
 import 'package:teapodstream/core/services/settings_service.dart';
 import 'package:teapodstream/providers/config_provider.dart';
 import 'package:teapodstream/providers/profile_provider.dart';

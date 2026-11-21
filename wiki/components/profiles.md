@@ -2,7 +2,7 @@
 
 **Files:** `lib/providers/profile_provider.dart`, `lib/core/models/profile.dart`, `lib/core/models/profile_bundle.dart`,
 `lib/core/models/connections_bundle.dart`, `lib/core/services/profile_storage_service.dart`,
-`lib/core/services/deeplink_router.dart`, `lib/core/services/deeplink_handler.dart`
+`lib/core/services/deeplink_router.dart`, `lib/ui/deeplink_handler.dart`
 
 A profile is a named snapshot of `AppSettings` plus the server selected under it. There is always at least one
 (`id = 'default'`, `isDefault`, can't be deleted).

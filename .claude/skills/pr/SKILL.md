@@ -21,6 +21,10 @@ Rules: [CONTRIBUTING.md](../../../CONTRIBUTING.md). Template: [.github/pull_requ
    ```
 4. Wiki pages for the touched area still true? Fix them in this branch.
 5. Grep the diff for secrets: `git diff master...HEAD | grep -nE 'vless://|vmess://|trojan://|ss://|hy2://|[0-9a-f]{8}-[0-9a-f]{4}-'`.
+6. Get a second review of the branch before CodeRabbit sees it, if you have another model or agent at hand: give
+   it `git diff master...HEAD`, the issue and sections 1 and 4–6 of the [review-pr checklist](../review-pr/SKILL.md),
+   and ask for concrete problems only. Verify each finding like a CodeRabbit comment and fix what holds up. Repeat
+   before each fix push. CodeRabbit reviews only so many commits an hour: a clean first push saves a review round.
 
 ## The description
 

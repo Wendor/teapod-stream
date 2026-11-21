@@ -111,4 +111,15 @@ class SessionCommandsTest {
         finish(last)
         assertEquals(listOf("skip quick 1", "skip connect", "skip quick 2", "disconnect"), ran)
     }
+
+    @Test
+    fun `of queued quick starts only the newest runs`() {
+        val release = CountDownLatch(1)
+        longStart(release)
+        submit(Kind.QUICK, "quick 1")
+        val last = submit(Kind.QUICK, "quick 2")
+        release.countDown()
+        finish(last)
+        assertEquals(listOf("skip quick 1", "quick 2"), ran)
+    }
 }

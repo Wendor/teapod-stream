@@ -1296,7 +1296,6 @@ class XrayVpnService : VpnService() {
             log("info", "quick start skipped: disconnected by user")
             return
         }
-        requestedAttempt = 0 // main thread, like ACTION_CONNECT: a later disconnect answers no Flutter connect
         sessionCommands.submit(SessionCommands.Kind.QUICK) {
             if (userRequestedDisconnect.get() || isRunning.get()) {
                 log("info", "quick start skipped (disconnected by user or already running)")

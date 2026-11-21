@@ -45,8 +45,8 @@ from the saved config (`SocksCredentials.xray` / `.singBox`), the `?prefix=` add
 All starts and stops run under `sessionLock`. `ACTION_CONNECT`, `ACTION_DISCONNECT` and the quick starts go through
 one queue (`SessionCommands`): one thread runs them in the order the service received them, under the same lock as a
 deferred reconnect's stop. Threads waiting for a lock don't enter in arrival order; the queue does, so a disconnect
-that waited behind a long start can't stop the session of a connect received after it. A connect or a quick start is
-skipped when a connect or a disconnect was received after it, and a connect doesn't start
+that waited behind a long start can't stop the session of a connect received after it. A connect is skipped when a
+connect or a disconnect was received after it, a quick start also when a newer quick start was, and a connect doesn't start
 after `onRevoke()` (which stops outside the queue) or a disconnect set `userRequestedDisconnect`; it reports
 `disconnected` under its attempt instead.
 
@@ -62,7 +62,7 @@ after `onRevoke()` (which stops outside the queue) or a disconnect set `userRequ
   reconnect), then in the queue: stop, close TUN (also an existing kill-switch sink) and post `disconnected` to the
   main thread — skipped when a connect or a quick start arrived meanwhile (that session owns the state). If the queued
   stop hasn't finished in 5 s, a supervisor closes the sink and reports anyway. Its events carry the attempt of the
-  last `ACTION_CONNECT` received before it (`requestedAttempt`; a quick start resets it): a connect Flutter still waits
+  last `ACTION_CONNECT` received before it (`requestedAttempt`): a connect Flutter still waits
   for, cancelled from the notification or the tile, gets its answer. Calls `ensureForeground()` first —
   it may arrive via `startForegroundService` into a fresh process.
 

@@ -18,14 +18,17 @@ threads() {  # unresolved threads, tab-separated: id, who started it, who spoke 
   gh api graphql --paginate -F n="$n" -f query='query($n:Int!,$endCursor:String){repository(owner:"Wendor",
     name:"teapod-stream"){pullRequest(number:$n){reviewThreads(first:100,after:$endCursor){nodes{id isResolved path
     first:comments(first:1){nodes{author{login}}} last:comments(last:1){nodes{author{login} createdAt
-    reactions(first:20){nodes{content user{login}}}}}}
+    rocket:reactions(first:100,content:ROCKET){nodes{user{login}}}
+    thumbsUp:reactions(first:100,content:THUMBS_UP){nodes{user{login}}}}}}
     pageInfo{hasNextPage endCursor}}}}}' \
     --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved | not)
       | [.id, .first.nodes[0].author.login, .last.nodes[0].author.login, .path,
          (now - (.last.nodes[0].createdAt | fromdate) | floor),
-         # Reactions name the bot "coderabbitai[bot]"; 👀 only means it is working on the thread.
-         ([.last.nodes[0].reactions.nodes[] | select((.user.login | startswith("coderabbitai"))
-           and (.content == "ROCKET" or .content == "THUMBS_UP"))] | if length > 0 then 1 else 0 end)] | @tsv'
+         # Only 🚀 and 👍 are read (filtered by content, so other reactions cannot push them out of the page);
+         # 👀 only means it is working on the thread. Reactions name the bot "coderabbitai[bot]".
+         ([(.last.nodes[0].rocket.nodes + .last.nodes[0].thumbsUp.nodes)[]
+           | select(.user.login == "coderabbitai[bot]" or .user.login == "coderabbitai")]
+           | if length > 0 then 1 else 0 end)] | @tsv'
 }
 
 while :; do

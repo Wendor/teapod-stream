@@ -805,6 +805,22 @@ void main() {
       expect(st().isConnected, isTrue);
     });
 
+    test('a resume before the connect reaches the service keeps the pending connect', () async {
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      final permission = Completer<Map<int, int>>();
+      messenger.setMockMethodCallHandler(_permissions, (call) => permission.future);
+      final pending = n().connect();
+      await _settle();
+      // The notification-permission dialog closes: the app resumes, native still reports the idle service.
+      native.state = {'state': 'disconnected', 'attempt': 0};
+      await n().syncNativeState();
+      await _settle();
+      expect(st().connectionState, VpnState.connecting);
+      permission.complete({17: 1});
+      await pending;
+      expect(native.named('connect'), hasLength(1));
+    });
+
     test('tagged events outside a newer connect and untagged events apply as before', () async {
       await boot(configs: [_cfg('a')], activeId: 'a');
       await n().connect();

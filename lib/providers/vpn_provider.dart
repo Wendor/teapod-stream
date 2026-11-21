@@ -191,7 +191,7 @@ class VpnNotifier extends Notifier<VpnState2> {
 
     final vpnState = await _engine.getVpnState();
     _seenNativeAttempt(vpnState.attempt);
-    if (_staleSnapshot(vpnState.attempt)) return;
+    if (_staleSnapshot(vpnState.attempt, vpnState.state)) return;
     if (vpnState.state == VpnState.connected && vpnState.socksPort > 0) {
       if (vpnState.connectedAtMs > 0) {
         _connectedAt = DateTime.fromMillisecondsSinceEpoch(vpnState.connectedAtMs);
@@ -536,9 +536,11 @@ class VpnNotifier extends Notifier<VpnState2> {
     if (_awaiting == null && native > _attempt) _attempt = native;
   }
 
-  /// A native snapshot (`getState`) of another attempt's session while a Flutter connect waits: the same rule as
-  /// for tagged events — the pending connect owns the state.
-  bool _staleSnapshot(int native) => native != 0 && _awaiting != null && native != _awaiting;
+  /// A native snapshot (`getState`) while a Flutter connect waits that isn't about it: another attempt's session,
+  /// or an idle untagged service — the connect hasn't reached it yet (a resume after the notification-permission
+  /// dialog at the start of a connect). The pending connect owns the state. An untagged reconnect still applies.
+  bool _staleSnapshot(int native, VpnState nativeState) =>
+      _awaiting != null && (native != 0 ? native != _awaiting : nativeState == VpnState.disconnected);
 
   /// [switching] — changing server/settings on a live tunnel: native rebuilds
   /// the session without closing TUN. A refusal before the native call keeps the old connection.
@@ -730,7 +732,7 @@ class VpnNotifier extends Notifier<VpnState2> {
     try {
       final native = await _engine.getVpnState();
       _seenNativeAttempt(native.attempt);
-      if (_staleSnapshot(native.attempt)) return;
+      if (_staleSnapshot(native.attempt, native.state)) return;
       if (native.state == VpnState.connected && native.socksPort > 0) {
         if (native.connectedAtMs > 0) {
           _connectedAt ??= DateTime.fromMillisecondsSinceEpoch(native.connectedAtMs);

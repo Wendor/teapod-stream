@@ -539,7 +539,7 @@ class XrayVpnService : VpnService() {
                             socksUser = u
                             socksPassword = p
                         }
-                        val command = sessionCommands.issue()
+                        val command = sessionCommands.current()
                         Thread {
                             startQuickLocked(command) {
                                 startVpn(
@@ -586,7 +586,7 @@ class XrayVpnService : VpnService() {
                 try {
                     val configText = configFile.readText()
                     val (socksUser, socksPassword) = extractSocksFromConfig(configText, params.engine)
-                    val command = sessionCommands.issue()
+                    val command = sessionCommands.current()
                     Thread {
                         startQuickLocked(command) {
                             startVpn(
@@ -1293,10 +1293,10 @@ class XrayVpnService : VpnService() {
         networkChangeHandler.postDelayed(r, delay)
     }
 
-    /// Restart from saved parameters (CONNECT_QUICK, system restart) — a session command like
-    /// ACTION_CONNECT and ACTION_DISCONNECT ([command] from [SessionCommands.issue] when it was received):
-    /// won't begin while the old session is stopping, after a newer command, on top of a live
-    /// session or after the user disconnected.
+    /// Restart from saved parameters (CONNECT_QUICK, system restart). [command] is [SessionCommands.current]
+    /// when it was received: it yields to any connect or disconnect received after it without cancelling
+    /// one received before it. Won't begin while the old session is stopping, on top of a live session or
+    /// after the user disconnected.
     private fun startQuickLocked(command: Long, start: () -> Unit) {
         sessionCommands.runIfLatest(command, superseded = { log("info", "quick start superseded by a newer command") }) {
             if (userRequestedDisconnect.get() || isRunning.get()) {

@@ -67,4 +67,16 @@ class SessionCommandsTest {
         assertFalse(commands.runIfLatest(id) { ran += "late" })
         assertEquals(listOf("run"), ran)
     }
+
+    @Test
+    fun `a quick start yields to a later command but doesn't cancel an earlier one`() {
+        val connect = commands.issue()
+        val quick = commands.current()
+        assertTrue(commands.isLatest(connect)) // the quick start took no new number
+        assertTrue(commands.runIfLatest(quick) { ran += "quick" })
+        val disconnect = commands.issue()
+        assertFalse(commands.runIfLatest(quick) { ran += "late quick" })
+        assertTrue(commands.isLatest(disconnect))
+        assertEquals(listOf("quick"), ran)
+    }
 }

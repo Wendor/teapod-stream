@@ -14,6 +14,12 @@ internal class SessionCommands(val lock: Any = Any()) {
     /** A number for a command received now; newer commands get larger numbers. */
     fun issue(): Long = issued.incrementAndGet()
 
+    /**
+     * The latest number without taking a new one: for a command that must yield to any command received after it but
+     * must not cancel the ones received before it (a quick start from the tile, boot or a reconnect).
+     */
+    fun current(): Long = issued.get()
+
     /** Whether no command was received after [command]. */
     fun isLatest(command: Long): Boolean = issued.get() == command
 

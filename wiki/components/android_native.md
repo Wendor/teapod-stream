@@ -8,6 +8,7 @@ back. It keeps working when the Flutter UI is gone (tile, boot, Tasker, service 
 | File | Role |
 |---|---|
 | `MainActivity.kt` | MethodChannel handler (`com.teapodstream/vpn`), VPN permission, deep link intents |
+| `PendingVpnStart.kt` | the connect waiting for the VPN-permission dialog: a newer connect replaces it (one dialog), `disconnect` cancels it; the dropped call is answered `SUPERSEDED` / `CANCELLED`. A dialog stays open until it answers, and its answer goes to the latest request |
 | `XrayVpnService.kt` | the `VpnService`: session lifecycle, TUN, kill switch, network-change reconnect, heartbeat, stats, notification, log file |
 | `core/` | `VpnCore` and its implementations (below), `TunOwnerPolicy`, `SocksCredentials`, `ProxyRedirect` |
 | `VpnEventStreamHandler.kt` | EventChannel (`com.teapodstream/vpn/events`) singleton |

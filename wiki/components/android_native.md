@@ -16,6 +16,7 @@ back. It keeps working when the Flutter UI is gone (tile, boot, Tasker, service 
 | `BootReceiver.kt` | auto-start after boot (`autoStartOnBoot`, a saved config, not after an explicit disconnect) |
 | `VpnCommandReceiver.kt` | Tasker/automation broadcasts `com.teapodstream.CONNECT` / `DISCONNECT`; ignored unless `automationEnabled` |
 | `PrefixTcpProxy.kt` | local TCP proxy for Shadowsocks `?prefix=` (Outline) |
+| `SocksHttpProbe.kt` | the heartbeat's `socks` probe: SOCKS5 handshake and an HTTP GET over raw sockets, probe-URL parsing |
 | `SpeedHistory.kt` | ring buffer for the speed chart (`(epoch, seq)` increments) |
 | `AppLocale.kt` | `Context.appString()` — native strings in the app's chosen language ([localization](localization.md)) |
 | `ItestBridge.kt` | integration-test bridge, only in the `…itest` build ([tests](tests.md)) |
@@ -94,7 +95,9 @@ excluded from TUN; otherwise VALIDATED first, then Wi-Fi) and sets it as the und
 A background thread probes every 15 s (60 s with the screen off; skipped in deep Doze) and acts after
 `heartbeatThreshold` failures in a row.
 
-- **Probe** (`runProbe`): `socks` — HTTP through the local SOCKS to `heartbeatUrl`, any 2xx; `xrayDelay` — measured
+- **Probe** (`runProbe`): `socks` — HTTP through the local SOCKS to `heartbeatUrl`, any 2xx (`SocksHttpProbe`; it
+  offers user/password only when the session has SOCKS credentials, and fails at once if the inbound demands them
+  without any); `xrayDelay` — measured
   inside the core (also used for a custom `https://` URL); `passive` — none.
 - **Passive success:** if TUN received data within the interval, the tunnel is alive and the radio isn't woken.
 - **Warm-up** after a reconnect: probes every 15 s, failures don't count until the first success, hard limit 30 s

@@ -46,7 +46,9 @@ All starts and stops run under `sessionLock`. `ACTION_CONNECT`, `ACTION_DISCONNE
 one queue (`SessionCommands`): one thread runs them in the order the service received them, under the same lock as a
 deferred reconnect's stop. Threads waiting for a lock don't enter in arrival order; the queue does, so a disconnect
 that waited behind a long start can't stop the session of a connect received after it. A connect or a quick start is
-skipped when a connect or a disconnect was received after it.
+skipped when a connect or a disconnect was received after it, and a connect doesn't start
+after `onRevoke()` (which stops outside the queue) or a disconnect set `userRequestedDisconnect`; it reports
+`disconnected` under its attempt instead.
 
 - **`ACTION_CONNECT`** (from Flutter): parameters → `ConnectionParams.save`; under `sessionLock`, before the old session
   stops, `sessionAttempt` takes Flutter's connect attempt (`EXTRA_ATTEMPT`), and every state event of the session

@@ -464,6 +464,14 @@ class XrayVpnService : VpnService() {
                 sessionCommands.submit(SessionCommands.Kind.CONNECT, skipped = {
                     log("info", "CONNECT skipped: a newer connect or disconnect was received")
                 }) {
+                    // Revoked (onRevoke stops outside the queue) or disconnected meanwhile: don't start. Flutter
+                    // waits for this attempt, so answer it.
+                    if (userRequestedDisconnect.get()) {
+                        log("info", "CONNECT cancelled: VPN revoked or disconnected meanwhile")
+                        sessionAttempt = attempt
+                        setState("disconnected")
+                        return@submit
+                    }
                     // Before the old session stops: its events from here on belong to this attempt.
                     sessionAttempt = attempt
                     if (isRunning.get()) stopVpn(reconnecting = true)

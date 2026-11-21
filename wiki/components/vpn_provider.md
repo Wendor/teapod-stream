@@ -49,7 +49,7 @@ it can → reconnect banner; disconnected → refresh or clear the saved quick-c
    cores are logged with `source: core`.
 4. `buildEngineOptions(settings, config, backend, …)` (`lib/core/cores/engine_options.dart`, shared with
    quick-connect) → `checkOptions`: `blocking` fails the connect, `warnings` go to the log.
-5. `XrayEngine.connect(config, options)`; stores the SOCKS credentials and `appliedFingerprint`.
+5. `XrayEngine.connect(config, backend, options)`; stores the SOCKS credentials and `appliedFingerprint`.
 
 **Attempt ownership.** A `connect()` that passes its entry guard (not busy, not connected unless switching) takes a
 new attempt number; a later such `connect()`, any `disconnect()` or the 45 s connect timeout makes it stale. After

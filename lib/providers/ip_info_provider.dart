@@ -36,7 +36,7 @@ class IpInfoNotifier extends AsyncNotifier<IpInfo?> {
       }
     }
     // Fallback: Quick Tile started VPN — native state may be ahead of Flutter state
-    final engine = XrayEngine();
+    final engine = ref.read(xrayEngineProvider);
     final nativeState = await engine.getVpnState();
     if (nativeState.state == VpnState.connected && nativeState.socksPort > 0) {
       return _fetch(

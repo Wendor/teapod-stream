@@ -71,7 +71,7 @@ void main() {
   group('connect', () {
     test('sends the built config and every option', () async {
       final engine = XrayEngine();
-      await engine.connect(_vless(ssPrefix: '1603'), _opts);
+      await engine.connect(_vless(ssPrefix: '1603'), const XrayGoBackend(), _opts);
       final call = calls.single;
       expect(call.method, 'connect');
       final args = Map<String, Object?>.from(call.arguments as Map);
@@ -97,18 +97,17 @@ void main() {
     });
 
     test('rust backend sets engine id', () async {
-      final engine = XrayEngine()..backend = const XrayRustBackend();
-      await engine.connect(_vless(), _opts);
+      final engine = XrayEngine();
+      await engine.connect(_vless(), const XrayRustBackend(), _opts);
       final args = calls.single.arguments as Map;
       expect(args['engine'], 'rust');
       expect(args.containsKey('ssPrefix'), isFalse);
-      expect(engine.supportsConfig(_vless()), isTrue);
     });
 
     test('config that cannot be built becomes UNSUPPORTED_CONFIG', () async {
       final bad = VpnConfig.fromJson({..._vless().toJson(), 'rawXrayConfig': '{broken'});
       await expectLater(
-        XrayEngine().connect(bad, _opts),
+        XrayEngine().connect(bad, const XrayGoBackend(), _opts),
         throwsA(isA<PlatformException>().having((e) => e.code, 'code', 'UNSUPPORTED_CONFIG')),
       );
       expect(calls, isEmpty);
@@ -116,7 +115,7 @@ void main() {
 
     test('quick-connect save and clear', () async {
       final engine = XrayEngine();
-      await engine.saveQuickConnect(_vless(), _opts);
+      await engine.saveQuickConnect(_vless(), const XrayGoBackend(), _opts);
       await engine.clearQuickConnect();
       await engine.disconnect();
       expect(calls.map((c) => c.method), ['saveQuickConnect', 'clearQuickConnect', 'disconnect']);
@@ -255,7 +254,6 @@ void main() {
       expect(a.user, matches(RegExp(r'^u[a-zA-Z0-9]{8}$')));
       expect(a.password, matches(RegExp('^[a-zA-Z0-9]{${AppConstants.socksAuthPasswordLength}}\$')));
       expect(a.password, isNot(b.password));
-      expect(XrayEngine().protocolName, 'xray');
     });
   });
 }

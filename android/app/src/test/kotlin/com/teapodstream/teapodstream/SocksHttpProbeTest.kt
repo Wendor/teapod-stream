@@ -1,6 +1,7 @@
 package com.teapodstream.teapodstream
 
 import java.io.DataInputStream
+import java.io.EOFException
 import java.io.OutputStream
 import java.net.InetAddress
 import java.net.ServerSocket
@@ -49,7 +50,11 @@ class SocksHttpProbeTest {
 
     private fun httpReply(inp: DataInputStream, out: OutputStream, status: String = "HTTP/1.1 204 No Content") {
         val req = StringBuilder()
-        while (!req.endsWith("\r\n\r\n")) req.append(inp.read().toChar())
+        while (!req.endsWith("\r\n\r\n")) {
+            val b = inp.read()
+            if (b < 0) throw EOFException("client closed before the end of the request")
+            req.append(b.toChar())
+        }
         out.write("$status\r\nContent-Length: 0\r\n\r\n".toByteArray())
     }
 

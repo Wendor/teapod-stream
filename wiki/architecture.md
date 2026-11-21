@@ -8,7 +8,7 @@ TeapodStream is an Android VPN client: a Flutter UI, a Kotlin `VpnService`, and 
 │ Flutter (Dart)                                               │
 │  UI (screens, widgets) → Riverpod providers → services       │
 │                        → core backends (config builders)     │
-│                        → XrayEngine (MethodChannel client)   │
+│                        → XrayEngine, PlatformService (native)│
 ├──────────────────────────────────────────────────────────────┤
 │ Android (Kotlin)                                             │
 │  MainActivity → XrayVpnService → VpnCore (Go / Box / Rust)   │
@@ -19,7 +19,7 @@ TeapodStream is an Android VPN client: a Flutter UI, a Kotlin `VpnService`, and 
 ```
 
 Layering rule: widgets read providers and call notifiers; providers orchestrate; services do I/O and persistence;
-core backends build configs; only `XrayEngine` talks to native; only `XrayVpnService` talks to the cores.
+core backends build configs; only `XrayEngine` (the tunnel) and `PlatformService` (system calls) talk to native; only `XrayVpnService` talks to the cores.
 
 ## Traffic
 
@@ -60,7 +60,7 @@ goes. Details: [vpn_provider](components/vpn_provider.md#choosing-the-core),
 
 | Channel | Direction | Content |
 |---|---|---|
-| `MethodChannel("com.teapodstream/vpn")` | Dart → native | `connect`, `disconnect`, `getState`, stats, ping, measure, logs, apps, device info, geodata, APK install ([XrayEngine](components/xray_engine.md)) |
+| `MethodChannel("com.teapodstream/vpn")` | Dart → native | `connect`, `disconnect`, `getState`, stats, ping, measure, logs ([XrayEngine](components/xray_engine.md)); versions, cores, apps, files, ABI, APK install, device info ([PlatformService](components/services.md#platformservice)) |
 | `EventChannel("com.teapodstream/vpn/events")` | native → Dart | `state` (+ SOCKS credentials and `connectedAtMs` on `connected`, `error` on `error`/`blocked`), `log`, `statsHistory`, `tunnel_dead`, `deeplink` |
 
 One broadcast stream (`XrayEngine.events`) serves all Dart listeners. On `onListen` native replays the current state,

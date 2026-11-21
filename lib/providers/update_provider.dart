@@ -10,6 +10,7 @@ import '../core/constants/app_constants.dart';
 import 'vpn_provider.dart';
 import 'settings_provider.dart';
 import '../l10n/l10n.dart';
+import '../core/services/platform_service.dart';
 
 sealed class UpdateState {}
 
@@ -52,8 +53,6 @@ class UpdateNotifier extends Notifier<UpdateState> {
   StreamSubscription<DownloadProgress>? _dlSub;
   String? _currentApkPath;
 
-  static const _channel = MethodChannel(AppConstants.methodChannel);
-
   @override
   UpdateState build() {
     ref.onDispose(() => _dlSub?.cancel());
@@ -65,7 +64,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
     try {
       final pkgInfo = await PackageInfo.fromPlatform();
       final currentVersion = pkgInfo.version;
-      final abi = await _channel.invokeMethod<String>('getAbi') ?? 'arm64-v8a';
+      final abi = await ref.read(platformServiceProvider).abi() ?? 'arm64-v8a';
       if (!AppConstants.supportedAbis.contains(abi)) {
         state = UpdateError(L10n.current.updateUnsupportedDevice(abi));
         return;
@@ -100,14 +99,14 @@ class UpdateNotifier extends Notifier<UpdateState> {
   }
 
   Future<void> reinstall(UpdateInfo info) async {
-    final abi = await _channel.invokeMethod<String>('getAbi') ?? 'arm64-v8a';
+    final abi = await ref.read(platformServiceProvider).abi() ?? 'arm64-v8a';
     final path = await _apkPath(info.version, abi);
     if (File(path).existsSync()) await File(path).delete();
     await startDownload(info);
   }
 
   Future<void> startDownload(UpdateInfo info) async {
-    final abi = await _channel.invokeMethod<String>('getAbi') ?? 'arm64-v8a';
+    final abi = await ref.read(platformServiceProvider).abi() ?? 'arm64-v8a';
     final path = await _apkPath(info.version, abi);
     _currentApkPath = path;
 
@@ -156,7 +155,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
 
   Future<void> installApk(String filePath) async {
     try {
-      await _channel.invokeMethod<void>('installApk', {'filePath': filePath});
+      await ref.read(platformServiceProvider).installApk(filePath);
       await _cleanOldApks(keepPath: filePath);
       state = UpdateIdle();
     } on PlatformException catch (e) {

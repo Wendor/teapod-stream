@@ -1,12 +1,11 @@
 import 'dart:convert';
-import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '../constants/app_constants.dart';
+import 'platform_service.dart';
 import 'storage_secure_service.dart';
 import 'subscription_service.dart';
 
 class DeviceService {
-  static const _channel = MethodChannel(AppConstants.methodChannel);
+  static const _platform = PlatformService();
   static const _storage = FlutterSecureStorage(aOptions: StorageSecureService.androidOptions);
   static const _deviceIdKey = 'cached_device_id';
   static const _deviceInfoKey = 'cached_device_info';
@@ -24,7 +23,7 @@ class DeviceService {
     }
 
     try {
-      final deviceId = await _channel.invokeMethod<String>('getDeviceId');
+      final deviceId = await _platform.deviceId();
       if (deviceId != null) {
         _cachedDeviceId = deviceId;
         await _storage.write(key: _deviceIdKey, value: deviceId);
@@ -46,7 +45,7 @@ class DeviceService {
     }
 
     try {
-      final result = await _channel.invokeMethod<Map<Object?, Object?>>('getDeviceInfo');
+      final result = await _platform.deviceInfo();
       if (result != null) {
         _cachedDeviceInfo = Map<String, dynamic>.from(result);
         await _storage.write(key: _deviceInfoKey, value: jsonEncode(_cachedDeviceInfo));

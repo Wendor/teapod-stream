@@ -1,14 +1,13 @@
 import 'dart:io';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../core/constants/app_constants.dart';
 import '../core/services/tunnel_socks.dart';
 import 'settings_provider.dart';
 import 'vpn_provider.dart';
 import '../l10n/l10n.dart';
+import '../core/services/platform_service.dart';
 
 sealed class GeoState {}
 
@@ -32,7 +31,6 @@ class GeoError extends GeoState {
 
 class GeoNotifier extends Notifier<GeoState> {
   static const _kLastUpdated = 'geo_last_updated';
-  static const _channel = MethodChannel(AppConstants.methodChannel);
 
   @override
   GeoState build() {
@@ -42,13 +40,13 @@ class GeoNotifier extends Notifier<GeoState> {
 
   Future<void> check() async {
     try {
-      final dir = await _channel.invokeMethod<String>('getFilesDir') ?? '';
+      final dir = await ref.read(platformServiceProvider).filesDir();
       if (dir.isEmpty) return;
       final geoip = File('$dir/geoip.dat');
       final geosite = File('$dir/geosite.dat');
       if (!geoip.existsSync() || !geosite.existsSync()) {
         // Try to extract bundled fallback from assets
-        await _channel.invokeMethod('prepareBinaries');
+        await ref.read(platformServiceProvider).prepareBinaries();
       }
       if (geoip.existsSync() && geosite.existsSync()) {
         final prefs = await SharedPreferences.getInstance();
@@ -66,7 +64,7 @@ class GeoNotifier extends Notifier<GeoState> {
     final settings = await ref.read(settingsProvider.future);
     final String dir;
     try {
-      dir = await _channel.invokeMethod<String>('getFilesDir') ?? '';
+      dir = await ref.read(platformServiceProvider).filesDir();
     } catch (_) {
       state = GeoError(L10n.current.geoNoFilesDir);
       return;

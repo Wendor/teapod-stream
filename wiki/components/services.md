@@ -82,6 +82,14 @@ cancel — hung forever). Both go through the tunnel when connected. [UpdateProv
 
 `DeeplinkRouter.parse` / `fetchFromUrl` and `DeeplinkHandler.handleUri` (dialogs, import) — [profiles](profiles.md#bundles-and-deep-links).
 
+## PlatformService
+
+Typed wrappers for the native calls on `com.teapodstream/vpn` that aren't about the tunnel: `binaryVersions`,
+`availableEngines`, `installedApps`, `appIcon`, `filesDir`, `prepareBinaries`, `abi`, `installApk`, `deviceId`,
+`deviceInfo`. Channel errors reach the caller, which keeps its own fallback. Providers read it through
+`platformServiceProvider`, so tests override the service instead of mocking the channel; `main.dart` and the static
+`DeviceService` use a `const PlatformService()`.
+
 ## Other
 
 `DeviceService` — ANDROID_ID, model and OS version for HWID. `third_party_licenses.dart` — license texts for About.

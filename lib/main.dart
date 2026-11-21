@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'app.dart';
 import 'core/constants/app_constants.dart';
+import 'core/services/platform_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,9 +20,7 @@ void main() async {
 
   // Fetch xray-core version early so it's available in the subscription User-Agent.
   try {
-    const channel = MethodChannel(AppConstants.methodChannel);
-    final versions = await channel.invokeMethod<Map<Object?, Object?>>('getBinaryVersions');
-    final xray = versions?['xray'] as String?;
+    final xray = (await const PlatformService().binaryVersions())['xray'];
     if (xray != null && xray.isNotEmpty && xray != 'Error' && xray != '—') {
       AppConstants.xrayCoreVersion = xray;
     }

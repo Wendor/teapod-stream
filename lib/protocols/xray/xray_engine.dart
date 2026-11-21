@@ -108,16 +108,6 @@ class XrayEngine implements VpnEngine {
   @override
   bool supportsConfig(VpnConfig config) => backend.checkConfig(config) == null;
 
-  Future<Map<String, String>> getBinaryVersions() async {
-    try {
-      final result = await _channel.invokeMethod<Map<Object?, Object?>>('getBinaryVersions');
-      if (result != null) {
-        return Map<String, String>.from(result);
-      }
-    } catch (_) {}
-    return {'xray': '—', 'tun2socks': '—'};
-  }
-
   /// Generate cryptographically random SOCKS credentials.
   static ({String user, String password}) generateSocksCredentials() {
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';

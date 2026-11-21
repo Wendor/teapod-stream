@@ -21,12 +21,12 @@ The name is historical: it drives all three cores. `backend` is set by `VpnNotif
 | `getStats()` / `getStatsHistory(epoch, since)` | same | history is incremental: `(epoch, seq)` |
 | `pingConfig(config)` | `ping` | ICMP `ping`, TCP connect as fallback; direct, not through the tunnel |
 | `measureOutbound(config, backend, options, url)` | `measureOutbound` | real request through a temporary core instance (config switch, urltest) |
-| `getBinaryVersions()` | `getBinaryVersions` | core versions for About and the subscription User-Agent |
 | `getLogs` / `getLogFilePath` / `clearLogs` / `setLogsEnabled` | same | `vpn_log.txt` in `filesDir`, lines `epochMs|level|message` |
 | `getTunnelDiag()` | `getTunnelDiag` | diagnostic dump for the logs screen |
 
-Other channel methods (installed apps and icons, device info, ABI, geodata preparation, APK install) are called
-directly by their providers and services.
+The other methods of the same channel — binary versions, available cores, installed apps and icons, files dir and
+binary preparation, ABI, APK install, device id and info — go through
+[`PlatformService`](services.md#platformservice).
 
 ## Related
 

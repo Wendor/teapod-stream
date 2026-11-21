@@ -42,7 +42,7 @@ from the saved config (`SocksCredentials.xray` / `.singBox`), the `?prefix=` add
 
 ## Session lifecycle
 
-All starts and stops run under `sessionLock`. `ACTION_CONNECT` and `ACTION_DISCONNECT` take a number when the service
+All starts and stops run under `sessionLock`. `ACTION_CONNECT`, `ACTION_DISCONNECT` and the quick starts take a number when the service
 receives them (`SessionCommands.issue`, main thread) and do their work on their own thread only if they are still the
 latest command when they get the lock (`runIfLatest`): waiting threads don't enter in arrival order, so a disconnect
 or an older connect that waited behind a long start must not stop or replace the newer session.
@@ -57,8 +57,9 @@ or an older connect that waited behind a long start must not stop or replace the
   `disconnected`, and the app opens.
 - **`ACTION_DISCONNECT`**: `userRequestedDisconnect` (+ `user_disconnected.flag` on disk, so a restarted process doesn't
   reconnect), stop, close TUN (also an existing kill-switch sink), `disconnected` — posted to the main thread and
-  skipped, like the stop itself and closing the sink, when an `ACTION_CONNECT` arrived meanwhile: that session owns
-  the state. Calls `ensureForeground()` first —
+  skipped, like the stop itself and closing the sink, when a newer command arrived meanwhile: that session owns
+  the state. Its events carry the attempt of the last `ACTION_CONNECT` received (`requestedAttempt`): a connect
+  Flutter still waits for, cancelled from the notification or the tile, gets its answer. Calls `ensureForeground()` first —
   it may arrive via `startForegroundService` into a fresh process.
 
 **Starting.** `Builder.establish()` → TUN (random `10.x.x.x/32`, IPv4 default route; IPv6 only with `ipv6Enabled`;

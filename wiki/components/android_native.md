@@ -17,7 +17,7 @@ back. It keeps working when the Flutter UI is gone (tile, boot, Tasker, service 
 | `BootReceiver.kt` | auto-start after boot (`autoStartOnBoot`, a saved config, not after an explicit disconnect) |
 | `VpnCommandReceiver.kt` | Tasker/automation broadcasts `com.teapodstream.CONNECT` / `DISCONNECT`; ignored unless `automationEnabled` |
 | `PrefixTcpProxy.kt` | local TCP proxy for Shadowsocks `?prefix=` (Outline) |
-| `SessionCommands.kt` | numbers `ACTION_CONNECT` / `ACTION_DISCONNECT` as received and runs one under the session lock only if it is still the latest |
+| `SessionCommands.kt` | the session command queue: connect / disconnect / quick start in arrival order on one thread under the session lock; a connect superseded by a later connect or disconnect is skipped |
 | `SocksHttpProbe.kt` | the heartbeat's `socks` probe: SOCKS5 handshake and an HTTP GET over raw sockets, probe-URL parsing |
 | `SpeedHistory.kt` | ring buffer for the speed chart (`(epoch, seq)` increments) |
 | `AppLocale.kt` | `Context.appString()` — native strings in the app's chosen language ([localization](localization.md)) |
@@ -42,11 +42,11 @@ from the saved config (`SocksCredentials.xray` / `.singBox`), the `?prefix=` add
 
 ## Session lifecycle
 
-All starts and stops run under `sessionLock`. `ACTION_CONNECT`, `ACTION_DISCONNECT` and the quick starts take a number when the service
-receives them (`SessionCommands.issue`, main thread) and do their work on their own thread only if they are still the
-latest command when they get the lock (`runIfLatest`); a quick start takes the current number (`current`), so it
-yields to a later connect or disconnect without cancelling an earlier one: waiting threads don't enter in arrival order, so a disconnect
-or an older connect that waited behind a long start must not stop or replace the newer session.
+All starts and stops run under `sessionLock`. `ACTION_CONNECT`, `ACTION_DISCONNECT` and the quick starts go through
+one queue (`SessionCommands`): one thread runs them in the order the service received them, under the same lock as a
+deferred reconnect's stop. Threads waiting for a lock don't enter in arrival order; the queue does, so a disconnect
+that waited behind a long start can't stop the session of a connect received after it. A connect is skipped when a
+connect or a disconnect was received after it.
 
 - **`ACTION_CONNECT`** (from Flutter): parameters → `ConnectionParams.save`; under `sessionLock`, before the old session
   stops, `sessionAttempt` takes Flutter's connect attempt (`EXTRA_ATTEMPT`), and every state event of the session
@@ -57,10 +57,11 @@ or an older connect that waited behind a long start must not stop or replace the
   (`abortQuickConnect`) the state is finished properly: kill switch → `blocked`, otherwise TUN is closed →
   `disconnected`, and the app opens.
 - **`ACTION_DISCONNECT`**: `userRequestedDisconnect` (+ `user_disconnected.flag` on disk, so a restarted process doesn't
-  reconnect), stop, close TUN (also an existing kill-switch sink), `disconnected` — posted to the main thread and
-  skipped, like the stop itself and closing the sink, when a newer command arrived meanwhile: that session owns
-  the state. Its events carry the attempt of the last `ACTION_CONNECT` received (`requestedAttempt`): a connect
-  Flutter still waits for, cancelled from the notification or the tile, gets its answer. Calls `ensureForeground()` first —
+  reconnect), then in the queue: stop and close TUN (also an existing kill-switch sink). The supervisor waits 5 s for
+  it, then posts `disconnected` to the main thread — skipped when a newer command arrived meanwhile (that session owns
+  the state); after the timeout it closes the sink itself. Its events carry the attempt of the last `ACTION_CONNECT`
+  received before it (`requestedAttempt`): a connect Flutter still waits for, cancelled from the notification or the
+  tile, gets its answer. Calls `ensureForeground()` first —
   it may arrive via `startForegroundService` into a fresh process.
 
 **Starting.** `Builder.establish()` → TUN (random `10.x.x.x/32`, IPv4 default route; IPv6 only with `ipv6Enabled`;

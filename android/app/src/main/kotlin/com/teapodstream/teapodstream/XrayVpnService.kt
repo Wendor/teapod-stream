@@ -386,47 +386,41 @@ class XrayVpnService : VpnService() {
                 if (!isRunning.get()) ensureForeground(connecting = false)
                 userRequestedDisconnect.set(true)
                 try { File(filesDir, "user_disconnected.flag").createNewFile() } catch (_: Exception) {}
-                // A connect received after this disconnect owns the session from then on.
-                val command = sessionCommands.issue()
                 // Flutter may still wait for the last connect it sent (a disconnect from the notification or
-                // the tile cancels it): the stop's events answer that attempt.
-                sessionAttempt = requestedAttempt
+                // the tile cancels it): the stop's events answer that attempt — the one received before this.
+                val answers = requestedAttempt
                 // Signal disconnecting immediately so the button turns yellow
                 // even when triggered from the notification (no Flutter-side handler).
                 setState("disconnecting")
-                // Run cleanup off the main thread — Go calls (stopTun2Socks/stopXray)
-                // can block if goroutines are stuck after long uptime or network changes.
+                // Stop in the session queue, after the commands received before this one. Go calls
+                // (stopTun2Socks/stopXray) can block if goroutines are stuck after long uptime or network changes.
+                val command = sessionCommands.submit(SessionCommands.Kind.DISCONNECT) {
+                    sessionAttempt = answers
+                    stopVpn(explicit = true)
+                    // From the blocked state stopVpn exits on the CAS (isRunning is already false),
+                    // the kill switch's TUN sink must be closed explicitly.
+                    closeTunSink()
+                }
                 Thread {
-                    val stopThread = Thread {
-                        sessionCommands.runIfLatest(
-                            command,
-                            superseded = { log("info", "DISCONNECT superseded by a newer connect, session left to it") },
-                        ) {
-                            stopVpn(explicit = true)
-                            // From the blocked state stopVpn exits on the CAS (isRunning is already false),
-                            // the kill switch's TUN sink must be closed explicitly.
-                            closeTunSink()
-                        }
+                    val stopped = try {
+                        command.done.get(STOP_THREAD_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
+                        true
+                    } catch (e: java.util.concurrent.TimeoutException) {
+                        log("warning", "disconnect didn't finish in 5s, forcing disconnected state")
+                        false
+                    } catch (e: Exception) {
+                        log("warning", "disconnect failed: ${e.message}")
+                        false
                     }
-                    stopThread.start()
-                    try {
-                        stopThread.join(STOP_THREAD_TIMEOUT_MS)
-                        if (stopThread.isAlive) {
-                            log("warning", "stopVpn timed out after 5s, forcing disconnected state")
-                        }
-                    } catch (e: InterruptedException) {
-                        Thread.currentThread().interrupt()
-                    }
-
-                    // A stop stuck past the timeout still holds the lock: close the sink without it, as long as
-                    // no newer command took over.
-                    if (stopThread.isAlive && sessionCommands.isLatest(command)) closeTunSink()
+                    // A stop stuck past the timeout (or still queued behind a stuck command) holds the queue:
+                    // close the sink without it, as long as no newer command took over.
+                    if (!stopped && sessionCommands.isLatest(command.id)) closeTunSink()
 
                     // Guarantee "disconnected" is always sent — unless a connect came in meanwhile: its
                     // session (and its attempt tag) is starting, and a late "disconnected" would claim it.
                     // On the main thread, like onStartCommand, so the check and ACTION_CONNECT can't interleave.
                     mainHandler.post {
-                        if (!sessionCommands.isLatest(command)) {
+                        if (!sessionCommands.isLatest(command.id)) {
                             log("info", "disconnect finished after a new connect: final state left to it")
                             return@post
                         }
@@ -449,7 +443,6 @@ class XrayVpnService : VpnService() {
                     log("error", "CONNECT without valid parameters: ${e.message}")
                     return START_NOT_STICKY
                 }
-                val command = sessionCommands.issue()
                 requestedAttempt = attempt
                 showNotification = params.showNotification
                 heartbeatProbe = params.heartbeatProbe
@@ -465,21 +458,19 @@ class XrayVpnService : VpnService() {
                 reconnectAttempts.set(0)
                 try { File(filesDir, "user_disconnected.flag").delete() } catch (_: Exception) {}
                 ensureForeground()
-                Thread {
-                    // Changing server/settings on a live tunnel: the old TUN stays a sink
-                    // until the new one's establish() — no explicit disconnect and no leak window.
-                    sessionCommands.runIfLatest(command, superseded = {
-                        log("info", "CONNECT superseded by a newer command while waiting")
-                    }) {
-                        // Before the old session stops: its events from here on belong to this attempt.
-                        sessionAttempt = attempt
-                        if (isRunning.get()) stopVpn(reconnecting = true)
-                        startVpn(xrayConfig, params.socksPort, socksUser, socksPassword,
-                            params.excludedPackages, params.includedPackages, params.vpnMode, params.ssPrefix,
-                            params.proxyOnly, params.killSwitch, params.allowIcmp, params.blockQuic,
-                            params.ipv6Enabled, mtu = params.mtu, engine = params.engine)
-                    }
-                }.start()
+                // Changing server/settings on a live tunnel: the old TUN stays a sink
+                // until the new one's establish() — no explicit disconnect and no leak window.
+                sessionCommands.submit(SessionCommands.Kind.CONNECT, skipped = {
+                    log("info", "CONNECT skipped: a newer connect or disconnect was received")
+                }) {
+                    // Before the old session stops: its events from here on belong to this attempt.
+                    sessionAttempt = attempt
+                    if (isRunning.get()) stopVpn(reconnecting = true)
+                    startVpn(xrayConfig, params.socksPort, socksUser, socksPassword,
+                        params.excludedPackages, params.includedPackages, params.vpnMode, params.ssPrefix,
+                        params.proxyOnly, params.killSwitch, params.allowIcmp, params.blockQuic,
+                        params.ipv6Enabled, mtu = params.mtu, engine = params.engine)
+                }
                 return START_STICKY
             }
             ACTION_CONNECT_QUICK -> {
@@ -539,18 +530,15 @@ class XrayVpnService : VpnService() {
                             socksUser = u
                             socksPassword = p
                         }
-                        val command = sessionCommands.current()
-                        Thread {
-                            startQuickLocked(command) {
-                                startVpn(
-                                    configText,
-                                    params.socksPort, socksUser, socksPassword,
-                                    params.excludedPackages, params.includedPackages, params.vpnMode,
-                                    params.ssPrefix, params.proxyOnly, params.killSwitch,
-                                    params.allowIcmp, params.blockQuic, params.ipv6Enabled, mtu = params.mtu, isReconnect = true, engine = params.engine
-                                )
-                            }
-                        }.start()
+                        startQuick {
+                            startVpn(
+                                configText,
+                                params.socksPort, socksUser, socksPassword,
+                                params.excludedPackages, params.includedPackages, params.vpnMode,
+                                params.ssPrefix, params.proxyOnly, params.killSwitch,
+                                params.allowIcmp, params.blockQuic, params.ipv6Enabled, mtu = params.mtu, isReconnect = true, engine = params.engine
+                            )
+                        }
                     }
                 } else {
                     abortQuickConnect(params?.killSwitch == true)
@@ -586,18 +574,15 @@ class XrayVpnService : VpnService() {
                 try {
                     val configText = configFile.readText()
                     val (socksUser, socksPassword) = extractSocksFromConfig(configText, params.engine)
-                    val command = sessionCommands.current()
-                    Thread {
-                        startQuickLocked(command) {
-                            startVpn(
-                                configText,
-                                params.socksPort, socksUser, socksPassword,
-                                params.excludedPackages, params.includedPackages, params.vpnMode,
-                                params.ssPrefix, params.proxyOnly, params.killSwitch,
-                                params.allowIcmp, params.blockQuic, params.ipv6Enabled, mtu = params.mtu, isReconnect = true, engine = params.engine
-                            )
-                        }
-                    }.start()
+                    startQuick {
+                        startVpn(
+                            configText,
+                            params.socksPort, socksUser, socksPassword,
+                            params.excludedPackages, params.includedPackages, params.vpnMode,
+                            params.ssPrefix, params.proxyOnly, params.killSwitch,
+                            params.allowIcmp, params.blockQuic, params.ipv6Enabled, mtu = params.mtu, isReconnect = true, engine = params.engine
+                        )
+                    }
                     return START_STICKY
                 } catch (e: Exception) {
                     log("warning", "Auto-connect failed: ${e.message}")
@@ -1293,15 +1278,13 @@ class XrayVpnService : VpnService() {
         networkChangeHandler.postDelayed(r, delay)
     }
 
-    /// Restart from saved parameters (CONNECT_QUICK, system restart). [command] is [SessionCommands.current]
-    /// when it was received: it yields to any connect or disconnect received after it without cancelling
-    /// one received before it. Won't begin while the old session is stopping, on top of a live session or
-    /// after the user disconnected.
-    private fun startQuickLocked(command: Long, start: () -> Unit) {
-        sessionCommands.runIfLatest(command, superseded = { log("info", "quick start superseded by a newer command") }) {
+    /// Restart from saved parameters (CONNECT_QUICK, system restart) — queued in [sessionCommands] after the
+    /// commands received before it. Won't begin on top of a live session or after the user disconnected.
+    private fun startQuick(start: () -> Unit) {
+        sessionCommands.submit(SessionCommands.Kind.QUICK) {
             if (userRequestedDisconnect.get() || isRunning.get()) {
                 log("info", "quick start skipped (disconnected by user or already running)")
-                return@runIfLatest
+                return@submit
             }
             sessionAttempt = 0
             start()

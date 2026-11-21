@@ -1,38 +1,51 @@
 package com.teapodstream.teapodstream
 
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.Future
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * Orders the session commands of [XrayVpnService] (`ACTION_CONNECT`, `ACTION_DISCONNECT`). Each takes a number when
- * the service receives it ([issue], main thread) and runs its work later on its own thread under [lock]; the JVM
- * doesn't let waiting threads in in arrival order, so a command that a newer one superseded while it waited must not
- * touch the session at all. [runIfLatest] checks that under the lock.
+ * The session commands of [XrayVpnService] — connect, disconnect, quick start — run one at a time, in the order the
+ * service received them, on one thread and under [lock] (which a deferred reconnect's stop also takes). Threads
+ * waiting for a lock don't enter in arrival order; a queue does, so a disconnect that waited behind a long start
+ * can't stop the session of a connect received after it.
+ *
+ * A connect is skipped when a connect or a disconnect was received after it: the session it would start is replaced
+ * right away. Disconnects and quick starts always run (quick starts check their own preconditions).
+ *
+ * [submit] must be called on one thread (the main thread, `onStartCommand`): the numbers follow the queue order.
  */
-internal class SessionCommands(val lock: Any = Any()) {
+internal class SessionCommands(
+    val lock: Any = Any(),
+    private val executor: ExecutorService = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "session-commands").apply { isDaemon = true }
+    },
+) {
+    enum class Kind { CONNECT, DISCONNECT, QUICK }
+
+    class Command(val id: Long, val done: Future<*>)
+
     private val issued = AtomicLong(0)
+    @Volatile private var lastConnect = 0L
+    @Volatile private var lastDisconnect = 0L
 
-    /** A number for a command received now; newer commands get larger numbers. */
-    fun issue(): Long = issued.incrementAndGet()
-
-    /**
-     * The latest number without taking a new one: for a command that must yield to any command received after it but
-     * must not cancel the ones received before it (a quick start from the tile, boot or a reconnect).
-     */
-    fun current(): Long = issued.get()
-
-    /** Whether no command was received after [command]. */
-    fun isLatest(command: Long): Boolean = issued.get() == command
-
-    /**
-     * Runs [block] under [lock] if [command] is still the latest when it gets the lock; otherwise runs [superseded]
-     * (also under the lock) and returns false.
-     */
-    fun runIfLatest(command: Long, superseded: () -> Unit = {}, block: () -> Unit): Boolean = synchronized(lock) {
-        if (!isLatest(command)) {
-            superseded()
-            return@synchronized false
+    /** Queues [block]; [skipped] runs instead (also in order, under [lock]) when a connect turns out superseded. */
+    fun submit(kind: Kind, skipped: () -> Unit = {}, block: () -> Unit): Command {
+        val id = issued.incrementAndGet()
+        when (kind) {
+            Kind.CONNECT -> lastConnect = id
+            Kind.DISCONNECT -> lastDisconnect = id
+            Kind.QUICK -> {}
         }
-        block()
-        true
+        val done = executor.submit {
+            synchronized(lock) {
+                if (kind == Kind.CONNECT && (lastConnect != id || lastDisconnect > id)) skipped() else block()
+            }
+        }
+        return Command(id, done)
     }
+
+    /** Whether no command was received after [id]. */
+    fun isLatest(id: Long): Boolean = issued.get() == id
 }

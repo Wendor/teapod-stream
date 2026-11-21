@@ -24,6 +24,7 @@ import 'package:teapodstream/core/services/config_storage_service.dart';
 import 'package:teapodstream/core/services/log_service.dart';
 import 'package:teapodstream/core/services/settings_service.dart';
 import 'package:teapodstream/core/models/app_settings.dart';
+import 'package:teapodstream/protocols/xray/xray_engine.dart';
 import 'package:teapodstream/protocols/xray/xray_rust_backend.dart';
 import 'package:teapodstream/providers/config_provider.dart';
 import 'package:teapodstream/providers/profile_provider.dart';
@@ -118,6 +119,20 @@ class _Native {
     }
     return null;
   }
+}
+
+/// Records the core each call was given, without touching the method channel.
+class _RecordingEngine extends XrayEngine {
+  final connects = <CoreKind>[];
+  final quickSaves = <CoreKind>[];
+
+  @override
+  Future<void> connect(VpnConfig config, CoreBackend backend, VpnEngineOptions options) async =>
+      connects.add(backend.kind);
+
+  @override
+  Future<void> saveQuickConnect(VpnConfig config, CoreBackend backend, VpnEngineOptions options) async =>
+      quickSaves.add(backend.kind);
 }
 
 Future<void> _settle() async {
@@ -983,6 +998,28 @@ void main() {
   });
 
   group('core switch', () {
+    test('the engine gets the resolved core on connect and on a quick-connect save', () async {
+      final engine = _RecordingEngine();
+      await boot(
+        configs: [_cfg('a')],
+        activeId: 'a',
+        settings: _settings.copyWith(coreOrder: [CoreKind.singBox, CoreKind.xrayGo, CoreKind.xrayRust]),
+        overrides: [xrayEngineProvider.overrideWithValue(engine)],
+      );
+      await n().connect();
+      expect(engine.connects, [CoreKind.singBox]);
+
+      await n().disconnect();
+      emit({'type': 'state', 'value': 'disconnected'});
+      await _settle();
+      await c
+          .read(settingsProvider.notifier)
+          .save(_settings.copyWith(coreOrder: [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox]));
+      await _settle();
+      expect(engine.quickSaves, [CoreKind.xrayRust]);
+      expect(native.named('connect'), isEmpty);
+    });
+
     test('connected session on an unsupported config is disconnected', () async {
       await connected(configs: [_cfg('r', rawXray: _visionRaw)]);
       await c

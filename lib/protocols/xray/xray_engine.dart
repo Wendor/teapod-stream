@@ -5,12 +5,12 @@ import '../../core/interfaces/vpn_engine.dart';
 import '../../core/models/vpn_config.dart';
 import '../../core/models/vpn_log_entry.dart';
 import '../../core/cores/core_backend.dart';
-import 'xray_go_backend.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// XrayEngine is a thin MethodChannel client — it sends commands to the native
 /// Android VPN service and nothing else. All state, stats, and log events are
 /// delivered via EventChannel and processed directly by VpnNotifier.
-class XrayEngine implements VpnEngine {
+class XrayEngine {
   static const _channel = MethodChannel(AppConstants.methodChannel);
 
   /// The single subscription to native events. A second `receiveBroadcastStream()`
@@ -20,14 +20,8 @@ class XrayEngine implements VpnEngine {
     '${AppConstants.methodChannel}/events',
   ).receiveBroadcastStream();
 
-  @override
-  String get protocolName => 'xray';
-
-  /// Core for [connect] and [saveQuickConnect]; set before the call.
-  CoreBackend backend = const XrayGoBackend();
-
-  @override
-  Future<void> connect(VpnConfig config, VpnEngineOptions options) async {
+  /// Starts [config] on [backend]'s core.
+  Future<void> connect(VpnConfig config, CoreBackend backend, VpnEngineOptions options) async {
     final String xrayConfig;
     try {
       xrayConfig = backend.buildConfig(config, options);
@@ -36,20 +30,25 @@ class XrayEngine implements VpnEngine {
     } on StateError catch (e) {
       throw PlatformException(code: 'UNSUPPORTED_CONFIG', message: e.message);
     }
-    await _channel.invokeMethod('connect', _connectArgs(xrayConfig, config, options));
+    await _channel.invokeMethod('connect', _connectArgs(xrayConfig, config, backend, options));
   }
 
   /// Quick-reconnect config (tile, autostart) for the current core without connecting.
-  Future<void> saveQuickConnect(VpnConfig config, VpnEngineOptions options) async {
+  Future<void> saveQuickConnect(VpnConfig config, CoreBackend backend, VpnEngineOptions options) async {
     await _channel.invokeMethod(
       'saveQuickConnect',
-      _connectArgs(backend.buildConfig(config, options), config, options),
+      _connectArgs(backend.buildConfig(config, options), config, backend, options),
     );
   }
 
   Future<void> clearQuickConnect() => _channel.invokeMethod('clearQuickConnect');
 
-  Map<String, Object?> _connectArgs(String xrayConfig, VpnConfig config, VpnEngineOptions options) => {
+  Map<String, Object?> _connectArgs(
+    String xrayConfig,
+    VpnConfig config,
+    CoreBackend backend,
+    VpnEngineOptions options,
+  ) => {
     'engine': backend.kind.nativeId,
     'configName': config.name,
     'xrayConfig': xrayConfig,
@@ -74,7 +73,6 @@ class XrayEngine implements VpnEngine {
     if (config.ssPrefix != null) 'ssPrefix': config.ssPrefix,
   };
 
-  @override
   Future<void> disconnect() async {
     await _channel.invokeMethod('disconnect');
   }
@@ -94,7 +92,6 @@ class XrayEngine implements VpnEngine {
     }
   }
 
-  @override
   Future<int?> pingConfig(VpnConfig config) async {
     if (config.address.isEmpty || config.address == 'managed') return null;
     try {
@@ -104,9 +101,6 @@ class XrayEngine implements VpnEngine {
       return null;
     }
   }
-
-  @override
-  bool supportsConfig(VpnConfig config) => backend.checkConfig(config) == null;
 
   /// Generate cryptographically random SOCKS credentials.
   static ({String user, String password}) generateSocksCredentials() {
@@ -236,3 +230,6 @@ class XrayEngine implements VpnEngine {
     _ => VpnState.disconnected,
   };
 }
+
+/// The engine [VpnNotifier] and the other providers talk to; tests override it.
+final xrayEngineProvider = Provider<XrayEngine>((ref) => XrayEngine());

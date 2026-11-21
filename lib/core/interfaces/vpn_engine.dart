@@ -1,4 +1,3 @@
-import '../models/vpn_config.dart';
 import '../models/vpn_log_entry.dart';
 import '../models/dns_config.dart';
 import '../models/heartbeat_settings.dart';
@@ -8,16 +7,6 @@ import '../models/app_settings.dart';
 
 /// blocked — the kill switch keeps the TUN sink after a drop: traffic is blocked.
 enum VpnState { disconnected, connecting, connected, disconnecting, error, blocked }
-
-abstract class VpnEngine {
-  String get protocolName;
-
-  Future<void> connect(VpnConfig config, VpnEngineOptions options);
-  Future<void> disconnect();
-
-  Future<int?> pingConfig(VpnConfig config);
-  bool supportsConfig(VpnConfig config);
-}
 
 class VpnEngineOptions {
   final int socksPort;

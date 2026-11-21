@@ -456,6 +456,9 @@ class XrayVpnService : VpnService() {
                         // The user managed to disconnect while we waited for the lock.
                         if (userRequestedDisconnect.get()) {
                             log("info", "CONNECT cancelled: user disconnected meanwhile")
+                            // Flutter waits for this attempt; the disconnect's own events carry the old tag.
+                            sessionAttempt = attempt
+                            setState("disconnected")
                             return@Thread
                         }
                         // Before the old session stops: its events from here on belong to this attempt.

@@ -7,6 +7,7 @@ import 'package:teapodstream/core/models/profile.dart';
 import 'package:teapodstream/core/models/routing_settings.dart';
 import 'package:teapodstream/core/services/profile_storage_service.dart';
 import 'package:teapodstream/core/services/settings_service.dart';
+import 'package:teapodstream/core/models/app_settings.dart';
 import 'package:teapodstream/core/services/update_service.dart';
 import 'package:teapodstream/providers/profile_provider.dart';
 import 'package:teapodstream/providers/settings_provider.dart';

@@ -5,7 +5,7 @@ import '../widgets/feature_gate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/heartbeat_settings.dart';
 import '../../core/models/xray_tuning.dart';
-import '../../core/services/settings_service.dart';
+import '../../core/models/app_settings.dart';
 import '../../providers/profile_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../theme/app_colors.dart';

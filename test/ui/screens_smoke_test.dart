@@ -1,8 +1,8 @@
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:teapodstream/core/services/config_storage_service.dart';
-import 'package:teapodstream/core/services/settings_service.dart';
+import 'package:teapodstream/core/models/subscription.dart';
+import 'package:teapodstream/core/models/app_settings.dart';
 import 'package:teapodstream/ui/screens/add_config_screen.dart';
 import 'package:teapodstream/ui/screens/configs_screen.dart';
 import 'package:teapodstream/ui/screens/dns_settings_screen.dart';

@@ -33,4 +33,8 @@ enum CoreKind {
     final order = <CoreKind>{if (names == null) ?tryName(first), ...?names?.map(tryName).nonNulls, ...defaultOrder};
     return List.unmodifiable(order);
   }
+
+  /// Set from saved names; unknown ones are dropped.
+  static Set<CoreKind> setOf(Iterable<String>? names) =>
+      Set.unmodifiable(names?.map(tryName).nonNulls ?? const <CoreKind>[]);
 }

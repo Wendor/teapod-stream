@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
+import '../core/models/app_settings.dart' show UpdateChannel;
 import '../core/services/update_service.dart';
 import '../core/constants/app_constants.dart';
 import 'vpn_provider.dart';

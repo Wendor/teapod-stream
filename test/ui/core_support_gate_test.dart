@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:teapodstream/core/cores/core_resolver.dart';
 import 'package:teapodstream/core/models/core_kind.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
-import 'package:teapodstream/core/services/settings_service.dart';
+import 'package:teapodstream/core/models/app_settings.dart';
 import 'package:teapodstream/protocols/xray/xray_rust_backend.dart';
 import 'package:teapodstream/providers/core_provider.dart';
 import 'package:teapodstream/ui/widgets/core_support_gate.dart';

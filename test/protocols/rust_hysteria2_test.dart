@@ -6,7 +6,7 @@ import 'package:teapodstream/core/models/dns_config.dart';
 import 'package:teapodstream/core/models/routing_settings.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/core/models/xray_tuning.dart';
-import 'package:teapodstream/core/services/settings_service.dart';
+import 'package:teapodstream/core/models/app_settings.dart';
 import 'package:teapodstream/protocols/xray/rust_config_builder.dart';
 import 'package:teapodstream/protocols/xray/vless_parser.dart';
 import 'package:teapodstream/protocols/xray/xray_config_builder.dart';

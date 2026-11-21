@@ -7,7 +7,7 @@ import '../../core/models/xray_tuning.dart';
 import '../../core/constants/routing_defaults.dart';
 import '../../core/constants/xray_defaults.dart';
 import '../../core/models/vpn_log_entry.dart' show LogLevel;
-import '../../core/services/settings_service.dart' show DnsQueryStrategy, TlsFingerprint;
+import '../../core/models/app_settings.dart' show DnsQueryStrategy, TlsFingerprint;
 import 'vless_parser.dart';
 import '../../l10n/l10n.dart';
 

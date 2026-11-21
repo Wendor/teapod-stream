@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'vpn_config.dart';
-import '../services/config_storage_service.dart' show Subscription;
+import '../models/subscription.dart' show Subscription;
 
 class ConnectionsBundle {
   static const int currentVersion = 1;

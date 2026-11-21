@@ -7,7 +7,7 @@ import 'package:teapodstream/core/models/connections_bundle.dart';
 import 'package:teapodstream/core/models/profile.dart';
 import 'package:teapodstream/core/models/profile_bundle.dart';
 import 'package:teapodstream/core/services/deeplink_router.dart';
-import 'package:teapodstream/core/services/settings_service.dart';
+import 'package:teapodstream/core/models/app_settings.dart';
 
 final _profileBundle = ProfileBundle(
   exportedAt: DateTime(2026),

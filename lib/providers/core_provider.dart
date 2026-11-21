@@ -8,7 +8,7 @@ import '../core/models/core_kind.dart';
 import '../protocols/singbox/singbox_backend.dart';
 import '../protocols/xray/xray_go_backend.dart';
 import '../protocols/xray/xray_rust_backend.dart';
-import '../core/services/settings_service.dart';
+import '../core/models/app_settings.dart';
 import 'config_provider.dart';
 import 'settings_provider.dart';
 

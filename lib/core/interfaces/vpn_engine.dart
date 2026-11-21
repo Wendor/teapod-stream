@@ -4,7 +4,7 @@ import '../models/dns_config.dart';
 import '../models/heartbeat_settings.dart';
 import '../models/routing_settings.dart';
 import '../models/xray_tuning.dart';
-import '../services/settings_service.dart';
+import '../models/app_settings.dart';
 
 /// blocked — the kill switch keeps the TUN sink after a drop: traffic is blocked.
 enum VpnState { disconnected, connecting, connected, disconnecting, error, blocked }

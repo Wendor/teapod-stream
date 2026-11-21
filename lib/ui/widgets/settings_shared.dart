@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/services/settings_service.dart' show AppSettings;
+import '../../core/models/app_settings.dart' show AppSettings;
 import '../../providers/profile_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../theme/app_colors.dart';

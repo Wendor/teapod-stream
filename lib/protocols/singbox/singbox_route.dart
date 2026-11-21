@@ -5,7 +5,7 @@ import '../../core/constants/xray_defaults.dart';
 import '../../core/interfaces/vpn_engine.dart';
 import '../../core/models/dns_config.dart';
 import '../../core/models/routing_settings.dart';
-import '../../core/services/settings_service.dart';
+import '../../core/models/app_settings.dart';
 import 'singbox_outbound.dart';
 
 /// sing-box 1.14 DNS and routing: the same rules as xray, in sing-box notation.

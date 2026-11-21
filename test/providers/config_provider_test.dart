@@ -9,6 +9,7 @@ import 'package:teapodstream/core/models/pinned_ref.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/core/models/vpn_log_entry.dart';
 import 'package:teapodstream/core/services/config_storage_service.dart';
+import 'package:teapodstream/core/models/subscription.dart';
 import 'package:teapodstream/core/services/log_service.dart';
 import 'package:teapodstream/providers/config_provider.dart';
 

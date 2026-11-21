@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:teapodstream/core/models/app_settings.dart' show UpdateChannel;
 import 'package:teapodstream/core/services/update_service.dart';
 
 import '../helpers/local_server.dart';

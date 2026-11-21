@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:teapodstream/core/services/config_storage_service.dart';
+import 'package:teapodstream/core/models/subscription.dart';
 import 'package:teapodstream/core/services/log_service.dart';
 import 'package:teapodstream/providers/config_provider.dart';
 import 'package:teapodstream/providers/settings_provider.dart';

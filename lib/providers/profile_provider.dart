@@ -8,6 +8,7 @@ import '../core/models/profile_bundle.dart';
 import '../core/models/connections_bundle.dart';
 import '../core/services/profile_storage_service.dart';
 import '../core/services/settings_service.dart';
+import '../core/models/app_settings.dart';
 import 'settings_provider.dart';
 import 'config_provider.dart';
 import 'vpn_provider.dart';

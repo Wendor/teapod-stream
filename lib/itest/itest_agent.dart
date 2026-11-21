@@ -9,7 +9,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../core/constants/app_constants.dart';
 import '../core/models/core_kind.dart';
-import '../core/services/settings_service.dart';
+import '../core/models/app_settings.dart';
 import '../protocols/xray/vless_parser.dart';
 import '../providers/config_provider.dart';
 import '../providers/core_provider.dart';

@@ -23,6 +23,7 @@ import 'package:teapodstream/core/models/vpn_log_entry.dart';
 import 'package:teapodstream/core/services/config_storage_service.dart';
 import 'package:teapodstream/core/services/log_service.dart';
 import 'package:teapodstream/core/services/settings_service.dart';
+import 'package:teapodstream/core/models/app_settings.dart';
 import 'package:teapodstream/protocols/xray/xray_rust_backend.dart';
 import 'package:teapodstream/providers/config_provider.dart';
 import 'package:teapodstream/providers/profile_provider.dart';

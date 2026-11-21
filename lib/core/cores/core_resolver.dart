@@ -1,6 +1,6 @@
 import '../models/core_kind.dart';
 import '../models/vpn_config.dart';
-import '../services/settings_service.dart';
+import '../models/app_settings.dart';
 import 'core_backend.dart';
 import 'engine_options.dart';
 import '../../l10n/l10n.dart';

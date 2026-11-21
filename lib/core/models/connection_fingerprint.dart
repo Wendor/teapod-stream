@@ -1,5 +1,5 @@
 import 'dart:convert';
-import '../services/settings_service.dart';
+import '../models/app_settings.dart';
 import 'core_kind.dart';
 
 /// Deterministic fingerprint of the settings that affect the active connection.

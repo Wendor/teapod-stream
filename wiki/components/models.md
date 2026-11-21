@@ -1,7 +1,7 @@
 # Models
 
-Immutable data classes in `lib/core/models/` (plus `Subscription` in `config_storage_service.dart` and
-`AppSettings` in `settings_service.dart` — [settings_provider](settings_provider.md)). All of them are stored as JSON.
+Immutable data classes and the enums they use, in `lib/core/models/` (`AppSettings` —
+[settings_provider](settings_provider.md)). Models import no services; all of them are stored as JSON.
 
 **Compatibility rule.** Users keep their data across updates. A new field needs a default in `fromJson`; a renamed
 or restructured field needs a read of the old key or a migration. Tests check the round trip
@@ -39,7 +39,7 @@ Sealed, JSON with a `type` discriminator; null for the xray protocols.
 - `SshSettings` — user, password and/or private key (+ passphrase), pinned host keys.
 - `NaiveSettings` — user, password, `quic`, extra headers.
 
-## Subscription (`config_storage_service.dart`)
+## Subscription (`subscription.dart`)
 
 `id`, `name`, `url`, `createdAt`, `lastFetchedAt`; usage info from the response headers (`expireAt`,
 `uploadBytes`, `downloadBytes`, `totalBytes`, `announce`, `announceUrl`); `pinnedCertDer` — the self-signed

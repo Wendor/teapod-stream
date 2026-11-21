@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:teapodstream/core/models/connection_fingerprint.dart';
-import 'package:teapodstream/core/services/settings_service.dart';
+import 'package:teapodstream/core/models/app_settings.dart';
 
 void main() {
   group('connectionFingerprint', () {

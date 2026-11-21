@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:teapodstream/core/cores/core_backend.dart';
 import 'package:teapodstream/core/cores/core_resolver.dart';
 import 'package:teapodstream/core/models/core_kind.dart';
-import 'package:teapodstream/core/services/settings_service.dart';
+import 'package:teapodstream/core/models/app_settings.dart';
 import 'package:teapodstream/providers/core_provider.dart';
 import 'package:teapodstream/ui/widgets/feature_gate.dart';
 import 'package:teapodstream/l10n/app_localizations.dart';

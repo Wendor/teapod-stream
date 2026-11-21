@@ -1,6 +1,7 @@
 # SettingsProvider — app settings
 
-**Files:** `lib/providers/settings_provider.dart`, `lib/core/services/settings_service.dart` (`AppSettings`),
+**Files:** `lib/providers/settings_provider.dart`, `lib/core/models/app_settings.dart` (`AppSettings`, its enums,
+`GeoPresets`), `lib/core/services/settings_service.dart` (`SettingsService`),
 `lib/core/models/xray_tuning.dart`, `lib/core/models/heartbeat_settings.dart`, `lib/core/models/routing_settings.dart`
 
 `SettingsNotifier` (`AsyncNotifier<AppSettings>`) loads `AppSettings` through `SettingsService` and saves every

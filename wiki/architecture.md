@@ -107,7 +107,7 @@ lib/
 │   ├── constants/            channel names, ports, xray and routing defaults
 │   ├── cores/                CoreBackend, CoreResolver, engine options, sanitizer, core switching
 │   ├── interfaces/           VpnEngine, VpnEngineOptions, VpnState
-│   ├── models/               VpnConfig, settings parts, profiles, bundles, stats, logs
+│   ├── models/               VpnConfig, AppSettings and its parts, subscriptions, profiles, bundles, stats, logs
 │   └── services/             storage, subscriptions, tunnel SOCKS, updates, deep links, logs
 ├── protocols/
 │   ├── xray/                 XrayEngine, Go/Rust backends and builders, VlessParser

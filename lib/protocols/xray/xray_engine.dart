@@ -20,8 +20,9 @@ class XrayEngine {
     '${AppConstants.methodChannel}/events',
   ).receiveBroadcastStream();
 
-  /// Starts [config] on [backend]'s core.
-  Future<void> connect(VpnConfig config, CoreBackend backend, VpnEngineOptions options) async {
+  /// Starts [config] on [backend]'s core. [attempt] — the caller's connect attempt; state events of the session it
+  /// starts carry it back (`attempt` field), 0 — untagged.
+  Future<void> connect(VpnConfig config, CoreBackend backend, VpnEngineOptions options, {int attempt = 0}) async {
     final String xrayConfig;
     try {
       xrayConfig = backend.buildConfig(config, options);
@@ -30,7 +31,7 @@ class XrayEngine {
     } on StateError catch (e) {
       throw PlatformException(code: 'UNSUPPORTED_CONFIG', message: e.message);
     }
-    await _channel.invokeMethod('connect', _connectArgs(xrayConfig, config, backend, options));
+    await _channel.invokeMethod('connect', {..._connectArgs(xrayConfig, config, backend, options), 'attempt': attempt});
   }
 
   /// Quick-reconnect config (tile, autostart) for the current core without connecting.

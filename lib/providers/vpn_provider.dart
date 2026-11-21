@@ -258,6 +258,14 @@ class VpnNotifier extends Notifier<VpnState2> {
     final type = event['type'] as String?;
     switch (type) {
       case 'state':
+        // A late event of a session a newer connect replaced (its start failing after the user moved on): while
+        // the newer attempt is connecting, it owns the state. Untagged events — sessions started natively — and
+        // events outside a connect apply as before.
+        final tagged = (event['attempt'] as num?)?.toInt();
+        if (tagged != null && tagged != _attempt && state.isConnecting) {
+          ref.read(logServiceProvider.notifier).addDebug('Ignored ${event['value']} of connect attempt $tagged');
+          return;
+        }
         final rawValue = event['value'] as String?;
         final isReconnect = rawValue == 'reconnecting';
         final newState = _parseState(rawValue);
@@ -570,7 +578,7 @@ class VpnNotifier extends Notifier<VpnState2> {
     }
 
     try {
-      await _engine.connect(config, backend, options);
+      await _engine.connect(config, backend, options, attempt: attempt);
       if (superseded()) return;
       _connectedConfig = config;
       if (switching) _connectedAt = null;

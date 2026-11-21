@@ -127,7 +127,7 @@ class _RecordingEngine extends XrayEngine {
   final quickSaves = <CoreKind>[];
 
   @override
-  Future<void> connect(VpnConfig config, CoreBackend backend, VpnEngineOptions options) async =>
+  Future<void> connect(VpnConfig config, CoreBackend backend, VpnEngineOptions options, {int attempt = 0}) async =>
       connects.add(backend.kind);
 
   @override
@@ -718,6 +718,53 @@ void main() {
       await _settle();
       expect(native.named('connect'), isEmpty);
       expect(st().connectionState, VpnState.disconnected);
+    });
+
+    test("a late event of a replaced session doesn't override a newer connect", () async {
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      await n().connect();
+      final first = native.lastConnect()['attempt'] as int;
+      expect(first, greaterThan(0));
+      await disconnectNow();
+      await n().connect();
+      final second = native.lastConnect()['attempt'] as int;
+      expect(second, greaterThan(first));
+      expect(st().connectionState, VpnState.connecting);
+
+      // The first session's start fails only now.
+      emit({'type': 'state', 'value': 'error', 'error': 'old server failed', 'attempt': first});
+      await _settle();
+      expect(st().connectionState, VpnState.connecting);
+      expect(st().error, isNull);
+
+      emit({
+        'type': 'state',
+        'value': 'connected',
+        'socksPort': 2080,
+        'socksUser': 'su',
+        'socksPassword': 'sp',
+        'attempt': second,
+      });
+      await _settle();
+      expect(st().isConnected, isTrue);
+    });
+
+    test('tagged events outside a newer connect and untagged events apply as before', () async {
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      await n().connect();
+      final first = native.lastConnect()['attempt'] as int;
+      final d = n().disconnect(); // bumps the attempt; not a connect
+      emit({'type': 'state', 'value': 'disconnected', 'attempt': first});
+      await d;
+      await _settle();
+      expect(st().connectionState, VpnState.disconnected);
+
+      await n().connect();
+      // A session started natively (tile, boot) has no tag.
+      emit({'type': 'state', 'value': 'error', 'error': 'native failure'});
+      await _settle();
+      expect(st().connectionState, VpnState.error);
+      expect(st().error, 'native failure');
     });
 
     test('disconnect after native reported disconnected still drops the waiting connect', () async {

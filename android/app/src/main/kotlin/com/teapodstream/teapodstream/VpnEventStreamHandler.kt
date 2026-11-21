@@ -83,7 +83,7 @@ object VpnEventStreamHandler : EventChannel.StreamHandler {
 
     fun sendStateEvent(state: String) {
         val error = XrayVpnService.lastError?.takeIf { state == "error" || state == "blocked" }
-        sendEvent(mapOf("type" to "state", "value" to state, "error" to error))
+        sendEvent(mapOf("type" to "state", "value" to state, "error" to error) + attemptField())
         ItestBridge.state(state)
         // Update the tile and notification on state change
         appContext?.let { ctx ->
@@ -100,13 +100,17 @@ object VpnEventStreamHandler : EventChannel.StreamHandler {
             "socksUser" to socksUser,
             "socksPassword" to socksPassword,
             "connectedAtMs" to XrayVpnService.connectedAtMs,
-        ))
+        ) + attemptField())
         ItestBridge.emit(mapOf(
             "ev" to "state", "value" to "connected", "t" to System.currentTimeMillis(),
             "socksPort" to socksPort, "socksUser" to socksUser, "socksPassword" to socksPassword,
         ))
         appContext?.let { VpnTileService.updateTile(it) }
     }
+
+    /** The session's connect attempt, when Flutter started it; see [XrayVpnService.sessionAttempt]. */
+    private fun attemptField(): Map<String, Any?> =
+        XrayVpnService.sessionAttempt.takeIf { it > 0 }?.let { mapOf("attempt" to it) } ?: emptyMap()
 
     fun sendLogEvent(level: String, message: String) {
         sendEvent(mapOf("type" to "log", "level" to level, "message" to message))

@@ -55,6 +55,8 @@ class XrayVpnService : VpnService() {
         const val EXTRA_SOCKS_PASSWORD = "socks_password"
         /** [ConnectionParams.toJson] of the session: everything but the config and the SOCKS login. */
         const val EXTRA_PARAMS = "params"
+        /** Flutter's connect attempt (> 0); state events of the session it starts carry it back. */
+        const val EXTRA_ATTEMPT = "attempt"
         const val EXTRA_CONFIG_NAME = "config_name"              // config name for the tile
 
         // Static state tracker for querying from Dart
@@ -92,6 +94,13 @@ class XrayVpnService : VpnService() {
         // Epoch-ms when VPN became connected; 0 when disconnected. Survives UI restarts because
         // the foreground service process stays alive. Flutter uses this to restore the timer.
         @Volatile var connectedAtMs: Long = 0
+            private set
+
+        /**
+         * Flutter's connect attempt that started the current session; 0 — started natively (tile, boot, restart).
+         * State events carry it, so Flutter can drop a late event of a session a newer connect replaced.
+         */
+        @Volatile var sessionAttempt: Long = 0
             private set
 
         /**
@@ -405,6 +414,7 @@ class XrayVpnService : VpnService() {
                 val xrayConfig = intent.getStringExtra(EXTRA_XRAY_CONFIG) ?: ""
                 val socksUser = intent.getStringExtra(EXTRA_SOCKS_USER) ?: ""
                 val socksPassword = intent.getStringExtra(EXTRA_SOCKS_PASSWORD) ?: ""
+                val attempt = intent.getLongExtra(EXTRA_ATTEMPT, 0)
                 val params = try {
                     ConnectionParams.fromJson(org.json.JSONObject(intent.getStringExtra(EXTRA_PARAMS) ?: ""))
                 } catch (e: Exception) {
@@ -434,6 +444,8 @@ class XrayVpnService : VpnService() {
                             log("info", "CONNECT cancelled: user disconnected meanwhile")
                             return@Thread
                         }
+                        // Before the old session stops: its events from here on belong to this attempt.
+                        sessionAttempt = attempt
                         if (isRunning.get()) stopVpn(reconnecting = true)
                         startVpn(xrayConfig, params.socksPort, socksUser, socksPassword,
                             params.excludedPackages, params.includedPackages, params.vpnMode, params.ssPrefix,
@@ -1260,6 +1272,7 @@ class XrayVpnService : VpnService() {
             log("info", "quick start skipped (disconnected by user or already running)")
             return@synchronized
         }
+        sessionAttempt = 0
         start()
     }
 

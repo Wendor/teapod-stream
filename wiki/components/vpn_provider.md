@@ -55,8 +55,10 @@ it can → reconnect banner; disconnected → refresh or clear the saved quick-c
 new attempt number; a later such `connect()`, any `disconnect()` or the 45 s connect timeout makes it stale. After
 each await of the attempt
 (notification permission, available cores, the native call) a stale attempt returns without calling native and
-without writing `_connectedConfig`, SOCKS credentials, `appliedFingerprint` or an `error`. Native state events carry
-no attempt number and are applied as they come.
+without writing `_connectedConfig`, SOCKS credentials, `appliedFingerprint` or an `error`. The attempt number goes
+to native with `connect`; state events of the session it starts carry it back (`attempt`). While a newer attempt is
+connecting, a state event tagged with another attempt (an old session's start failing late) is dropped. Untagged
+events (sessions started natively: tile, boot, restart) and events outside a connect apply as they come.
 
 SOCKS credentials are random when `randomCredentials` is on **or** when the manual login is empty in TUN mode —
 a password-less SOCKS on localhost would be an open proxy for every app. In proxy-only mode empty credentials

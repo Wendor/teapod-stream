@@ -87,6 +87,7 @@ class MainActivity : FlutterActivity() {
                             startVpnService(
                                 xrayConfig, socksUser, socksPassword, params,
                                 configName = call.argument<String>("configName"),
+                                attempt = call.argument<Number>("attempt")?.toLong() ?: 0,
                             )
                             result.success(null)
                         }
@@ -418,6 +419,7 @@ class MainActivity : FlutterActivity() {
         socksPassword: String,
         params: ConnectionParams,
         configName: String? = null,
+        attempt: Long = 0,
     ) {
         requestBatteryOptimizationExemption()
         val intent = Intent(this, XrayVpnService::class.java).apply {
@@ -427,6 +429,7 @@ class MainActivity : FlutterActivity() {
             putExtra(XrayVpnService.EXTRA_SOCKS_PASSWORD, socksPassword)
             putExtra(XrayVpnService.EXTRA_PARAMS, params.toJson().toString())
             putExtra(XrayVpnService.EXTRA_CONFIG_NAME, configName)
+            putExtra(XrayVpnService.EXTRA_ATTEMPT, attempt)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent)

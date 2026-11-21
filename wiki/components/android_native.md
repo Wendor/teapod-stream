@@ -43,7 +43,9 @@ from the saved config (`SocksCredentials.xray` / `.singBox`), the `?prefix=` add
 
 All starts and stops run under `sessionLock`.
 
-- **`ACTION_CONNECT`** (from Flutter): parameters → `ConnectionParams.save`; if a session is running this is a **hot
+- **`ACTION_CONNECT`** (from Flutter): parameters → `ConnectionParams.save`; under `sessionLock`, before the old session
+  stops, `sessionAttempt` takes Flutter's connect attempt (`EXTRA_ATTEMPT`), and every state event of the session
+  carries it as `attempt` (quick starts reset it to 0 — untagged); if a session is running this is a **hot
   switch** — `stopVpn(reconnecting=true)` keeps TUN as a sink until the new session is up, no leak window.
 - **`ACTION_CONNECT_QUICK`** (tile, notification, boot, `reconnectInternal`, START_STICKY restart): parameters from
   `last_connection_meta.json`. Ignored while a session is running. Without a config or VPN permission

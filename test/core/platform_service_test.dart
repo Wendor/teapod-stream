@@ -51,6 +51,10 @@ void main() {
         {'packageName': 'a.b', 'appName': 'A', 'isSystem': false},
       ],
       'getFilesDir' => '/data/files',
+      'getAppIcon' => Uint8List.fromList([1, 2]),
+      'getAbi' => 'arm64-v8a',
+      'getDeviceId' => 'dev',
+      'getDeviceInfo' => {'model': 'X1', 'osVersion': 34},
       _ => null,
     };
     expect(await p.binaryVersions(), {'xray': '26', 'tun2socks': '1'});
@@ -59,12 +63,20 @@ void main() {
       {'packageName': 'a.b', 'appName': 'A', 'isSystem': false},
     ]);
     expect(await p.filesDir(), '/data/files');
+    expect(await p.appIcon('a.b'), [1, 2]);
+    expect(await p.abi(), 'arm64-v8a');
+    expect(await p.deviceId(), 'dev');
+    expect(await p.deviceInfo(), {'model': 'X1', 'osVersion': 34});
 
     reply = (_) => null;
     expect(await p.binaryVersions(), isEmpty);
     expect(await p.availableEngines(), isEmpty);
     expect(await p.installedApps(), isEmpty);
     expect(await p.filesDir(), '');
+    expect(await p.appIcon('a.b'), isNull);
+    expect(await p.abi(), isNull);
+    expect(await p.deviceId(), isNull);
+    expect(await p.deviceInfo(), isNull);
   });
 
   test('channel errors reach the caller', () async {

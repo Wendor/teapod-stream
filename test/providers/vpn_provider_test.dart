@@ -805,6 +805,59 @@ void main() {
       expect(st().isConnected, isTrue);
     });
 
+    test('a resume before the connect reaches the service keeps the pending connect', () async {
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      final permission = Completer<Map<int, int>>();
+      messenger.setMockMethodCallHandler(_permissions, (call) => permission.future);
+      final pending = n().connect();
+      await _settle();
+      // The notification-permission dialog closes: the app resumes, native still reports the idle service.
+      native.state = {'state': 'disconnected', 'attempt': 0};
+      await n().syncNativeState();
+      await _settle();
+      expect(st().connectionState, VpnState.connecting);
+      permission.complete({17: 1});
+      await pending;
+      expect(native.named('connect'), hasLength(1));
+    });
+
+    test("a resume before the connect reaches the service ignores a natively started session's error", () async {
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      final permission = Completer<Map<int, int>>();
+      messenger.setMockMethodCallHandler(_permissions, (call) => permission.future);
+      final pending = n().connect();
+      await _settle();
+      // A session started from the tile failed before the connect; its untagged state is still there.
+      native.state = {'state': 'error', 'attempt': 0};
+      await n().syncNativeState();
+      await _settle();
+      expect(st().connectionState, VpnState.connecting);
+      permission.complete({17: 1});
+      await pending;
+      expect(native.named('connect'), hasLength(1));
+    });
+
+    test('a connect settled by the startup sync follows a later idle snapshot', () async {
+      final logsGate = Completer<void>();
+      messenger.setMockMethodCallHandler(_method, (call) async {
+        if (call.method == 'getLogs') await logsGate.future;
+        return native.handle(call);
+      });
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      // The startup sync waits for the logs; a connect starts meanwhile and native brings it up.
+      await n().connect();
+      final attempt = native.lastConnect()['attempt'] as int;
+      native.state = {'state': 'connected', 'socksPort': 2080, 'attempt': attempt};
+      logsGate.complete();
+      await _settle();
+      expect(st().isConnected, isTrue);
+      // The service died: the idle snapshot of a resume applies.
+      native.state = {'state': 'disconnected', 'attempt': 0};
+      await n().syncNativeState();
+      await _settle();
+      expect(st().connectionState, VpnState.disconnected);
+    });
+
     test('tagged events outside a newer connect and untagged events apply as before', () async {
       await boot(configs: [_cfg('a')], activeId: 'a');
       await n().connect();
@@ -1269,14 +1322,37 @@ void main() {
       });
     });
 
+    test('an idle snapshot after a reconnect report keeps the pending connect bounded', () {
+      fakeAsync((async) {
+        boot(configs: [_cfg('a')], activeId: 'a');
+        async.flushMicrotasks();
+        n().connect();
+        async.flushMicrotasks();
+        final attempt = native.lastConnect()['attempt'] as int;
+        // A resume sync sees the pending session connecting: treated as a reconnect, the timeout is cancelled.
+        native.state = {'state': 'connecting', 'attempt': attempt};
+        n().syncNativeState();
+        async.flushMicrotasks();
+        // The service died: an idle untagged snapshot is rejected, the connect still ends.
+        native.state = {'state': 'disconnected', 'attempt': 0};
+        n().syncNativeState();
+        async.flushMicrotasks();
+        expect(st().connectionState, VpnState.connecting);
+        async.elapse(const Duration(seconds: 46));
+        expect(st().connectionState, VpnState.error);
+        expect(st().error, 'Connection timeout');
+        c.dispose();
+      });
+    });
+
     test('native reconnect cycle cancels the connect timeout', () {
       fakeAsync((async) {
         boot(configs: [_cfg('a')], activeId: 'a');
         async.flushMicrotasks();
         n().connect();
         async.flushMicrotasks();
-        // syncNativeState doesn't know whose connecting this is, and clears the timeout.
-        native.state = {'state': 'connecting'};
+        // syncNativeState doesn't know whether the pending session is reconnecting, and clears the timeout.
+        native.state = {'state': 'connecting', 'attempt': native.lastConnect()['attempt']};
         n().syncNativeState();
         async.flushMicrotasks();
         async.elapse(const Duration(seconds: 60));

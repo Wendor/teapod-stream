@@ -60,8 +60,10 @@ to native with `connect`; state events of the session it starts carry it back (`
 it. Numbers start at the notifier's creation time (µs) and are raised above the native session's on every state
 sync, so a notifier recreated with the UI never reuses one. While a Flutter connect waits for its outcome
 (`_awaiting`, cleared by a settled state, a failure, the timeout or a disconnect), a state event tagged with another
-attempt — an old session's start failing late — is dropped, and so is a `getState` snapshot of another attempt's
-session during a resume sync. Untagged events (sessions started natively: tile, boot,
+attempt — an old session's start failing late — is dropped. A `getState` snapshot (startup or resume sync) not
+tagged with the pending attempt is dropped too: another attempt's session, the service before the connect reached
+it (a resume after the notification-permission dialog), or a natively started session the connect replaces; a
+dropped snapshot re-arms the 45 s timeout if a reconnect report cancelled it. Untagged events (sessions started natively: tile, boot,
 restart) and events outside a pending connect (native reconnects, a session surviving a UI restart) apply as they
 come.
 

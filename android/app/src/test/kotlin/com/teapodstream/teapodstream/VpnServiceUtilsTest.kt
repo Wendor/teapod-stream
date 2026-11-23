@@ -4,6 +4,8 @@ import com.teapodstream.teapodstream.core.CoreKind
 import java.util.Locale
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -32,5 +34,14 @@ class VpnServiceUtilsTest {
         assertEquals(CoreKind.RUST, CoreKind.fromId("rust"))
         assertEquals(CoreKind.GO, CoreKind.fromId(null))
         assertEquals(CoreKind.GO, CoreKind.fromId("zig"))
+    }
+
+    @Test
+    fun pingableAddressIsHostnameOrIpLiteral() {
+        listOf("example.com", "a-b.example.com.", "_srv.test", "1.2.3.4", "::1", "2001:db8::1", "::ffff:1.2.3.4")
+            .forEach { assertTrue(it, isPingableAddress(it)) }
+        val label64 = "a".repeat(64)
+        listOf("", "-f", "-c 100 x", "--help", "a b", "a;b", "-1.2.3.4", "a.-b", "a\nb", "example.com\n", "$label64.com")
+            .forEach { assertFalse(it, isPingableAddress(it)) }
     }
 }

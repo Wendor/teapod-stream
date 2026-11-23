@@ -23,7 +23,7 @@ internal object SocksHttpProbe {
         Target(
             host = u.host ?: DEFAULT_HOST,
             port = if (u.port > 0) u.port else if (https) 443 else 80,
-            path = if (u.path.isNullOrEmpty()) "/" else u.path,
+            path = if (u.rawPath.isNullOrEmpty()) "/" else u.rawPath,
             https = https,
         )
     } catch (_: Exception) {

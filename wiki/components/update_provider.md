@@ -11,13 +11,15 @@ State (sealed): `UpdateIdle`, `UpdateChecking`, `UpdateUpToDate(info)`, `UpdateA
 | Method | Behaviour |
 |---|---|
 | `checkForUpdate()` | device ABI (`getAbi`); outside `AppConstants.supportedAbis` → error; newer → `UpdateAvailable`, same → `UpdateUpToDate` (allows reinstall) |
-| `startDownload(info)` | streams `downloadApk` into `teapod-update-<abi>-<version>.apk`, resuming a partial file; through the tunnel when connected |
+| `startDownload(info)` | streams `downloadApk` into `updates/teapod-update-<abi>-<version>.apk` (app support dir),  resuming a partial file; through the tunnel when connected |
 | `cancelDownload()` | back to `UpdateAvailable` with `resumableBytes`; takes effect on the next chunk or the 30 s idle timeout |
 | `reinstall(info)` | deletes the cached APK of this version, then downloads |
 | `installApk(path)` | native `installApk` (`FileProvider` + `ACTION_VIEW`) |
 
 `_cleanOldApks(keepPath)` removes other `teapod-update-*.apk` files so the installer never picks a stale one
-("Cannot parse package").
+("Cannot parse package"), also from the support root where older versions downloaded them. `updates/` is the only
+directory the `FileProvider` exposes (`res/xml/file_provider_paths.xml`): the rest of `filesDir` holds the core config
+and SOCKS credentials.
 
 UI: the update row in Settings → system (at the top when an update is available) with the notes of each version
 between the installed one and the update, in the app's language (`ReleaseNotes.forLanguage`). Settings → about →

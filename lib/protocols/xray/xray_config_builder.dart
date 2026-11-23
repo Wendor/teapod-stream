@@ -583,7 +583,7 @@ class XrayConfigBuilder {
         // allowInsecure in xray v26 breaks startup of the whole config; without it nodes with
         // a self-signed certificate fail only at the handshake.
         (o['streamSettings']?['tlsSettings'] as Map?)?.remove('allowInsecure');
-        _dropReverse(o['settings']);
+        _dropReverse(o);
       }
 
       // Preserve the original socks inbound tag so server routing rules
@@ -702,15 +702,20 @@ class XrayConfigBuilder {
     'version',
   };
 
-  /// Removes `reverse` (in any letter case, as xray reads it) from VLESS outbound settings:
-  /// the simplified style and the users of `vnext`.
-  static void _dropReverse(Object? settings) {
-    if (settings is! Map<String, dynamic>) return;
-    settings.removeWhere((key, _) => key.toLowerCase() == 'reverse');
-    for (final server in (settings['vnext'] as List? ?? const []).whereType<Map<String, dynamic>>()) {
-      for (final user in (server['users'] as List? ?? const []).whereType<Map<String, dynamic>>()) {
-        user.removeWhere((key, _) => key.toLowerCase() == 'reverse');
+  /// Removes `reverse` from outbound settings (the VLESS simplified style and `vnext` users) at any
+  /// depth. xray matches keys in any letter case, so `Settings`, `Vnext` and `Reverse` count too.
+  static void _dropReverse(Map<String, dynamic> outbound) {
+    void walk(Object? node) {
+      if (node is Map<String, dynamic>) {
+        node.removeWhere((key, _) => key.toLowerCase() == 'reverse');
+        node.values.forEach(walk);
+      } else if (node is List) {
+        node.forEach(walk);
       }
+    }
+
+    for (final e in outbound.entries) {
+      if (e.key.toLowerCase() == 'settings') walk(e.value);
     }
   }
 

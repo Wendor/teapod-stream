@@ -735,12 +735,12 @@ void main() {
           {
             'tag': 'v',
             'protocol': 'vless',
-            'settings': {
-              'vnext': [
+            'Settings': {
+              'Vnext': [
                 {
                   'address': 's.example',
                   'port': 443,
-                  'users': [
+                  'Users': [
                     {
                       'id': 'u',
                       'encryption': 'none',
@@ -770,7 +770,7 @@ void main() {
       expect(cfg['inbounds'], hasLength(1));
       expect(cfg['inbounds'][0]['listen'], '127.0.0.1');
       expect(cfg['outbounds'][0]['settings'], {'address': 's.example', 'port': 443, 'id': 'u', 'encryption': 'none'});
-      expect(cfg['outbounds'][1]['settings']['vnext'][0]['users'][0], {'id': 'u', 'encryption': 'none'});
+      expect(cfg['outbounds'][1]['Settings']['Vnext'][0]['Users'][0], {'id': 'u', 'encryption': 'none'});
       expect(cfg['dns'], raw['dns']);
     });
   });

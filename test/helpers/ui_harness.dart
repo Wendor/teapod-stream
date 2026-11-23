@@ -91,7 +91,7 @@ Future<FakeNative> setUpScreenTest({
     buildNumber: '1',
     buildSignature: '',
   );
-  SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+  SharedPreferences.setMockInitialValues({});
   FlutterSecureStorage.setMockInitialValues({});
   await SettingsService().save(settings);
   final storage = ConfigStorageService();

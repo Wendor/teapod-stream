@@ -167,7 +167,7 @@ void main() {
     AppSettings settings = _settings,
     List<Override> overrides = const [],
   }) async {
-    SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+    SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
     await SettingsService().save(settings);
     final storage = ConfigStorageService();

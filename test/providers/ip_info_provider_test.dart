@@ -120,7 +120,7 @@ void main() {
       const EventChannel('${AppConstants.methodChannel}/events'),
       MockStreamHandler.inline(onListen: (_, _) {}),
     );
-    SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+    SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
     // Short timeouts: the https services can't complete a TLS handshake with the plain-HTTP test proxy.
     c = ProviderContainer(

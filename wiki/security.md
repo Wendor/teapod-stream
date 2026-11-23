@@ -48,9 +48,6 @@ says how, and what counts.
 | Logs | `filesDir/vpn_log.txt` (+ `.prev`) | SENSITIVE: core warnings and errors carry server and destination addresses, `debug` adds access lines; masked on export |
 | Exported log | `cacheDir/teapod_log.txt` | masked, overwritten by the next export |
 
-`StorageMigrationService` moved data from plaintext SharedPreferences to encrypted storage once
-(`storage_migrated_v2`); on a Keystore error the flag isn't set and it retries next launch.
-
 flutter_secure_storage moves data written by its v9 (EncryptedSharedPreferences) to its own cipher key by key on
 first access. If that fails before any key moved, reads fail for that launch and the migration runs again on the next
 one. `StorageSecureService.androidOptions` (shared by every instance) sets `resetOnError: false` (the plugin's default

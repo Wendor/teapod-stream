@@ -65,7 +65,7 @@ void main() {
     String? activeId,
     String? activeSubId,
   }) async {
-    SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+    SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
     await storage.saveConfigs(configs);
     await storage.saveSubscriptions(subs);

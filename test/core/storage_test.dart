@@ -30,7 +30,7 @@ Subscription _sub(String id, {String url = 'https://s'}) =>
 
 void main() {
   setUp(() {
-    SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+    SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
   });
 
@@ -107,7 +107,7 @@ void main() {
     test('data is stored in secure storage only', () async {
       await s.addConfig(_cfg('1'));
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getKeys(), {'storage_migrated_v2'});
+      expect(prefs.getKeys(), isEmpty);
       final raw = await const FlutterSecureStorage().read(key: 'vpn_configs_v2');
       expect((jsonDecode(raw!) as List).single['id'], '1');
     });

@@ -17,7 +17,7 @@ A fix comes with a test that fails without it; a logic change comes with tests o
 
 | Directory | What |
 |---|---|
-| `test/core/` | models, bundles, `AppSettings`/`SettingsService`, storage, migration, subscriptions, updates and release notes, `changelog/` files, deep links, logs, `DeviceService` |
+| `test/core/` | models, bundles, `AppSettings`/`SettingsService`, storage, subscriptions, updates and release notes, `changelog/` files, deep links, logs, `DeviceService` |
 | `test/protocols/` | link parsers, Go/Rust/sing-box builders, `XrayEngine` (MethodChannel) |
 | `test/providers/` | `ConfigNotifier`, profiles/settings, `VpnNotifier`, update/geo/ipInfo and small providers |
 | `test/ui/` | smoke of every screen (empty / with data), interactions, deep link dialogs, settings |
@@ -29,9 +29,7 @@ A fix comes with a test that fails without it; a logic change comes with tests o
 
 ## Techniques and pitfalls
 
-- **Storage:** `SharedPreferences.setMockInitialValues({'storage_migrated_v2': true})` +
-  `FlutterSecureStorage.setMockInitialValues({})`. `StorageMigrationService` runs once per process — the migration
-  scenario lives in its own file.
+- **Storage:** `SharedPreferences.setMockInitialValues({})` + `FlutterSecureStorage.setMockInitialValues({})`.
 - **Network without mocks:** `LocalServer` on 127.0.0.1. `TestWidgetsFlutterBinding` replaces `HttpClient` with a stub
   (always 400): use a file without the binding, `HttpOverrides.global = null`, or a `RedirectHttpOverrides(port)` zone
   (also redirects hard-coded URLs such as api.github.com).

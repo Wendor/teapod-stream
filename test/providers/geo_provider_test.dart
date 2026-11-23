@@ -30,7 +30,7 @@ void main() {
       calls.add(call.method);
       return call.method == 'getFilesDir' ? filesDir : null;
     });
-    SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+    SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
     await SettingsService().save(const AppSettings(geoipUrl: 'https://g/ip.dat', geositeUrl: 'https://g/site.dat'));
     c = ProviderContainer();
@@ -57,7 +57,7 @@ void main() {
     test('present files are ready with the last update time', () async {
       File('${dir.path}/geoip.dat').writeAsStringSync('ip');
       File('${dir.path}/geosite.dat').writeAsStringSync('site');
-      SharedPreferences.setMockInitialValues({'storage_migrated_v2': true, 'geo_last_updated': 1700000000000});
+      SharedPreferences.setMockInitialValues({'geo_last_updated': 1700000000000});
       final s = await start();
       expect(s, isA<GeoReady>());
       expect((s as GeoReady).lastUpdated, DateTime.fromMillisecondsSinceEpoch(1700000000000));

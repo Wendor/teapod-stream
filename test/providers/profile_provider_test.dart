@@ -85,7 +85,7 @@ void main() {
     List<Override> overrides = const [],
   }) async {
     if (!keepStorage) {
-      SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+      SharedPreferences.setMockInitialValues({});
       FlutterSecureStorage.setMockInitialValues({});
     }
     await SettingsService().save(_local);
@@ -179,7 +179,7 @@ void main() {
     }
 
     test('each profile keeps its own server', () async {
-      SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+      SharedPreferences.setMockInitialValues({});
       FlutterSecureStorage.setMockInitialValues({});
       await seed([_cfg('x'), _cfg('y')], activeId: 'x');
       await boot(stored: [profile('a'), profile('b')], activeId: 'a', keepStorage: true);
@@ -201,7 +201,7 @@ void main() {
     });
 
     test('the remembered server survives new config ids and restores auto-select', () async {
-      SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+      SharedPreferences.setMockInitialValues({});
       FlutterSecureStorage.setMockInitialValues({});
       // a subscription refresh issued new ids: the profile resolves by name and endpoint
       await seed([_cfg('new1', name: 'NL', subId: 's1'), _cfg('loc')], activeId: 'loc');
@@ -225,7 +225,7 @@ void main() {
     });
 
     test('of two configs with the same name and endpoint the chosen one is restored', () async {
-      SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+      SharedPreferences.setMockInitialValues({});
       FlutterSecureStorage.setMockInitialValues({});
       // same name and endpoint, different credentials (ids)
       await seed([_cfg('d1', name: 'Dup', address: 'same'), _cfg('d2', name: 'Dup', address: 'same')], activeId: 'd1');
@@ -277,7 +277,7 @@ void main() {
     });
 
     test('two quick switches keep each profile its own server', () async {
-      SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+      SharedPreferences.setMockInitialValues({});
       FlutterSecureStorage.setMockInitialValues({});
       await seed([_cfg('x'), _cfg('y'), _cfg('z')], activeId: 'x');
       ConfigSelection sel(String id) => ConfigSelection(configId: id, config: PinnedRef.of(_cfg(id)));
@@ -302,7 +302,7 @@ void main() {
     });
 
     test('the outgoing profile remembers a selection still queued in configs', () async {
-      SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+      SharedPreferences.setMockInitialValues({});
       FlutterSecureStorage.setMockInitialValues({});
       await seed([_cfg('x'), _cfg('y')], activeId: 'x');
       await boot(stored: [profile('a'), profile('b')], activeId: 'a', keepStorage: true);
@@ -316,7 +316,7 @@ void main() {
     });
 
     test('a refresh finishing after a switch keeps the switch', () async {
-      SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+      SharedPreferences.setMockInitialValues({});
       FlutterSecureStorage.setMockInitialValues({});
       await seed([_cfg('x')], activeId: 'x');
       await boot(stored: [profile('a'), profile('b')], activeId: 'a', keepStorage: true);
@@ -365,7 +365,7 @@ void main() {
     });
 
     test('a vanished server leaves the current selection', () async {
-      SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+      SharedPreferences.setMockInitialValues({});
       FlutterSecureStorage.setMockInitialValues({});
       await seed([_cfg('x')], activeId: 'x');
       final gone = ConfigSelection(config: PinnedRef.of(_cfg('gone')), subscriptionId: 'deleted');

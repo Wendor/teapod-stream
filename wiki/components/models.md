@@ -5,7 +5,9 @@ Immutable data classes and the enums they use, in `lib/core/models/` (`AppSettin
 
 **Compatibility rule.** Users keep their data across updates. A new field needs a default in `fromJson`; a renamed
 or restructured field needs a read of the old key or a migration. Tests check the round trip
-(`test/core/`); never "fix" old data by resetting it.
+(`test/core/`); never "fix" old data by resetting it. A migration is removed only by a maintainer's decision on the
+oldest version that may still upgrade directly; versions before 1.3.3 (plaintext configs in SharedPreferences) are
+below that cut-off.
 
 ## VpnConfig (`vpn_config.dart`)
 

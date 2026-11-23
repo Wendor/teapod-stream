@@ -3,7 +3,6 @@ import '../models/vpn_config.dart';
 import '../models/pinned_ref.dart';
 import '../models/subscription.dart';
 import 'storage_secure_service.dart';
-import 'storage_migration_service.dart';
 
 class ConfigStorageService {
   final _secure = StorageSecureService();
@@ -11,7 +10,6 @@ class ConfigStorageService {
   // ─── Configs ───
 
   Future<List<VpnConfig>> loadConfigs() async {
-    await StorageMigrationService.runIfNeeded();
     final raw = await _secure.readConfigsRaw();
     if (raw == null || raw.isEmpty) return [];
     final list = jsonDecode(raw) as List<dynamic>;
@@ -59,7 +57,6 @@ class ConfigStorageService {
   }
 
   Future<String?> loadActiveConfigId() async {
-    await StorageMigrationService.runIfNeeded();
     return _secure.readActiveConfigId();
   }
 
@@ -68,7 +65,6 @@ class ConfigStorageService {
   }
 
   Future<String?> loadActiveSubscriptionId() async {
-    await StorageMigrationService.runIfNeeded();
     return _secure.readActiveSubscriptionId();
   }
 
@@ -79,7 +75,6 @@ class ConfigStorageService {
   // ─── Subscriptions ───
 
   Future<List<Subscription>> loadSubscriptions() async {
-    await StorageMigrationService.runIfNeeded();
     final raw = await _secure.readSubscriptionsRaw();
     if (raw == null || raw.isEmpty) return [];
     final list = jsonDecode(raw) as List<dynamic>;

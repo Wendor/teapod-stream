@@ -58,7 +58,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('importBundle keeps pin, allowInsecure and every other field', () async {
-    SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+    SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
     final container = ProviderContainer();
     addTearDown(container.dispose);

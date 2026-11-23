@@ -131,7 +131,9 @@ the tunnel). On top, tun2socks checks each new flow's owner UID (`getConnectionO
 (shared by all cores): UID `-1` is either tethering or an excluded app that bound a socket to `tun0`
 (`SO_BINDTODEVICE`) — indistinguishable. So `-1` is always blocked in `onlySelected`, and in `allExcept` when the
 exclusion list is non-empty and `allowTethering` is off. Exception: DNS to the TUN DNS address on port 53 (on Android
-10 resolver sockets belong to netd). A failing lookup allows. [security](../security.md)
+10 resolver sockets belong to netd). A lookup that throws (`SecurityException` while the service is not the active
+VPN, a binder error) counts as UID `-1`: refused wherever `-1` is, allowed elsewhere. Such refusals are counted, and
+the first one and every power of two after it go to the log as a warning. [security](../security.md)
 
 ## Stats, notification, logs
 

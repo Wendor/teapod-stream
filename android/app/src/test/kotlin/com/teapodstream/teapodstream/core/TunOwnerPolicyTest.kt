@@ -7,15 +7,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The Rust owner check must decide exactly as the Go service's buildTunValidator:
+ * The owner check (Tun2SocksCore.buildTunValidator and RustCore.tunAdmission) decides:
  *
  *     if (allowedUids.isEmpty()) -> always true
- *     lookup threw               -> true
  *     uid < 0                    -> DNS to tunDns || (vpnMode != "onlySelected" && !blockUnowned)
  *     onlySelected               -> uid in allowedUids
  *     allExcept                  -> uid !in allowedUids
  *
- * with blockUnowned = excludedPackages.isNotEmpty() && !allowTethering.
+ * with blockUnowned = excludedPackages.isNotEmpty() && !allowTethering. A lookup that
+ * threw is decided as uid < 0: refused where ownerless flows are, admitted elsewhere.
  */
 class TunOwnerPolicyTest {
     private val own = 10_100
@@ -25,11 +25,10 @@ class TunOwnerPolicyTest {
     private val unowned = -1
     private val dns = "1.1.1.1"
 
-    /** The Go validator, transcribed literally from the Go service. */
+    /** The rule above, transcribed literally. */
     private fun go(vpnMode: String, allowedUids: Set<Int>, blockUnowned: Boolean, uid: Int?): Boolean {
         if (allowedUids.isEmpty()) return true
-        if (uid == null) return true
-        if (uid < 0) return vpnMode != "onlySelected" && !blockUnowned
+        if (uid == null || uid < 0) return vpnMode != "onlySelected" && !blockUnowned
         return if (vpnMode == "onlySelected") uid in allowedUids else uid !in allowedUids
     }
 
@@ -102,11 +101,46 @@ class TunOwnerPolicyTest {
     }
 
     @Test
-    fun failedLookupAllowsTheFlowLikeGo() {
+    fun failedLookupIsRefusedInModesThatFilter() {
+        val logged = mutableListOf<String>()
+        val only = TunOwnerPolicy(true, setOf(browser), blockUnowned = false, tunDns = dns) { _, m -> logged += m }
+        assertTrue(only.needsAdmission)
+        assertFalse(only.admitFlow(WEB, 443) { throw SecurityException("not the active VPN") })
+        assertFalse(only.admitFlow(WEB, 443) { throw IllegalArgumentException("bad tuple") })
+        // The resolver exception still holds when the lookup throws.
+        assertTrue(only.admitFlow(dns, 53) { throw SecurityException("not the active VPN") })
+        assertFalse(only.admitFlow("8.8.8.8", 53) { throw SecurityException("not the active VPN") })
+        assertEquals(3, only.denied)
+        assertEquals(3, only.deniedOnLookupError)
+        // Logged at the 1st and 2nd refusal, not at the 3rd.
+        assertEquals(2, logged.size)
+        assertTrue(logged[0].contains("SecurityException"))
+
+        val strict = TunOwnerPolicy.of("allExcept", setOf(own, excluded), listOf("x"), false, dns)
+        assertTrue(strict.needsAdmission)
+        assertFalse(strict.admitFlow(WEB, 443) { throw SecurityException("not the active VPN") })
+        assertTrue(strict.admitFlow(dns, 53) { throw SecurityException("not the active VPN") })
+        assertEquals(1, strict.deniedOnLookupError)
+    }
+
+    @Test
+    fun failedLookupIsAdmittedWhereOwnerlessFlowsAre() {
+        for (policy in listOf(
+            TunOwnerPolicy.of("allExcept", setOf(own, excluded), listOf("x"), allowTethering = true),
+            TunOwnerPolicy.of("allExcept", setOf(own), emptyList(), allowTethering = false),
+            TunOwnerPolicy.of("onlySelected", emptySet(), emptyList(), allowTethering = false),
+        )) {
+            assertTrue(policy.admitFlow(WEB, 443) { throw SecurityException("not the active VPN") })
+            assertEquals(0, policy.denied)
+        }
+    }
+
+    @Test
+    fun refusalWithAWorkingLookupIsNotCountedAsLookupError() {
         val policy = TunOwnerPolicy.of("onlySelected", setOf(browser), emptyList(), allowTethering = false)
-        assertTrue(policy.admitFlow(WEB, 443) { throw SecurityException("not the active VPN") })
-        assertTrue(policy.admitFlow(WEB, 443) { throw IllegalArgumentException("bad tuple") })
-        assertEquals(0, policy.denied)
+        assertFalse(policy.admitFlow(WEB, 443) { other })
+        assertEquals(1, policy.denied)
+        assertEquals(0, policy.deniedOnLookupError)
     }
 
     @Test

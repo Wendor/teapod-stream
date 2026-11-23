@@ -14,33 +14,54 @@ import java.util.concurrent.atomic.AtomicLong
  * [tunDns] — the address from addDnsServer(). On Android 10 netd opens DNS sockets
  * under its own name, and the lookup gives INVALID_UID: without an exception for DNS to this address
  * selected apps can't resolve names (issue #155).
+ *
+ * [log] gets a warning when a failed owner lookup refuses a flow: the first one, then
+ * at every power of two, so a lookup that keeps failing doesn't flood the log.
  */
 internal class TunOwnerPolicy(
     val onlySelected: Boolean,
     val listedUids: Set<Int>,
     val blockUnowned: Boolean,
     val tunDns: String = "",
+    private val log: (level: String, message: String) -> Unit = { _, _ -> },
 ) {
     private val deniedFlows = AtomicLong()
+    private val deniedOnErrorFlows = AtomicLong()
 
     /** Flows refused since this policy was created; diagnostics only. */
     val denied: Long get() = deniedFlows.get()
 
+    /** Of [denied], the flows refused because the owner lookup threw; diagnostics only. */
+    val deniedOnLookupError: Long get() = deniedOnErrorFlows.get()
+
     /**
-     * Go's decision. [uid] null means the owner lookup threw: Go allows the flow so a
-     * broken lookup never cuts connectivity. An empty UID list gets Go's allow-all
-     * validator.
+     * The decision for one flow. [uid] null means the owner lookup threw: the flow is
+     * treated as ownerless (INVALID_UID), so a mode that refuses ownerless flows refuses
+     * it too (DNS to [tunDns] aside), and a mode that admits them admits it. An empty
+     * UID list gets Go's allow-all validator.
      */
     fun admit(uid: Int?, dstIp: String = "", dstPort: Int = 0): Boolean {
-        if (listedUids.isEmpty() || uid == null) return true
-        if (uid < 0) return (dstPort == 53 && dstIp == tunDns) || (!onlySelected && !blockUnowned)
-        return if (onlySelected) uid in listedUids else uid !in listedUids
+        if (listedUids.isEmpty()) return true
+        val owner = uid ?: INVALID_UID
+        if (owner < 0) return (dstPort == 53 && dstIp == tunDns) || (!onlySelected && !blockUnowned)
+        return if (onlySelected) owner in listedUids else owner !in listedUids
     }
 
     /** Runs the owner [lookup] for one new flow, as Go's TunValidator.onValidate. */
     fun admitFlow(dstIp: String, dstPort: Int, lookup: () -> Int): Boolean {
-        val uid = try { lookup() } catch (_: Exception) { null }
-        return admit(uid, dstIp, dstPort).also { if (!it) deniedFlows.incrementAndGet() }
+        var error: Exception? = null
+        val uid = try { lookup() } catch (e: Exception) { error = e; null }
+        val admitted = admit(uid, dstIp, dstPort)
+        if (admitted) return true
+        deniedFlows.incrementAndGet()
+        if (error != null) {
+            val n = deniedOnErrorFlows.incrementAndGet()
+            if (n and (n - 1) == 0L) {
+                log("warning", "TUN owner lookup failed, flow refused ($n so far): " +
+                    "${error.javaClass.simpleName}: ${error.message}")
+            }
+        }
+        return false
     }
 
     /**
@@ -55,6 +76,9 @@ internal class TunOwnerPolicy(
         get() = listedUids.isNotEmpty() && (onlySelected || blockUnowned)
 
     companion object {
+        /** android.os.Process.INVALID_UID, kept here so the class stays free of Android types. */
+        private const val INVALID_UID = -1
+
         fun of(
             vpnMode: String,
             listedUids: Set<Int>,

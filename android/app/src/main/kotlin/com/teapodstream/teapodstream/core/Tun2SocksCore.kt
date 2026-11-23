@@ -91,10 +91,11 @@ abstract class Tun2SocksCore : VpnCore {
      * An excluded app can bind a socket to TUN (SO_BINDTODEVICE), and
      * getConnectionOwnerUid() returns INVALID_UID — such a bypass is indistinguishable from
      * tethering and is blocked when there are exclusions unless tethering is allowed.
+     * A flow whose owner lookup throws is treated as ownerless (TunOwnerPolicy).
      */
     private fun buildTunValidator(allowedUids: Set<Int>, vpnMode: String, blockUnowned: Boolean): TunValidator? {
         val cm = connectivity ?: return null
-        val policy = TunOwnerPolicy(vpnMode == "onlySelected", allowedUids, blockUnowned, tunDnsServer)
+        val policy = TunOwnerPolicy(vpnMode == "onlySelected", allowedUids, blockUnowned, tunDnsServer, log)
         // "EXCEPT" without blocking ownerless flows rejects nobody: null —
         // tun2socks lets everything through itself, without binder IPC per connection.
         if (!policy.needsAdmission) return null

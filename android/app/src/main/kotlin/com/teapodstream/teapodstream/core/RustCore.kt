@@ -90,6 +90,7 @@ object RustCore : VpnCore {
             listedUids = params.allowedUids,
             blockUnowned = params.blockUnowned,
             tunDns = tunDnsServer,
+            log = log,
         )
         log("info", "TUN owner check: mode=${params.vpnMode} uids=${params.allowedUids.size} " +
             "blockUnowned=${params.blockUnowned} admission=${policy.needsAdmission}")
@@ -118,6 +119,7 @@ object RustCore : VpnCore {
     /**
      * Owner decision — as in GoCore. A timeout or a full queue rejects
      * the flow (failOpen=false): otherwise an excluded app could flood the queue.
+     * A throwing owner lookup is refused by the policy itself (treated as ownerless).
      */
     private fun tunAdmission(service: VpnService, policy: TunOwnerPolicy): XrayTunAdmissionOptions {
         val cm = service.getSystemService(ConnectivityManager::class.java)

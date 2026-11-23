@@ -9,7 +9,7 @@ says how, and what counts.
 
 | Threat | Protection |
 |---|---|
-| An excluded app binds a socket to `tun0` (`SO_BINDTODEVICE`) and learns the VPN and the server's IP | per-flow owner check in tun2socks / TUN admission (`TunOwnerPolicy`): UID `-1` is blocked in `onlySelected` and in `allExcept` with exclusions, unless "tethering through VPN" is on ([android_native](components/android_native.md#split-tunneling-and-owner-validation)); the cache is keyed by the full 5-tuple |
+| An excluded app binds a socket to `tun0` (`SO_BINDTODEVICE`) and learns the VPN and the server's IP | per-flow owner check in tun2socks / TUN admission (`TunOwnerPolicy`): UID `-1` is blocked in `onlySelected` and in `allExcept` with exclusions, unless "tethering through VPN" is on, and so is a flow whose owner lookup throws ([android_native](components/android_native.md#split-tunneling-and-owner-validation)); the cache is keyed by the full 5-tuple |
 | Local SOCKS used by other apps | in TUN mode credentials are always set (random, or generated when the manual ones are empty); the Rust probe inbound uses a one-time password |
 | `PrefixTcpProxy` reachable by others | loopback only, own UID only |
 | State broadcast reveals the VPN | `STATE_CHANGED` is sent only with the automation option (off by default), without the port |

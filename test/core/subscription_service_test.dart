@@ -233,6 +233,17 @@ void main() {
     });
   });
 
+  test('sha256 matches the FIPS 180-4 vectors', () {
+    String hex(String s) => sha256(utf8.encode(s)).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    expect(hex(''), 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+    expect(hex('abc'), 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+    expect(
+      hex('abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq'),
+      '248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1',
+    );
+    expect(hex('a' * 1000000), 'cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0');
+  });
+
   group('self-signed certificate', () {
     late LocalServer tls;
     late String der;
@@ -246,28 +257,46 @@ void main() {
     });
     tearDown(() => tls.close());
 
-    test('untrusted certificate throws with details', () async {
+    test('untrusted certificate throws with details, the presented DER and its SHA-256', () async {
       await expectLater(
         svc.fetchSubscription(tls.url()),
         throwsA(
           isA<UntrustedCertificateException>()
               .having((e) => e.host, 'host', '127.0.0.1')
               .having((e) => e.subject, 'subject', contains('localhost'))
+              .having((e) => e.der, 'der', der)
+              .having(
+                (e) => e.sha256Fingerprint,
+                'sha256Fingerprint',
+                'EB:A4:EA:86:70:63:EA:E2:FF:B5:4A:EE:80:E7:35:55:0E:90:EA:9A:E8:AD:35:95:C9:5F:28:85:3B:3C:D7:1B',
+              )
               .having((e) => e.toString(), 'toString', contains('127.0.0.1')),
         ),
       );
     });
 
-    test('allowSelfSigned accepts and returns the certificate to pin', () async {
-      final r = await svc.fetchSubscription(tls.url(), allowSelfSigned: true);
+    test('pinned certificate is trusted and returned as the pin', () async {
+      final r = await svc.fetchSubscription(tls.url(), pinnedCertDer: der);
       expect(r.configs, hasLength(1));
       expect(r.acceptedCertDer, der);
     });
 
-    test('pinned certificate is trusted without allowSelfSigned', () async {
-      final r = await svc.fetchSubscription(tls.url(), pinnedCertDer: der);
-      expect(r.configs, hasLength(1));
-      expect(r.acceptedCertDer, der);
+    test('the pin holds only for the subscription host, not after a redirect', () async {
+      tls.handler = (r) async {
+        if (r.uri.path == '/') {
+          r.response.statusCode = HttpStatus.found;
+          r.response.headers.set(HttpHeaders.locationHeader, tls.url('/sub'));
+        } else {
+          r.response.write(_trojan);
+        }
+        await r.response.close();
+      };
+      final viaLocalhost = 'https://localhost:${tls.port}/';
+      await expectLater(
+        svc.fetchSubscription(viaLocalhost, pinnedCertDer: der),
+        throwsA(isA<UntrustedCertificateException>().having((e) => e.host, 'host', '127.0.0.1')),
+      );
+      expect(tls.paths, ['/'], reason: 'the redirected request never got past the handshake');
     });
 
     test('a different pinned certificate is rejected', () async {

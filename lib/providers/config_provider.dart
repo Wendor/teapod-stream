@@ -210,13 +210,9 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
   // ─── Subscription methods ───
 
   /// [replaceId] — update the subscription with this id to the new [url] (URL change):
-  /// on a load error the old subscription stays untouched.
-  Future<void> addSubscriptionFromUrl(
-    String url, {
-    String? name,
-    bool allowSelfSigned = false,
-    String? replaceId,
-  }) async {
+  /// on a load error the old subscription stays untouched. [pinnedCertDer] — the certificate the user has just
+  /// accepted (`UntrustedCertificateException.der`); otherwise the subscription's stored pin applies.
+  Future<void> addSubscriptionFromUrl(String url, {String? name, String? pinnedCertDer, String? replaceId}) async {
     bool isTarget(Subscription s) => replaceId != null ? s.id == replaceId : s.url == url;
     final before = state.value ?? ConfigState();
     final target = before.subscriptions.where(isTarget).firstOrNull;
@@ -228,8 +224,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     final (tagged, fetchResult) = await _fetchAndTagConfigs(
       url,
       subId,
-      allowSelfSigned: allowSelfSigned,
-      pinnedCertDer: target?.pinnedCertDer,
+      pinnedCertDer: pinnedCertDer ?? target?.pinnedCertDer,
       hwid: hwid,
       userAgent: settings?.subUserAgent ?? '',
     );
@@ -319,7 +314,6 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
   Future<(List<VpnConfig>, SubscriptionFetchResult)> _fetchAndTagConfigs(
     String url,
     String subId, {
-    bool allowSelfSigned = false,
     String? pinnedCertDer,
     HwidDeviceInfo? hwid,
     String? userAgent,
@@ -327,7 +321,6 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     final svc = SubscriptionService();
     final result = await svc.fetchSubscription(
       url,
-      allowSelfSigned: allowSelfSigned,
       pinnedCertDer: pinnedCertDer,
       hwid: hwid,
       userAgent: userAgent,

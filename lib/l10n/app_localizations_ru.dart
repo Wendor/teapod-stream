@@ -1,5 +1,6 @@
 // ignore: unused_import
 import 'package:intl/intl.dart' as intl;
+
 import 'app_localizations.dart';
 
 // ignore_for_file: type=lint
@@ -199,6 +200,11 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String certIssuer(String issuer) {
     return 'Издатель: $issuer';
+  }
+
+  @override
+  String certFingerprint(String fingerprint) {
+    return 'SHA-256: $fingerprint';
   }
 
   @override

@@ -4,16 +4,19 @@ Business logic and persistence without UI, in `lib/core/services/`. Providers cr
 
 ## SubscriptionService
 
-`fetchSubscription(url, {allowSelfSigned, pinnedCertDer, hwid, userAgent, socks})` → `SubscriptionFetchResult`
+`fetchSubscription(url, {pinnedCertDer, hwid, userAgent, socks})` → `SubscriptionFetchResult`
 (configs, `profileTitle`, usage info, `acceptedCertDer`).
 
 - **Request** through [AppHttp](#apphttp) with its defaults (15 s timeouts, body limit 10 MB). User-Agent =
   `subUserAgent` or `AppConstants.subscriptionUserAgent`; HWID headers when enabled (below). Non-200 → error.
 - **Through the tunnel.** `socks` (from `tunnelSocksProvider`, only while connected) sends the request through the
   tunnel, directly when the tunnel fails ([TunnelSocks](#tunnelsocks)).
-- **Certificates.** An untrusted certificate with `allowSelfSigned = false` → `UntrustedCertificateException`; the
-  UI asks the user. Once accepted, the DER is returned as `acceptedCertDer` and stored in
-  `Subscription.pinnedCertDer`; later refreshes accept only that certificate (trust on first use).
+- **Certificates.** An untrusted certificate → `UntrustedCertificateException` (host, subject, issuer, the presented
+  `der` and its `sha256Fingerprint`); the UI asks the user (`confirmUntrustedCertificate`). On "continue" the fetch
+  is repeated with `pinnedCertDer: e.der`: only the certificate the user saw passes, and only from the host of the
+  subscription URL (a redirect to another host is checked normally). The pin is returned as `acceptedCertDer` and
+  stored in `Subscription.pinnedCertDer`; later refreshes accept only that certificate (trust on first use). There
+  is no "accept any certificate" mode. `sha256()` is a local FIPS 180-4 implementation (no hashing dependency).
 - **Body formats**, tried in order: a JSON array (managed subscription: each element becomes a `VpnConfig` with
   `rawXrayConfig`), base64 of a URI list, a plain URI list. URIs go to [VlessParser](vless_parser.md).
 - **Response headers:** profile title, usage (`subscription-userinfo`), announce, HWID status (`x-hwid-active`,

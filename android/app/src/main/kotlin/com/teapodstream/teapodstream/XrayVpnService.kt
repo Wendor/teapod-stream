@@ -1065,9 +1065,11 @@ class XrayVpnService : VpnService() {
                     // (cumulative counters), speeds average over the longer interval.
                     val wasScreenOn = screenOn
                     Thread.sleep(if (wasScreenOn) STATS_INTERVAL_MS else STATS_INTERVAL_SCREEN_OFF_MS)
+                    // Bound to the session seen dead: a connect that replaced it meanwhile isn't stopped.
+                    val session = lastConnectedMs
                     if (tunDied()) {
                         log("warning", "tun2socks stopped while connected, reconnecting")
-                        reconnectInternal()
+                        reconnectInternal(session)
                         break
                     }
                     val now = System.currentTimeMillis()

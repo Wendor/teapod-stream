@@ -64,6 +64,9 @@ on the next call.
 Error/Debug`, `loadFromEntries` (restores the native `vpn_log.txt` on start), `clear`. The native side writes the
 file; when `logsEnabled` is off it writes only warnings and errors.
 
+`maskLog(text, secrets:)` prepares the file for sharing; `logSecrets(configs:, subscriptions:, extra:)` collects the
+known values it hides. What is masked: [security](../security.md).
+
 ## UpdateService
 
 `checkForUpdate(currentVersion, abi, {channel, socks…})` → `UpdateInfo?` from GitHub `/releases?per_page=30`

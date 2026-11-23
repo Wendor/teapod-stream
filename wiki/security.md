@@ -22,6 +22,7 @@ says how, and what counts.
 | QUIC leaking when blocked | answered locally with ICMP in tun2socks, never routed `direct` |
 | Backups / device transfer copy secrets | `allowBackup=false`, `dataExtractionRules` exclude everything |
 | Browsing history on disk | core access logs only at `debug`; sing-box `info` mapped to `warn` |
+| A shared log reveals servers or credentials | "share" on the logs screen sends a masked copy (`maskLog` in `log_service.dart`): hosts, UUIDs, passwords and share links of saved configs, subscription URLs and hosts, SOCKS credentials, any UUID, `user=`/`pass=`-like values and public IPv4/IPv6 become `<hidden>` / `<uuid>` / `<ip>`; loopback, private and link-local addresses stay. One copy, `teapod_log.txt` in the cache dir, overwritten on every export. The prefix-proxy line doesn't name the server |
 | Self-signed subscription servers | explicit user confirmation, then only that certificate is trusted (TOFU pin) |
 
 ## Accepted risks
@@ -44,7 +45,8 @@ says how, and what counts.
 | Other settings (ports, DNS, split tunneling, kill switch, …) | SharedPreferences | PUBLIC |
 | Core config | `filesDir/xray_config.json` | SECRET, process-private |
 | Quick-reconnect parameters | `filesDir/last_connection_meta.json` (no SOCKS credentials), `socks_creds.json` | SENSITIVE, process-private |
-| Logs | `filesDir/vpn_log.txt` (+ `.prev`) | may contain hosts at `debug` |
+| Logs | `filesDir/vpn_log.txt` (+ `.prev`) | SENSITIVE: core warnings and errors carry server and destination addresses, `debug` adds access lines; masked on export |
+| Exported log | `cacheDir/teapod_log.txt` | masked, overwritten by the next export |
 
 `StorageMigrationService` moved data from plaintext SharedPreferences to encrypted storage once
 (`storage_migrated_v2`); on a Keystore error the flag isn't set and it retries next launch.

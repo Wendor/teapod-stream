@@ -868,7 +868,7 @@ class XrayVpnService : VpnService() {
                 }
                 proxy.start()
                 prefixProxy = proxy
-                log("info", "Prefix proxy: 127.0.0.1:${proxy.localPort} → $realHost:$realPort (${prefixBytes.size} prefix bytes)")
+                log("info", "Prefix proxy: 127.0.0.1:${proxy.localPort} (${prefixBytes.size} prefix bytes)")
                 proxy.localPort
             }
         } catch (e: Exception) {

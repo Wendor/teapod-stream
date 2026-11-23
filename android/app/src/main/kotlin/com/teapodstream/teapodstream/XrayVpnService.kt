@@ -60,6 +60,7 @@ class XrayVpnService : VpnService() {
         const val EXTRA_CONFIG_NAME = "config_name"              // config name for the tile
 
         private val session = AtomicReference(SessionSnapshot())
+        private val publishLock = Any()
 
         /** The current session; changed only by [publish]. Reading it has no side effects. */
         val snapshot: SessionSnapshot get() = session.get()
@@ -1696,24 +1697,27 @@ class XrayVpnService : VpnService() {
     }
 
     /** A state other than connected, tagged with [sessionAttempt]; [error] replaces the failure reason. */
-    private fun setState(state: SessionState, error: String? = null) {
-        val current = snapshot
-        publish(current.moved(state, sessionAttempt, error ?: current.error))
-    }
+    private fun setState(state: SessionState, error: String? = null) =
+        publish { it.moved(state, sessionAttempt, error ?: it.error) }
 
     /**
-     * The only writer of the session state: stores [next] and reports it to Flutter, the itest marker, the tile,
-     * the intermediate notification and the automation broadcast.
+     * The only writer of the session state: stores the snapshot [next] makes of the current one and reports it to
+     * Flutter, the itest marker, the tile, the intermediate notification and the automation broadcast. The write and
+     * the event post are one step under [publishLock] (neither blocks), so events leave in the order of the writes.
      */
-    private fun publish(next: SessionSnapshot) {
-        session.set(next)
-        VpnEventStreamHandler.sendEvent(next.toMap())
-        ItestBridge.emit(next.itestMarker(System.currentTimeMillis()))
+    private fun publish(next: (SessionSnapshot) -> SessionSnapshot) {
+        val published = synchronized(publishLock) {
+            next(session.get()).also {
+                session.set(it)
+                VpnEventStreamHandler.sendEvent(it.toMap())
+                ItestBridge.emit(it.itestMarker(System.currentTimeMillis()))
+            }
+        }
         VpnTileService.updateTile(this)
-        onStateNotification(this, next.state)
+        onStateNotification(this, published.state)
         // An implicit broadcast is readable by any app — only with the option and without the SOCKS port.
         if (automationEnabled(this)) {
-            sendBroadcast(Intent("com.teapodstream.STATE_CHANGED").putExtra("state", next.state.wire))
+            sendBroadcast(Intent("com.teapodstream.STATE_CHANGED").putExtra("state", published.state.wire))
         }
     }
 
@@ -1733,7 +1737,7 @@ class XrayVpnService : VpnService() {
         } catch (e: Exception) {
             log("warning", "Failed to save socks_creds: ${e.message}")
         }
-        publish(SessionSnapshot.connected(sessionAttempt, socksPort, socksUser, socksPassword, now))
+        publish { SessionSnapshot.connected(sessionAttempt, socksPort, socksUser, socksPassword, now) }
         // The "Disconnected"/intermediate notification bypasses the dedupe cache —
         // reset it so the connected layout is always posted.
         lastNotificationText = null

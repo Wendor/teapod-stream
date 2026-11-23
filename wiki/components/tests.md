@@ -35,7 +35,9 @@ A fix comes with a test that fails without it; a logic change comes with tests o
 - **Network without mocks:** `LocalServer` on 127.0.0.1. `TestWidgetsFlutterBinding` replaces `HttpClient` with a stub
   (always 400): use a file without the binding, `HttpOverrides.global = null`, or a `RedirectHttpOverrides(port)` zone
   (also redirects hard-coded URLs such as api.github.com).
-- **package:http:** `http.runWithClient(body, () => MockClient(...))` works for `http.get` and `http.Client()`.
+- **App requests** go through `AppHttp` (`dart:io`), so `LocalServer` with `RedirectHttpOverrides` covers them;
+  `package:http`'s `MockClient` doesn't reach them. A widget test that needs a real response sets
+  `HttpOverrides.global` and lets the IO run in short `tester.runAsync` delays between pumps (`flows_test.dart`).
 - **Native:** `setMockMethodCallHandler` for `com.teapodstream/vpn`, `setMockStreamHandler(MockStreamHandler.inline(...))`
   for events. `XrayEngine.events` is a static broadcast stream — install the handler before building `vpnProvider`.
 - **fakeAsync:** EventChannel events aren't delivered in the fake zone (they go through the root zone); MethodChannel

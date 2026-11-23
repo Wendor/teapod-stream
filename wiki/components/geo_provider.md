@@ -14,7 +14,8 @@ State (sealed): `GeoMissing`, `GeoReady(lastUpdated)`, `GeoDownloading(downloade
 - **`download()`** from `AppSettings.geoipUrl` / `geositeUrl`: HEAD for the total size, both files into `*.tmp`,
   then an atomic rename — a failure leaves the old files intact. While connected the download goes through the
   tunnel (`TunnelSocks.orDirect`, [services](services.md#tunnelsocks)): the app is excluded from TUN and GitHub's CDN
-  may be blocked. Timeouts: 15 s for HEAD, 30 s for the response and for a stalled stream. The timestamp is kept in
+  may be blocked. Requests go through [AppHttp](services.md#apphttp). Timeouts: 15 s for HEAD, 30 s for the response
+and for a stalled stream; at most 200 MB per file. The timestamp is kept in
   SharedPreferences (`geo_last_updated`).
 
 **Sources** (`GeoPresets`): Loyalsoldier (default), runetfreedom, v2fly (its `dlc.dat` is saved as

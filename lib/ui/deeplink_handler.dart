@@ -6,6 +6,7 @@ import '../core/models/profile_bundle.dart';
 import '../core/models/connections_bundle.dart';
 import '../providers/profile_provider.dart';
 import '../providers/config_provider.dart';
+import '../providers/vpn_provider.dart';
 import 'theme/app_theme.dart';
 import 'theme/app_colors.dart';
 import '../l10n/l10n.dart';
@@ -26,14 +27,13 @@ class DeeplinkHandler {
     if (parsed.source == DeeplinkSource.data) {
       bundle = parsed.type == DeeplinkType.profile ? parsed.profileBundle : parsed.connectionsBundle;
     } else {
-      // Any site or app can open the link, and the request bypasses the VPN
-      // from the real IP — https only and only after the user agrees.
+      // Any site or app can open the link: https only and only after the user agrees.
       final url = Uri.tryParse(parsed.urlValue ?? '');
       if (url == null || url.scheme != 'https' || url.host.isEmpty) {
         return _showError(context.l10n.deeplinkHttpsOnly);
       }
       if (!await _confirmFetch(url.host)) return;
-      bundle = await DeeplinkRouter.fetchFromUrl(parsed);
+      bundle = await DeeplinkRouter.fetchFromUrl(parsed, socks: ref.read(tunnelSocksProvider));
     }
 
     if (!context.mounted) return;

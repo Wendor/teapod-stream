@@ -8,7 +8,9 @@ import 'package:share_plus/share_plus.dart';
 import '../../core/models/profile.dart';
 import '../../core/models/profile_bundle.dart';
 import '../../core/services/deeplink_router.dart';
+import '../../core/services/tunnel_socks.dart';
 import '../../providers/profile_provider.dart';
+import '../../providers/vpn_provider.dart';
 import 'dart:convert';
 import '../theme/app_theme.dart';
 import '../theme/app_colors.dart';
@@ -287,7 +289,7 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
             onPressed: () async {
               var loading = false;
 
-              final parseFuture = _parseProfileInput(ctrl.text);
+              final parseFuture = _parseProfileInput(ctrl.text, ref.read(tunnelSocksProvider));
 
               if (DeeplinkRouter.parse(ctrl.text.trim())?.source == DeeplinkSource.url) {
                 loading = true;
@@ -804,7 +806,7 @@ class _CheckBox extends StatelessWidget {
   }
 }
 
-Future<(ProfileBundle?, String, String?)> _parseProfileInput(String input) async {
+Future<(ProfileBundle?, String, String?)> _parseProfileInput(String input, TunnelSocks? socks) async {
   try {
     final trimmed = input.trim();
     final deeplinkResult = DeeplinkRouter.parse(trimmed);
@@ -813,7 +815,7 @@ Future<(ProfileBundle?, String, String?)> _parseProfileInput(String input) async
         return (deeplinkResult.profileBundle, '', deeplinkResult.effectiveSourceUrl);
       }
       if (deeplinkResult.source == DeeplinkSource.url) {
-        final fetched = await DeeplinkRouter.fetchFromUrl(deeplinkResult);
+        final fetched = await DeeplinkRouter.fetchFromUrl(deeplinkResult, socks: socks);
         if (fetched is ProfileBundle) return (fetched, '', deeplinkResult.effectiveSourceUrl);
         return (null, L10n.current.deeplinkFetchFailed, null);
       }

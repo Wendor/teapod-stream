@@ -69,16 +69,13 @@ class UpdateNotifier extends Notifier<UpdateState> {
         state = UpdateError(L10n.current.updateUnsupportedDevice(abi));
         return;
       }
-      final vpn = ref.read(vpnProvider);
       final settings = ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
       final channel = settings?.updateChannel ?? UpdateChannel.stable;
       final update = await _service.checkForUpdate(
         currentVersion,
         abi,
         channel: channel,
-        socksPort: vpn.isConnected ? vpn.activeSocksPort : null,
-        socksUser: vpn.activeSocksUser,
-        socksPassword: vpn.activeSocksPassword,
+        socks: ref.read(vpnProvider).tunnelSocks,
         force: true,
       );
       if (update == null) {
@@ -119,13 +116,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
     // Like the release check — through the tunnel if it is up (#150).
     final socks = ref.read(vpnProvider).tunnelSocks;
     _dlSub = _service
-        .downloadApk(
-          info.downloadUrl,
-          path,
-          socksPort: socks?.port,
-          socksUser: socks?.user,
-          socksPassword: socks?.password,
-        )
+        .downloadApk(info.downloadUrl, path, socks: socks)
         .listen(
           (progress) {
             if (progress.done) {

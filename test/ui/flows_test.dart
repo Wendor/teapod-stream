@@ -1,11 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
 
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'package:teapodstream/core/models/connections_bundle.dart';
 import 'package:teapodstream/core/models/profile.dart';
 import 'package:teapodstream/core/models/profile_bundle.dart';
@@ -19,6 +18,7 @@ import 'package:teapodstream/providers/vpn_provider.dart';
 import 'package:teapodstream/ui/screens/home_screen.dart';
 import 'package:teapodstream/ui/screens/profiles_screen.dart';
 
+import '../helpers/local_server.dart';
 import '../helpers/ui_harness.dart';
 
 /// The `go` button calls DeeplinkHandler.handleUri with [uri].
@@ -85,62 +85,65 @@ void main() {
       await unmount(tester, c);
     });
 
+    /// A local server behind every request (RedirectHttpOverrides); its IO runs in [tester.runAsync].
+    Future<LocalServer> serve(WidgetTester tester, Object body, {int status = 200}) async {
+      final server = (await tester.runAsync(LocalServer.start))!..serve(body, status: status);
+      final previous = HttpOverrides.current;
+      HttpOverrides.global = RedirectHttpOverrides(server.port);
+      addTearDown(() async {
+        HttpOverrides.global = previous;
+        await tester.runAsync(server.close);
+      });
+      return server;
+    }
+
+    /// Taps `Load` and lets the fetch finish: its IO is real, its continuations run in the fake zone.
+    Future<void> load(WidgetTester tester) async {
+      await tester.tap(find.text('Load'));
+      for (var i = 0; i < 40; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+        await tester.pump();
+      }
+      await settle(tester);
+    }
+
     testWidgets('non-https url is refused without a request', (tester) async {
-      var requests = 0;
-      await http.runWithClient(
-        () async {
-          final c = await go(tester, 'teapod://import/profile?url=http://plain.example/p.json');
-          expect(find.text('Import by link supports https only'), findsOneWidget);
-          await unmount(tester, c);
-        },
-        () => MockClient((_) async {
-          requests++;
-          return http.Response('', 200);
-        }),
-      );
-      expect(requests, 0);
+      final server = await serve(tester, '');
+      final c = await go(tester, 'teapod://import/profile?url=http://plain.example/p.json');
+      expect(find.text('Import by link supports https only'), findsOneWidget);
+      await unmount(tester, c);
+      expect(server.paths, isEmpty);
     });
 
     testWidgets('https url asks first; declining makes no request', (tester) async {
-      var requests = 0;
-      await http.runWithClient(
-        () async {
-          final c = await go(tester, 'teapod://import/profile?url=https://cfg.example/p.json');
-          expect(find.text('Load from link?'), findsOneWidget);
-          expect(find.textContaining('cfg.example'), findsOneWidget);
-          await tester.tap(find.text('Cancel'));
-          await settle(tester);
-          await unmount(tester, c);
-        },
-        () => MockClient((_) async {
-          requests++;
-          return http.Response('', 200);
-        }),
-      );
-      expect(requests, 0);
+      final server = await serve(tester, '');
+      final c = await go(tester, 'teapod://import/profile?url=https://cfg.example/p.json');
+      expect(find.text('Load from link?'), findsOneWidget);
+      expect(find.textContaining('cfg.example'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await settle(tester);
+      await unmount(tester, c);
+      expect(server.paths, isEmpty);
     });
 
     testWidgets('https url fetches after consent and shows the import dialog', (tester) async {
-      await http.runWithClient(() async {
-        final c = await go(tester, 'teapod://import/profile?url=https://cfg.example/p.json');
-        await tester.tap(find.text('Load'));
-        await settle(tester);
-        expect(find.text('Import profile'), findsOneWidget);
-        expect(find.text('Source: https://cfg.example/p.json'), findsOneWidget);
-        await tester.tap(find.text('Cancel'));
-        await settle(tester);
-        await unmount(tester, c);
-      }, () => MockClient((_) async => http.Response(jsonEncode(_profileBundle.toJson()), 200)));
+      final server = await serve(tester, jsonEncode(_profileBundle.toJson()));
+      final c = await go(tester, 'teapod://import/profile?url=https://cfg.example/p.json');
+      await load(tester);
+      expect(server.paths.single, '/p.json');
+      expect(find.text('Import profile'), findsOneWidget);
+      expect(find.text('Source: https://cfg.example/p.json'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await settle(tester);
+      await unmount(tester, c);
     });
 
     testWidgets('failed fetch shows an error', (tester) async {
-      await http.runWithClient(() async {
-        final c = await go(tester, 'teapod://import/connections?url=https://cfg.example/c.json');
-        await tester.tap(find.text('Load'));
-        await settle(tester);
-        expect(find.text("Couldn't load data from the link"), findsOneWidget);
-        await unmount(tester, c);
-      }, () => MockClient((_) async => http.Response('', 404)));
+      await serve(tester, '', status: 404);
+      final c = await go(tester, 'teapod://import/connections?url=https://cfg.example/c.json');
+      await load(tester);
+      expect(find.text("Couldn't load data from the link"), findsOneWidget);
+      await unmount(tester, c);
     });
 
     testWidgets('foreign links are ignored', (tester) async {

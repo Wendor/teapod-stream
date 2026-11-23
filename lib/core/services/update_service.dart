@@ -1,7 +1,8 @@
 import 'dart:io';
 import 'dart:convert';
-import 'package:socks5_proxy/socks.dart';
 import '../models/app_settings.dart' show UpdateChannel;
+import 'app_http.dart';
+import 'tunnel_socks.dart';
 
 /// Release notes languages: code → the language's own name. The name is the H1 of `changelog/<code>.md` and the
 /// `### <name>` heading of that language's section in a release body (`./build.sh notes`).
@@ -60,68 +61,47 @@ class UpdateService {
   static const _githubApiLatest = 'https://api.github.com/repos/Wendor/teapod-stream/releases/latest';
   // Newest first; 30 covers the versions a user may have skipped.
   static const _githubApiList = 'https://api.github.com/repos/Wendor/teapod-stream/releases?per_page=30';
-
-  HttpClient _makeClient({int? socksPort, String? user, String? password}) {
-    final client = HttpClient();
-    if (socksPort != null && socksPort > 0) {
-      SocksTCPClient.assignToHttpClient(client, [
-        ProxySettings(
-          InternetAddress.loopbackIPv4,
-          socksPort,
-          username: (user != null && user.isNotEmpty) ? user : null,
-          password: (user != null && user.isNotEmpty) ? password : null,
-        ),
-      ]);
-    }
-    return client;
-  }
+  static const _maxApkBytes = 500 * 1024 * 1024;
 
   /// Returns null if already up to date or no matching APK asset found.
-  /// Pass [socksPort] to route through the active VPN SOCKS5 proxy.
+  /// Pass [socks] to route through the tunnel.
   /// Pass [force] to skip version comparison (for reinstall).
   Future<UpdateInfo?> checkForUpdate(
     String currentVersion,
     String abi, {
     UpdateChannel channel = UpdateChannel.stable,
-    int? socksPort,
-    String? socksUser,
-    String? socksPassword,
+    TunnelSocks? socks,
     bool force = false,
   }) async {
-    final client = _makeClient(socksPort: socksPort, user: socksUser, password: socksPassword);
-    try {
-      final releases = await _fetchReleases(client, channel);
-      if (releases.isEmpty) return null;
-      final release = releases.first;
-      final tagName = _version(release);
-      if (tagName.isEmpty) return null;
-      if (!force && _compareVersions(tagName, currentVersion) <= 0) return null;
-      final assets = release['assets'] as List<dynamic>? ?? [];
-      for (final asset in assets) {
-        final name = asset['name'] as String? ?? '';
-        if (name.contains(abi) && name.endsWith('.apk')) {
-          final url = asset['browser_download_url'] as String?;
-          final size = asset['size'] as int?;
-          if (url != null) {
-            return UpdateInfo(
-              version: tagName,
-              downloadUrl: url,
-              totalBytes: size,
-              notes: _notes(releases, release, currentVersion),
-            );
-          }
+    final releases = await _fetchReleases(socks, channel);
+    if (releases.isEmpty) return null;
+    final release = releases.first;
+    final tagName = _version(release);
+    if (tagName.isEmpty) return null;
+    if (!force && _compareVersions(tagName, currentVersion) <= 0) return null;
+    final assets = release['assets'] as List<dynamic>? ?? [];
+    for (final asset in assets) {
+      final name = asset['name'] as String? ?? '';
+      if (name.contains(abi) && name.endsWith('.apk')) {
+        final url = asset['browser_download_url'] as String?;
+        final size = asset['size'] as int?;
+        if (url != null) {
+          return UpdateInfo(
+            version: tagName,
+            downloadUrl: url,
+            totalBytes: size,
+            notes: _notes(releases, release, currentVersion),
+          );
         }
       }
-      return null;
-    } finally {
-      client.close(force: true);
     }
+    return null;
   }
 
   /// Non-draft releases of [channel] as GitHub lists them, newest first: stable without prereleases, beta all.
   /// Stable falls back to `/releases/latest` when the page holds prereleases only.
-  Future<List<Map<String, dynamic>>> _fetchReleases(HttpClient client, UpdateChannel channel) async {
-    final list = await _getJson(client, _githubApiList);
+  Future<List<Map<String, dynamic>>> _fetchReleases(TunnelSocks? socks, UpdateChannel channel) async {
+    final list = await _getJson(socks, _githubApiList);
     final releases = [
       if (list is List<dynamic>)
         for (final r in list)
@@ -131,21 +111,21 @@ class UpdateService {
             r,
     ];
     if (releases.isEmpty && channel == UpdateChannel.stable) {
-      final latest = await _getJson(client, _githubApiLatest);
+      final latest = await _getJson(socks, _githubApiLatest);
       if (latest is Map<String, dynamic>) releases.add(latest);
     }
     return releases;
   }
 
   /// Decoded JSON of a GitHub API [url]; null on an error status.
-  Future<Object?> _getJson(HttpClient client, String url) async {
-    final req = await client.getUrl(Uri.parse(url)).timeout(const Duration(seconds: 15));
-    req.headers.set('User-Agent', 'TeapodStream');
-    req.headers.set('Accept', 'application/vnd.github+json');
-    final resp = await req.close().timeout(const Duration(seconds: 15));
-    // The body of an error is not read: it may never end; the caller closes the client.
+  Future<Object?> _getJson(TunnelSocks? socks, String url) async {
+    final resp = await AppHttp.get(
+      Uri.parse(url),
+      socks: socks,
+      headers: const {'User-Agent': 'TeapodStream', 'Accept': 'application/vnd.github+json'},
+    );
     if (resp.statusCode != 200) return null;
-    return jsonDecode(await resp.transform(utf8.decoder).join());
+    return jsonDecode(resp.body);
   }
 
   /// Notes of [releases] newer than [currentVersion] and not newer than [target], highest version first;
@@ -168,23 +148,21 @@ class UpdateService {
       (release['tag_name'] as String? ?? '').replaceFirst(RegExp(r'^v'), '');
 
   /// Resumable download. Sends Range header if destPath already has bytes.
-  /// Pass [socksPort] to route through the active VPN SOCKS5 proxy.
-  Stream<DownloadProgress> downloadApk(
-    String url,
-    String destPath, {
-    int? socksPort,
-    String? socksUser,
-    String? socksPassword,
-  }) async* {
+  /// Pass [socks] to route through the tunnel.
+  Stream<DownloadProgress> downloadApk(String url, String destPath, {TunnelSocks? socks}) async* {
     final file = File(destPath);
     final existing = file.existsSync() ? file.lengthSync() : 0;
-    final client = _makeClient(socksPort: socksPort, user: socksUser, password: socksPassword);
+    // Idle timeout: without it a stuck network holds the download forever, and cancelling
+    // the async* subscription waits for the next chunk.
+    final resp = await AppHttp.open(
+      Uri.parse(url),
+      socks: socks,
+      headers: {'User-Agent': 'TeapodStream', if (existing > 0) 'Range': 'bytes=$existing-'},
+      maxBytes: _maxApkBytes,
+      idleTimeout: const Duration(seconds: 30),
+    );
     IOSink? sink;
     try {
-      final req = await client.getUrl(Uri.parse(url));
-      req.headers.set('User-Agent', 'TeapodStream');
-      if (existing > 0) req.headers.set('Range', 'bytes=$existing-');
-      final resp = await req.close();
       if (resp.statusCode == 416) {
         yield DownloadProgress(downloaded: existing, total: existing, done: true);
         return;
@@ -198,9 +176,7 @@ class UpdateService {
       final total = contentLength > 0 ? (isResume ? existing + contentLength : contentLength) : -1;
       sink = file.openWrite(mode: isResume ? FileMode.append : FileMode.write);
       int downloaded = isResume ? existing : 0;
-      // Idle timeout: without it a stuck network holds the download forever, and cancelling
-      // the async* subscription waits for the next chunk.
-      await for (final chunk in resp.timeout(const Duration(seconds: 30))) {
+      await for (final chunk in resp.body) {
         sink.add(chunk);
         downloaded += chunk.length;
         yield DownloadProgress(downloaded: downloaded, total: total, done: false);
@@ -210,7 +186,7 @@ class UpdateService {
       yield DownloadProgress(downloaded: downloaded, total: total, done: true);
     } finally {
       await sink?.close();
-      client.close(force: true);
+      resp.close();
     }
   }
 

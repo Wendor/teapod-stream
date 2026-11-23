@@ -4,13 +4,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:teapodstream/core/constants/app_constants.dart';
 import 'package:teapodstream/core/services/settings_service.dart';
 import 'package:teapodstream/core/models/app_settings.dart';
 import 'package:teapodstream/providers/geo_provider.dart';
+
+import '../helpers/local_server.dart';
 
 const _channel = MethodChannel(AppConstants.methodChannel);
 
@@ -71,26 +71,32 @@ void main() {
   });
 
   group('download', () {
-    Future<void> download(MockClientHandler handler) async {
+    late LocalServer server;
+    setUp(() async => server = await LocalServer.start());
+    tearDown(() => server.close());
+
+    /// Every request goes to [server].
+    Future<void> download() async {
       await start();
-      await http.runWithClient(() => c.read(geoProvider.notifier).download(), () => MockClient(handler));
+      await HttpOverrides.runWithHttpOverrides(
+        () => c.read(geoProvider.notifier).download(),
+        RedirectHttpOverrides(server.port),
+      );
     }
 
     test('downloads both files from the configured URLs', () async {
       final requested = <String>[];
       final states = <GeoState>[];
       c.listen(geoProvider, (_, s) => states.add(s));
-      await download((req) async {
-        requested.add('${req.method} ${req.url}');
-        final body = req.url.path.endsWith('ip.dat') ? 'IPDATA' : 'SITEDATA!';
-        return http.Response(req.method == 'HEAD' ? '' : body, 200, headers: {'content-length': '${body.length}'});
-      });
-      expect(requested, [
-        'HEAD https://g/ip.dat',
-        'HEAD https://g/site.dat',
-        'GET https://g/ip.dat',
-        'GET https://g/site.dat',
-      ]);
+      server.handler = (r) async {
+        requested.add('${r.method} ${r.uri}');
+        final body = r.uri.path.endsWith('ip.dat') ? 'IPDATA' : 'SITEDATA!';
+        r.response.contentLength = body.length;
+        if (r.method != 'HEAD') r.response.write(body);
+        await r.response.close();
+      };
+      await download();
+      expect(requested, ['HEAD /ip.dat', 'HEAD /site.dat', 'GET /ip.dat', 'GET /site.dat']);
       expect(File('${dir.path}/geoip.dat').readAsStringSync(), 'IPDATA');
       expect(File('${dir.path}/geosite.dat').readAsStringSync(), 'SITEDATA!');
       expect(File('${dir.path}/geoip.dat.tmp').existsSync(), isFalse);
@@ -103,21 +109,47 @@ void main() {
 
     test('HTTP error keeps the old file and reports it', () async {
       File('${dir.path}/geoip.dat').writeAsStringSync('old');
-      await download((req) async => http.Response('', req.method == 'HEAD' ? 200 : 404));
+      server.handler = (r) async {
+        r.response.statusCode = r.method == 'HEAD' ? 200 : 404;
+        await r.response.close();
+      };
+      await download();
       final s = c.read(geoProvider);
       expect(s, isA<GeoError>());
       expect((s as GeoError).message, 'HTTP 404');
       expect(File('${dir.path}/geoip.dat').readAsStringSync(), 'old');
     });
 
+    test('files over the default body limit report their size', () async {
+      const big = 20 * 1024 * 1024;
+      final states = <GeoState>[];
+      c.listen(geoProvider, (_, s) => states.add(s));
+      server.handler = (r) async {
+        if (r.method == 'HEAD') {
+          r.response.contentLength = big;
+        } else {
+          r.response.write('x');
+        }
+        await r.response.close();
+      };
+      await download();
+      expect(states.whereType<GeoDownloading>().last.total, 2 * big);
+      expect(c.read(geoProvider), isA<GeoReady>());
+    });
+
     test('unknown sizes still download', () async {
-      await download((req) async => http.Response(req.method == 'HEAD' ? '' : 'x', 200));
+      server.handler = (r) async {
+        if (r.method != 'HEAD') r.response.write('x');
+        await r.response.close();
+      };
+      await download();
       expect(c.read(geoProvider), isA<GeoReady>());
     });
 
     test('no files dir is an error', () async {
       filesDir = '';
-      await download((_) async => http.Response('', 200));
+      server.serve('');
+      await download();
       expect(c.read(geoProvider), isA<GeoError>());
     });
   });

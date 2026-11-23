@@ -169,6 +169,10 @@ class UpdateService {
     );
     IOSink? sink;
     try {
+      // A resume (206) or a finished file (416) keeps the existing part: it counts toward the limit.
+      if ((resp.statusCode == 206 || resp.statusCode == 416) && existing > maxBytes) {
+        throw AppHttpException('APK exceeds $maxBytes bytes');
+      }
       if (resp.statusCode == 416) {
         yield DownloadProgress(downloaded: existing, total: existing, done: true);
         return;

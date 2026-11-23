@@ -71,7 +71,8 @@ class AppHttp {
   /// Sends [method] to [url] and returns the response with its body unread. Redirects are followed here, so
   /// [httpsOnly] holds for every hop. The caller closes the result. With [client] (from [AppHttp.client]) the
   /// request uses it and its owner closes it, ending every request still running on it; [socks] and
-  /// [onBadCertificate] are then the client's.
+  /// [onBadCertificate] are then the client's, and a rejected certificate stays a [TlsException]: don't pass such a
+  /// client to code that retries directly ([TunnelSocks.orDirect]).
   static Future<AppHttpStream> open(
     Uri url, {
     String method = 'GET',

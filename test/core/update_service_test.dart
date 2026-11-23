@@ -272,6 +272,21 @@ void main() {
         svc.downloadApk(server.url(), path, maxBytes: payload.length - 1).toList(),
         throwsA(isA<AppHttpException>()),
       );
+      // A finished (416) or empty (206) resume still counts the existing part.
+      File(path).writeAsBytesSync(payload);
+      await expectLater(
+        svc.downloadApk(server.url(), path, maxBytes: payload.length - 1).toList(),
+        throwsA(isA<AppHttpException>()),
+      );
+      server.handler = (r) async {
+        r.response.statusCode = 206;
+        await r.response.close();
+      };
+      await expectLater(
+        svc.downloadApk(server.url(), path, maxBytes: payload.length - 1).toList(),
+        throwsA(isA<AppHttpException>()),
+      );
+      serveFile();
       File(path).deleteSync();
       final events = await svc.downloadApk(server.url(), path, maxBytes: payload.length).toList();
       expect(events.last.downloaded, payload.length);

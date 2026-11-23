@@ -96,8 +96,12 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
   /// Copies named `teapod_<date>_<time>.txt` were left in the cache by earlier versions.
   static Future<void> _deleteOldExports(Directory dir) async {
     final old = RegExp(r'^teapod_\d{8}_\d{4}\.txt$');
-    await for (final f in dir.list()) {
-      if (f is File && old.hasMatch(f.uri.pathSegments.last)) await f.delete();
+    try {
+      await for (final f in dir.list()) {
+        if (f is File && old.hasMatch(f.uri.pathSegments.last)) await f.delete();
+      }
+    } on FileSystemException {
+      // Best effort: a copy that can't be deleted must not stop the export.
     }
   }
 

@@ -16,7 +16,7 @@ says how, and what counts.
 | An app turns the VPN off through `VpnCommandReceiver` | commands are ignored unless automation is on |
 | Deep link `?url=` makes the app fetch an attacker URL from the real IP | https only, downloaded after a dialog showing the host |
 | An imported profile opens a noauth proxy or redirects probes | security fields stay local; export strips credentials and the custom probe URL ([profiles](components/profiles.md)) |
-| `api` / `metrics` in a managed config expose outbounds over gRPC / pprof | removed by `mergeWithRaw` |
+| A managed config adds sections a client doesn't need (`api` / `metrics` expose outbounds over gRPC / pprof, `reverse` turns the client into a reverse-proxy bridge) | `mergeWithRaw` keeps only an allowlist of top-level sections and removes `reverse` from outbound settings ([xray](components/xray_config_builder.md#mergewithraw--managed-subscriptions)) |
 | Apps' DNS queries leave outside the tunnel | the TUN's DNS address is the only resolver apps get; tun2socks hands port 53 to the core (xray `dns-out`, sing-box `hijack-dns`), which resolves with the configured server through the tunnel ([xray](components/xray_config_builder.md#dns), [sing-box](components/singbox_config_builder.md)); a server-made xray config keeps the server's DNS |
 | Traffic leaks during reconnect | TUN is kept as a sink during reconnects and hot switches; kill switch keeps it after a failure |
 | QUIC leaking when blocked | answered locally with ICMP in tun2socks, never routed `direct` |

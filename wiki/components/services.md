@@ -44,10 +44,12 @@ by design.
 - `get(url, …)` → `AppHttpResponse` (status, headers, bytes): the body is read only for a 2xx status (an error body
   may never end).
 - Limits: `maxBytes` (10 MB by default) is checked against `Content-Length` before the body and while reading it.
-  Refusals (non-https URL, body over the limit, a certificate rejected by `onBadCertificate` or by default) throw
-  `AppHttpException`, which is not a transport error, so `orDirect` doesn't retry it outside the tunnel.
+  Refusals (non-https URL, body over the limit, and — on a client `open` creates itself — a certificate rejected by
+  `onBadCertificate` or by default) throw `AppHttpException`, which is not a transport error, so `orDirect` doesn't
+  retry it outside the tunnel.
 - `open` / `get` with `client:` (from `client()`) share one client; its owner closes it, which ends every request
-  still running on it (the IP lookup chain stops waiting for a slow service but must not leave it running).
+  still running on it (the IP lookup chain stops waiting for a slow service but must not leave it running). A
+  certificate rejection on such a client stays a `TlsException`, so a shared client is never used under `orDirect`.
 
 | Caller | Tunnel | Limits |
 |---|---|---|

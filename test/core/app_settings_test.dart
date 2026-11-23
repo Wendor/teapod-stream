@@ -178,6 +178,11 @@ void main() {
       expect(secure['socks_user_v2'], 'user');
     });
 
+    test('legacy core_kind becomes the first core of the order', () async {
+      SharedPreferences.setMockInitialValues({'core_kind': 'xrayRust'});
+      expect((await SettingsService().load()).coreOrder, [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox]);
+    });
+
     test('corrupt nested json falls back to defaults', () async {
       SharedPreferences.setMockInitialValues({
         'xray_fragment': '{broken',

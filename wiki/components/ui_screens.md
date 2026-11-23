@@ -40,7 +40,7 @@ pause, auto-connects on start (`autoConnect`), pings stale configs, checks geoda
 | `SubscriptionSettingsScreen` | HWID, auto-refresh and interval, User-Agent |
 | `ProfilesScreen` | profile cards: switch, rename, read-only, export link/QR, import, refresh from URL, delete |
 | `WhatsNewScreen` | release history from the bundled `changelog/<lang>.md` (English fallback): versions and their bullets (`parseChangelog`) |
-| `LogsScreen` | log list with auto-scroll, share the file, clear, logging on/off, tunnel diagnostics |
+| `LogsScreen` | log list with auto-scroll, share a masked copy of the file ([security](../security.md)), clear, logging on/off, tunnel diagnostics |
 
 ## Cores in the UI
 

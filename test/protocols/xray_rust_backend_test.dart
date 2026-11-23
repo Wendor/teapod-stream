@@ -23,15 +23,7 @@ VpnConfig _vless() => VpnConfig(
 );
 
 VpnEngineOptions _opts({bool proxyOnly = false, int mtu = 1500, MuxSettings mux = const MuxSettings()}) =>
-    VpnEngineOptions(
-      socksPort: 10808,
-      httpPort: 0,
-      socksUser: 'u',
-      socksPassword: 'p',
-      proxyOnly: proxyOnly,
-      mtu: mtu,
-      mux: mux,
-    );
+    VpnEngineOptions(socksPort: 10808, socksUser: 'u', socksPassword: 'p', proxyOnly: proxyOnly, mtu: mtu, mux: mux);
 
 Map<String, dynamic> _proxy(Map<String, dynamic> json) =>
     (json['outbounds'] as List).cast<Map<String, dynamic>>().firstWhere((o) => o['tag'] == 'proxy');

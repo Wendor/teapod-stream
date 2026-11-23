@@ -28,7 +28,6 @@ VpnEngineOptions options({
   bool allowTethering = false,
 }) => VpnEngineOptions(
   socksPort: 12345,
-  httpPort: 0,
   socksUser: 'random-user',
   socksPassword: 'random-password',
   routing: routing,
@@ -399,14 +398,8 @@ void main() {
     final config = VlessParser.parseUri(profile())!;
     for (final opts in [
       options(proxyOnly: true),
-      const VpnEngineOptions(socksPort: 12345, httpPort: 0, socksUser: '', socksPassword: '', mtu: 1400),
-      const VpnEngineOptions(
-        socksPort: 12345,
-        httpPort: 0,
-        socksUser: '',
-        socksPassword: '',
-        mux: MuxSettings(enabled: true),
-      ),
+      const VpnEngineOptions(socksPort: 12345, socksUser: '', socksPassword: '', mtu: 1400),
+      const VpnEngineOptions(socksPort: 12345, socksUser: '', socksPassword: '', mux: MuxSettings(enabled: true)),
     ]) {
       expect(() => RustConfigBuilder.build(config, opts), throwsFormatException);
     }

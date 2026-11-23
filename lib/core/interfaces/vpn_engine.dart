@@ -10,7 +10,6 @@ enum VpnState { disconnected, connecting, connected, disconnecting, error, block
 
 class VpnEngineOptions {
   final int socksPort;
-  final int httpPort;
   final String socksUser;
   final String socksPassword;
   final Set<String> excludedPackages;
@@ -40,7 +39,6 @@ class VpnEngineOptions {
 
   const VpnEngineOptions({
     required this.socksPort,
-    required this.httpPort,
     required this.socksUser,
     required this.socksPassword,
     this.excludedPackages = const {},
@@ -79,7 +77,6 @@ class VpnEngineOptions {
     MuxSettings? mux,
   }) => VpnEngineOptions(
     socksPort: socksPort,
-    httpPort: httpPort,
     socksUser: socksUser,
     socksPassword: socksPassword,
     excludedPackages: excludedPackages,

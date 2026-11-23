@@ -26,15 +26,7 @@ VpnEngineOptions _opts({
   NoiseSettings noise = const NoiseSettings(),
   MuxSettings mux = const MuxSettings(),
   FragmentSettings fragment = const FragmentSettings(),
-}) => VpnEngineOptions(
-  socksPort: 1,
-  httpPort: 0,
-  socksUser: 'u',
-  socksPassword: 'p',
-  noise: noise,
-  mux: mux,
-  fragment: fragment,
-);
+}) => VpnEngineOptions(socksPort: 1, socksUser: 'u', socksPassword: 'p', noise: noise, mux: mux, fragment: fragment);
 
 void main() {
   const CoreBackend box = SingBoxBackend();

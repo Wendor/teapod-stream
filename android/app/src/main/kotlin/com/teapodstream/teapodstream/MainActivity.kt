@@ -155,11 +155,6 @@ class MainActivity : FlutterActivity() {
                         result.success(android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a")
                     }
 
-                    "isBinaryReady" -> {
-                        // teapod-core is an AAR library; geo files are managed by Flutter
-                        result.success(true)
-                    }
-
                     "prepareBinaries" -> {
                         Thread {
                             val success = XrayVpnService.prepareBinaries(this)

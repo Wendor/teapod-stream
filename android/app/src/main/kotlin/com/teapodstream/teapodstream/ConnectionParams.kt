@@ -27,7 +27,7 @@ internal data class ConnectionParams(
     val heartbeatUrl: String = DEFAULT_HEARTBEAT_URL,
     /// allExcept: let ownerless flows through (tethering) when exclusions are non-empty.
     val allowTethering: Boolean = false,
-    /// "go" | "rust" — the session core; quick-reconnect brings up the same core.
+    /// "go" | "rust" | "box" — the session core; quick-reconnect brings up the same core.
     val engine: String = "go",
 ) {
     /** The persisted and Intent form; [fromJson] reads it back. */

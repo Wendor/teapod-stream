@@ -63,12 +63,6 @@ void main() {
       expect((await s.loadConfigs()).map((c) => c.id), ['2']);
     });
 
-    test('standalone vs subscription configs', () async {
-      await s.saveConfigs([_cfg('a'), _cfg('b', subId: 's1'), _cfg('c', subId: 's2')]);
-      expect((await s.getStandaloneConfigs()).map((c) => c.id), ['a']);
-      expect((await s.getConfigsForSubscription('s1')).map((c) => c.id), ['b']);
-    });
-
     test('active ids can be set and cleared', () async {
       await s.saveActiveConfigId('x');
       await s.saveActiveSubscriptionId('y');
@@ -84,15 +78,13 @@ void main() {
   group('ConfigStorageService subscriptions', () {
     final s = ConfigStorageService();
 
-    test('add, update, find by url', () async {
+    test('add and update', () async {
       await s.addSubscription(_sub('1', url: 'https://one'));
       await s.addSubscription(_sub('2', url: 'https://two'));
       await s.updateSubscription(_sub('2', url: 'https://two').copyWith(name: 'Two'));
       await s.updateSubscription(_sub('ghost'));
       final subs = await s.loadSubscriptions();
       expect(subs.map((x) => x.name), ['S1', 'Two']);
-      expect((await s.findSubscriptionByUrl('https://two'))?.id, '2');
-      expect(await s.findSubscriptionByUrl('https://none'), isNull);
     });
 
     test('removing a subscription removes its configs', () async {
@@ -130,16 +122,6 @@ void main() {
       await s.writeSocksCredentials('u', 'p');
       final c2 = await s.readSocksCredentials();
       expect((c2.user, c2.password), ('u', 'p'));
-    });
-
-    test('device id and info', () async {
-      final s = StorageSecureService();
-      await s.writeDeviceId('dev');
-      await s.writeDeviceInfoRaw('{}');
-      expect(await s.readDeviceId(), 'dev');
-      expect(await s.readDeviceInfoRaw(), '{}');
-      await s.writeDeviceId(null);
-      expect(await s.readDeviceId(), isNull);
     });
 
     test('Android options keep data on errors and migrate the v9 store', () {

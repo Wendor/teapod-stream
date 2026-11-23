@@ -38,7 +38,7 @@ const _conf =
 
 WireGuardSettings _wg(VpnConfig c) => c.protocolSettings! as WireGuardSettings;
 
-const _opts = VpnEngineOptions(socksPort: 1, httpPort: 0, socksUser: '', socksPassword: '');
+const _opts = VpnEngineOptions(socksPort: 1, socksUser: '', socksPassword: '');
 
 void main() {
   test('wireguard:// link', () {

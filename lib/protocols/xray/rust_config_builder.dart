@@ -278,7 +278,7 @@ class RustConfigBuilder {
   static Map<String, dynamic> build(VpnConfig config, VpnEngineOptions options) {
     final reason = unsupportedReason(config);
     if (reason != null) throw FormatException(reason);
-    if (options.proxyOnly || options.httpPort != 0) {
+    if (options.proxyOnly) {
       throw FormatException(L10n.current.rustTunOnly);
     }
     // Go doesn't apply Mux to Hysteria2 (QUIC multiplexes streams itself),

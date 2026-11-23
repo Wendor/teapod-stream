@@ -5,7 +5,7 @@ import 'package:teapodstream/core/interfaces/vpn_engine.dart';
 import 'package:teapodstream/protocols/xray/rust_config_builder.dart';
 import 'package:teapodstream/protocols/xray/vless_parser.dart';
 
-const options = VpnEngineOptions(socksPort: 10808, httpPort: 0, socksUser: '', socksPassword: '');
+const options = VpnEngineOptions(socksPort: 10808, socksUser: '', socksPassword: '');
 
 String link(String transport, String security, {String flow = '', String extra = ''}) =>
     'vless://11111111-2222-4333-8444-555555555555@server.example:443'
@@ -99,7 +99,6 @@ void main() {
         config,
         VpnEngineOptions(
           socksPort: 10808,
-          httpPort: 0,
           socksUser: '',
           socksPassword: '',
           blockQuic: const XrayRustBackend().effectiveQuicBlock(requested: false, flow: config.flow),

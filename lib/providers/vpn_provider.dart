@@ -341,7 +341,6 @@ class VpnNotifier extends Notifier<VpnState2> {
       // affecting the outbound matter.
       final options = VpnEngineOptions(
         socksPort: AppConstants.defaultSocksPort,
-        httpPort: 0,
         socksUser: '',
         socksPassword: '',
         tlsFingerprint: settings.tlsFingerprint,

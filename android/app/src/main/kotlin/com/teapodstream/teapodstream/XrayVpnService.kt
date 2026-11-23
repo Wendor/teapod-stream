@@ -327,8 +327,6 @@ class XrayVpnService : VpnService() {
     private val wakeProbeRunning = AtomicBoolean(false)
     private val reconnectAttempts = AtomicInteger(0)
 
-    private val tunAddress = "10.120.230.1"
-    private val tunNetmask = "255.255.255.0"
     @Volatile private var tunMtu = 1500
     // Core of the current session: fixed in startVpn after the CAS so that a core change
     // by a new connect doesn't redirect stop/heartbeat/stats to another core.

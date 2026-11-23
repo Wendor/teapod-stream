@@ -9,7 +9,7 @@ internal fun formatSpeed(bps: Long): String = when {
 private val HOSTNAME = Regex(
     "^(?=.{1,253}$)[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?(?:\\.[A-Za-z0-9_](?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?)*\\.?$",
 )
-private val IPV6_LITERAL = Regex("^[0-9A-Fa-f:.]+$")
+private val IPV6_LITERAL = Regex("^[0-9A-Fa-f:.]+(%[A-Za-z0-9_.-]+)?$")
 
 /** True for a hostname or an IP literal: the only things handed to the `ping` binary (never an option like `-f`). */
 internal fun isPingableAddress(address: String): Boolean =

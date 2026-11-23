@@ -17,7 +17,7 @@ State (sealed): `UpdateIdle`, `UpdateChecking`, `UpdateUpToDate(info)`, `UpdateA
 | `installApk(path)` | native `installApk` (`FileProvider` + `ACTION_VIEW`) |
 
 `_cleanOldApks(keepPath)` removes other `teapod-update-*.apk` files so the installer never picks a stale one
-("Cannot parse package"), also from the support root where older versions downloaded them. `updates/` is the only
+("Cannot parse package"); it scans both `updates/` and the support root. `updates/` is the only
 directory the `FileProvider` exposes (`res/xml/file_provider_paths.xml`): the rest of `filesDir` holds the core config
 and SOCKS credentials.
 

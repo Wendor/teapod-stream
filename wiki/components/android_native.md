@@ -10,6 +10,7 @@ back. It keeps working when the Flutter UI is gone (tile, boot, Tasker, service 
 | `MainActivity.kt` | MethodChannel handler (`com.teapodstream/vpn`), VPN permission, deep link intents |
 | `PendingVpnStart.kt` | the connect waiting for the VPN-permission dialog: a newer connect replaces it (one dialog), `disconnect` cancels it; the dropped call is answered `SUPERSEDED` / `CANCELLED`. A dialog stays open until it answers, and its answer goes to the latest request |
 | `XrayVpnService.kt` | the `VpnService`: session lifecycle, TUN, kill switch, network-change reconnect, heartbeat, stats, notification, log file |
+| `SessionSnapshot.kt` | `SessionState` (the state names Flutter sees) and the immutable `SessionSnapshot`: its map for Flutter, the itest marker, the pure transition `moved` |
 | `core/` | `VpnCore` and its implementations (below), `TunOwnerPolicy`, `SocksCredentials`, `ProxyRedirect` |
 | `VpnEventStreamHandler.kt` | EventChannel (`com.teapodstream/vpn/events`) singleton |
 | `ConnectionParams.kt` | the session parameters (everything but the config and the SOCKS login): one JSON form for the `ACTION_CONNECT` Intent (`EXTRA_PARAMS`) and `last_connection_meta.json`; `fromJson` holds every default and limit (MTU 576–9000, heartbeat threshold 1–10), `fromArgs` maps Flutter's `connect` / `saveQuickConnect` arguments through it |
@@ -51,8 +52,8 @@ after `onRevoke()` (which stops outside the queue) or a disconnect set `userRequ
 `disconnected` under its attempt instead.
 
 - **`ACTION_CONNECT`** (from Flutter): parameters → `ConnectionParams.save`; under `sessionLock`, before the old session
-  stops, `sessionAttempt` takes Flutter's connect attempt (`EXTRA_ATTEMPT`), and every state event of the session
-  carries it as `attempt` (quick starts reset it to 0 — untagged); if a session is running this is a **hot
+  stops, `sessionAttempt` takes Flutter's connect attempt (`EXTRA_ATTEMPT`), and every snapshot the session
+  publishes carries it as `attempt` (quick starts reset it to 0 — untagged); if a session is running this is a **hot
   switch** — `stopVpn(reconnecting=true)` keeps TUN as a sink until the new session is up, no leak window.
 - **`ACTION_CONNECT_QUICK`** (tile, notification, boot, `reconnectInternal`, START_STICKY restart): parameters from
   `last_connection_meta.json`. Ignored while a session is running. Without a config or VPN permission
@@ -67,11 +68,30 @@ after `onRevoke()` (which stops outside the queue) or a disconnect set `userRequ
   it may arrive via `startForegroundService` into a fresh process.
 
 **Starting.** `Builder.establish()` → TUN (random `10.x.x.x/32`, IPv4 default route; IPv6 only with `ipv6Enabled`;
-MTU from settings) → `VpnCore.start` → `setConnected()`: atomic SOCKS credentials, `connectedAtMs`, connected event,
-notification.
+MTU from settings) → `VpnCore.start` → `setConnected()`: publishes the `connected` snapshot (SOCKS credentials,
+`connectedAtMs`), notification.
 
-**Failure reason.** A failed start stores `lastError`; the `error`/`blocked` state event carries it as `error` and
-`onListen` replays it.
+**Failure reason.** A failed start passes its reason to `stopVpn(error = …)`; the `error`/`blocked` snapshot carries it
+as `error` until the session moves to another state.
+
+## Session snapshot
+
+The state is one immutable `SessionSnapshot` in the service's companion (`XrayVpnService.snapshot`): `SessionState`,
+`attempt`, SOCKS port and login, `connectedAtMs`, `error`. Only `publish()` changes it, and it reports every change
+in one place: the `state` event, the itest marker, the tile, the intermediate notification and the automation
+broadcast (`com.teapodstream.STATE_CHANGED`, only with `automationEnabled`, without the SOCKS port). A new snapshot
+comes from `SessionSnapshot.moved` (any state but `connected`: drops the SOCKS login, keeps `error` only for
+`error`/`blocked`) or `SessionSnapshot.connected`. Reading it has no side effects: `getState`, the `onListen` replay,
+the tile and the `saveQuickConnect` / `clearQuickConnect` guards read the same snapshot.
+
+The `state` event (`toMap`): `type: state`, `value` (the wire name), `attempt` only when Flutter started the session,
+`socksPort` / `socksUser` / `socksPassword` / `connectedAtMs` only for `connected`, `error` for every other state.
+`getState` reports the same snapshot as `state`, the SOCKS login, `connectedAtMs` (zeros outside `connected`) and
+`attempt`.
+
+**Dead TUN.** `connected` in TUN mode while tun2socks no longer runs (the fd closed externally, e.g. during a phone
+call, without `onRevoke()`): the stats thread calls `reconnectInternal()`, which publishes `reconnecting` — no
+phantom connection, and the heartbeat's own tun2socks check stays as a fallback.
 
 ## Kill switch and reconnect
 
@@ -150,9 +170,8 @@ the first one and every power of two after it go to the log as a warning. [secur
 
 ## EventChannel (`VpnEventStreamHandler`)
 
-Holds the application context weakly. `onListen` replays the current state — with SOCKS credentials and
-`connectedAtMs` for `connected`, with `error` for `error`/`blocked` — so a restarted UI catches up. State changes
-also update the tile and intermediate notifications. Events: `state`, `log`, `stats` (replay only), `statsHistory`,
+`onListen` replays the current session snapshot (plus stats and the chart history when connected), so a restarted
+UI catches up. It only sends: the tile and the notification follow the service's `publish()`. Events: `state`, `log`, `stats` (replay only), `statsHistory`,
 `tunnel_dead`, `deeplink`.
 
 ## Tile

@@ -450,6 +450,7 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun icmpPing(address: String): Int? {
+        if (!isPingableAddress(address)) return null
         return try {
             val proc = Runtime.getRuntime().exec(arrayOf("ping", "-c", "1", "-w", "3", address))
             val exited = proc.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)

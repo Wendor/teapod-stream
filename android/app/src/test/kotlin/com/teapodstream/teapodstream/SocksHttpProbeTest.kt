@@ -206,4 +206,10 @@ class SocksHttpProbeTest {
             SocksHttpProbe.parseUrl("::not a url"),
         )
     }
+
+    @Test
+    fun parseUrlKeepsThePathEncoded() {
+        // A decoded %0d%0a would put CR/LF into the request line.
+        assertEquals("/a%0d%0aX:%20y", SocksHttpProbe.parseUrl("http://a.test/a%0d%0aX:%20y").path)
+    }
 }

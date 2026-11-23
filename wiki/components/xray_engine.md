@@ -19,7 +19,7 @@ engine instead of mocking the channel.
 | `disconnect()` | `disconnect` | |
 | `getVpnState()` | `getState` | state, SOCKS credentials, `connectedAtMs`, `attempt` (the connect attempt of the native session) |
 | `getStats()` / `getStatsHistory(epoch, since)` | same | history is incremental: `(epoch, seq)` |
-| `pingConfig(config)` | `ping` | ICMP `ping`, TCP connect as fallback; direct, not through the tunnel |
+| `pingConfig(config)` | `ping` | ICMP `ping` (only for an address that is a hostname or IP literal, `isPingableAddress`), TCP connect as fallback; direct, not through the tunnel |
 | `measureOutbound(config, backend, options, url)` | `measureOutbound` | real request through a temporary core instance (config switch, urltest) |
 | `getLogs` / `getLogFilePath` / `clearLogs` / `setLogsEnabled` | same | `vpn_log.txt` in `filesDir`, lines `epochMs|level|message` |
 | `getTunnelDiag()` | `getTunnelDiag` | diagnostic dump for the logs screen |

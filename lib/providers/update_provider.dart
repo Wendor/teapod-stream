@@ -165,16 +165,21 @@ class UpdateNotifier extends Notifier<UpdateState> {
     return false;
   }
 
+  /// Downloads live in `updates/`, the only directory the FileProvider exposes (`file_provider_paths.xml`).
   Future<String> _apkPath(String version, String abi) async {
-    final dir = await getApplicationSupportDirectory();
+    final root = await getApplicationSupportDirectory();
+    final dir = Directory('${root.path}/updates');
+    await dir.create(recursive: true);
     return '${dir.path}/teapod-update-$abi-$version.apk';
   }
 
+  /// Deletes every downloaded APK except [keepPath], including ones left in the support root by older versions.
   Future<void> _cleanOldApks({String? keepPath}) async {
-    final dir = await getApplicationSupportDirectory();
-    for (final f in dir.listSync().whereType<File>()) {
-      if (f.path.contains('teapod-update-') && f.path.endsWith('.apk')) {
-        if (keepPath == null || f.path != keepPath) {
+    final root = await getApplicationSupportDirectory();
+    for (final dir in [root, Directory('${root.path}/updates')]) {
+      if (!dir.existsSync()) continue;
+      for (final f in dir.listSync().whereType<File>()) {
+        if (f.path.contains('teapod-update-') && f.path.endsWith('.apk') && f.path != keepPath) {
           await f.delete();
         }
       }

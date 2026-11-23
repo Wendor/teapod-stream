@@ -85,14 +85,18 @@ void main() {
 
     test('newer release is available, old APKs are cleaned, partial one kept', () async {
       server.serve(jsonEncode([_release('1.8.0')]));
-      final stale = File('${support.path}/teapod-update-arm64-v8a-1.7.0.apk')..writeAsStringSync('x');
-      final partial = File('${support.path}/teapod-update-arm64-v8a-1.8.0.apk')..writeAsStringSync('abc');
+      final updates = Directory('${support.path}/updates')..createSync();
+      final stale = File('${updates.path}/teapod-update-arm64-v8a-1.7.0.apk')..writeAsStringSync('x');
+      // Older versions downloaded into the support root, outside the FileProvider path.
+      final legacy = File('${support.path}/teapod-update-arm64-v8a-1.8.0.apk')..writeAsStringSync('x');
+      final partial = File('${updates.path}/teapod-update-arm64-v8a-1.8.0.apk')..writeAsStringSync('abc');
       final unrelated = File('${support.path}/other.apk')..writeAsStringSync('x');
       await redirected(() => n().checkForUpdate());
       final s = st() as UpdateAvailable;
       expect(s.info.version, '1.8.0');
       expect(s.resumableBytes, 3);
       expect(stale.existsSync(), isFalse);
+      expect(legacy.existsSync(), isFalse);
       expect(partial.existsSync(), isTrue);
       expect(unrelated.existsSync(), isTrue);
     });
@@ -112,7 +116,7 @@ void main() {
 
   group('download and install', () {
     const info = UpdateInfo(version: '1.8.0', downloadUrl: 'https://dl/app.apk', totalBytes: 6);
-    String apkPath() => '${support.path}/teapod-update-arm64-v8a-1.8.0.apk';
+    String apkPath() => '${support.path}/updates/teapod-update-arm64-v8a-1.8.0.apk';
 
     Future<void> waitFor(bool Function(UpdateState) done) async {
       for (var i = 0; i < 200 && !done(st()); i++) {
@@ -145,7 +149,9 @@ void main() {
     });
 
     test('reinstall deletes the old file first', () async {
-      File(apkPath()).writeAsStringSync('APK');
+      File(apkPath())
+        ..createSync(recursive: true)
+        ..writeAsStringSync('APK');
       server.serve('NEWAPK');
       await redirected(() async {
         await n().reinstall(info);
@@ -184,7 +190,9 @@ void main() {
     });
 
     test('install success cleans other APKs, failure is reported', () async {
-      final keep = File(apkPath())..writeAsStringSync('APK');
+      final keep = File(apkPath())
+        ..createSync(recursive: true)
+        ..writeAsStringSync('APK');
       final old = File('${support.path}/teapod-update-arm64-v8a-1.0.0.apk')..writeAsStringSync('x');
       await n().installApk(keep.path);
       expect(st(), isA<UpdateIdle>());

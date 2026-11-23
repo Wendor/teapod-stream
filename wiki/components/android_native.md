@@ -108,8 +108,8 @@ excluded from TUN; otherwise VALIDATED first, then Wi-Fi) and sets it as the und
 A background thread probes every 15 s (60 s with the screen off; skipped in deep Doze) and acts after
 `heartbeatThreshold` failures in a row.
 
-- **Probe** (`runProbe`): `socks` — HTTP through the local SOCKS to `heartbeatUrl`, any 2xx (`SocksHttpProbe`; it
-  offers user/password only when the session has SOCKS credentials, and fails at once if the inbound demands them
+- **Probe** (`runProbe`): `socks` — HTTP through the local SOCKS to `heartbeatUrl`, any 2xx (`SocksHttpProbe`; the
+  request line carries the URL's raw, still-encoded path; it offers user/password only when the session has SOCKS credentials, and fails at once if the inbound demands them
   without any); `xrayDelay` — measured
   inside the core (also used for a custom `https://` URL); `passive` — none.
 - **Passive success:** if TUN received data within the interval, the tunnel is alive and the radio isn't woken.
@@ -173,7 +173,7 @@ server dial timeout 10 s.
 `INTERNET`, `ACCESS_NETWORK_STATE`, `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_SPECIAL_USE` (service type
 `specialUse`), `RECEIVE_BOOT_COMPLETED`, `POST_NOTIFICATIONS`, `CAMERA` (QR), `QUERY_ALL_PACKAGES`,
 `REQUEST_INSTALL_PACKAGES`, `WAKE_LOCK`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`. `allowBackup=false` and
-`dataExtractionRules` exclude everything. `FileProvider` for update APKs. The VPN service is not exported; the
+`dataExtractionRules` exclude everything. `FileProvider` for update APKs, limited to `filesDir/updates/`. The VPN service is not exported; the
 activity, tile and command receiver are (the receiver checks `automationEnabled`).
 
 ## Related

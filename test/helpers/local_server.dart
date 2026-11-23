@@ -84,6 +84,10 @@ class _RedirectClient implements HttpClient {
   set connectionTimeout(Duration? timeout) => inner.connectionTimeout = timeout;
 
   @override
+  set badCertificateCallback(bool Function(X509Certificate cert, String host, int port)? callback) =>
+      inner.badCertificateCallback = callback;
+
+  @override
   void close({bool force = false}) => inner.close(force: force);
 
   @override

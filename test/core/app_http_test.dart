@@ -45,7 +45,14 @@ void main() {
 
   group('size limit', () {
     test('a declared length over the limit is refused before the body', () async {
-      server.serve('x' * 2000);
+      final release = Completer<void>();
+      addTearDown(release.complete);
+      server.handler = (r) async {
+        r.response.contentLength = 2000;
+        r.response.write('x');
+        await r.response.flush();
+        await release.future;
+      };
       await expectLater(
         AppHttp.get(Uri.parse(server.url()), maxBytes: 1000),
         throwsA(isA<AppHttpException>().having((e) => e.message, 'message', contains('1000 bytes'))),
@@ -83,6 +90,55 @@ void main() {
     } finally {
       r.close();
     }
+  });
+
+  group('certificates', () {
+    late LocalServer tls;
+    setUp(() async => tls = await LocalServer.start(tls: LocalServer.selfSignedContext()));
+    tearDown(() => tls.close());
+
+    test('a rejected certificate is not a transport error', () async {
+      tls.serve('secure');
+      Object? error;
+      try {
+        await AppHttp.get(Uri.parse(tls.url()), onBadCertificate: (_, _, _) => false);
+      } catch (e) {
+        error = e;
+      }
+      expect(error, isA<AppHttpException>());
+      expect(TunnelSocks.isTransportError(error!), isFalse);
+      expect(tls.paths, isEmpty);
+    });
+
+    test('without a callback the default rejection is the same', () async {
+      await expectLater(AppHttp.get(Uri.parse(tls.url())), throwsA(isA<AppHttpException>()));
+    });
+
+    test('a refused connection stays a transport error', () async {
+      final port = tls.port;
+      await tls.close();
+      Object? error;
+      try {
+        await AppHttp.get(Uri.parse('https://127.0.0.1:$port/'));
+      } catch (e) {
+        error = e;
+      }
+      expect(TunnelSocks.isTransportError(error!), isTrue);
+    });
+  });
+
+  test('closing a shared client ends the requests still running on it', () async {
+    server.handler = (r) async {
+      r.response.write('start');
+      await r.response.flush();
+      await Future<void>.delayed(const Duration(seconds: 10));
+      await r.response.close();
+    };
+    final client = AppHttp.client();
+    final pending = AppHttp.get(Uri.parse(server.url()), client: client);
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    client.close(force: true);
+    await expectLater(pending.timeout(const Duration(seconds: 2)), throwsA(isNot(isA<TimeoutException>())));
   });
 
   group('https only', () {

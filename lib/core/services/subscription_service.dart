@@ -131,7 +131,7 @@ class SubscriptionService {
           },
         },
       );
-    } on HandshakeException {
+    } on AppHttpException {
       if (certError != null) throw certError!;
       rethrow;
     }

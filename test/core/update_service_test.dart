@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:teapodstream/core/models/app_settings.dart' show UpdateChannel;
+import 'package:teapodstream/core/services/app_http.dart';
 import 'package:teapodstream/core/services/update_service.dart';
 
 import '../helpers/local_server.dart';
@@ -261,6 +262,19 @@ void main() {
       final events = await svc.downloadApk(server.url(), path).toList();
       expect(events.single.done, isTrue);
       expect(events.single.downloaded, payload.length);
+    });
+
+    test('the limit covers the whole file, a resumed part included', () async {
+      serveFile();
+      final path = '${dir.path}/a.apk';
+      File(path).writeAsBytesSync(payload.sublist(0, 1500));
+      await expectLater(
+        svc.downloadApk(server.url(), path, maxBytes: payload.length - 1).toList(),
+        throwsA(isA<AppHttpException>()),
+      );
+      File(path).deleteSync();
+      final events = await svc.downloadApk(server.url(), path, maxBytes: payload.length).toList();
+      expect(events.last.downloaded, payload.length);
     });
 
     test('error status throws', () async {

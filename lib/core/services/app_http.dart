@@ -20,15 +20,19 @@ class AppHttpException implements Exception {
 class AppHttpStream {
   final HttpClientResponse _response;
   final HttpClient _client;
+  final bool _ownsClient;
   final Stream<List<int>> body;
 
-  AppHttpStream._(this._response, this._client, this.body);
+  AppHttpStream._(this._response, this._client, this._ownsClient, this.body);
 
   int get statusCode => _response.statusCode;
   HttpHeaders get headers => _response.headers;
 
   /// With force: a connection with an unread body (error status, timeout) would otherwise stay open.
-  void close() => _client.close(force: true);
+  /// A shared client (`open(client: …)`) is closed by its owner.
+  void close() {
+    if (_ownsClient) _client.close(force: true);
+  }
 }
 
 /// A response read completely. [bytes] is empty unless the status is 2xx: the body of an error is not read
@@ -46,7 +50,8 @@ class AppHttpResponse {
 /// The app's own HTTP requests (subscriptions, geodata, updates, IP lookup, profile and bundle downloads).
 /// The app is excluded from the VPN, so each request takes the tunnel's [TunnelSocks] when it is up.
 /// One policy: a timeout for the connection and the response headers, an idle timeout while reading the body,
-/// a body size limit, https only where asked (redirects included).
+/// a body size limit, https only where asked (redirects included). A rejected certificate ends the request with
+/// [AppHttpException] (not a transport error), so [TunnelSocks.orDirect] doesn't repeat it outside the tunnel.
 class AppHttp {
   static const timeout = Duration(seconds: 15);
   static const maxBytes = 10 * 1024 * 1024;
@@ -64,7 +69,9 @@ class AppHttp {
   }
 
   /// Sends [method] to [url] and returns the response with its body unread. Redirects are followed here, so
-  /// [httpsOnly] holds for every hop. The caller closes the result.
+  /// [httpsOnly] holds for every hop. The caller closes the result. With [client] (from [AppHttp.client]) the
+  /// request uses it and its owner closes it, ending every request still running on it; [socks] and
+  /// [onBadCertificate] are then the client's.
   static Future<AppHttpStream> open(
     Uri url, {
     String method = 'GET',
@@ -75,13 +82,22 @@ class AppHttp {
     Duration timeout = timeout,
     Duration idleTimeout = timeout,
     bool Function(X509Certificate cert, String host, int port)? onBadCertificate,
+    HttpClient? client,
   }) async {
-    final client = AppHttp.client(socks: socks, onBadCertificate: onBadCertificate);
+    var certRejected = false;
+    bool check(X509Certificate cert, String host, int port) {
+      final accepted = onBadCertificate?.call(cert, host, port) ?? false;
+      if (!accepted) certRejected = true;
+      return accepted;
+    }
+
+    final owned = client == null;
+    final http = client ?? AppHttp.client(socks: socks, onBadCertificate: check);
     try {
       var uri = url;
       for (var hop = 0; ; hop++) {
         if (httpsOnly && uri.scheme != 'https') throw AppHttpException('Only https is allowed: ${uri.scheme}');
-        final request = await client.openUrl(method, uri).timeout(timeout);
+        final request = await http.openUrl(method, uri).timeout(timeout);
         request.followRedirects = false;
         headers.forEach(request.headers.set);
         final response = await request.close().timeout(timeout);
@@ -92,10 +108,12 @@ class AppHttp {
           continue;
         }
         if (response.contentLength > maxBytes) throw AppHttpException('Response exceeds ${_mb(maxBytes)}');
-        return AppHttpStream._(response, client, _limited(response, maxBytes, idleTimeout));
+        return AppHttpStream._(response, http, owned, _limited(response, maxBytes, idleTimeout));
       }
-    } catch (_) {
-      client.close(force: true);
+    } catch (e) {
+      if (owned) http.close(force: true);
+      // A handshake that failed on the certificate is the server's answer, not a dead tunnel.
+      if (certRejected && e is TlsException) throw AppHttpException('Untrusted certificate: ${e.message}');
       rethrow;
     }
   }
@@ -108,6 +126,7 @@ class AppHttp {
     bool httpsOnly = false,
     int maxBytes = maxBytes,
     bool Function(X509Certificate cert, String host, int port)? onBadCertificate,
+    HttpClient? client,
   }) async {
     final response = await open(
       url,
@@ -116,6 +135,7 @@ class AppHttp {
       httpsOnly: httpsOnly,
       maxBytes: maxBytes,
       onBadCertificate: onBadCertificate,
+      client: client,
     );
     try {
       final bytes = BytesBuilder(copy: false);

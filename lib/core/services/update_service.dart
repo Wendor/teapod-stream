@@ -149,7 +149,13 @@ class UpdateService {
 
   /// Resumable download. Sends Range header if destPath already has bytes.
   /// Pass [socks] to route through the tunnel.
-  Stream<DownloadProgress> downloadApk(String url, String destPath, {TunnelSocks? socks}) async* {
+  /// [maxBytes] limits the whole file, a resumed part included.
+  Stream<DownloadProgress> downloadApk(
+    String url,
+    String destPath, {
+    TunnelSocks? socks,
+    int maxBytes = _maxApkBytes,
+  }) async* {
     final file = File(destPath);
     final existing = file.existsSync() ? file.lengthSync() : 0;
     // Idle timeout: without it a stuck network holds the download forever, and cancelling
@@ -158,7 +164,7 @@ class UpdateService {
       Uri.parse(url),
       socks: socks,
       headers: {'User-Agent': 'TeapodStream', if (existing > 0) 'Range': 'bytes=$existing-'},
-      maxBytes: _maxApkBytes,
+      maxBytes: maxBytes,
       idleTimeout: const Duration(seconds: 30),
     );
     IOSink? sink;
@@ -174,11 +180,13 @@ class UpdateService {
       if (!isResume && existing > 0) await file.delete();
       final contentLength = resp.headers.contentLength;
       final total = contentLength > 0 ? (isResume ? existing + contentLength : contentLength) : -1;
+      if (total > maxBytes) throw AppHttpException('APK exceeds $maxBytes bytes');
       sink = file.openWrite(mode: isResume ? FileMode.append : FileMode.write);
       int downloaded = isResume ? existing : 0;
       await for (final chunk in resp.body) {
-        sink.add(chunk);
         downloaded += chunk.length;
+        if (downloaded > maxBytes) throw AppHttpException('APK exceeds $maxBytes bytes');
+        sink.add(chunk);
         yield DownloadProgress(downloaded: downloaded, total: total, done: false);
       }
       await sink.close();

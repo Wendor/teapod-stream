@@ -46,10 +46,12 @@ class IpInfoNotifier extends AsyncNotifier<IpInfo?> {
   /// Only through the tunnel: the lookup is about the tunnel's exit IP.
   Future<IpInfo?> _fetch(TunnelSocks socks) async {
     final configId = ref.read(effectiveConfigProvider)?.id ?? '';
+    // One client for the chain: closing it ends the requests the lookup stopped waiting for.
+    final client = AppHttp.client(socks: socks);
     Future<String> fetch(Uri url) async {
       final resp = await AppHttp.get(
         url,
-        socks: socks,
+        client: client,
         headers: const {HttpHeaders.userAgentHeader: 'TeapodStream'},
         maxBytes: _maxBodyBytes,
       );
@@ -57,7 +59,12 @@ class IpInfoNotifier extends AsyncNotifier<IpInfo?> {
       return resp.body;
     }
 
-    final r = await ref.read(ipLookupProvider).lookup(configId, fetch);
+    final IpLookupResult? r;
+    try {
+      r = await ref.read(ipLookupProvider).lookup(configId, fetch);
+    } finally {
+      client.close(force: true);
+    }
     if (r == null) return null;
     // The service gave no country: take it from the geoip.dat the cores route with.
     final code = r.countryCode ?? await _countryFromGeoip(r.ip);

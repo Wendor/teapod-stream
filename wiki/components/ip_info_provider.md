@@ -4,7 +4,7 @@
 
 `IpInfoNotifier` (`AsyncNotifier<IpInfo?>`) watches `vpnConnectionStateProvider`. When connected and the SOCKS port
 is known it asks the lookup services **through the tunnel's SOCKS** ([AppHttp](services.md#apphttp), 15 s timeouts,
-64 KB body) and returns `IpInfo(ip, country?, countryCode?)`;
+64 KB body; one client for the chain, closed when it returns) and returns `IpInfo(ip, country?, countryCode?)`;
 otherwise `null`. When the service that answered gives no country, the code comes from the `geoip.dat` the cores
 route with (`PlatformService.countryForIp` → native `countryForIp` → `Teapodcore.countryForIp`, off the main thread). Works in TUN and proxy-only mode.
 

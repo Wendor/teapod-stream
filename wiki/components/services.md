@@ -44,14 +44,16 @@ by design.
 - `get(url, …)` → `AppHttpResponse` (status, headers, bytes): the body is read only for a 2xx status (an error body
   may never end).
 - Limits: `maxBytes` (10 MB by default) is checked against `Content-Length` before the body and while reading it.
-  Refusals (non-https URL, body over the limit) throw `AppHttpException`, which is not a transport error, so
-  `orDirect` doesn't retry it.
+  Refusals (non-https URL, body over the limit, a certificate rejected by `onBadCertificate` or by default) throw
+  `AppHttpException`, which is not a transport error, so `orDirect` doesn't retry it outside the tunnel.
+- `open` / `get` with `client:` (from `client()`) share one client; its owner closes it, which ends every request
+  still running on it (the IP lookup chain stops waiting for a slow service but must not leave it running).
 
 | Caller | Tunnel | Limits |
 |---|---|---|
 | subscriptions (`SubscriptionService`) | `orDirect` | defaults |
 | geodata (`GeoNotifier`) | `orDirect` | 30 s, 200 MB per file |
-| update check, APK (`UpdateService`) | when connected, no direct retry | defaults; APK: 30 s idle, 500 MB |
+| update check, APK (`UpdateService`) | when connected, no direct retry | defaults; APK: 30 s idle, 500 MB for the whole file, a resumed part included |
 | IP lookup (`IpInfoNotifier`) | always (it asks for the tunnel's exit) | 64 KB |
 | deep link and profile bundles (`DeeplinkRouter.fetchBundle`) | `orDirect` | https only, 1 MB |
 

@@ -14,6 +14,7 @@ import '../../providers/vpn_provider.dart';
 import 'dart:convert';
 import '../theme/app_theme.dart';
 import '../theme/app_colors.dart';
+import '../widgets/import_review.dart';
 import '../widgets/breadcrumb_bar.dart';
 import '../widgets/hero_panel.dart';
 import '../../l10n/l10n.dart';
@@ -318,6 +319,8 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
                 );
                 return;
               }
+              final review = await ref.read(profileProvider.notifier).reviewImport(result);
+              if (!ctx.mounted || !await confirmImportReview(ctx, review) || !ctx.mounted) return;
               Navigator.pop(ctx);
               await ref
                   .read(profileProvider.notifier)
@@ -508,33 +511,43 @@ void _confirmDelete(BuildContext context, WidgetRef ref, Profile profile, Teapod
   );
 }
 
-void _refreshProfile(BuildContext context, WidgetRef ref, Profile profile, TeapodTokens t) {
+Future<void> _refreshProfile(BuildContext context, WidgetRef ref, Profile profile, TeapodTokens t) async {
+  var spinner = true;
+  void closeSpinner() {
+    if (spinner && context.mounted) Navigator.pop(context);
+    spinner = false;
+  }
+
   showDialog<void>(
     context: context,
     barrierDismissible: false,
     builder: (_) => const Center(child: CircularProgressIndicator()),
   );
-  ref.read(profileProvider.notifier).refreshProfile(profile.id, profile.sourceUrl!).then((result) {
-    if (!context.mounted) return;
-    Navigator.pop(context);
-    if (result != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.l10n.profilesUpdated(profile.name), style: AppTheme.mono(size: 12, color: t.bg)),
-          backgroundColor: t.accent,
-          duration: const Duration(seconds: 2),
-        ),
+  var declined = false;
+  final result = await ref
+      .read(profileProvider.notifier)
+      .refreshProfile(
+        profile.id,
+        profile.sourceUrl!,
+        confirm: (review) async {
+          closeSpinner();
+          if (!context.mounted) return false;
+          declined = !await confirmImportReview(context, review);
+          return !declined;
+        },
       );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.l10n.profilesUpdateError, style: AppTheme.mono(size: 12, color: t.bg)),
-          backgroundColor: t.danger,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
-  });
+  closeSpinner();
+  if (!context.mounted || declined) return;
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        result != null ? context.l10n.profilesUpdated(profile.name) : context.l10n.profilesUpdateError,
+        style: AppTheme.mono(size: 12, color: t.bg),
+      ),
+      backgroundColor: result != null ? t.accent : t.danger,
+      duration: const Duration(seconds: 2),
+    ),
+  );
 }
 
 // ── Profile card ──────────────────────────────────────────────────

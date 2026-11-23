@@ -933,5 +933,12 @@
         "type": "int"
       }
     }
-  }
+  },
+  "importReviewTitle": "Check before importing",
+  "importReviewTraffic": "Changes how traffic goes:",
+  "importReviewSubscriptions": "Adds subscriptions, the app will load them from:",
+  "importChangeKillSwitch": "Kill switch",
+  "importChangeDns": "DNS",
+  "importChangeRouting": "Routing rules",
+  "importChangeLogLevel": "Log level"
 }

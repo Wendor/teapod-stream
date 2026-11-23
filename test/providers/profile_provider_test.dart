@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:teapodstream/core/models/config_selection.dart';
 import 'package:teapodstream/core/models/heartbeat_settings.dart';
+import 'package:teapodstream/core/models/import_review.dart';
 import 'package:teapodstream/core/models/pinned_ref.dart';
 import 'package:teapodstream/core/models/profile.dart';
 import 'package:teapodstream/core/models/profile_bundle.dart';
@@ -47,6 +48,8 @@ const _foreign = AppSettings(
   hwidEnabled: true,
   automationEnabled: true,
   heartbeat: HeartbeatSettings(failureThreshold: 8, target: HeartbeatTarget.custom, customUrl: 'http://attacker/log'),
+  geoipUrl: 'https://attacker/geoip.dat',
+  geositeUrl: 'https://attacker/geosite.dat',
 );
 
 VpnConfig _cfg(String id, {String? name, String? subId, String? address}) => VpnConfig(
@@ -444,6 +447,31 @@ void main() {
       expect(applied.automationEnabled, isFalse);
       expect(applied.heartbeat.target, HeartbeatTarget.apple);
       expect(applied.heartbeat.customUrl, '');
+      expect(applied.geoipUrl, GeoPresets.defaultGeoipUrl);
+      expect(applied.geositeUrl, GeoPresets.defaultGeositeUrl);
+    });
+
+    test('review lists the traffic settings it changes and the new subscription hosts', () async {
+      await boot();
+      await c.read(configProvider.future);
+      await ConfigStorageService().saveSubscriptions([
+        Subscription(id: 'k', name: 'K', url: 'https://known.example/s', createdAt: DateTime(2026)),
+      ]);
+      c.invalidate(configProvider);
+      await c.read(configProvider.future);
+      final bundle = ProfileBundle(
+        exportedAt: DateTime(2026),
+        profile: Profile(id: 'r', name: 'R', settings: _foreign, createdAt: DateTime(2026)),
+        subscriptions: [
+          Subscription(id: 'a', name: 'A', url: 'https://known.example/s', createdAt: DateTime(2026)),
+          Subscription(id: 'b', name: 'B', url: 'https://new.example/s?token=1', createdAt: DateTime(2026)),
+        ],
+      );
+      final review = await n().reviewImport(bundle);
+      // SOCKS, proxy-only, heartbeat and geodata stay local: not listed, not applied.
+      expect(review.changes, [TrafficSetting.killSwitch]);
+      expect(review.subscriptionHosts, ['new.example']);
+      expect((await n().reviewImport(_bundle(settings: _local))).isEmpty, isTrue);
     });
 
     test('readonly import without switching, connections imported', () async {
@@ -519,6 +547,49 @@ void main() {
       expect(await refresh('default', 'not json'), isNull);
       expect(await refresh('ghost', jsonEncode(_bundle().toJson())), isNull);
       expect(s().activeProfile!.name, 'Default');
+    });
+
+    test('geodata sources stay the profile\'s own on refresh', () async {
+      const mine = AppSettings(geoipUrl: 'https://mine/geoip.dat', geositeUrl: 'https://mine/geosite.dat');
+      await boot(
+        stored: [profile('p', settings: mine)],
+        activeId: 'p',
+      );
+      expect(await refresh('p', jsonEncode(_bundle().toJson())), 'p');
+      expect(s().activeProfile!.settings.geoipUrl, 'https://mine/geoip.dat');
+      expect((await settings()).geositeUrl, 'https://mine/geosite.dat');
+    });
+
+    test('a declined review applies nothing; no changes ask nothing', () async {
+      await boot(
+        stored: [profile('p', settings: _local)],
+        activeId: 'p',
+      );
+      final asked = <ImportReview>[];
+      Future<String?> refreshWith(String body, bool answer) {
+        server.serve(body);
+        return HttpOverrides.runWithHttpOverrides(
+          () => n().refreshProfile(
+            'p',
+            'https://src/profile.json',
+            confirm: (r) async {
+              asked.add(r);
+              return answer;
+            },
+          ),
+          RedirectHttpOverrides(server.port),
+        );
+      }
+
+      expect(await refreshWith(jsonEncode(_bundle().toJson()), false), isNull);
+      expect(asked.single.changes, [TrafficSetting.killSwitch]);
+      expect(s().activeProfile!.name, 'p');
+      expect((await settings()).killSwitchEnabled, isFalse);
+
+      asked.clear();
+      expect(await refreshWith(jsonEncode(_bundle(settings: _local.copyWith(mtu: 1280)).toJson()), false), 'p');
+      expect(asked, isEmpty);
+      expect((await settings()).mtu, 1280);
     });
 
     test('a plain http source is not fetched', () async {

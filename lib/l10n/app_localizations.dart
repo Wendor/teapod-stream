@@ -2827,6 +2827,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No configuration selected'**
   String get vpnNoConfigSelected;
+
+  /// No description provided for @importReviewTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Check before importing'**
+  String get importReviewTitle;
+
+  /// No description provided for @importReviewTraffic.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes how traffic goes:'**
+  String get importReviewTraffic;
+
+  /// No description provided for @importReviewSubscriptions.
+  ///
+  /// In en, this message translates to:
+  /// **'Adds subscriptions, the app will load them from:'**
+  String get importReviewSubscriptions;
+
+  /// No description provided for @importChangeKillSwitch.
+  ///
+  /// In en, this message translates to:
+  /// **'Kill switch'**
+  String get importChangeKillSwitch;
+
+  /// No description provided for @importChangeDns.
+  ///
+  /// In en, this message translates to:
+  /// **'DNS'**
+  String get importChangeDns;
+
+  /// No description provided for @importChangeRouting.
+  ///
+  /// In en, this message translates to:
+  /// **'Routing rules'**
+  String get importChangeRouting;
+
+  /// No description provided for @importChangeLogLevel.
+  ///
+  /// In en, this message translates to:
+  /// **'Log level'**
+  String get importChangeLogLevel;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

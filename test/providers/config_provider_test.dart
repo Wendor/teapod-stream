@@ -225,6 +225,22 @@ void main() {
   });
 
   group('importBundle', () {
+    test('review lists hosts of new subscriptions, full and compact', () async {
+      await boot(subs: [_sub('k', url: 'https://known.example/s')]);
+      final review = n().reviewBundle(
+        ConnectionsBundle(
+          exportedAt: DateTime(2026),
+          subscriptions: [
+            _sub('a', url: 'https://known.example/s'),
+            _sub('b', url: 'https://full.example/s'),
+          ],
+          subscriptionUrls: ['https://compact.example/s'],
+        ),
+      );
+      expect(review.changes, isEmpty);
+      expect(review.subscriptionHosts, ['full.example', 'compact.example']);
+    });
+
     test('dedupes configs, remaps and reuses subscriptions, selects first', () async {
       await boot(
         configs: [

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/models/profile.dart';
 import '../core/models/profile_bundle.dart';
 import '../core/models/connections_bundle.dart';
+import '../core/models/import_review.dart';
 import '../core/services/deeplink_router.dart';
 import '../core/services/profile_storage_service.dart';
 import '../core/services/settings_service.dart';
@@ -183,6 +184,20 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
     );
   }
 
+  /// What importing [bundle] changes, shown before [importBundle]: traffic settings against the ones in force now
+  /// (local fields already kept) and the hosts of the subscriptions it adds.
+  Future<ImportReview> reviewImport(ProfileBundle bundle) async {
+    final local = await ref.read(settingsProvider.future);
+    return _review(bundle, local);
+  }
+
+  ImportReview _review(ProfileBundle bundle, AppSettings current) => ImportReview(
+    changes: ImportReview.trafficChanges(current, _keepLocalSecurity(bundle.profile.settings, current)),
+    subscriptionHosts: ref
+        .read(configProvider.notifier)
+        .newSubscriptionHosts((bundle.subscriptions ?? const []).map((s) => s.url)),
+  );
+
   Future<String?> importBundle(
     ProfileBundle bundle, {
     bool switchToProfile = true,
@@ -224,7 +239,7 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
 
   /// A foreign profile doesn't touch fields that expose the tunnel: SOCKS (port,
   /// credentials — an open proxy on localhost), proxy-only (traffic bypassing the VPN), heartbeat
-  /// probe URL (sees the server IP), HWID and automation.
+  /// probe URL (sees the server IP), HWID, automation and the geodata sources (routing decisions come from them).
   static AppSettings _keepLocalSecurity(AppSettings imported, AppSettings local) => imported.copyWith(
     socksPort: local.socksPort,
     randomPort: local.randomPort,
@@ -235,9 +250,17 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
     hwidEnabled: local.hwidEnabled,
     automationEnabled: local.automationEnabled,
     heartbeat: imported.heartbeat.copyWith(target: local.heartbeat.target, customUrl: local.heartbeat.customUrl),
+    geoipUrl: local.geoipUrl,
+    geositeUrl: local.geositeUrl,
   );
 
-  Future<String?> refreshProfile(String profileId, String url) async {
+  /// Downloads the profile from [url] and applies it. When it changes traffic settings or adds subscriptions,
+  /// [confirm] is asked first; declined — nothing is applied and the result is null.
+  Future<String?> refreshProfile(
+    String profileId,
+    String url, {
+    Future<bool> Function(ImportReview review)? confirm,
+  }) async {
     if (_current == null) return null;
 
     ProfileBundle bundle;
@@ -248,6 +271,13 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
       bundle = ProfileBundle.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
     } catch (e) {
       return null;
+    }
+
+    if (confirm != null) {
+      final existing = _current?.profiles.where((p) => p.id == profileId).firstOrNull;
+      if (existing == null) return null;
+      final review = _review(bundle, existing.settings);
+      if (!review.isEmpty && !await confirm(review)) return null;
     }
 
     // The download took a while: merge into the latest state (a switch may have run meanwhile).

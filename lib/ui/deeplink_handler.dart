@@ -9,6 +9,7 @@ import '../providers/config_provider.dart';
 import '../providers/vpn_provider.dart';
 import 'theme/app_theme.dart';
 import 'theme/app_colors.dart';
+import 'widgets/import_review.dart';
 import '../l10n/l10n.dart';
 
 class DeeplinkHandler {
@@ -41,16 +42,18 @@ class DeeplinkHandler {
 
     switch (parsed.type) {
       case DeeplinkType.profile:
-        _showProfileImportDialog(bundle as ProfileBundle, sourceUrl: sourceUrl);
+        await _showProfileImportDialog(bundle as ProfileBundle, sourceUrl: sourceUrl);
       case DeeplinkType.connections:
         _showConnectionsImportDialog(bundle as ConnectionsBundle);
     }
   }
 
-  void _showProfileImportDialog(ProfileBundle bundle, {String? sourceUrl}) {
+  Future<void> _showProfileImportDialog(ProfileBundle bundle, {String? sourceUrl}) async {
+    final review = await ref.read(profileProvider.notifier).reviewImport(bundle);
+    if (!context.mounted) return;
     final t = Theme.of(context).extension<TeapodTokens>()!;
 
-    showDialog<void>(
+    await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: t.bg,
@@ -59,26 +62,29 @@ class DeeplinkHandler {
           context.l10n.profileImportTitle,
           style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500),
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(context.l10n.deeplinkProfile(bundle.profile.name), style: AppTheme.mono(size: 12, color: t.text)),
-            const SizedBox(height: 6),
-            Text(
-              context.l10n.deeplinkExported(_formatDate(bundle.exportedAt)),
-              style: AppTheme.mono(size: 10, color: t.textMuted),
-            ),
-            if (sourceUrl != null) ...[
-              const SizedBox(height: 4),
-              Text(context.l10n.deeplinkSource(sourceUrl), style: AppTheme.mono(size: 9, color: t.accent)),
-            ],
-            if (bundle.hasConnections)
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(context.l10n.deeplinkProfile(bundle.profile.name), style: AppTheme.mono(size: 12, color: t.text)),
+              const SizedBox(height: 6),
               Text(
-                '+ ${context.l10n.configsCount(bundle.configs?.length ?? 0)}, ${context.l10n.subscriptionsCount(bundle.subscriptions?.length ?? 0)}',
-                style: AppTheme.mono(size: 10, color: t.accent),
+                context.l10n.deeplinkExported(_formatDate(bundle.exportedAt)),
+                style: AppTheme.mono(size: 10, color: t.textMuted),
               ),
-          ],
+              if (sourceUrl != null) ...[
+                const SizedBox(height: 4),
+                Text(context.l10n.deeplinkSource(sourceUrl), style: AppTheme.mono(size: 9, color: t.accent)),
+              ],
+              if (bundle.hasConnections)
+                Text(
+                  '+ ${context.l10n.configsCount(bundle.configs?.length ?? 0)}, ${context.l10n.subscriptionsCount(bundle.subscriptions?.length ?? 0)}',
+                  style: AppTheme.mono(size: 10, color: t.accent),
+                ),
+              ImportReviewDetails(review),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -111,6 +117,7 @@ class DeeplinkHandler {
 
   void _showConnectionsImportDialog(ConnectionsBundle bundle) {
     final t = Theme.of(context).extension<TeapodTokens>()!;
+    final review = ref.read(configProvider.notifier).reviewBundle(bundle);
 
     showDialog<void>(
       context: context,
@@ -121,23 +128,26 @@ class DeeplinkHandler {
           context.l10n.deeplinkConnectionsTitle,
           style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500),
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (bundle.label != null)
-              Text(context.l10n.deeplinkBundle(bundle.label!), style: AppTheme.mono(size: 12, color: t.text)),
-            const SizedBox(height: 6),
-            Text(
-              '${context.l10n.configsCount(bundle.configs.length)}, ${context.l10n.subscriptionsCount(bundle.subscriptions.length)}',
-              style: AppTheme.mono(size: 12, color: t.text),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              context.l10n.deeplinkExported(_formatDate(bundle.exportedAt)),
-              style: AppTheme.mono(size: 10, color: t.textMuted),
-            ),
-          ],
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (bundle.label != null)
+                Text(context.l10n.deeplinkBundle(bundle.label!), style: AppTheme.mono(size: 12, color: t.text)),
+              const SizedBox(height: 6),
+              Text(
+                '${context.l10n.configsCount(bundle.configs.length)}, ${context.l10n.subscriptionsCount(bundle.subscriptions.length)}',
+                style: AppTheme.mono(size: 12, color: t.text),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                context.l10n.deeplinkExported(_formatDate(bundle.exportedAt)),
+                style: AppTheme.mono(size: 10, color: t.textMuted),
+              ),
+              ImportReviewDetails(review),
+            ],
+          ),
         ),
         actions: [
           TextButton(

@@ -31,14 +31,24 @@ outgoing selection through the configs queue (`ConfigNotifier.currentSelection`)
 |---|---|
 | `switchProfile(id)` | remembers the outgoing profile's server, applies the profile's settings, then its server, inside `VpnNotifier.duringProfileSwitch`: the VPN follows the final state (a live tunnel is rebuilt if the server or connection settings changed), also when restoring the server failed |
 | `syncActiveSettings(settings)` | called by `SettingsNotifier.save()`: keeps the active profile's snapshot current |
-| `refreshProfile(id, url)` | downloads the profile again, applies settings, imports its connections |
+| `refreshProfile(id, url, {confirm})` | downloads the profile again; if it changes traffic settings or adds subscriptions, `confirm` is asked first (declined — nothing applied); applies settings, imports its connections |
+| `reviewImport(bundle)` | the `ImportReview` shown before `importBundle` (below) |
 | `importBundle(bundle, …)` | adds a profile and imports its connections through `ConfigNotifier.importBundle` (deduplicated by subscription URL / server) |
 | `exportBundle` | a `ProfileBundle` for sharing |
 
 **Security fields stay local** (`_keepLocalSecurity`): an imported or refreshed profile never sets the SOCKS port and
-credentials, `randomPort`/`randomCredentials`, `proxyOnly`, `hwidEnabled`, `automationEnabled` or the heartbeat
-target — otherwise one tap on a link could open an unauthenticated proxy or send probes to an attacker's URL.
+credentials, `randomPort`/`randomCredentials`, `proxyOnly`, `hwidEnabled`, `automationEnabled`, the heartbeat
+target or the geodata sources (`geoipUrl`/`geositeUrl`) — otherwise one tap on a link could open an unauthenticated
+proxy, send probes to an attacker's URL or take routing decisions from a foreign file.
 Export strips the SOCKS credentials and the custom heartbeat URL.
+
+**Shown before applying.** The other settings are the point of a profile and are applied, but the user sees first
+what changes the way traffic goes: `ImportReview` (`lib/core/models/import_review.dart`) lists the changed kill
+switch, DNS, split tunneling (mode and app lists), routing rules, tethering through VPN, IPv6 and log level (against
+the settings in force; for a refresh, against the profile's own), and the hosts of subscriptions the import adds (ones
+already present are skipped; the app fetches the added ones itself later, with HWID headers when enabled). The
+deep link dialogs embed it (`ImportReviewDetails`); a pasted profile, a pasted `teapod://import/connections` link on
+the Add screen and a profile refresh ask through `confirmImportReview` when the review isn't empty.
 
 ## Storage
 

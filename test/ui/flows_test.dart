@@ -8,6 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:teapodstream/core/models/connections_bundle.dart';
 import 'package:teapodstream/core/models/profile.dart';
 import 'package:teapodstream/core/models/profile_bundle.dart';
+import 'package:teapodstream/core/models/dns_config.dart';
+import 'package:teapodstream/core/models/subscription.dart';
 import 'package:teapodstream/ui/deeplink_handler.dart';
 import 'package:teapodstream/core/models/app_settings.dart';
 import 'package:teapodstream/providers/config_provider.dart';
@@ -82,6 +84,37 @@ void main() {
       await settle(tester);
       expect(c.read(configProvider).value!.configs.single.address, 'hx.example');
       expect(find.text('Added: 1 new config'), findsOneWidget);
+      await unmount(tester, c);
+    });
+
+    testWidgets('the import dialogs list traffic changes and subscription hosts', (tester) async {
+      final profile = ProfileBundle(
+        exportedAt: DateTime(2026),
+        profile: Profile(
+          id: 'r',
+          name: 'Leaky',
+          settings: const AppSettings(dnsMode: DnsMode.direct, geoipUrl: 'https://geo.example/ip.dat'),
+          createdAt: DateTime(2026),
+        ),
+      );
+      var c = await go(tester, profile.toDeeplink());
+      expect(find.text('Changes how traffic goes:'), findsOneWidget);
+      expect(find.text('· DNS'), findsOneWidget);
+      expect(find.textContaining('subscriptions, the app'), findsNothing);
+      await tester.tap(find.text('Cancel'));
+      await settle(tester);
+      await unmount(tester, c);
+
+      final connections = ConnectionsBundle(
+        exportedAt: DateTime(2026),
+        subscriptions: [Subscription(id: 's', name: 'S', url: 'https://subs.example/x', createdAt: DateTime(2026))],
+      );
+      c = await go(tester, connections.toDeeplink());
+      expect(find.text('Adds subscriptions, the app will load them from:'), findsOneWidget);
+      expect(find.text('· subs.example'), findsOneWidget);
+      expect(find.text('Changes how traffic goes:'), findsNothing);
+      await tester.tap(find.text('Cancel'));
+      await settle(tester);
       await unmount(tester, c);
     });
 

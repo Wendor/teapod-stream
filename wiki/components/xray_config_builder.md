@@ -6,7 +6,13 @@
 
 `XrayConfigBuilder` turns a `VpnConfig` + `VpnEngineOptions` into the JSON for xray-core (Go): `buildJson` for a
 generated config, `mergeWithRaw` for a managed subscription's ready JSON. Pure functions, no state.
-`RustConfigBuilder` translates the Go builder's output into the subset xray-rust accepts.
+`RustConfigBuilder` assembles the config for xray-rust from the same parts, taken by name.
+
+`build` is a composition of named parts: `logBlock`, `buildDnsBlock`, `socksInbound`, `proxyOutbound` (with its
+`streamSettings`), `directOutbound` / `dnsOutbound` / `blockOutbound`, and the rule groups `dnsRules`, `geoRules`,
+`diagnosticRules`, `catchAllRule` (the SOCKS UDP rule, `dialer-out` and `policy` are Go-only). Reordering or adding a
+part in the Go config doesn't shift the Rust config: `RustConfigBuilder` never edits the finished Go config by
+position.
 
 ## Generated config
 
@@ -120,8 +126,10 @@ Shown to the user on Home: their DNS settings and ad block via DNS don't apply; 
   Hysteria2; no raw configs, no link `finalmask` (the builder assembles its own subset), no `mux=on` in the link (except
   Hysteria2), no Vision on non-RAW transports without VLESS encryption. Unsupported features (`CoreFeature`):
   proxy-only, ICMP toggle, MTU, Mux, observatory, raw config. The Rust core reads the TUN fd itself, so
-  `RustConfigBuilder` adds the TUN inbound, removes the Go-only UDP rule (it has `_blockTunUdp`), strips `sockopt`, and
-  converts `udphop` back to `quicParams.udpHop`. `buildProbe` makes a password-protected probe inbound for latency
+  `RustConfigBuilder` adds the TUN inbound before `socks-in`, routes `dnsRules` from both inbounds, puts its own TUN UDP
+  rule (`_tunUdpRule`) after them instead of the Go-only SOCKS one, takes no catch-all (unmatched traffic goes to the
+  first outbound: `direct` for `onlySelected`, else `proxy`), strips `sockopt` from the proxy outbound, and converts
+  `udphop` back to `quicParams.udpHop`. `buildProbe` makes a password-protected probe inbound for latency
   measurement.
 
 ## Related

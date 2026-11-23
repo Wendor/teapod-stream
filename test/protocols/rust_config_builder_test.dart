@@ -406,4 +406,45 @@ void main() {
     // QUIC blocking is supported since xray-rust 0.8 (blackhole outbound).
     expect(() => RustConfigBuilder.build(config, options(blockQuic: true)), returnsNormally);
   });
+
+  test('takes the Go rule groups by name, not by their position in the Go config', () {
+    final config = VlessParser.parseUri(profile())!;
+    for (final direction in RoutingDirection.values) {
+      final opts = options(
+        routing: RoutingSettings(
+          direction: direction,
+          bypassLocal: true,
+          geoEnabled: true,
+          geoCodes: ['RU'],
+          sitesEnabled: true,
+          sites: ['example.com'],
+        ),
+        blockQuic: true,
+      );
+      final goRules = XrayConfigBuilder.build(config, opts)['routing']['rules'] as List;
+      final rustRules = RustConfigBuilder.build(config, opts)['routing']['rules'] as List;
+      final geo = XrayConfigBuilder.geoRules(opts.routing);
+      final diagnostics = XrayConfigBuilder.diagnosticRules(opts);
+      final catchAll = XrayConfigBuilder.catchAllRule(opts.routing);
+      // The groups Rust takes are in the Go config too.
+      expect(goRules, containsAll([...geo, ...diagnostics, catchAll]));
+      expect(rustRules, [
+        ...XrayConfigBuilder.dnsRules(opts, inbounds: ['tun-in', 'socks-in']),
+        {
+          'type': 'field',
+          'inboundTag': ['tun-in'],
+          'network': 'udp',
+          'port': '443',
+          'outboundTag': 'block',
+        },
+        ...geo,
+        ...diagnostics,
+      ]);
+      expect(rustRules, isNot(contains(catchAll)));
+      final proxy = (RustConfigBuilder.build(config, opts)['outbounds'] as List).singleWhere(
+        (dynamic o) => o['tag'] == 'proxy',
+      );
+      expect(proxy['settings'], XrayConfigBuilder.proxyOutbound(config, opts)['settings']);
+    }
+  });
 }

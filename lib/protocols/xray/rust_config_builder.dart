@@ -11,8 +11,8 @@ import 'xray_config_builder.dart';
 import '../../l10n/l10n.dart';
 
 /// Profiles xray-rust 0.8.1 runs through Android TUN: VLESS, Trojan, VMess
-/// AEAD, Shadowsocks 2022 and Hysteria2, translated from the Go builder's
-/// output into the subset `docs/config-compatibility.md` accepts.
+/// AEAD, Shadowsocks 2022 and Hysteria2, assembled from the Go builder's
+/// named parts into the subset `docs/config-compatibility.md` accepts.
 ///
 /// TLS certificate pins win over `allowInsecure`: a profile with both is built
 /// with `allowInsecure: false` and `pinnedPeerCertSha256`, so the server must
@@ -307,38 +307,23 @@ class RustConfigBuilder {
       throw FormatException(L10n.current.rustAdBlockLimit);
     }
 
-    // Reuse the existing profile and domain-routing translation, then replace
-    // the Go-specific inbound and policy. Native TUN traffic never uses SOCKS.
-    final result = XrayConfigBuilder.build(config, options);
-    result.remove('policy');
-    // Resolve for IP rules only. Domain-only routing can pass the name to
-    // the server (every supported protocol carries domain destinations)
-    // without an extra client-side DNS round trip for every new host.
-    result['routing']['domainStrategy'] =
-        options.routing.isActive && (options.routing.geoEnabled || options.routing.bypassLocal)
-        ? 'IPIfNonMatch'
-        : 'AsIs';
+    // Composed from the Go builder's parts by name; its policy, dialer-out, SOCKS UDP rule and catch-all
+    // aren't taken. Native TUN traffic never uses SOCKS.
+    final routing = options.routing;
+    final dns = XrayConfigBuilder.buildDnsBlock(options);
     // Rust 0.6 restores domain identity from FakeDNS before TUN routing.
     // Its TUN TCP sniffer alone does not classify ordinary real-IP targets.
-    if (options.routing.isActive &&
-        (options.routing.geositeEnabled ||
-            options.routing.domainEnabled ||
-            options.routing.sitesEnabled ||
-            options.routing.ruServicesEnabled)) {
-      (result['dns'] as Map<String, dynamic>)['fakeIp'] = {
-        'enabled': true,
-        'ipv4Pool': '198.18.0.0/15',
-        'poolSize': 4096,
-        'ttl': 300,
-      };
+    if (routing.isActive &&
+        (routing.geositeEnabled || routing.domainEnabled || routing.sitesEnabled || routing.ruServicesEnabled)) {
+      dns['fakeIp'] = {'enabled': true, 'ipv4Pool': '198.18.0.0/15', 'poolSize': 4096, 'ttl': 300};
     }
-    _adaptDnsServers(result['dns'] as Map<String, dynamic>);
+    _adaptDnsServers(dns);
+    final adDomains = routing.adBlockEnabled ? _takeAdBlockDomains(dns) : null;
 
-    final inbounds = result['inbounds'] as List<dynamic>;
-    final socks = inbounds.single as Map<String, dynamic>;
+    final socks = XrayConfigBuilder.socksInbound(options);
     socks['listen'] = '127.0.0.1';
     // `udp` as in Go; xray-rust only parses it, SOCKS UDP with UDP disabled
-    // is killed by the rule from _blockTunUdp.
+    // is killed by the rule from _tunUdpRule.
     // xray-rust ≥ 0.9.0: SOCKS inbound password (RFC 1929), Xray format.
     socks['settings'] = options.socksUser.isNotEmpty && options.socksPassword.isNotEmpty
         ? {
@@ -349,36 +334,12 @@ class RustConfigBuilder {
             'udp': options.enableUdp,
           }
         : {'auth': 'noauth', 'udp': options.enableUdp};
-    inbounds.insert(0, {
-      'tag': 'tun-in',
-      'protocol': 'tun',
-      'sniffing': Map<String, dynamic>.from(socks['sniffing'] as Map),
-    });
-    // Loopback SOCKS is retained for the app's IP check and heartbeat only.
-    final outbounds = result['outbounds'] as List<dynamic>;
+
+    final proxy = XrayConfigBuilder.proxyOutbound(config, options);
+    final stream = proxy['streamSettings'] as Map<String, dynamic>;
     // Fragmentation and noise move from Go's freedom dialer into FinalMask:
     // xray-rust's freedom accepts only `fragment` (not `domainStrategy` or
     // `noises`) and Hysteria rejects sockopt.
-    outbounds.removeWhere((dynamic out) => out['tag'] == 'dialer-out');
-    if (options.routing.adBlockEnabled) _blockAdsInDnsOutbound(result);
-    final rules = (result['routing'] as Map)['rules'] as List<dynamic>;
-    // Go closes disabled UDP with a socks-in rule; here _blockTunUdp replaces it.
-    rules.removeWhere((dynamic r) => r['network'] == 'udp' && r['inboundTag']?.first == 'socks-in');
-    for (final dynamic rule in rules) {
-      final tags = rule['inboundTag'];
-      if (tags is List && tags.contains('socks-in')) {
-        rule['inboundTag'] = ['tun-in', 'socks-in'];
-      }
-    }
-    // A catch-all rule matches before IPIfNonMatch can resolve a restored
-    // domain. Use the core's default outbound instead, leaving the second
-    // routing pass available for GeoIP when GeoSite did not match.
-    rules.removeLast();
-    if (!_blockTunUdp(rules, options)) {
-      outbounds.removeWhere((dynamic out) => out['protocol'] == 'blackhole');
-    }
-    final proxy = outbounds.first as Map<String, dynamic>;
-    final stream = proxy['streamSettings'] as Map<String, dynamic>;
     stream.remove('sockopt');
     // xray-rust moves Host from headers into host with a warning about
     // the deprecated field; an empty Host means serverName/address anyway.
@@ -423,12 +384,48 @@ class RustConfigBuilder {
       }
       stream['finalmask'] = mask;
     }
-    if (options.routing.direction == RoutingDirection.onlySelected) {
-      final direct = outbounds.singleWhere((dynamic out) => out['tag'] == 'direct');
-      outbounds.remove(direct);
-      outbounds.insert(0, direct);
-    }
-    return result;
+
+    final tunUdpRule = _tunUdpRule(options);
+    // No catch-all rule: it would match before IPIfNonMatch can resolve a restored
+    // domain. Unmatched traffic goes to the core's default (first) outbound instead,
+    // leaving the second routing pass available for GeoIP when GeoSite did not match.
+    final onlySelected = routing.direction == RoutingDirection.onlySelected;
+    return {
+      'log': XrayConfigBuilder.logBlock(options),
+      'dns': dns,
+      'inbounds': [
+        {'tag': 'tun-in', 'protocol': 'tun', 'sniffing': Map<String, dynamic>.from(socks['sniffing'] as Map)},
+        // Loopback SOCKS is retained for the app's IP check and heartbeat only.
+        socks,
+      ],
+      'outbounds': [
+        if (onlySelected) XrayConfigBuilder.directOutbound,
+        proxy,
+        if (!onlySelected) XrayConfigBuilder.directOutbound,
+        {
+          ...XrayConfigBuilder.dnsOutbound,
+          if (adDomains != null)
+            'settings': {
+              'rules': [
+                {'action': 'return', 'rCode': 0, 'domain': adDomains},
+              ],
+            },
+        },
+        if (tunUdpRule != null) XrayConfigBuilder.blockOutbound,
+      ],
+      'routing': {
+        // Resolve for IP rules only. Domain-only routing can pass the name to
+        // the server (every supported protocol carries domain destinations)
+        // without an extra client-side DNS round trip for every new host.
+        'domainStrategy': routing.isActive && (routing.geoEnabled || routing.bypassLocal) ? 'IPIfNonMatch' : 'AsIs',
+        'rules': [
+          ...XrayConfigBuilder.dnsRules(options, inbounds: ['tun-in', XrayConfigBuilder.socksInTag]),
+          ?tunUdpRule,
+          ...XrayConfigBuilder.geoRules(routing),
+          ...XrayConfigBuilder.diagnosticRules(options),
+        ],
+      },
+    };
   }
 
   /// Go drops UDP/443 in tun2socks before xray, and disabled UDP — with a
@@ -439,19 +436,16 @@ class RustConfigBuilder {
   /// Go answers with) until 60 s of silence. xray-rust 0.8.1 parses `udp`
   /// for SOCKS but accepts UDP ASSOCIATE anyway, so disabled UDP
   /// also closes SOCKS with a rule; QUIC, as in Go, is blocked only in TUN.
-  /// Returns whether a rule was added.
-  static bool _blockTunUdp(List<dynamic> rules, VpnEngineOptions options) {
-    if (options.enableUdp && !options.blockQuic) return false;
-    final at = rules.lastIndexWhere((dynamic r) => r['outboundTag'] == 'dns-out') + 1;
-    if (at == 0) throw StateError('DNS rule not found');
-    rules.insert(at, <String, dynamic>{
+  /// null — nothing to block.
+  static Map<String, dynamic>? _tunUdpRule(VpnEngineOptions options) {
+    if (options.enableUdp && !options.blockQuic) return null;
+    return {
       'type': 'field',
-      'inboundTag': options.enableUdp ? ['tun-in'] : ['tun-in', 'socks-in'],
+      'inboundTag': options.enableUdp ? ['tun-in'] : ['tun-in', XrayConfigBuilder.socksInTag],
       'network': 'udp',
       if (options.enableUdp) 'port': '443',
       'outboundTag': 'block',
-    });
-    return true;
+    };
   }
 
   static bool _isXhttpH3(VpnConfig config) =>
@@ -571,23 +565,13 @@ class RustConfigBuilder {
 
   /// Go answers ad domains with an empty NOERROR: a DNS server
   /// `rcode://success` with a domains list. xray-rust doesn't accept such a server,
-  /// so a Return rule on the DNS outbound that carries app DNS queries does the same
-  /// (both with FakeDNS and in "direct" mode). The domains are the same as Go's.
-  static void _blockAdsInDnsOutbound(Map<String, dynamic> result) {
-    final servers = (result['dns'] as Map)['servers'] as List<dynamic>;
-    final adServer = servers.singleWhere((dynamic s) => s is Map && s['address'] == 'rcode://success');
+  /// so it is taken out of [dns] and its domains go to a Return rule on the DNS outbound
+  /// that carries app DNS queries (both with FakeDNS and in "direct" mode).
+  static Object? _takeAdBlockDomains(Map<String, dynamic> dns) {
+    final servers = dns['servers'] as List<dynamic>;
+    final adServer = servers.singleWhere((dynamic s) => s is Map && s['address'] == 'rcode://success') as Map;
     servers.remove(adServer);
-    final outbounds = result['outbounds'] as List<dynamic>;
-    final dnsOut = outbounds.indexWhere((dynamic out) => out['protocol'] == 'dns');
-    // Go writes dns-out as a Map<String, String> literal — rebuild it.
-    outbounds[dnsOut] = <String, dynamic>{
-      ...(outbounds[dnsOut] as Map).cast<String, dynamic>(),
-      'settings': {
-        'rules': [
-          {'action': 'return', 'rCode': 0, 'domain': adServer['domains']},
-        ],
-      },
-    };
+    return adServer['domains'];
   }
 
   /// xray-rust reads a DoT server's port only from its `tls://` URL and ignores

@@ -37,126 +37,140 @@ class XrayConfigBuilder {
     return null;
   }
 
-  static Map<String, dynamic> build(VpnConfig config, VpnEngineOptions options) {
-    final dnsBlock = _buildDnsBlock(options);
-    final routing = options.routing;
-    // routeOnly=true: sniffed domain is used for routing only — xray does NOT replace
-    // the connection destination. Without this, xray re-resolves the domain and
-    // redirects the connection to a different IP, breaking tun2socks and leaking DNS.
-    final routeOnly = options.sniffingEnabled;
-    final probeHost = Uri.tryParse(options.heartbeat.url)?.host ?? '';
+  /// Tag of the app's SOCKS inbound.
+  static const socksInTag = 'socks-in';
 
-    return {
-      'log': _logBlock(options),
-      'dns': dnsBlock,
-      'inbounds': [
-        {
-          'tag': 'socks-in',
-          'protocol': 'socks',
-          'port': options.socksPort,
-          'listen': XrayDefaults.socksListen,
-          'settings': {
-            'auth': options.socksUser.isNotEmpty ? 'password' : 'noauth',
-            if (options.socksUser.isNotEmpty)
-              'accounts': [
-                {'user': options.socksUser, 'pass': options.socksPassword},
-              ],
-            // UDP ASSOCIATE is always needed: tun2socks sends app DNS through it.
-            // Disabled UDP is cut by the _udpBlockRule rule (except port 53).
-            'udp': true,
-          },
-          'sniffing': {
-            'enabled': options.sniffingEnabled,
-            if (options.sniffingEnabled) ...{
-              'destOverride': ['http', 'tls', 'quic'],
-              'routeOnly': routeOnly,
-            },
-          },
-        },
+  /// The generated config, assembled from the named parts below. [RustConfigBuilder] takes the same parts
+  /// by name, so reordering or adding a part here doesn't shift what it builds.
+  static Map<String, dynamic> build(VpnConfig config, VpnEngineOptions options) => {
+    'log': logBlock(options),
+    'dns': buildDnsBlock(options),
+    'inbounds': [socksInbound(options)],
+    'outbounds': [
+      proxyOutbound(config, options),
+      if (_dialerApplies(config, options)) _buildDialerOutbound(config, options),
+      directOutbound,
+      dnsOutbound,
+      blockOutbound,
+    ],
+    'routing': {
+      'domainStrategy': 'IPIfNonMatch',
+      'rules': [
+        // QUIC blocking is handled at the TUN level by tun2socks, which replies
+        // with an ICMP Port Unreachable so the browser falls back to TCP immediately.
+        // No xray routing rule is needed: silently dropping UDP/443 here (blackhole)
+        // would force browsers to wait ~55s for QUIC retransmission to time out,
+        // and rerouting QUIC to 'direct' would leak the destination outside the tunnel.
+        ...dnsRules(options),
+        if (!options.enableUdp) _udpBlockRule(socksInTag, 'block'),
+        ...geoRules(options.routing),
+        ...diagnosticRules(options),
+        catchAllRule(options.routing),
       ],
-      'outbounds': [
-        _buildOutbound(config, options),
-        if (_dialerApplies(config, options)) _buildDialerOutbound(config, options),
-        {'tag': 'direct', 'protocol': 'freedom'},
-        {'tag': 'dns-out', 'protocol': 'dns'},
-        {'tag': 'block', 'protocol': 'blackhole'},
-      ],
-      'routing': {
-        'domainStrategy': 'IPIfNonMatch',
-        'rules': [
-          // QUIC blocking is handled at the TUN level by tun2socks, which replies
-          // with an ICMP Port Unreachable so the browser falls back to TCP immediately.
-          // No xray routing rule is needed: silently dropping UDP/443 here (blackhole)
-          // would force browsers to wait ~55s for QUIC retransmission to time out,
-          // and rerouting QUIC to 'direct' would leak the destination outside the tunnel.
-          // App DNS goes to xray's DNS module with the selected server. Its own sockets
-          // egress through the tunnel in proxy mode, or past it in direct mode (xray's
-          // process is excluded from the TUN) — as if there were no VPN.
-          {
-            'type': 'field',
-            'inboundTag': ['dns-module'],
-            'outboundTag': options.dnsMode == DnsMode.proxy ? 'proxy' : 'direct',
-          },
-          {
-            'type': 'field',
-            'inboundTag': ['socks-in'],
-            'port': '53',
-            'network': 'udp,tcp',
-            'outboundTag': 'dns-out',
-          },
-          if (!options.enableUdp) _udpBlockRule('socks-in', 'block'),
-          ..._buildGeoRules(routing),
-          // In ONLY mode the catch-all routes to direct, so diagnostic hosts that aren't
-          // in the user's rules would bypass the proxy and may be blocked locally.
-          // Force them via proxy so heartbeat and IP-detection always test the tunnel.
-          // The custom probe URL too: otherwise it would measure the direct internet, not the tunnel.
-          if (routing.direction == RoutingDirection.onlySelected) ...[
-            {
-              'type': 'field',
-              'domain': [
-                'full:cp.cloudflare.com',
-                for (final h in IpLookupSource.hosts) 'full:$h',
-                if (probeHost.isNotEmpty && !_isIpAddress(probeHost)) 'full:$probeHost',
-              ],
-              'outboundTag': 'proxy',
-            },
-            if (_isIpAddress(probeHost))
-              {
-                'type': 'field',
-                'ip': [probeHost],
-                'outboundTag': 'proxy',
-              },
-          ],
-          {
-            'type': 'field',
-            'inboundTag': ['socks-in'],
-            'outboundTag': routing.direction == RoutingDirection.onlySelected ? 'direct' : 'proxy',
-          },
+    },
+    'policy': _policyBlock,
+  };
+
+  /// The SOCKS5 inbound tun2socks and the app's own checks connect to.
+  static Map<String, dynamic> socksInbound(VpnEngineOptions options) => {
+    'tag': socksInTag,
+    'protocol': 'socks',
+    'port': options.socksPort,
+    'listen': XrayDefaults.socksListen,
+    'settings': {
+      'auth': options.socksUser.isNotEmpty ? 'password' : 'noauth',
+      if (options.socksUser.isNotEmpty)
+        'accounts': [
+          {'user': options.socksUser, 'pass': options.socksPassword},
         ],
+      // UDP ASSOCIATE is always needed: tun2socks sends app DNS through it.
+      // Disabled UDP is cut by the _udpBlockRule rule (except port 53).
+      'udp': true,
+    },
+    'sniffing': {
+      'enabled': options.sniffingEnabled,
+      if (options.sniffingEnabled) ...{
+        'destOverride': ['http', 'tls', 'quic'],
+        // routeOnly=true: sniffed domain is used for routing only — xray does NOT replace
+        // the connection destination. Without this, xray re-resolves the domain and
+        // redirects the connection to a different IP, breaking tun2socks and leaking DNS.
+        'routeOnly': true,
       },
-      'policy': {
-        'levels': {
-          '0': {
-            'handshake': XrayDefaults.handshakeTimeout,
-            'connIdle': XrayDefaults.connIdleTimeout,
-            'uplinkOnly': XrayDefaults.uplinkOnlyTimeout,
-            'downlinkOnly': XrayDefaults.downlinkOnlyTimeout,
-          },
+    },
+  };
+
+  static Map<String, dynamic> get directOutbound => {'tag': 'direct', 'protocol': 'freedom'};
+
+  static Map<String, dynamic> get dnsOutbound => {'tag': 'dns-out', 'protocol': 'dns'};
+
+  static Map<String, dynamic> get blockOutbound => {'tag': 'block', 'protocol': 'blackhole'};
+
+  /// App DNS goes to xray's DNS module with the selected server. Its own sockets egress through the tunnel
+  /// in proxy mode, or past it in direct mode (xray's process is excluded from the TUN) — as if there were
+  /// no VPN. Port 53 from [inbounds] goes to `dns-out`.
+  static List<Map<String, dynamic>> dnsRules(VpnEngineOptions options, {List<String> inbounds = const [socksInTag]}) =>
+      [
+        {
+          'type': 'field',
+          'inboundTag': ['dns-module'],
+          'outboundTag': options.dnsMode == DnsMode.proxy ? 'proxy' : 'direct',
         },
-        'system': {'statsInboundUplink': false, 'statsInboundDownlink': false},
+        {'type': 'field', 'inboundTag': inbounds, 'port': '53', 'network': 'udp,tcp', 'outboundTag': 'dns-out'},
+      ];
+
+  /// In ONLY mode the catch-all routes to direct, so diagnostic hosts that aren't in the user's rules would
+  /// bypass the proxy and may be blocked locally. Force them via proxy so heartbeat and IP detection always
+  /// test the tunnel. The custom probe URL too: otherwise it would measure the direct internet, not the tunnel.
+  static List<Map<String, dynamic>> diagnosticRules(VpnEngineOptions options) {
+    if (options.routing.direction != RoutingDirection.onlySelected) return [];
+    final probeHost = Uri.tryParse(options.heartbeat.url)?.host ?? '';
+    return [
+      {
+        'type': 'field',
+        'domain': [
+          'full:cp.cloudflare.com',
+          for (final h in IpLookupSource.hosts) 'full:$h',
+          if (probeHost.isNotEmpty && !_isIpAddress(probeHost)) 'full:$probeHost',
+        ],
+        'outboundTag': 'proxy',
       },
-    };
+      if (_isIpAddress(probeHost))
+        {
+          'type': 'field',
+          'ip': [probeHost],
+          'outboundTag': 'proxy',
+        },
+    ];
   }
+
+  /// The last rule: everything else from the SOCKS inbound.
+  static Map<String, dynamic> catchAllRule(RoutingSettings routing) => {
+    'type': 'field',
+    'inboundTag': [socksInTag],
+    'outboundTag': routing.direction == RoutingDirection.onlySelected ? 'direct' : 'proxy',
+  };
+
+  static Map<String, dynamic> get _policyBlock => {
+    'levels': {
+      '0': {
+        'handshake': XrayDefaults.handshakeTimeout,
+        'connIdle': XrayDefaults.connIdleTimeout,
+        'uplinkOnly': XrayDefaults.uplinkOnlyTimeout,
+        'downlinkOnly': XrayDefaults.downlinkOnlyTimeout,
+      },
+    },
+    'system': {'statsInboundUplink': false, 'statsInboundDownlink': false},
+  };
 
   /// Access log (a line per connection: JNI → logcat + log file, essentially
   /// browsing history on disk) — debug only. xray writes dial errors
   /// to the info-level error log, so they stay.
-  static Map<String, dynamic> _logBlock(VpnEngineOptions options) => {
+  static Map<String, dynamic> logBlock(VpnEngineOptions options) => {
     'loglevel': options.logLevel.name,
     if (options.logLevel != LogLevel.debug) 'access': 'none',
   };
 
-  static List<Map<String, dynamic>> _buildGeoRules(RoutingSettings routing) {
+  static List<Map<String, dynamic>> geoRules(RoutingSettings routing) {
     if (!routing.isActive) return [];
 
     final rules = <Map<String, dynamic>>[];
@@ -225,9 +239,7 @@ class XrayConfigBuilder {
     DnsQueryStrategy.auto => 'UseIP',
   };
 
-  static Map<String, dynamic> buildDnsBlock(VpnEngineOptions options) => _buildDnsBlock(options);
-
-  static Map<String, dynamic> _buildDnsBlock(VpnEngineOptions options) {
+  static Map<String, dynamic> buildDnsBlock(VpnEngineOptions options) {
     final server = options.dnsServer;
     final routing = options.routing;
     final strategy = _queryStrategy(options.dnsQueryStrategy);
@@ -344,7 +356,7 @@ class XrayConfigBuilder {
     };
   }
 
-  static Map<String, dynamic> _buildOutbound(VpnConfig config, VpnEngineOptions options) {
+  static Map<String, dynamic> proxyOutbound(VpnConfig config, VpnEngineOptions options) {
     final stream = _buildStreamSettings(config, options.tlsFingerprint);
     if (_dialerApplies(config, options)) {
       stream['sockopt'] = {'dialerProxy': _dialerTag};
@@ -627,7 +639,7 @@ class XrayConfigBuilder {
       // routing configured for their outbound topology. Overriding it breaks dns-module
       // routing (no 'proxy' outbound exists in these configs) and causes DNS leaks.
       // User's custom DNS server and adblock settings do not apply to managed configs.
-      cfg['log'] = _logBlock(options);
+      cfg['log'] = logBlock(options);
 
       _clampObservatoryInterval(cfg, options.obsProbeIntervalSec);
       _neutralizeDirectFallback(cfg);
@@ -659,7 +671,7 @@ class XrayConfigBuilder {
       // onlySelected rules (→ 'proxy') are skipped: the server's own catch-all handles routing.
       final routing = options.routing;
       if (routing.direction == RoutingDirection.bypass) {
-        appRules.addAll(_buildGeoRules(routing));
+        appRules.addAll(geoRules(routing));
       } else if (routing.bypassLocal) {
         appRules.add({
           'type': 'field',

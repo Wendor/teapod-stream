@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:teapodstream/core/cores/options_sanitizer.dart';
 import 'package:teapodstream/core/interfaces/vpn_engine.dart';
 
-const _base = VpnEngineOptions(socksPort: 10808, httpPort: 0, socksUser: 'u', socksPassword: 'p', mtu: 1400);
+const _base = VpnEngineOptions(socksPort: 10808, socksUser: 'u', socksPassword: 'p', mtu: 1400);
 
 void main() {
   test('drop applies fix and records warning only when true', () {

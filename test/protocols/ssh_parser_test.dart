@@ -45,7 +45,7 @@ void main() {
   });
 
   test('sing-box outbound', () {
-    const opts = VpnEngineOptions(socksPort: 1, httpPort: 0, socksUser: '', socksPassword: '');
+    const opts = VpnEngineOptions(socksPort: 1, socksUser: '', socksPassword: '');
     expect(SingBoxOutbound.build(SshParser.parseUri('ssh://root:pw@h.example:2222?hk=k1')!, opts), {
       'type': 'ssh',
       'tag': 'proxy',

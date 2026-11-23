@@ -24,7 +24,6 @@ VpnEngineOptions options({
   MuxSettings mux = const MuxSettings(),
 }) => VpnEngineOptions(
   socksPort: 10808,
-  httpPort: 0,
   socksUser: '',
   socksPassword: '',
   fragment: fragment,

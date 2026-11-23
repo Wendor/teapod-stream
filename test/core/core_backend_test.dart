@@ -20,7 +20,7 @@ VpnConfig _vless() => VpnConfig(
   createdAt: DateTime(2026),
 );
 
-const _opts = VpnEngineOptions(socksPort: 10808, httpPort: 0, socksUser: 'u', socksPassword: 'p');
+const _opts = VpnEngineOptions(socksPort: 10808, socksUser: 'u', socksPassword: 'p');
 
 void main() {
   test('core order: defaults, json round trip, legacy single core goes first', () {

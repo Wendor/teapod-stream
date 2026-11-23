@@ -15,7 +15,6 @@ VpnEngineOptions buildEngineOptions(
   ({String user, String password}) credentials = (user: '', password: ''),
 }) => VpnEngineOptions(
   socksPort: socksPort,
-  httpPort: 0,
   socksUser: credentials.user,
   socksPassword: credentials.password,
   excludedPackages: settings.splitTunnelingEnabled

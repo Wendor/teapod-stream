@@ -64,7 +64,7 @@ VpnConfig _cfg(
   finalmask: finalmask,
 );
 
-const _opts = VpnEngineOptions(socksPort: 10808, httpPort: 0, socksUser: 'u', socksPassword: 'p');
+const _opts = VpnEngineOptions(socksPort: 10808, socksUser: 'u', socksPassword: 'p');
 
 Map<String, dynamic> _tls(Map<String, dynamic> out) => out['tls'] as Map<String, dynamic>;
 
@@ -102,7 +102,6 @@ void main() {
       expect(_tls(SingBoxOutbound.build(cfg, _opts))['utls'], {'enabled': true, 'fingerprint': 'firefox'});
       const safari = VpnEngineOptions(
         socksPort: 1,
-        httpPort: 0,
         socksUser: '',
         socksPassword: '',
         tlsFingerprint: TlsFingerprint.safari,
@@ -184,7 +183,6 @@ void main() {
     test('Hysteria2 never gets uTLS (QUIC needs the standard TLS stack)', () {
       const safari = VpnEngineOptions(
         socksPort: 1,
-        httpPort: 0,
         socksUser: '',
         socksPassword: '',
         tlsFingerprint: TlsFingerprint.safari,
@@ -208,7 +206,6 @@ void main() {
     test('TLS options: insecure, ALPN, ECH, ClientHello fragmentation', () {
       const fragment = VpnEngineOptions(
         socksPort: 1,
-        httpPort: 0,
         socksUser: '',
         socksPassword: '',
         fragment: FragmentSettings(enabled: true),

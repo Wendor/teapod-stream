@@ -35,7 +35,6 @@ VpnEngineOptions _opts({
   DnsQueryStrategy strategy = DnsQueryStrategy.ipv4Only,
 }) => VpnEngineOptions(
   socksPort: 10808,
-  httpPort: 0,
   socksUser: 'u',
   socksPassword: 'p',
   routing: routing,
@@ -256,7 +255,7 @@ void main() {
     String level(LogLevel l) =>
         ((SingBoxConfigBuilder.build(
                   _trojan,
-                  VpnEngineOptions(socksPort: 1, httpPort: 0, socksUser: '', socksPassword: '', logLevel: l),
+                  VpnEngineOptions(socksPort: 1, socksUser: '', socksPassword: '', logLevel: l),
                 )['log']
                 as Map)['level'])
             as String;

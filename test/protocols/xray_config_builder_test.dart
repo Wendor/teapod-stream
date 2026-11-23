@@ -29,7 +29,6 @@ VpnEngineOptions _defaultOptions({
   bool enableUdp = true,
 }) => VpnEngineOptions(
   socksPort: socksPort,
-  httpPort: 0,
   socksUser: '',
   socksPassword: '',
   routing: routing ?? const RoutingSettings(),
@@ -53,7 +52,6 @@ void main() {
       final dns = XrayConfigBuilder.buildDnsBlock(
         VpnEngineOptions(
           socksPort: 10808,
-          httpPort: 0,
           socksUser: '',
           socksPassword: '',
           routing: const RoutingSettings(),
@@ -594,7 +592,7 @@ void main() {
     Map<String, dynamic> logOf(LogLevel level) =>
         XrayConfigBuilder.build(
               _vlessConfig(),
-              VpnEngineOptions(socksPort: 1, httpPort: 0, socksUser: '', socksPassword: '', logLevel: level),
+              VpnEngineOptions(socksPort: 1, socksUser: '', socksPassword: '', logLevel: level),
             )['log']
             as Map<String, dynamic>;
     expect(logOf(LogLevel.debug).containsKey('access'), isFalse);

@@ -32,7 +32,7 @@ void main() {
   });
 
   test('sing-box outbound', () {
-    const opts = VpnEngineOptions(socksPort: 1, httpPort: 0, socksUser: '', socksPassword: '');
+    const opts = VpnEngineOptions(socksPort: 1, socksUser: '', socksPassword: '');
     expect(
       SingBoxOutbound.build(NaiveParser.parseUri('naive+https://u:p@n.example.com?extra-headers=X-A%3A1')!, opts),
       {

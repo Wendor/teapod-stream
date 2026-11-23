@@ -22,7 +22,6 @@ VpnEngineOptions options({
   TlsFingerprint fingerprint = TlsFingerprint.defaultFp,
 }) => VpnEngineOptions(
   socksPort: 10808,
-  httpPort: 0,
   socksUser: '',
   socksPassword: '',
   routing: routing,

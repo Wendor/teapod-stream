@@ -127,22 +127,4 @@ class ConfigStorageService {
     configs.removeWhere((c) => c.subscriptionId == id);
     await saveConfigs(configs);
   }
-
-  /// Find subscription by URL
-  Future<Subscription?> findSubscriptionByUrl(String url) async {
-    final subs = await loadSubscriptions();
-    return subs.where((s) => s.url == url).firstOrNull;
-  }
-
-  /// Get configs that belong to a subscription
-  Future<List<VpnConfig>> getConfigsForSubscription(String subscriptionId) async {
-    final configs = await loadConfigs();
-    return configs.where((c) => c.subscriptionId == subscriptionId).toList();
-  }
-
-  /// Get configs that are NOT from any subscription
-  Future<List<VpnConfig>> getStandaloneConfigs() async {
-    final configs = await loadConfigs();
-    return configs.where((c) => c.subscriptionId == null).toList();
-  }
 }

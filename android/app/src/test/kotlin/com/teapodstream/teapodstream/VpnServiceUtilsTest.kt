@@ -27,15 +27,6 @@ class VpnServiceUtilsTest {
     }
 
     @Test
-    fun subnetMaskToPrefixCountsBits() {
-        assertEquals(0, subnetMaskToPrefix("0.0.0.0"))
-        assertEquals(8, subnetMaskToPrefix("255.0.0.0"))
-        assertEquals(24, subnetMaskToPrefix("255.255.255.0"))
-        assertEquals(30, subnetMaskToPrefix("255.255.255.252"))
-        assertEquals(32, subnetMaskToPrefix("255.255.255.255"))
-    }
-
-    @Test
     fun coreKindFromIdDefaultsToGo() {
         assertEquals(CoreKind.GO, CoreKind.fromId("go"))
         assertEquals(CoreKind.RUST, CoreKind.fromId("rust"))

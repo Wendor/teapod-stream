@@ -23,7 +23,6 @@ VpnEngineOptions options({
   RoutingSettings routing = const RoutingSettings(),
 }) => VpnEngineOptions(
   socksPort: 10808,
-  httpPort: 0,
   socksUser: '',
   socksPassword: '',
   fragment: fragment,

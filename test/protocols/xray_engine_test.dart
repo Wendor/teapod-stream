@@ -30,7 +30,6 @@ VpnConfig _vless({String address = '1.2.3.4', String? ssPrefix}) => VpnConfig(
 
 const _opts = VpnEngineOptions(
   socksPort: 1080,
-  httpPort: 0,
   socksUser: 'u',
   socksPassword: 'p',
   excludedPackages: {'a'},

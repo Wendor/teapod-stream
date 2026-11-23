@@ -16,14 +16,7 @@ final key16 = base64.encode(List.generate(16, (i) => i + 1));
 final key32 = base64.encode(List.generate(32, (i) => i + 11));
 
 VpnEngineOptions options({RoutingSettings routing = const RoutingSettings(), DnsMode dnsMode = DnsMode.proxy}) =>
-    VpnEngineOptions(
-      socksPort: 10808,
-      httpPort: 0,
-      socksUser: '',
-      socksPassword: '',
-      routing: routing,
-      dnsMode: dnsMode,
-    );
+    VpnEngineOptions(socksPort: 10808, socksUser: '', socksPassword: '', routing: routing, dnsMode: dnsMode);
 
 VpnConfig parse(String link) => VlessParser.parseUri(link)!;
 

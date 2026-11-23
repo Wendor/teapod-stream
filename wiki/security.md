@@ -40,7 +40,7 @@ says how, and what counts.
 |---|---|---|
 | Configs (`password`, `uuid`, keys, `rawUri`), subscription URLs, profiles, pins, active ids | flutter_secure_storage via `StorageSecureService` (AES-GCM, key wrapped by a Keystore RSA key): `vpn_configs_v2`, `subscriptions_v2`, `profiles_v1`, `pinned_refs_v1`, `active_*_v2` | SECRET |
 | SOCKS user / password | `socks_user_v2`, `socks_password_v2` (encrypted) | SENSITIVE |
-| HWID cache | `device_id_v2`, `device_info_v2` (encrypted) | SENSITIVE |
+| HWID cache | `cached_device_id`, `cached_device_info` (encrypted) | SENSITIVE |
 | Other settings (ports, DNS, split tunneling, kill switch, …) | SharedPreferences | PUBLIC |
 | Core config | `filesDir/xray_config.json` | SECRET, process-private |
 | Quick-reconnect parameters | `filesDir/last_connection_meta.json` (no SOCKS credentials), `socks_creds.json` | SENSITIVE, process-private |

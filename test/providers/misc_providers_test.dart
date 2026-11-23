@@ -34,7 +34,7 @@ void main() {
       calls.add(call);
       return reply(call);
     });
-    SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+    SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
     c = ProviderContainer();
     addTearDown(c.dispose);

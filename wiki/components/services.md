@@ -83,11 +83,6 @@ app itself is excluded from the VPN, so without it the app's own requests would 
 | `ConfigStorageService` | typed load/save of configs, subscriptions, active ids, pins | through `StorageSecureService` |
 | `ProfileStorageService` | profiles, active profile id | secure + SharedPreferences |
 | `SettingsService` | `AppSettings`: one key per field; SOCKS credentials in secure storage | SharedPreferences |
-| `StorageMigrationService` | one-time move from plaintext SharedPreferences to secure storage (`storage_migrated_v2`) | — |
-
-`StorageMigrationService.runIfNeeded()` runs once per process; concurrent callers (configs and settings load at the
-same time) await the same run instead of reading storage before the move; a failure before the move is retried
-on the next call.
 
 ## LogService
 

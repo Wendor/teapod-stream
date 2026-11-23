@@ -64,7 +64,7 @@ void main() {
       const EventChannel('${AppConstants.methodChannel}/events'),
       MockStreamHandler.inline(onListen: (_, _) {}),
     );
-    SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+    SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
     c = ProviderContainer();
     c.listen(updateProvider, (_, _) {});

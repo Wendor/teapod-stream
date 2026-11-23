@@ -340,29 +340,7 @@ class XrayVpnService : VpnService() {
         val pm = getSystemService(POWER_SERVICE) as PowerManager
         screenOn = pm.isInteractive
         deviceIdle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) pm.isDeviceIdleMode else false
-        migrateConnectionParamsIfNeeded()
         registerScreenReceiver()
-    }
-
-    private fun migrateConnectionParamsIfNeeded() {
-        val oldFile = File(filesDir, "last_connection.json")
-        if (!oldFile.exists()) return
-        try {
-            val json = org.json.JSONObject(oldFile.readText())
-            val meta = org.json.JSONObject().apply {
-                put("socksPort", json.optInt("socksPort", 10808))
-                put("excludedPackages", json.optJSONArray("excludedPackages") ?: org.json.JSONArray())
-                put("includedPackages", json.optJSONArray("includedPackages") ?: org.json.JSONArray())
-                put("vpnMode", json.optString("vpnMode", "allExcept"))
-                val ssPrefix = json.optString("ssPrefix")
-                if (ssPrefix.isNotEmpty()) put("ssPrefix", ssPrefix)
-                put("proxyOnly", json.optBoolean("proxyOnly", false))
-                put("showNotification", json.optBoolean("showNotification", true))
-                put("killSwitch", json.optBoolean("killSwitch", false))
-            }
-            File(filesDir, "last_connection_meta.json").writeText(meta.toString())
-        } catch (_: Exception) { }
-        oldFile.delete()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

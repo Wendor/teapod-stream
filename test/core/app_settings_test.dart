@@ -154,7 +154,7 @@ void main() {
 
   group('SettingsService', () {
     setUp(() {
-      SharedPreferences.setMockInitialValues({'storage_migrated_v2': true});
+      SharedPreferences.setMockInitialValues({});
       FlutterSecureStorage.setMockInitialValues({});
     });
 
@@ -180,7 +180,6 @@ void main() {
 
     test('corrupt nested json falls back to defaults', () async {
       SharedPreferences.setMockInitialValues({
-        'storage_migrated_v2': true,
         'xray_fragment': '{broken',
         'xray_noise': '[]',
         'xray_mux': '',

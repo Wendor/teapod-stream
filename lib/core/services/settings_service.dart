@@ -10,7 +10,6 @@ import '../models/routing_settings.dart';
 import '../models/xray_tuning.dart';
 import '../constants/app_constants.dart';
 import 'storage_secure_service.dart';
-import 'storage_migration_service.dart';
 
 class SettingsService {
   static const _socksPortKey = 'socks_port';
@@ -75,7 +74,6 @@ class SettingsService {
   final _secure = StorageSecureService();
 
   Future<AppSettings> load() async {
-    await StorageMigrationService.runIfNeeded();
     final prefs = await SharedPreferences.getInstance();
     final creds = await _secure.readSocksCredentials();
     final excluded = (prefs.getStringList(_excludedPackagesKey) ?? []).toSet();

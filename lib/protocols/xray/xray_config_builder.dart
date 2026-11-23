@@ -568,22 +568,22 @@ class XrayConfigBuilder {
   /// Merge app settings into a pre-built raw xray config from a managed subscription.
   ///
   /// Unlike [build], we preserve the server's outbound topology (load balancers,
-  /// observatory, custom outbound tags). Only port/credentials, DNS, log and
-  /// safe bypass rules (→ direct) are overlaid.
+  /// observatory, custom outbound tags). Only the sections in [_managedTopLevelKeys] are
+  /// kept; port/credentials, log and safe bypass rules (→ direct) are overlaid.
   static String mergeWithRaw(String rawConfig, VpnEngineOptions options) {
     try {
       final cfg = jsonDecode(rawConfig) as Map<String, dynamic>;
 
-      // api/metrics with `listen` — gRPC (HandlerService.ListOutbounds: addresses, UUIDs,
-      // keys) and pprof on localhost without authentication for any app.
-      cfg
-        ..remove('api')
-        ..remove('metrics');
+      // Only the sections a client config needs. Everything else (api/metrics: unauthenticated
+      // gRPC and pprof on localhost; reverse; env; geodata; transport) is dropped. Exact
+      // spelling only: xray matches keys case-insensitively, so `Inbounds` would override ours.
+      cfg.removeWhere((key, _) => !_managedTopLevelKeys.contains(key));
 
-      // allowInsecure in xray v26 breaks startup of the whole config; without it nodes with
-      // a self-signed certificate fail only at the handshake.
       for (final o in (cfg['outbounds'] as List? ?? const []).whereType<Map<String, dynamic>>()) {
+        // allowInsecure in xray v26 breaks startup of the whole config; without it nodes with
+        // a self-signed certificate fail only at the handshake.
         (o['streamSettings']?['tlsSettings'] as Map?)?.remove('allowInsecure');
+        _dropReverse(o);
       }
 
       // Preserve the original socks inbound tag so server routing rules
@@ -683,6 +683,39 @@ class XrayConfigBuilder {
     } catch (e) {
       // Don't pass the config as is: it has server inbounds (0.0.0.0, noauth).
       throw FormatException(L10n.current.xrayRawJsonParse('$e'));
+    }
+  }
+
+  /// Top-level sections kept from a managed config; `inbounds` and `log` are then replaced.
+  static const _managedTopLevelKeys = {
+    'log',
+    'dns',
+    'routing',
+    'inbounds',
+    'outbounds',
+    'policy',
+    'stats',
+    'fakedns',
+    'fakeDns',
+    'observatory',
+    'burstObservatory',
+    'version',
+  };
+
+  /// Removes `reverse` from outbound settings (the VLESS simplified style and `vnext` users) at any
+  /// depth. xray matches keys in any letter case, so `Settings`, `Vnext` and `Reverse` count too.
+  static void _dropReverse(Map<String, dynamic> outbound) {
+    void walk(Object? node) {
+      if (node is Map<String, dynamic>) {
+        node.removeWhere((key, _) => key.toLowerCase() == 'reverse');
+        node.values.forEach(walk);
+      } else if (node is List) {
+        node.forEach(walk);
+      }
+    }
+
+    for (final e in outbound.entries) {
+      if (e.key.toLowerCase() == 'settings') walk(e.value);
     }
   }
 

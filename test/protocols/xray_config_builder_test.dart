@@ -683,6 +683,94 @@ void main() {
       expect(cfg['inbounds'][0]['listen'], '127.0.0.1');
       expect(() => XrayConfigBuilder.mergeWithRaw('{"inbounds": {}}', _defaultOptions()), throwsFormatException);
     });
+
+    test('mergeWithRaw keeps only the client sections and drops reverse from outbounds', () {
+      final raw = {
+        'log': {'loglevel': 'debug'},
+        'Inbounds': [
+          {'tag': 'x', 'protocol': 'socks', 'listen': '0.0.0.0', 'port': 1081},
+        ],
+        'inbounds': [
+          {'tag': 'socks', 'protocol': 'socks', 'listen': '0.0.0.0', 'port': 1080},
+        ],
+        'dns': {
+          'servers': ['1.1.1.1'],
+        },
+        'routing': {'rules': <Object>[]},
+        'policy': {'levels': <String, Object>{}},
+        'stats': <String, Object>{},
+        'fakedns': [
+          {'ipPool': '198.18.0.0/15', 'poolSize': 65535},
+        ],
+        'observatory': {
+          'subjectSelector': ['p'],
+        },
+        'burstObservatory': {
+          'subjectSelector': ['p'],
+        },
+        'reverse': {
+          'bridges': [
+            {'tag': 'b', 'domain': 'r.example'},
+          ],
+        },
+        'Reverse': <String, Object>{},
+        'env': {'k': 'v'},
+        'geodata': {'outbound': 'direct'},
+        'transport': <String, Object>{},
+        'outbounds': [
+          {
+            'tag': 'p',
+            'protocol': 'vless',
+            'settings': {
+              'address': 's.example',
+              'port': 443,
+              'id': 'u',
+              'encryption': 'none',
+              'reverse': {'tag': 'r'},
+              'Reverse': {'tag': 'r'},
+            },
+          },
+          {
+            'tag': 'v',
+            'protocol': 'vless',
+            'Settings': {
+              'Vnext': [
+                {
+                  'address': 's.example',
+                  'port': 443,
+                  'Users': [
+                    {
+                      'id': 'u',
+                      'encryption': 'none',
+                      'reverse': {'tag': 'r'},
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+          {'tag': 'direct', 'protocol': 'freedom'},
+        ],
+      };
+      final cfg = jsonDecode(XrayConfigBuilder.mergeWithRaw(jsonEncode(raw), _defaultOptions())) as Map;
+      expect(cfg.keys.toSet(), {
+        'log',
+        'inbounds',
+        'dns',
+        'routing',
+        'policy',
+        'stats',
+        'fakedns',
+        'observatory',
+        'burstObservatory',
+        'outbounds',
+      });
+      expect(cfg['inbounds'], hasLength(1));
+      expect(cfg['inbounds'][0]['listen'], '127.0.0.1');
+      expect(cfg['outbounds'][0]['settings'], {'address': 's.example', 'port': 443, 'id': 'u', 'encryption': 'none'});
+      expect(cfg['outbounds'][1]['Settings']['Vnext'][0]['Users'][0], {'id': 'u', 'encryption': 'none'});
+      expect(cfg['dns'], raw['dns']);
+    });
   });
 
   group('Mux from the link', () {

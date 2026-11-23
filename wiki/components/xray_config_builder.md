@@ -99,7 +99,8 @@ must:
 | `inbounds` | replaced by the app's SOCKS (port, credentials, sniffing), **keeping the original tag** — server rules match `inboundTag: ["socks", …]` |
 | `log` | replaced |
 | `dns` | kept — it is built for the server's outbound topology; replacing it broke resolving, and routing `dns-module → direct` would leak |
-| `api`, `metrics` | removed — with `listen` they are an unauthenticated gRPC (lists outbounds with keys) / pprof on localhost |
+| top-level sections | only `log`, `dns`, `routing`, `inbounds`, `outbounds`, `policy`, `stats`, `fakedns`/`fakeDns`, `observatory`, `burstObservatory`, `version` are kept, in exactly this spelling (xray reads keys case-insensitively, so `Inbounds` would override the app's); the rest is dropped: `api`/`metrics` (with `listen` an unauthenticated gRPC listing outbounds with keys / pprof on localhost), `reverse`, `env`, `geodata`, `transport` |
+| `reverse` in outbound `settings` | removed at any depth in any letter case (`Settings`, `vnext` users) — a client config doesn't run reverse proxying |
 | `allowInsecure` in outbounds | removed — fatal in xray v26 |
 | `observatory.probeInterval` | raised to at least `obsProbeIntervalSec` (default 600 s, 0 = keep): configs with 30 s and 20+ outbounds flooded mobile links with TLS probes and triggered server resets |
 | balancer `fallbackTag` pointing to freedom | rewritten to the first proxy outbound of the selector, else `teapod-blackhole` — otherwise traffic leaves outside the VPN when all nodes are "dead" and in the first seconds before observatory has results |

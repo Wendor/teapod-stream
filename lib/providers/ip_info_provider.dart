@@ -1,9 +1,9 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:socks5_proxy/socks.dart';
 import '../core/interfaces/vpn_engine.dart';
+import '../core/services/app_http.dart';
 import '../core/services/ip_lookup.dart';
+import '../core/services/tunnel_socks.dart';
 import '../protocols/xray/xray_engine.dart';
 import 'config_provider.dart';
 import 'vpn_provider.dart';
@@ -23,62 +23,52 @@ class IpInfo {
 final ipLookupProvider = Provider<IpLookup>((ref) => IpLookup());
 
 class IpInfoNotifier extends AsyncNotifier<IpInfo?> {
+  static const _maxBodyBytes = 64 * 1024;
+
   @override
   Future<IpInfo?> build() async {
     final connectionState = ref.watch(vpnConnectionStateProvider);
     if (connectionState == VpnState.connected) {
       final vpnState = ref.read(vpnProvider);
       if (vpnState.activeSocksPort > 0) {
-        return _fetch(
-          socksPort: vpnState.activeSocksPort,
-          socksUser: vpnState.activeSocksUser,
-          socksPassword: vpnState.activeSocksPassword,
-        );
+        return _fetch(TunnelSocks(vpnState.activeSocksPort, vpnState.activeSocksUser, vpnState.activeSocksPassword));
       }
     }
     // Fallback: Quick Tile started VPN — native state may be ahead of Flutter state
     final engine = ref.read(xrayEngineProvider);
     final nativeState = await engine.getVpnState();
     if (nativeState.state == VpnState.connected && nativeState.socksPort > 0) {
-      return _fetch(
-        socksPort: nativeState.socksPort,
-        socksUser: nativeState.socksUser,
-        socksPassword: nativeState.socksPassword,
-      );
+      return _fetch(TunnelSocks(nativeState.socksPort, nativeState.socksUser, nativeState.socksPassword));
     }
     return null;
   }
 
-  Future<IpInfo?> _fetch({required int socksPort, required String socksUser, required String socksPassword}) async {
-    if (socksPort <= 0) return null;
+  /// Only through the tunnel: the lookup is about the tunnel's exit IP.
+  Future<IpInfo?> _fetch(TunnelSocks socks) async {
     final configId = ref.read(effectiveConfigProvider)?.id ?? '';
-    final client = HttpClient();
-    SocksTCPClient.assignToHttpClient(client, [
-      ProxySettings(
-        InternetAddress.loopbackIPv4,
-        socksPort,
-        username: socksUser.isNotEmpty ? socksUser : null,
-        password: socksUser.isNotEmpty ? socksPassword : null,
-      ),
-    ]);
+    // One client for the chain: closing it ends the requests the lookup stopped waiting for.
+    final client = AppHttp.client(socks: socks);
     Future<String> fetch(Uri url) async {
-      final req = await client.getUrl(url);
-      req.headers.set(HttpHeaders.userAgentHeader, 'TeapodStream');
-      final resp = await req.close();
-      final body = await resp.transform(utf8.decoder).join();
+      final resp = await AppHttp.get(
+        url,
+        client: client,
+        headers: const {HttpHeaders.userAgentHeader: 'TeapodStream'},
+        maxBytes: _maxBodyBytes,
+      );
       if (resp.statusCode != HttpStatus.ok) throw HttpException('HTTP ${resp.statusCode}', uri: url);
-      return body;
+      return resp.body;
     }
 
+    final IpLookupResult? r;
     try {
-      final r = await ref.read(ipLookupProvider).lookup(configId, fetch);
-      if (r == null) return null;
-      // The service gave no country: take it from the geoip.dat the cores route with.
-      final code = r.countryCode ?? await _countryFromGeoip(r.ip);
-      return IpInfo(ip: r.ip, country: r.country, countryCode: code);
+      r = await ref.read(ipLookupProvider).lookup(configId, fetch);
     } finally {
       client.close(force: true);
     }
+    if (r == null) return null;
+    // The service gave no country: take it from the geoip.dat the cores route with.
+    final code = r.countryCode ?? await _countryFromGeoip(r.ip);
+    return IpInfo(ip: r.ip, country: r.country, countryCode: code);
   }
 
   Future<String?> _countryFromGeoip(String ip) async {

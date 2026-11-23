@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import '../constants/app_constants.dart';
 import '../models/vpn_config.dart';
+import 'app_http.dart';
 import 'tunnel_socks.dart';
 import '../../protocols/xray/vless_parser.dart';
 
@@ -65,8 +65,6 @@ class HwidDeviceInfo {
 }
 
 class SubscriptionService {
-  static const _maxBodyBytes = 10 * 1024 * 1024;
-
   /// Fetch and parse a subscription URL.
   ///
   /// If [allowSelfSigned] is false (default) and the server presents an
@@ -103,9 +101,6 @@ class SubscriptionService {
     required String? userAgent,
     required TunnelSocks? socks,
   }) async {
-    final uri = Uri.parse(url);
-    final httpClient = HttpClient()..connectionTimeout = const Duration(seconds: 15);
-
     UntrustedCertificateException? certError;
     String? acceptedCert;
 
@@ -119,45 +114,32 @@ class SubscriptionService {
       return false;
     }
 
-    httpClient.badCertificateCallback = onBadCertificate;
-    socks?.apply(httpClient, onBadCertificate: onBadCertificate);
-
-    String body;
-    HttpHeaders responseHeaders;
+    final ua = userAgent?.trim() ?? '';
+    final AppHttpResponse response;
     try {
-      final request = await httpClient.getUrl(uri).timeout(const Duration(seconds: 15));
-      final ua = userAgent?.trim() ?? '';
-      request.headers.set('User-Agent', ua.isNotEmpty ? ua : AppConstants.subscriptionUserAgent);
-
-      if (hwid != null) {
-        request.headers.set('X-Hwid', hwid.deviceId);
-        request.headers.set('X-Device-Os', 'Android');
-        request.headers.set('X-Device-Model', hwid.deviceModel);
-        request.headers.set('X-Ver-Os', hwid.osVersion.toString());
-      }
-
-      final response = await request.close().timeout(const Duration(seconds: 15));
-
-      if (response.statusCode != 200) {
-        throw Exception('Failed to fetch subscription: ${response.statusCode}');
-      }
-
-      responseHeaders = response.headers;
-      // Idle timeout and size limit: a slow or huge response must not
-      // hang forever or eat memory.
-      final bytes = BytesBuilder(copy: false);
-      await for (final chunk in response.timeout(const Duration(seconds: 15))) {
-        bytes.add(chunk);
-        if (bytes.length > _maxBodyBytes) throw Exception('Subscription body exceeds 10 MB');
-      }
-      body = utf8.decode(bytes.takeBytes(), allowMalformed: true);
-    } on HandshakeException {
+      response = await AppHttp.get(
+        Uri.parse(url),
+        socks: socks,
+        onBadCertificate: onBadCertificate,
+        headers: {
+          'User-Agent': ua.isNotEmpty ? ua : AppConstants.subscriptionUserAgent,
+          if (hwid != null) ...{
+            'X-Hwid': hwid.deviceId,
+            'X-Device-Os': 'Android',
+            'X-Device-Model': hwid.deviceModel,
+            'X-Ver-Os': hwid.osVersion.toString(),
+          },
+        },
+      );
+    } on AppHttpException {
       if (certError != null) throw certError!;
       rethrow;
-    } finally {
-      // Without force a connection with an unread body (non-200, timeout) lives forever.
-      httpClient.close(force: true);
     }
+    if (response.statusCode != 200) {
+      throw Exception('Failed to fetch subscription: ${response.statusCode}');
+    }
+    final responseHeaders = response.headers;
+    var body = response.body;
 
     final meta = _parseHeaders(responseHeaders);
 

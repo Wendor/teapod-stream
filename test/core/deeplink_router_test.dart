@@ -1,13 +1,14 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'package:teapodstream/core/models/connections_bundle.dart';
 import 'package:teapodstream/core/models/profile.dart';
 import 'package:teapodstream/core/models/profile_bundle.dart';
 import 'package:teapodstream/core/services/deeplink_router.dart';
 import 'package:teapodstream/core/models/app_settings.dart';
+
+import '../helpers/local_server.dart';
 
 final _profileBundle = ProfileBundle(
   exportedAt: DateTime(2026),
@@ -66,36 +67,47 @@ void main() {
   });
 
   group('DeeplinkRouter.fetchFromUrl', () {
-    Future<Object?> fetch(DeeplinkParseResult r, MockClientHandler h) =>
-        http.runWithClient(() => DeeplinkRouter.fetchFromUrl(r), () => MockClient(h));
+    late LocalServer server;
+    setUp(() async => server = await LocalServer.start());
+    tearDown(() => server.close());
+
+    /// Every request goes to [server], whatever the host and scheme of the URL.
+    Future<Object?> fetch(DeeplinkParseResult r) =>
+        HttpOverrides.runWithHttpOverrides(() => DeeplinkRouter.fetchFromUrl(r), RedirectHttpOverrides(server.port));
 
     test('fetches a profile bundle', () async {
-      final b = await fetch(
-        DeeplinkParseResult.urlProfile('https://x/p'),
-        (req) async => http.Response(jsonEncode(_profileBundle.toJson()), 200),
-      );
+      server.serve(jsonEncode(_profileBundle.toJson()));
+      final b = await fetch(DeeplinkParseResult.urlProfile('https://x/p'));
       expect((b as ProfileBundle).profile.name, 'P');
+      expect(server.paths.single, '/p');
     });
 
     test('fetches a connections bundle', () async {
-      final b = await fetch(
-        DeeplinkParseResult.urlConnections('https://x/c'),
-        (req) async => http.Response(jsonEncode(_connections.toJson()), 200),
-      );
+      server.serve(jsonEncode(_connections.toJson()));
+      final b = await fetch(DeeplinkParseResult.urlConnections('https://x/c'));
       expect((b as ConnectionsBundle).label, 'L');
     });
 
     test('non-200, bad json and inline results give null', () async {
-      expect(await fetch(DeeplinkParseResult.urlProfile('https://x'), (_) async => http.Response('', 404)), isNull);
-      expect(await fetch(DeeplinkParseResult.urlProfile('https://x'), (_) async => http.Response('[1]', 200)), isNull);
-      expect(
-        await fetch(
-          DeeplinkParseResult.urlConnections('https://x'),
-          (_) async => throw http.ClientException('offline'),
-        ),
-        isNull,
-      );
+      server.serve('', status: 404);
+      expect(await fetch(DeeplinkParseResult.urlProfile('https://x')), isNull);
+      server.serve('[1]');
+      expect(await fetch(DeeplinkParseResult.urlProfile('https://x')), isNull);
       expect(await DeeplinkRouter.fetchFromUrl(DeeplinkParseResult.inlineProfile(_profileBundle)), isNull);
+    });
+
+    test('plain http and a redirect to it are refused', () async {
+      server.serve(jsonEncode(_profileBundle.toJson()));
+      expect(await fetch(DeeplinkParseResult.urlProfile('http://x/p')), isNull);
+      expect(server.paths, isEmpty);
+      server.serve('', status: 302, headers: {'location': 'http://x/p'});
+      expect(await fetch(DeeplinkParseResult.urlProfile('https://x/start')), isNull);
+      expect(server.paths, ['/start']);
+    });
+
+    test('a bundle over the limit gives null', () async {
+      server.serve('x' * (DeeplinkRouter.maxBundleBytes + 1));
+      expect(await fetch(DeeplinkParseResult.urlProfile('https://x')), isNull);
     });
   });
 }

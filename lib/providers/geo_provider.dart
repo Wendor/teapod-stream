@@ -1,8 +1,7 @@
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/io_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/services/app_http.dart';
 import '../core/services/tunnel_socks.dart';
 import 'settings_provider.dart';
 import 'vpn_provider.dart';
@@ -31,6 +30,7 @@ class GeoError extends GeoState {
 
 class GeoNotifier extends Notifier<GeoState> {
   static const _kLastUpdated = 'geo_last_updated';
+  static const _maxFileBytes = 200 * 1024 * 1024;
 
   @override
   GeoState build() {
@@ -110,21 +110,10 @@ class GeoNotifier extends Notifier<GeoState> {
     }
   }
 
-  static http.Client _client(TunnelSocks? socks) {
-    if (socks == null) return http.Client();
-    final c = HttpClient()..connectionTimeout = const Duration(seconds: 15);
-    socks.apply(c);
-    return IOClient(c);
-  }
-
   Future<int> _contentLength(String url, TunnelSocks? socks) async {
-    final client = _client(socks);
-    try {
-      final resp = await client.head(Uri.parse(url)).timeout(const Duration(seconds: 15));
-      return int.tryParse(resp.headers['content-length'] ?? '') ?? -1;
-    } finally {
-      client.close();
-    }
+    final resp = await AppHttp.open(Uri.parse(url), method: 'HEAD', socks: socks, maxBytes: _maxFileBytes);
+    resp.close();
+    return resp.headers.contentLength;
   }
 
   Future<void> _downloadFile({
@@ -137,17 +126,22 @@ class GeoNotifier extends Notifier<GeoState> {
     final tmpFile = File(tmpPath);
     final destFile = File(destPath);
 
-    final client = _client(socks);
+    // Idle timeout: a stuck tunnel must not hold the download forever.
+    final resp = await AppHttp.open(
+      Uri.parse(url),
+      socks: socks,
+      timeout: const Duration(seconds: 30),
+      idleTimeout: const Duration(seconds: 30),
+      maxBytes: _maxFileBytes,
+    );
     try {
-      final resp = await client.send(http.Request('GET', Uri.parse(url))).timeout(const Duration(seconds: 30));
       if (resp.statusCode != 200) {
         throw Exception('HTTP ${resp.statusCode}');
       }
 
       final sink = tmpFile.openWrite();
       try {
-        // Idle timeout: a stuck tunnel must not hold the download forever.
-        await for (final chunk in resp.stream.timeout(const Duration(seconds: 30))) {
+        await for (final chunk in resp.body) {
           sink.add(chunk);
           onProgress(chunk.length);
         }
@@ -155,7 +149,7 @@ class GeoNotifier extends Notifier<GeoState> {
         await sink.close();
       }
     } finally {
-      client.close();
+      resp.close();
     }
 
     if (destFile.existsSync()) await destFile.delete();

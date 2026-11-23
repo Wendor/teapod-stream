@@ -72,8 +72,20 @@ class _RedirectClient implements HttpClient {
   final int port;
   _RedirectClient(this.inner, this.port);
 
+  Uri _local(Uri url) => url.replace(scheme: 'http', host: '127.0.0.1', port: port);
+
   @override
-  Future<HttpClientRequest> getUrl(Uri url) => inner.getUrl(url.replace(scheme: 'http', host: '127.0.0.1', port: port));
+  Future<HttpClientRequest> getUrl(Uri url) => inner.getUrl(_local(url));
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) => inner.openUrl(method, _local(url));
+
+  @override
+  set connectionTimeout(Duration? timeout) => inner.connectionTimeout = timeout;
+
+  @override
+  set badCertificateCallback(bool Function(X509Certificate cert, String host, int port)? callback) =>
+      inner.badCertificateCallback = callback;
 
   @override
   void close({bool force = false}) => inner.close(force: force);

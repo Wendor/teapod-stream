@@ -61,8 +61,9 @@ encoded as base64url without padding. `ConnectionsBundle` has a full form (confi
 
 Flow: `MainActivity` → `deeplink` event on the shared event stream → `DeeplinkHandler.handleUri` →
 `DeeplinkRouter.parse` → confirmation dialog → import. A `url=` link is accepted only over https and is downloaded
-**after** a dialog that shows the host: the app is excluded from the tunnel, so the request goes out from the real
-IP.
+**after** a dialog that shows the host. The download (`DeeplinkRouter.fetchBundle`, also used by `refreshProfile`)
+goes through [AppHttp](services.md#apphttp): https only including redirects, at most 1 MB, through the tunnel when
+connected and directly when the tunnel fails; without a tunnel it goes out from the real IP.
 
 ## Related
 

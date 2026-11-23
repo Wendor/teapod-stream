@@ -1,11 +1,11 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/models/profile.dart';
 import '../core/models/profile_bundle.dart';
 import '../core/models/connections_bundle.dart';
+import '../core/services/deeplink_router.dart';
 import '../core/services/profile_storage_service.dart';
 import '../core/services/settings_service.dart';
 import '../core/models/app_settings.dart';
@@ -242,7 +242,7 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
 
     ProfileBundle bundle;
     try {
-      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 15));
+      final response = await DeeplinkRouter.fetchBundle(Uri.parse(url), socks: ref.read(tunnelSocksProvider));
       if (response.statusCode != 200) return null;
 
       bundle = ProfileBundle.fromJson(jsonDecode(response.body) as Map<String, dynamic>);

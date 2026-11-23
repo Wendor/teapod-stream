@@ -7,10 +7,10 @@ Business logic and persistence without UI, in `lib/core/services/`. Providers cr
 `fetchSubscription(url, {allowSelfSigned, pinnedCertDer, hwid, userAgent, socks})` → `SubscriptionFetchResult`
 (configs, `profileTitle`, usage info, `acceptedCertDer`).
 
-- **Request.** User-Agent = `subUserAgent` or `AppConstants.subscriptionUserAgent`; HWID headers when enabled
-  (below). Connection timeout 15 s, idle timeout while reading the body 15 s, body limit 10 MB, non-200 → error.
+- **Request** through [AppHttp](#apphttp) with its defaults (15 s timeouts, body limit 10 MB). User-Agent =
+  `subUserAgent` or `AppConstants.subscriptionUserAgent`; HWID headers when enabled (below). Non-200 → error.
 - **Through the tunnel.** `socks` (from `tunnelSocksProvider`, only while connected) sends the request through the
-  tunnel ([TunnelSocks](#tunnelsocks)).
+  tunnel, directly when the tunnel fails ([TunnelSocks](#tunnelsocks)).
 - **Certificates.** An untrusted certificate with `allowSelfSigned = false` → `UntrustedCertificateException`; the
   UI asks the user. Once accepted, the DER is returned as `acceptedCertDer` and stored in
   `Subscription.pinnedCertDer`; later refreshes accept only that certificate (trust on first use).
@@ -19,8 +19,9 @@ Business logic and persistence without UI, in `lib/core/services/`. Providers cr
 - **Response headers:** profile title, usage (`subscription-userinfo`), announce, HWID status (`x-hwid-active`,
   `x-hwid-not-supported`, `x-hwid-max-devices-reached`).
 
-**HTTP rule for the whole app:** close `HttpClient` with `close(force: true)` in `finally`. Without `force` a
-connection with an unread body (non-200, timeout) stays ESTABLISHED forever.
+**HTTP rule for the whole app:** the app's own requests go through [AppHttp](#apphttp); it closes its `HttpClient`
+with `close(force: true)`. Without `force` a connection with an unread body (non-200, timeout) stays ESTABLISHED
+forever.
 
 ### HWID
 
@@ -28,11 +29,40 @@ connection with an unread body (non-200, timeout) stays ESTABLISHED forever.
 page, and the subscription would import zero configs. Headers: `X-Hwid` (ANDROID_ID), `X-Device-Os: Android`,
 `X-Device-Model`, `X-Ver-Os`. `DeviceService` reads them over the channel once and caches them in secure storage.
 
+## AppHttp
+
+`lib/core/services/app_http.dart` — the one HTTP client for the app's own requests: subscriptions, geodata, update
+check and APK, IP lookup, profile and bundle downloads. Ping and delay measurement stay out of it: they go direct
+by design.
+
+- `client({socks, onBadCertificate})` — an `HttpClient` through [TunnelSocks](#tunnelsocks) when `socks` is given,
+  connection timeout 15 s.
+- `open(url, {method, socks, headers, httpsOnly, maxBytes, timeout, idleTimeout, onBadCertificate})` → `AppHttpStream`
+  with the body unread; the caller calls `close()` in `finally`. `timeout` (15 s) covers the connection and the
+  response headers, `idleTimeout` (15 s) each wait for the next body chunk. Redirects (up to 5) are followed here,
+  so `httpsOnly` holds for every hop.
+- `get(url, …)` → `AppHttpResponse` (status, headers, bytes): the body is read only for a 2xx status (an error body
+  may never end).
+- Limits: `maxBytes` (10 MB by default) is checked against `Content-Length` before the body and while reading it.
+  Refusals (non-https URL, body over the limit, and — on a client `open` creates itself — a certificate rejected by
+  `onBadCertificate` or by default) throw `AppHttpException`, which is not a transport error, so `orDirect` doesn't
+  retry it outside the tunnel.
+- `open` / `get` with `client:` (from `client()`) share one client; its owner closes it, which ends every request
+  still running on it (the IP lookup chain stops waiting for a slow service but must not leave it running). A
+  certificate rejection on such a client stays a `TlsException`, so a shared client is never used under `orDirect`.
+
+| Caller | Tunnel | Limits |
+|---|---|---|
+| subscriptions (`SubscriptionService`) | `orDirect` | defaults |
+| geodata (`GeoNotifier`) | `orDirect` | 30 s, 200 MB per file |
+| update check, APK (`UpdateService`) | when connected, no direct retry | defaults; APK: 30 s idle, 500 MB for the whole file, a resumed part included |
+| IP lookup (`IpInfoNotifier`) | always (it asks for the tunnel's exit) | 64 KB |
+| deep link and profile bundles (`DeeplinkRouter.fetchBundle`) | `orDirect` | https only, 1 MB |
+
 ## TunnelSocks
 
-`lib/core/services/tunnel_socks.dart` — the active tunnel's local SOCKS inbound, used for the app's own downloads
-(subscriptions, geodata, update APK): the app itself is excluded from the VPN, so without it these requests would
-leave from the real IP.
+`lib/core/services/tunnel_socks.dart` — the active tunnel's local SOCKS inbound, used by [AppHttp](#apphttp): the
+app itself is excluded from the VPN, so without it the app's own requests would leave from the real IP.
 
 - `apply(HttpClient, {onBadCertificate})` installs a connection factory: SOCKS, then TLS with the host of the
   actual connection (after a redirect — the new one); certificate checks go through `onBadCertificate`.
@@ -40,7 +70,8 @@ leave from the real IP.
   (`isTransportError`: socket, timeout, TLS, HTTP client and SOCKS errors). A server answer (HTTP error, untrusted
   certificate) is not retried, otherwise a live tunnel could be bypassed.
 - Provided by `tunnelSocksProvider` (`vpn_provider.dart`): a holder that `VpnNotifier` fills on every state change
-  (`listenSelf`), with no dependencies of its own. `ConfigNotifier` and `GeoNotifier` read it; if it watched
+  (`listenSelf`), with no dependencies of its own. `ConfigNotifier`, `GeoNotifier`, `ProfileNotifier` and the deep
+  link UI read it; if it watched
   `vpnProvider`, the read would close a cycle (`vpnProvider` → `activeCoreProvider` → `configProvider`), which Riverpod
   refuses in debug builds.
 
@@ -79,11 +110,12 @@ H1s of `changelog/*.md`, [release notes](ci.md#release-notes)) and returns the s
 English, else the whole body (releases before per-language notes). The app reads notes only through the GitHub API:
 `raw.githubusercontent.com` is often unreachable in Russia. `downloadApk` streams
 `DownloadProgress`, resumes with `Range`, and fails after 30 s without data (otherwise a stalled download — and its
-cancel — hung forever). Both go through the tunnel when connected. [UpdateProvider](update_provider.md).
+cancel — hung forever). Both go through [AppHttp](#apphttp) and the tunnel when connected. [UpdateProvider](update_provider.md).
 
 ## Deep links
 
 `DeeplinkRouter.parse` / `fetchFromUrl` and `DeeplinkHandler.handleUri` (dialogs, import) — [profiles](profiles.md#bundles-and-deep-links).
+`DeeplinkRouter.fetchBundle` downloads a bundle for a deep link and for `ProfileNotifier.refreshProfile` ([AppHttp](#apphttp)).
 
 ## PlatformService
 

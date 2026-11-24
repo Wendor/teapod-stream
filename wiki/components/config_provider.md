@@ -31,7 +31,7 @@ the queue never call a public mutator — it would deadlock; use the private var
 
 ## Subscriptions
 
-`addSubscriptionFromUrl(url, {name, allowSelfSigned, replaceId})` — the download runs outside the queue, applying
+`addSubscriptionFromUrl(url, {name, pinnedCertDer, replaceId})` — the download runs outside the queue, applying
 it runs inside with a fresh state. Configs of a subscription get **new ids on every download**, so the refresh
 carries over:
 - ping results, by `address:port`;
@@ -39,8 +39,9 @@ carries over:
 - the subscription name: `name ?? existing ?? profile-title ?? host` — a user rename survives auto-refresh.
 
 `replaceId` changes the URL of an existing subscription; on a download error the old one stays intact. A
-self-signed certificate raises `UntrustedCertificateException`; after the user confirms, its DER is pinned
-(trust on first use) and later refreshes require the same certificate ([services](services.md)).
+self-signed certificate raises `UntrustedCertificateException`; after the user confirms, the call is repeated with
+`pinnedCertDer` = the DER of the certificate shown, which is stored as the pin (trust on first use); on later
+refreshes an otherwise untrusted certificate passes only if it is that one ([services](services.md)).
 
 `refreshStaleSubscriptions(intervalHours)` refreshes subscriptions never fetched or older than the interval; one
 failure is logged and backed off for 1 h in memory (`_subFailedAt`) without stopping the others; `_refreshingSubs`

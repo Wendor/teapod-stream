@@ -202,6 +202,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String certFingerprint(String fingerprint) {
+    return 'SHA-256: $fingerprint';
+  }
+
+  @override
   String get certContinueAnyway => 'Continue anyway?';
 
   @override

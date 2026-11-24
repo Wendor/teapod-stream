@@ -108,6 +108,14 @@
       }
     }
   },
+  "certFingerprint": "SHA-256: {fingerprint}",
+  "@certFingerprint": {
+    "placeholders": {
+      "fingerprint": {
+        "type": "String"
+      }
+    }
+  },
   "certContinueAnyway": "Continue anyway?",
   "configsUpdateError": "Update error: {error}",
   "@configsUpdateError": {

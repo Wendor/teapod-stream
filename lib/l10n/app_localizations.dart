@@ -446,6 +446,12 @@ abstract class AppLocalizations {
   /// **'Issuer: {issuer}'**
   String certIssuer(String issuer);
 
+  /// No description provided for @certFingerprint.
+  ///
+  /// In en, this message translates to:
+  /// **'SHA-256: {fingerprint}'**
+  String certFingerprint(String fingerprint);
+
   /// No description provided for @certContinueAnyway.
   ///
   /// In en, this message translates to:

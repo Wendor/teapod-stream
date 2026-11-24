@@ -59,6 +59,7 @@
   "certServer": "Сервер: {host}",
   "certSubject": "Сертификат: {subject}",
   "certIssuer": "Издатель: {issuer}",
+  "certFingerprint": "SHA-256: {fingerprint}",
   "certContinueAnyway": "Продолжить всё равно?",
   "configsUpdateError": "Ошибка обновления: {error}",
   "configsRenameSub": "Переименовать подписку",

@@ -21,6 +21,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/hero_panel.dart';
 import '../widgets/pressable.dart';
+import '../widgets/untrusted_cert_dialog.dart';
 import 'add_config_screen.dart';
 import 'subscription_settings_screen.dart';
 import '../../l10n/l10n.dart';
@@ -602,7 +603,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
     BuildContext context,
     WidgetRef ref,
     Subscription sub, {
-    bool allowSelfSigned = false,
+    String? pinnedCertDer,
   }) async {
     showDialog<void>(
       context: context,
@@ -612,7 +613,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
     try {
       await ref
           .read(configProvider.notifier)
-          .addSubscriptionFromUrl(sub.url, name: sub.name, allowSelfSigned: allowSelfSigned);
+          .addSubscriptionFromUrl(sub.url, name: sub.name, pinnedCertDer: pinnedCertDer);
       if (context.mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.l10n.configsSubUpdated)));
@@ -620,31 +621,8 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
     } on UntrustedCertificateException catch (e) {
       if (!context.mounted) return;
       Navigator.pop(context);
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(context.l10n.certUntrustedTitle),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(context.l10n.certUntrustedMessage),
-              const SizedBox(height: 12),
-              Text(context.l10n.certServer(e.host), style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
-              Text(context.l10n.certSubject(e.subject), style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
-              Text(context.l10n.certIssuer(e.issuer), style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
-              const SizedBox(height: 12),
-              Text(context.l10n.certContinueAnyway),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l10n.commonCancel)),
-            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.l10n.commonContinue)),
-          ],
-        ),
-      );
-      if (confirmed == true && context.mounted) {
-        await _refreshSubscription(context, ref, sub, allowSelfSigned: true);
+      if (await confirmUntrustedCertificate(context, e) && context.mounted) {
+        await _refreshSubscription(context, ref, sub, pinnedCertDer: e.der);
       }
     } catch (e) {
       if (context.mounted) {

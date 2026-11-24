@@ -11,6 +11,7 @@ import '../../providers/config_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/breadcrumb_bar.dart';
+import '../widgets/untrusted_cert_dialog.dart';
 import 'qr_scan_screen.dart';
 import '../../l10n/l10n.dart';
 
@@ -267,7 +268,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
     await _processUri(text);
   }
 
-  Future<void> _processUri(String uri, {bool allowSelfSigned = false}) async {
+  Future<void> _processUri(String uri, {String? pinnedCertDer}) async {
     setState(() {
       _loading = true;
       _error = null;
@@ -283,7 +284,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
       final parsed = Uri.parse(uri);
 
       if (parsed.scheme == 'http' || parsed.scheme == 'https') {
-        await ref.read(configProvider.notifier).addSubscriptionFromUrl(uri, allowSelfSigned: allowSelfSigned);
+        await ref.read(configProvider.notifier).addSubscriptionFromUrl(uri, pinnedCertDer: pinnedCertDer);
         if (mounted) Navigator.pop(context);
       } else if (parsed.scheme == 'teapod') {
         final result = DeeplinkRouter.parse(uri);
@@ -342,9 +343,8 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
     } on UntrustedCertificateException catch (e) {
       setState(() => _loading = false);
       if (!mounted) return;
-      final confirmed = await _showUntrustedCertDialog(e);
-      if (confirmed == true && mounted) {
-        await _processUri(uri, allowSelfSigned: true);
+      if (await confirmUntrustedCertificate(context, e) && mounted) {
+        await _processUri(uri, pinnedCertDer: e.der);
       }
       return;
     } catch (e) {
@@ -352,40 +352,6 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
-  }
-
-  Future<bool?> _showUntrustedCertDialog(UntrustedCertificateException e) {
-    final t = Theme.of(context).extension<TeapodTokens>()!;
-    return showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: t.bgElev,
-        title: Text(context.l10n.certUntrustedTitle, style: AppTheme.sans(size: 16, color: t.text)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(context.l10n.certUntrustedMessage, style: AppTheme.sans(size: 13, color: t.textDim)),
-            const SizedBox(height: 12),
-            Text(context.l10n.certServer(e.host), style: AppTheme.mono(size: 11, color: t.textDim)),
-            Text(context.l10n.certSubject(e.subject), style: AppTheme.mono(size: 11, color: t.textDim)),
-            Text(context.l10n.certIssuer(e.issuer), style: AppTheme.mono(size: 11, color: t.textDim)),
-            const SizedBox(height: 12),
-            Text(context.l10n.certContinueAnyway, style: AppTheme.sans(size: 13, color: t.text)),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(context.l10n.commonCancel, style: AppTheme.mono(size: 12, color: t.textDim)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(context.l10n.commonContinue, style: AppTheme.mono(size: 12, color: t.danger)),
-          ),
-        ],
-      ),
-    );
   }
 }
 

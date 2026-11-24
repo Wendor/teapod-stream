@@ -11,6 +11,7 @@ import 'package:teapodstream/core/models/vpn_log_entry.dart';
 import 'package:teapodstream/core/services/config_storage_service.dart';
 import 'package:teapodstream/core/models/subscription.dart';
 import 'package:teapodstream/core/services/log_service.dart';
+import 'package:teapodstream/core/services/subscription_service.dart';
 import 'package:teapodstream/providers/config_provider.dart';
 
 import '../helpers/local_server.dart';
@@ -400,6 +401,35 @@ void main() {
       expect(s().activeConfigId, s().configs.first.id);
       expect((await storage.loadConfigs()).length, 2);
       expect(server.requests.single.value('x-hwid'), isNull);
+    });
+
+    test('an accepted certificate is pinned exactly; another one on the retry is refused', () async {
+      await boot();
+      final tls = await LocalServer.start(tls: LocalServer.selfSignedContext());
+      addTearDown(tls.close);
+      tls.serve(_trojan('a.example', 'A'));
+      UntrustedCertificateException? presented;
+      try {
+        await n().addSubscriptionFromUrl(tls.url());
+      } on UntrustedCertificateException catch (e) {
+        presented = e;
+      }
+      expect(presented, isNotNull);
+      expect(s().subscriptions, isEmpty);
+
+      // The user accepted a certificate the server no longer presents: nothing is trusted.
+      final other = base64.encode([...base64.decode(presented!.der)]..[0] ^= 1);
+      await expectLater(
+        n().addSubscriptionFromUrl(tls.url(), pinnedCertDer: other),
+        throwsA(isA<UntrustedCertificateException>()),
+      );
+      expect(s().subscriptions, isEmpty);
+
+      await n().addSubscriptionFromUrl(tls.url(), pinnedCertDer: presented.der);
+      expect(s().subscriptions.single.pinnedCertDer, presented.der);
+      // Later refreshes use the stored pin.
+      await n().addSubscriptionFromUrl(tls.url());
+      expect(s().subscriptions.single.pinnedCertDer, presented.der);
     });
 
     test('refresh keeps user name, latency and the selected server', () async {

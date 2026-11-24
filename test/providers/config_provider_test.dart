@@ -221,6 +221,22 @@ void main() {
     expect((await storage.loadConfigs()).map((c) => c.id), ['1', '2']);
   });
 
+  test('after a failed load a mutation fails and stored configs stay', () async {
+    SharedPreferences.setMockInitialValues({});
+    FlutterSecureStorage.setMockInitialValues({});
+    await storage.saveConfigs([_cfg('1'), _cfg('2')]);
+    // The configs read fine, the subscriptions don't.
+    await const FlutterSecureStorage().write(key: 'subscriptions_v2', value: 'not json');
+    c = ProviderContainer();
+    addTearDown(c.dispose);
+    c.listen(configProvider, (_, _) {});
+    while (!c.read(configProvider).hasError) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    await expectLater(n().addConfig(_cfg('3')), throwsA(anything));
+    expect((await storage.loadConfigs()).map((c) => c.id), ['1', '2']);
+  });
+
   test('build loads persisted state', () async {
     await boot(
       configs: [_cfg('1')],

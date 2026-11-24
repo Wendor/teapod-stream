@@ -29,8 +29,10 @@ Every mutator runs through `_serial()`, a FIFO on a future chain, and most throu
 `build()` (`_loaded()` — a mutation never starts from a state the finishing load would overwrite), compute the next
 `ConfigState` with a pure function, `_commit(current, next)`. `_commit` is the only writer of the stored state: it
 saves each list or id that changed (whole lists, one write each; `ConfigStorageService` is plain load/save) and then
-publishes the state. Run concurrently (a ping in the middle of a subscription refresh) mutations overwrote each other.
-Inside the queue never call a public mutator — it would deadlock.
+publishes it — after a failed write, only the parts saved before it, so memory never runs ahead of or behind
+storage. A failed initial load makes mutations fail instead of writing over data that couldn't be read. Serialization
+prevents a ping update and a subscription refresh from overwriting each other's changes. Inside the queue never call
+a public mutator — it would deadlock.
 
 The transitions are `ConfigState` methods without side effects: `withoutConfig`, `withoutSubscription`,
 `withSubscription` (below); the rest are `copyWith` in the mutator.

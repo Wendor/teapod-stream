@@ -153,21 +153,45 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     return result;
   }
 
-  /// The state once [build] has finished (an empty one if loading failed): a mutation never starts from a state the
-  /// finishing [build] would overwrite.
-  Future<ConfigState> _loaded() => future.then((s) => s, onError: (Object _) => state.value ?? ConfigState());
+  /// The state once [build] has finished: a mutation never starts from a state the finishing [build] would
+  /// overwrite. A failed load throws here (also while Riverpod retries it), so nothing is written over stored data
+  /// that couldn't be read.
+  Future<ConfigState> _loaded() async {
+    final s = state;
+    if (s.hasValue) return s.requireValue;
+    if (s.hasError) Error.throwWithStackTrace(s.error!, s.stackTrace ?? StackTrace.current);
+    return future;
+  }
 
-  /// Persists what differs between [from] and [next] — whole lists, one write per changed list or id — then
-  /// publishes [next]. The only writer of the stored state.
+  /// Persists what differs between [from] and [next] — whole lists, one write per changed list or id — and publishes
+  /// what was written: all of [next], or after a failed write the parts saved before it, so the next mutation starts
+  /// from what storage holds. The only writer of the stored state.
   Future<void> _commit(ConfigState from, ConfigState next) async {
-    if (!identical(next.configs, from.configs)) await storage.saveConfigs(next.configs);
-    if (!identical(next.subscriptions, from.subscriptions)) await storage.saveSubscriptions(next.subscriptions);
-    if (!identical(next.pins, from.pins)) await storage.savePins(next.pins);
-    if (next.activeConfigId != from.activeConfigId) await storage.saveActiveConfigId(next.activeConfigId);
-    if (next.activeSubscriptionId != from.activeSubscriptionId) {
-      await storage.saveActiveSubscriptionId(next.activeSubscriptionId);
+    var saved = from;
+    try {
+      if (!identical(next.configs, from.configs)) {
+        await storage.saveConfigs(next.configs);
+        saved = saved.copyWith(configs: next.configs);
+      }
+      if (!identical(next.subscriptions, from.subscriptions)) {
+        await storage.saveSubscriptions(next.subscriptions);
+        saved = saved.copyWith(subscriptions: next.subscriptions);
+      }
+      if (!identical(next.pins, from.pins)) {
+        await storage.savePins(next.pins);
+        saved = saved.copyWith(pins: next.pins);
+      }
+      if (next.activeConfigId != from.activeConfigId) {
+        await storage.saveActiveConfigId(next.activeConfigId);
+        saved = saved.copyWith(activeConfigId: next.activeConfigId, clearActive: next.activeConfigId == null);
+      }
+      if (next.activeSubscriptionId != from.activeSubscriptionId) {
+        await storage.saveActiveSubscriptionId(next.activeSubscriptionId);
+      }
+      saved = next;
+    } finally {
+      state = AsyncData(saved);
     }
-    state = AsyncData(next);
   }
 
   /// Queues a mutation: [next] maps the current state to the next one (null — nothing to change).

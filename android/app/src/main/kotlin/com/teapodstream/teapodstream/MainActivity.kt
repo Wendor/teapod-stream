@@ -401,25 +401,29 @@ class MainActivity : FlutterActivity() {
         val prefs = getSharedPreferences(XrayVpnService.PREFS_NAME, MODE_PRIVATE)
         // An exempt app isn't asked and the flag stays unset: if the exemption is removed later, the next connect asks.
         if (prefs.getBoolean(PREF_BATTERY_PROMPT_SHOWN, false) || isIgnoringBatteryOptimizations()) return
-        prefs.edit().putBoolean(PREF_BATTERY_PROMPT_SHOWN, true).apply()
-        openBatteryOptimizationSettings()
+        // Recorded only once the prompt has opened: a failed launch is retried on the next connect.
+        if (openBatteryOptimizationSettings()) prefs.edit().putBoolean(PREF_BATTERY_PROMPT_SHOWN, true).apply()
     }
 
     private fun isIgnoringBatteryOptimizations(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
             (getSystemService(POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(packageName)
 
-    /** The exemption prompt while the app is optimized; the system list (to revert it) once it is exempt. */
-    private fun openBatteryOptimizationSettings() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+    /** The exemption prompt while the app is optimized; the system list (to revert it) once it is exempt.
+     *  False when there is nothing to open (before Android 6) or the launch failed. */
+    private fun openBatteryOptimizationSettings(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return false
         val intent = if (isIgnoringBatteryOptimizations()) {
             Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
         } else {
             Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).setData(Uri.parse("package:$packageName"))
         }
-        try {
+        return try {
             startActivity(intent)
-        } catch (_: Exception) {}
+            true
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private fun startVpnService(

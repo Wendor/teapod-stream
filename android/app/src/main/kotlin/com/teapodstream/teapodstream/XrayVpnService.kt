@@ -277,6 +277,8 @@ class XrayVpnService : VpnService() {
     private val sessionCommands = SessionCommands(afterEach = { if (snapshot.state.isOff) mainHandler.post(::stopIfIdle) })
     /** The startId of the last onStartCommand (main thread): see [stopIfIdle]. */
     private var lastStartId = 0
+    /** Set in onDestroy (main thread): reports posted later belong to a stopped instance. */
+    private var destroyed = false
     private val sessionLock = sessionCommands.lock
     // Among the deferred events there was a loss of VALIDATED — reconnect without checking the network.
     @Volatile private var pendingForce = false
@@ -346,7 +348,11 @@ class XrayVpnService : VpnService() {
                 // state. Answers the connect Flutter may wait for.
                 val report = {
                     mainHandler.post {
-                        if (sessionCommands.startAfter(command.id)) {
+                        if (destroyed) {
+                            // A late report (the 5 s supervisor) of a stopped instance: a newer one may own the
+                            // session state, which is process-wide.
+                            log("info", "disconnect report after the service stopped: dropped")
+                        } else if (sessionCommands.startAfter(command.id)) {
                             log("info", "disconnect finished after a new start: final state left to it")
                         } else {
                             sessionAttempt = answers
@@ -944,6 +950,7 @@ class XrayVpnService : VpnService() {
     }
 
     override fun onDestroy() {
+        destroyed = true
         try { unregisterReceiver(screenReceiver) } catch (_: Exception) {}
         screenReceiver = null
         stopVpn()

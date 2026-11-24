@@ -1682,8 +1682,10 @@ class XrayVpnService : VpnService() {
      * is ignored by the system if a newer intent is on its way.
      */
     private fun stopIfIdle() {
-        if (isRunning.get()) return
-        if (!serviceIdle(snapshot.state, tunHeld = tunInterface != null, startInFlight = sessionCommands.startInFlight())) return
+        // In flight first: a start finishing after this read is checked again by afterEach; once it reads false no
+        // new start can begin (they are queued here, on the main thread).
+        if (sessionCommands.startInFlight() || isRunning.get()) return
+        if (!serviceIdle(snapshot.state, tunHeld = tunInterface != null, startInFlight = false)) return
         log("info", "VPN off: the service stops")
         stopSelf(lastStartId)
     }

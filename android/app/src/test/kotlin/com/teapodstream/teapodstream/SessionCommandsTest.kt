@@ -146,4 +146,15 @@ class SessionCommandsTest {
         last.done.get(2, TimeUnit.SECONDS)
         assertEquals(listOf(false, false), seen)
     }
+
+    @Test
+    fun `afterEach runs and the start is finished even when the command throws`() {
+        val after = CountDownLatch(1)
+        lateinit var queue: SessionCommands
+        var inFlightAfter = true
+        queue = SessionCommands(afterEach = { inFlightAfter = queue.startInFlight(); after.countDown() })
+        queue.submit(Kind.CONNECT) { throw IllegalStateException("boom") }
+        assertTrue(after.await(2, TimeUnit.SECONDS))
+        assertFalse(inFlightAfter)
+    }
 }

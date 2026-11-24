@@ -43,19 +43,22 @@ internal class SessionCommands(
             Kind.QUICK -> lastQuick = id
         }
         val done = executor.submit {
-            synchronized(lock) {
-                val replaced = when (kind) {
-                    Kind.CONNECT -> lastConnect != id || lastDisconnect > id
-                    Kind.QUICK -> lastQuick != id || lastConnect > id || lastDisconnect > id
-                    Kind.DISCONNECT -> false
+            try {
+                synchronized(lock) {
+                    val replaced = when (kind) {
+                        Kind.CONNECT -> lastConnect != id || lastDisconnect > id
+                        Kind.QUICK -> lastQuick != id || lastConnect > id || lastDisconnect > id
+                        Kind.DISCONNECT -> false
+                    }
+                    try {
+                        if (replaced) skipped() else block()
+                    } finally {
+                        finished = id
+                    }
                 }
-                try {
-                    if (replaced) skipped() else block()
-                } finally {
-                    finished = id
-                }
+            } finally {
+                afterEach()
             }
-            afterEach()
         }
         return Command(id, done)
     }

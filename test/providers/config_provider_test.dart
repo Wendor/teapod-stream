@@ -84,6 +84,143 @@ void main() {
     await c.read(configProvider.future);
   }
 
+  group('ConfigState.withSubscription (pure)', () {
+    final sub = _sub('s');
+    VpnConfig old(String id, String name, String host, {int? latency, CoreKind? core}) =>
+        _cfg(id, subId: 's', name: name, address: host, latency: latency).copyWith(core: core);
+    VpnConfig fresh(String id, String name, String host) => _cfg(id, subId: 's', name: name, address: host);
+
+    // (case, old configs, active id, fetched, expected [id, latency, core] per fetched, expected active)
+    final cases = <(String, List<VpnConfig>, String?, List<VpnConfig>, List<(String, int?, CoreKind?)>, String)>[
+      (
+        'ping by endpoint, core by name+endpoint',
+        [old('o1', 'A', 'h1', latency: 10, core: CoreKind.singBox), old('o2', 'B', 'h1', latency: 20)],
+        null,
+        [fresh('n1', 'A', 'h1'), fresh('n2', 'B', 'h1')],
+        [('n1', 10, CoreKind.singBox), ('n2', 20, null)],
+        'n1',
+      ),
+      (
+        'renamed but unique endpoint keeps ping and core',
+        [old('o1', 'A', 'h1', latency: 10, core: CoreKind.xrayRust)],
+        null,
+        [fresh('n1', 'A2', 'h1')],
+        [('n1', 10, CoreKind.xrayRust)],
+        'n1',
+      ),
+      (
+        'ambiguous endpoint: last ping, no core',
+        [old('o1', 'A', 'h1', latency: 10, core: CoreKind.singBox), old('o2', 'B', 'h1', latency: 20)],
+        null,
+        [fresh('n1', 'C', 'h1')],
+        [('n1', 20, null)],
+        'n1',
+      ),
+      (
+        'selection by name+endpoint',
+        [old('o1', 'A', 'h1'), old('o2', 'B', 'h1')],
+        'o2',
+        [fresh('n1', 'A', 'h1'), fresh('n2', 'B', 'h1')],
+        [('n1', null, null), ('n2', null, null)],
+        'n2',
+      ),
+      (
+        'selection by endpoint when renamed',
+        [old('o1', 'A', 'h1'), old('o2', 'B', 'h2')],
+        'o2',
+        [fresh('n1', 'A', 'h1'), fresh('n2', 'B2', 'h2')],
+        [('n1', null, null), ('n2', null, null)],
+        'n2',
+      ),
+      (
+        'selection by name when moved',
+        [old('o1', 'A', 'h1'), old('o2', 'B', 'h2')],
+        'o2',
+        [fresh('n1', 'A', 'h1'), fresh('n2', 'B', 'h3')],
+        [('n1', null, null), ('n2', null, null)],
+        'n2',
+      ),
+      (
+        'vanished selection falls back to the first',
+        [old('o1', 'A', 'h1')],
+        'o1',
+        [fresh('n1', 'X', 'h9'), fresh('n2', 'Y', 'h8')],
+        [('n1', null, null), ('n2', null, null)],
+        'n1',
+      ),
+      (
+        'a selection outside the subscription stays',
+        [old('o1', 'A', 'h1'), _cfg('mine')],
+        'mine',
+        [fresh('n1', 'A', 'h1')],
+        [('n1', null, null)],
+        'mine',
+      ),
+    ];
+
+    for (final (name, olds, active, fetched, expected, expectedActive) in cases) {
+      test(name, () {
+        final before = ConfigState(
+          configs: olds,
+          subscriptions: [sub],
+          activeConfigId: active,
+          activeSubscriptionId: 'mode',
+        );
+        final after = before.withSubscription(sub.copyWith(name: 'renamed'), fetched);
+        final merged = after.configs.where((c) => c.subscriptionId == 's').toList();
+        expect([for (final c in merged) (c.id, c.latencyMs, c.core)], expected);
+        expect(
+          after.configs.where((c) => c.subscriptionId != 's').map((c) => c.id),
+          olds.where((c) => c.subscriptionId != 's').map((c) => c.id),
+        );
+        expect(after.activeConfigId, expectedActive);
+        expect(after.activeSubscriptionId, 'mode', reason: 'the subscription mode is left as it is');
+        expect(after.subscriptions.single.name, 'renamed');
+        expect(before.configs, olds, reason: 'pure');
+      });
+    }
+
+    test('a new subscription is appended', () {
+      final after = ConfigState(subscriptions: [_sub('a')]).withSubscription(sub, [fresh('n1', 'A', 'h1')]);
+      expect(after.subscriptions.map((s) => s.id), ['a', 's']);
+      expect(after.activeConfigId, 'n1');
+    });
+
+    test('withoutSubscription drops its configs, pins and the selection pointing into it', () {
+      final before = ConfigState(
+        configs: [
+          _cfg('a'),
+          _cfg('b', subId: 's'),
+        ],
+        subscriptions: [sub],
+        pins: [
+          const PinnedRef(subscriptionId: 's', name: 'nb'),
+          const PinnedRef(subscriptionId: null, name: 'na'),
+        ],
+        activeConfigId: 'b',
+        activeSubscriptionId: 's',
+      );
+      final after = before.withoutSubscription('s');
+      expect(after.configs.map((c) => c.id), ['a']);
+      expect(after.subscriptions, isEmpty);
+      expect(after.pins.map((p) => p.name), ['na']);
+      expect(after.activeConfigId, isNull);
+      expect(after.activeSubscriptionId, isNull);
+    });
+  });
+
+  test('a mutation queued before build() finishes is kept', () async {
+    SharedPreferences.setMockInitialValues({});
+    FlutterSecureStorage.setMockInitialValues({});
+    await storage.saveConfigs([_cfg('1')]);
+    c = ProviderContainer();
+    addTearDown(c.dispose);
+    c.read(configProvider);
+    await n().addConfig(_cfg('2'));
+    expect(s().configs.map((c) => c.id), ['1', '2']);
+    expect((await storage.loadConfigs()).map((c) => c.id), ['1', '2']);
+  });
+
   test('build loads persisted state', () async {
     await boot(
       configs: [_cfg('1')],

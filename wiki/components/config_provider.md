@@ -25,17 +25,25 @@ the lowest `latencyMs` (never-pinged last), otherwise the active config. Used by
 
 ## Mutation queue
 
-Every mutator runs through `_serial()`, a FIFO on a future chain. Each does "read state → load-modify-save →
-set state"; run concurrently (a ping in the middle of a subscription refresh) they overwrote each other. Inside
-the queue never call a public mutator — it would deadlock; use the private variant (`_setActiveConfig`).
+Every mutator runs through `_serial()`, a FIFO on a future chain, and most through `_mutate(next)`: wait for
+`build()` (`_loaded()` — a mutation never starts from a state the finishing load would overwrite), compute the next
+`ConfigState` with a pure function, `_commit(current, next)`. `_commit` is the only writer of the stored state: it
+saves each list or id that changed (whole lists, one write each; `ConfigStorageService` is plain load/save) and then
+publishes the state. Run concurrently (a ping in the middle of a subscription refresh) mutations overwrote each other.
+Inside the queue never call a public mutator — it would deadlock.
+
+The transitions are `ConfigState` methods without side effects: `withoutConfig`, `withoutSubscription`,
+`withSubscription` (below); the rest are `copyWith` in the mutator.
 
 ## Subscriptions
 
 `addSubscriptionFromUrl(url, {name, pinnedCertDer, replaceId})` — the download runs outside the queue, applying
-it runs inside with a fresh state. Configs of a subscription get **new ids on every download**, so the refresh
-carries over:
+it runs inside with a fresh state: `ConfigState.withSubscription(sub, fetched)`, table-tested. Configs of a
+subscription get **new ids on every download**, so the refresh carries over:
 - ping results, by `address:port`;
-- the active config, by name + endpoint → endpoint → name (names inside a subscription aren't unique);
+- the pinned core, by name + endpoint, or by an endpoint unique in the subscription;
+- the active config, by name + endpoint → endpoint → name (names inside a subscription aren't unique); none, or it
+  vanished — the first fetched one; the subscription mode is left as it is;
 - the subscription name: `name ?? existing ?? profile-title ?? host` — a user rename survives auto-refresh.
 
 `replaceId` changes the URL of an existing subscription; on a download error the old one stays intact. A
@@ -48,7 +56,8 @@ failure is logged and backed off for 1 h in memory (`_subFailedAt`) without stop
 prevents parallel runs. It is triggered from `VpnNotifier.refreshStaleSubscriptionsIfDue()` on start and resume when
 `subAutoRefresh` is on — there is no background timer.
 
-`removeSubscription` removes its configs and clears auto mode if it pointed there.
+`removeSubscription` (`withoutSubscription`) removes its configs and pins, and clears the selection and auto mode if
+they pointed there.
 
 ## Pins
 
@@ -63,7 +72,7 @@ prevents parallel runs. It is triggered from `VpnNotifier.refreshStaleSubscripti
 `reorderSubscriptions` / `reorderGroupConfigs(subId, …)` (indices from `ReorderableListView.onReorderItem`:
 `newIndex` is the position after the move),
 `batchUpdatePingResults` (one write for all pings), `importBundle` (connections from a profile or deep link,
-[profiles](profiles.md)), `reviewBundle` / `newSubscriptionHosts` (hosts of the subscriptions an import would add,
+[profiles](profiles.md); one commit for its subscriptions, configs and the selection), `reviewBundle` / `newSubscriptionHosts` (hosts of the subscriptions an import would add,
 shown before it), `applySelection` (a profile's remembered server, [profiles](profiles.md#selected-server)).
 
 ## Related

@@ -33,9 +33,6 @@ object ItestBridge {
         if (BuildConfig.ITEST) Log.i(TAG, marker(payload))
     }
 
-    fun state(value: String) =
-        emit(mapOf("ev" to "state", "value" to value, "t" to System.currentTimeMillis()))
-
     fun attach(messenger: BinaryMessenger) {
         if (!BuildConfig.ITEST) return
         dartReady = false

@@ -59,49 +59,14 @@ class XrayVpnService : VpnService() {
         const val EXTRA_ATTEMPT = "attempt"
         const val EXTRA_CONFIG_NAME = "config_name"              // config name for the tile
 
-        // Static state tracker for querying from Dart
-        @Volatile private var currentNativeState: String = "disconnected"
-        /** Reason of the last failed start; goes to Flutter with the error/blocked state. */
-        @Volatile var lastError: String? = null
-            private set
-        // Tracks whether we are in TUN mode (not proxy-only). Used by getNativeState() to detect
-        // a TUN fd closed externally (e.g. during a phone call) without onRevoke() being called.
-        @Volatile private var tunModeActive = false
+        private val session = AtomicReference(SessionSnapshot())
+        private val publishLock = Any()
 
-        @JvmStatic fun getNativeState(): String {
-            // If the native state claims "connected" in TUN mode but tun2socks is no longer running,
-            // the TUN fd was likely closed externally (e.g. system network change during a phone call)
-            // without onRevoke() being called. Correct the stale state proactively so that
-            // syncNativeState() in Flutter reflects reality instead of showing a phantom connection.
-            if (currentNativeState == "connected" && tunModeActive && !VpnCores.active.isTunRunning()) {
-                currentNativeState = "disconnected"
-            }
-            return currentNativeState
-        }
+        /** The current session; changed only by [publish]. Reading it has no side effects. */
+        val snapshot: SessionSnapshot get() = session.get()
 
         // Set true on explicit user disconnect, false on connect — guards reconnectInternal()
         val userRequestedDisconnect = AtomicBoolean(false)
-
-        // Active SOCKS credentials — stored so onListen can replay them with "connected".
-        // AtomicReference ensures the three fields are always read/written as a consistent unit.
-        private data class SocksCredentials(val port: Int, val user: String, val password: String)
-        private val _socksCredentials = AtomicReference(SocksCredentials(0, "", ""))
-
-        val activeSocksPort: Int get() = _socksCredentials.get().port
-        val activeSocksUser: String get() = _socksCredentials.get().user
-        val activeSocksPassword: String get() = _socksCredentials.get().password
-
-        // Epoch-ms when VPN became connected; 0 when disconnected. Survives UI restarts because
-        // the foreground service process stays alive. Flutter uses this to restore the timer.
-        @Volatile var connectedAtMs: Long = 0
-            private set
-
-        /**
-         * Flutter's connect attempt that started the current session; 0 — started natively (tile, boot, restart).
-         * State events carry it, so Flutter can drop a late event of a session a newer connect replaced.
-         */
-        @Volatile var sessionAttempt: Long = 0
-            private set
 
         /** The attempt of the last ACTION_CONNECT received (main thread); a disconnect tags its stop with it. */
         @Volatile private var requestedAttempt: Long = 0
@@ -114,11 +79,6 @@ class XrayVpnService : VpnService() {
         fun automationEnabled(context: android.content.Context): Boolean =
             context.getSharedPreferences("FlutterSharedPreferences", MODE_PRIVATE)
                 .getBoolean("flutter.automation_enabled", false)
-
-        @JvmStatic fun getSocksCredentials(): Map<String, Any> {
-            val c = _socksCredentials.get()
-            return mapOf("port" to c.port, "user" to c.user, "password" to c.password, "connectedAtMs" to connectedAtMs)
-        }
 
         const val LOG_FILE_NAME = "vpn_log.txt"
         const val LOG_PREV_FILE_NAME = "vpn_log.prev.txt"
@@ -218,10 +178,10 @@ class XrayVpnService : VpnService() {
                 ?: (ConnectionParams.load(context.filesDir)?.showNotification ?: true).also { showNotificationFlag = it }
 
         /** Notification on state change: intermediate for connecting/disconnecting/reconnecting. */
-        @JvmStatic fun onStateNotification(context: Context, state: String) {
+        @JvmStatic fun onStateNotification(context: Context, state: SessionState) {
             val connecting = when (state) {
-                "connecting", "reconnecting" -> true
-                "disconnecting" -> false
+                SessionState.CONNECTING, SessionState.RECONNECTING -> true
+                SessionState.DISCONNECTING -> false
                 else -> { lastIntermediate = null; return }
             }
             if (!notificationsEnabled(context) || lastIntermediate == connecting) return
@@ -286,6 +246,13 @@ class XrayVpnService : VpnService() {
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     @Volatile private var lastUnderlyingNetwork: Network? = null
     @Volatile private var lastConnectedMs: Long = 0L
+    /**
+     * Flutter's connect attempt the published states are tagged with ([SessionSnapshot.attempt]): set by a connect
+     * or a disconnect before it stops or starts a session, 0 for a quick start.
+     */
+    @Volatile private var sessionAttempt: Long = 0
+    // TUN mode (not proxy-only): the stats thread checks that tun2socks still runs.
+    @Volatile private var tunModeActive = false
     // The physical network at the moment of connected — the deferred network-change check compares against it.
     @Volatile private var connectedNetwork: Network? = null
     private var prefixProxy: PrefixTcpProxy? = null
@@ -335,7 +302,6 @@ class XrayVpnService : VpnService() {
 
     override fun onCreate() {
         super.onCreate()
-        VpnEventStreamHandler.appContext = applicationContext
         logsEnabled = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean(PREF_LOGS_ENABLED, true)
         val pm = getSystemService(POWER_SERVICE) as PowerManager
         screenOn = pm.isInteractive
@@ -352,7 +318,7 @@ class XrayVpnService : VpnService() {
                 return START_NOT_STICKY
             }
             log("warning", "itest: simulated unexpected drop")
-            Thread { stopVpn(resultState = "error", explicit = false) }.start()
+            Thread { stopVpn(resultState = SessionState.ERROR, explicit = false) }.start()
             return START_STICKY
         }
         when (intent?.action) {
@@ -367,7 +333,7 @@ class XrayVpnService : VpnService() {
                 val answers = requestedAttempt
                 // Signal disconnecting immediately so the button turns yellow
                 // even when triggered from the notification (no Flutter-side handler).
-                setState("disconnecting")
+                setState(SessionState.DISCONNECTING)
                 // Stop in the session queue, after the commands received before this one. Go calls
                 // (stopTun2Socks/stopXray) can block if goroutines are stuck after long uptime or network changes.
                 lateinit var command: SessionCommands.Command
@@ -380,7 +346,7 @@ class XrayVpnService : VpnService() {
                             log("info", "disconnect finished after a new start: final state left to it")
                         } else {
                             sessionAttempt = answers
-                            setState("disconnected")
+                            setState(SessionState.DISCONNECTED)
                             showDisconnectedNotification()
                         }
                     }
@@ -445,7 +411,7 @@ class XrayVpnService : VpnService() {
                     if (userRequestedDisconnect.get()) {
                         log("info", "CONNECT cancelled: VPN revoked or disconnected meanwhile")
                         sessionAttempt = attempt
-                        setState("disconnected")
+                        setState(SessionState.DISCONNECTED)
                         return@submit
                     }
                     // Before the old session stops: its events from here on belong to this attempt.
@@ -475,7 +441,7 @@ class XrayVpnService : VpnService() {
                     // state isn't left stuck at "reconnecting" over a live tunnel.
                     // startForegroundService requires startForeground — repeat it with
                     // the live session's notification: "Connecting…" would hang until the speed changes.
-                    val live = currentNativeState == "connected" && showNotification
+                    val live = snapshot.state == SessionState.CONNECTED && showNotification
                     if (live) lastNotificationText = null  // the next stats tick updates the speed
                     ensureForeground(override = if (live) buildConnectedNotification(0, 0) else null)
                     log("info", "CONNECT_QUICK ignored: VPN already running")
@@ -491,7 +457,7 @@ class XrayVpnService : VpnService() {
                     } else {
                         userRequestedDisconnect.set(false)
                         try { File(filesDir, "user_disconnected.flag").delete() } catch (_: Exception) {}
-                        setState("reconnecting")
+                        setState(SessionState.RECONNECTING)
                         val configText = configFile.readText()
                         // Load SOCKS credentials from saved file (survives reconnect)
                         var socksUser = ""
@@ -555,7 +521,7 @@ class XrayVpnService : VpnService() {
             val needsPermission = !params.proxyOnly && VpnService.prepare(this) != null
             if (!needsPermission) {
                 userRequestedDisconnect.set(false)
-                setState("reconnecting")
+                setState(SessionState.RECONNECTING)
                 try {
                     val configText = configFile.readText()
                     val (socksUser, socksPassword) = extractSocksFromConfig(configText, params.engine)
@@ -571,7 +537,7 @@ class XrayVpnService : VpnService() {
                     return START_STICKY
                 } catch (e: Exception) {
                     log("warning", "Auto-connect failed: ${e.message}")
-                    setState("disconnected")
+                    setState(SessionState.DISCONNECTED)
                 }
             }
         }
@@ -625,7 +591,7 @@ class XrayVpnService : VpnService() {
         proxyOnlyMode = proxyOnly
         tunMtu = core.tunMtu(mtu.coerceIn(576, 9000))
         if (!isReconnect) clearLogFile()
-        setState(if (isReconnect) "reconnecting" else "connecting")
+        setState(if (isReconnect) SessionState.RECONNECTING else SessionState.CONNECTING)
         log("info", "Starting VPN (MTU: $tunMtu)")
 
         try {
@@ -763,8 +729,8 @@ class XrayVpnService : VpnService() {
                     && reconnectAttempts.incrementAndGet() <= MAX_RECONNECT_ATTEMPTS
             // On final failure with kill switch keep the sink (explicit=false) so
             // traffic stays blocked instead of silently leaking past the VPN.
-            if (!willRetry) lastError = e.message ?: e.javaClass.simpleName
-            stopVpn(resultState = "error", explicit = !willRetry && !keepSinkOnFailure, reconnecting = willRetry)
+            stopVpn(resultState = SessionState.ERROR, explicit = !willRetry && !keepSinkOnFailure, reconnecting = willRetry,
+                error = if (willRetry) null else e.message ?: e.javaClass.simpleName)
             if (willRetry) {
                 val attempt = reconnectAttempts.get()
                 val delayMs = RECONNECT_RETRY_BASE_MS * attempt
@@ -865,7 +831,7 @@ class XrayVpnService : VpnService() {
         stopVpn(explicit = true)
         // Force state update in case stopVpn returned early (isRunning was already false
         // during a reconnect cycle when the user tapped the system VPN popup).
-        setState("disconnected")
+        setState(SessionState.DISCONNECTED)
         stopSelf()
     }
 
@@ -877,9 +843,11 @@ class XrayVpnService : VpnService() {
     }
 
     private fun stopVpn(
-        resultState: String = "disconnected",
+        resultState: SessionState = SessionState.DISCONNECTED,
         explicit: Boolean = false,
         reconnecting: Boolean = false,
+        /** The reason of a failed start, reported with [resultState] (or `blocked`). */
+        error: String? = null,
     ) {
         if (!isRunning.compareAndSet(true, false)) return  // idempotent — safe to call multiple times
         log("info", "stopVpn: begin (explicit=$explicit, reconnecting=$reconnecting)")
@@ -954,21 +922,21 @@ class XrayVpnService : VpnService() {
             //     try { File(filesDir, "xray_config.json").delete() } catch (_: Exception) {}
             // }
         } finally {
-            // Don't overwrite "connecting" state when doing internal reconnect
-            if (!reconnecting) {
-                connectedAtMs = 0
+            val finalState = when {
+                // TUN is already a sink: no traffic while we wait for the network (up to 30 s) — not "connected".
+                // The snapshot drops the SOCKS login, so the next start reports fresh credentials.
+                reconnecting -> SessionState.RECONNECTING
                 // The TUN sink stayed open (kill switch) — traffic is blocked,
                 // report a state distinct from disconnected.
-                setState(if (keptTunAsSink) "blocked" else resultState)
+                keptTunAsSink -> SessionState.BLOCKED
+                else -> resultState
+            }
+            setState(finalState, error)
+            if (!reconnecting) {
                 // Otherwise after a connection error "Connecting…" hung (issue #76).
                 showDisconnectedNotification(keptTunAsSink)
-            } else {
-                // Clear credentials so startVpn picks up fresh ones from configFile
-                _socksCredentials.set(SocksCredentials(0, "", ""))
-                // TUN is already a sink: no traffic while we wait for the network (up to 30 s) — not "connected".
-                setState("reconnecting")
             }
-            log("info", "stopVpn: done (state=${if (reconnecting) "reconnecting" else if (keptTunAsSink) "blocked" else resultState})")
+            log("info", "stopVpn: done (state=${finalState.wire})")
             flushLogBuffer(filesDir)
         }
     }
@@ -996,7 +964,7 @@ class XrayVpnService : VpnService() {
                         log("info", "Screen on")
                         // Notification updates are suppressed while the screen is off —
                         // refresh once so the shade shows current speeds immediately.
-                        if (isRunning.get() && currentNativeState == "connected") {
+                        if (isRunning.get() && snapshot.state == SessionState.CONNECTED) {
                             lastNotificationText = null
                             updateNotification(lastUploadSpeed, lastDownloadSpeed)
                         }
@@ -1039,7 +1007,7 @@ class XrayVpnService : VpnService() {
         if (!wakeProbeRunning.compareAndSet(false, true)) return
         Thread {
             try {
-                val port = activeSocksPort
+                val port = snapshot.socksPort
                 if (port <= 0) return@Thread
                 try {
                     runProbe(port)
@@ -1076,6 +1044,13 @@ class XrayVpnService : VpnService() {
                     // (cumulative counters), speeds average over the longer interval.
                     val wasScreenOn = screenOn
                     Thread.sleep(if (wasScreenOn) STATS_INTERVAL_MS else STATS_INTERVAL_SCREEN_OFF_MS)
+                    // Bound to the session seen dead: a connect that replaced it meanwhile isn't stopped.
+                    val session = lastConnectedMs
+                    if (tunDied()) {
+                        log("warning", "tun2socks stopped while connected, reconnecting")
+                        reconnectInternal(session)
+                        break
+                    }
                     val now = System.currentTimeMillis()
                     val elapsed = (now - lastTime) / 1000.0
 
@@ -1100,6 +1075,15 @@ class XrayVpnService : VpnService() {
             }
         }.also { it.isDaemon = true; it.start() }
     }
+
+    /**
+     * `connected` in TUN mode while tun2socks no longer runs: the TUN fd was likely closed externally (e.g. a system
+     * network change during a phone call) without onRevoke(). The stats thread then reconnects, which publishes
+     * `reconnecting`, so Flutter and the tile don't show a phantom connection. tun2socks is checked before
+     * [isRunning]: a stop clears [isRunning] before it stops the core, so a stopping session is never taken for dead.
+     */
+    private fun tunDied(): Boolean =
+        snapshot.state == SessionState.CONNECTED && tunModeActive && !core.isTunRunning() && isRunning.get()
 
     private fun registerNetworkCallback() {
         try {
@@ -1230,7 +1214,7 @@ class XrayVpnService : VpnService() {
     private fun scheduleNetworkChanged(switched: Boolean = false) {
         // Only reconnect when fully connected — prevents spurious reconnects during the
         // initial startVpn() phase when onAvailable fires right after registration.
-        if (currentNativeState != "connected") return
+        if (snapshot.state != SessionState.CONNECTED) return
         // On mobile data Android fires onAvailable/onCapabilitiesChanged right after VPN
         // connects. In the first 5 s we don't reconnect right away: when the window ends we compare
         // the physical network with the connection network — a real change isn't lost.
@@ -1248,7 +1232,7 @@ class XrayVpnService : VpnService() {
         val r = Runnable {
             val force = pendingForce
             pendingForce = false
-            if (currentNativeState != "connected" || lastConnectedMs != session) return@Runnable
+            if (snapshot.state != SessionState.CONNECTED || lastConnectedMs != session) return@Runnable
             if (checkNetwork && !force) {
                 val now = findPhysicalNetwork() ?: return@Runnable
                 if (now == connectedNetwork) {
@@ -1303,7 +1287,7 @@ class XrayVpnService : VpnService() {
                 try {
                     val stopped = synchronized(sessionLock) {
                         if (session != 0L && lastConnectedMs != session) false
-                        else { stopVpn(resultState = "connecting", reconnecting = true); true }
+                        else { stopVpn(reconnecting = true); true }
                     }
                     if (!stopped) {
                         log("info", "reconnectInternal: session replaced, skipped")
@@ -1413,7 +1397,7 @@ class XrayVpnService : VpnService() {
                     if (!warmupDone && warmupDeadline == 0L) {
                         warmupDeadline = System.currentTimeMillis() + HEARTBEAT_WARMUP_TIMEOUT_MS
                     }
-                    val port = activeSocksPort
+                    val port = snapshot.socksPort
                     if (port <= 0) continue
 
                     // Check tun2socks is alive before testing SOCKS5 connectivity.
@@ -1529,7 +1513,7 @@ class XrayVpnService : VpnService() {
                     while (immediateRetries < 2 && !Thread.currentThread().isInterrupted) {
                         try {
                             Thread.sleep(3000)
-                            runProbe(activeSocksPort)
+                            runProbe(snapshot.socksPort)
                             warmupDone = true
                             heartbeatFailures.set(0)
                             break
@@ -1587,9 +1571,9 @@ class XrayVpnService : VpnService() {
             log("debug", "Heartbeat OK (https url, measured in core: ${ms}ms)")
             return
         }
-        val creds = _socksCredentials.get()
+        val creds = snapshot
         try {
-            SocksHttpProbe.check(port, creds.user, creds.password, target)
+            SocksHttpProbe.check(port, creds.socksUser, creds.socksPassword, target)
         } catch (e: SocksHttpProbe.Failure) {
             log("warning", "Heartbeat check failed at [${e.stage}]: ${e.message}")
             throw e
@@ -1675,7 +1659,7 @@ class XrayVpnService : VpnService() {
     private fun abortQuickConnect(killSwitch: Boolean) {
         val blocked = killSwitch && tunInterface != null
         if (!blocked) closeTunSink()
-        setState(if (blocked) "blocked" else "disconnected")
+        setState(if (blocked) SessionState.BLOCKED else SessionState.DISCONNECTED)
         showDisconnectedNotification(blocked)
         openApp()
     }
@@ -1690,28 +1674,36 @@ class XrayVpnService : VpnService() {
         } catch (_: Exception) {}
     }
 
-    private fun setState(state: String) {
-        if (state != "error" && state != "blocked") lastError = null
-        currentNativeState = state
-        VpnEventStreamHandler.sendStateEvent(state)
-        broadcastState(state)
-    }
+    /** A state other than connected, tagged with [sessionAttempt]; [error] replaces the failure reason. */
+    private fun setState(state: SessionState, error: String? = null) =
+        publish { it.moved(state, sessionAttempt, error ?: it.error) }
 
-    /** An implicit broadcast is readable by any app — only with the option and without the SOCKS port. */
-    private fun broadcastState(state: String) {
+    /**
+     * The only writer of the session state: stores the snapshot [next] makes of the current one and reports it to
+     * Flutter, the itest marker, the tile, the intermediate notification and the automation broadcast. The write and
+     * the event post are one step under [publishLock] (neither blocks), so events leave in the order of the writes.
+     */
+    private fun publish(next: (SessionSnapshot) -> SessionSnapshot) {
+        val published = synchronized(publishLock) {
+            next(session.get()).also {
+                session.set(it)
+                VpnEventStreamHandler.sendEvent(it.toMap())
+                ItestBridge.emit(it.itestMarker(System.currentTimeMillis()))
+            }
+        }
+        VpnTileService.updateTile(this)
+        onStateNotification(this, published.state)
+        // An implicit broadcast is readable by any app — only with the option and without the SOCKS port.
         if (automationEnabled(this)) {
-            sendBroadcast(Intent("com.teapodstream.STATE_CHANGED").putExtra("state", state))
+            sendBroadcast(Intent("com.teapodstream.STATE_CHANGED").putExtra("state", published.state.wire))
         }
     }
 
     private fun setConnected(socksPort: Int, socksUser: String, socksPassword: String) {
-        currentNativeState = "connected"
         reconnectAttempts.set(0)
         val now = System.currentTimeMillis()
-        connectedAtMs = now
         lastConnectedMs = now
         connectedNetwork = lastUnderlyingNetwork
-        _socksCredentials.set(SocksCredentials(socksPort, socksUser, socksPassword))
         // Save credentials to file for CONNECT_QUICK reconnect
         try {
             val credsFile = File(filesDir, "socks_creds.json")
@@ -1723,7 +1715,7 @@ class XrayVpnService : VpnService() {
         } catch (e: Exception) {
             log("warning", "Failed to save socks_creds: ${e.message}")
         }
-        VpnEventStreamHandler.sendConnectedEvent(socksPort, socksUser, socksPassword)
+        publish { SessionSnapshot.connected(sessionAttempt, socksPort, socksUser, socksPassword, now) }
         // The "Disconnected"/intermediate notification bypasses the dedupe cache —
         // reset it so the connected layout is always posted.
         lastNotificationText = null
@@ -1732,12 +1724,11 @@ class XrayVpnService : VpnService() {
         // If notify() is dropped by the rate limit (tile → intermediate → connected within
         // a fraction of a second), a retry after 2 s guarantees the final look (issue #76).
         networkChangeHandler.postDelayed({
-            if (currentNativeState == "connected") {
+            if (snapshot.state == SessionState.CONNECTED) {
                 lastNotificationText = null
                 updateNotification(lastUploadSpeed, lastDownloadSpeed)
             }
         }, 2_000)
-        broadcastState("connected")
     }
 
     private fun updateNotification(uploadSpeed: Long, downloadSpeed: Long) {

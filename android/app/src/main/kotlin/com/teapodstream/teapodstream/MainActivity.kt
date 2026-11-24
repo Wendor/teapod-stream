@@ -57,9 +57,6 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        // Initialize the context for updating the Quick Settings tile
-        VpnEventStreamHandler.appContext = applicationContext
-
         // Event channel for native → Flutter events
         EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL)
             .setStreamHandler(VpnEventStreamHandler)
@@ -114,7 +111,7 @@ class MainActivity : FlutterActivity() {
                     // Re-save the quick-reconnect config (tile, autostart) without connecting —
                     // on a core change while disconnected. During a session — a no-op.
                     "saveQuickConnect" -> {
-                        if (XrayVpnService.getNativeState() !in setOf("disconnected", "error")) {
+                        if (XrayVpnService.snapshot.state !in setOf(SessionState.DISCONNECTED, SessionState.ERROR)) {
                             result.success(false)
                             return@setMethodCallHandler
                         }
@@ -135,7 +132,7 @@ class MainActivity : FlutterActivity() {
                     }
 
                     "clearQuickConnect" -> {
-                        if (XrayVpnService.getNativeState() !in setOf("disconnected", "error")) {
+                        if (XrayVpnService.snapshot.state !in setOf(SessionState.DISCONNECTED, SessionState.ERROR)) {
                             result.success(false)
                             return@setMethodCallHandler
                         }
@@ -249,19 +246,15 @@ class MainActivity : FlutterActivity() {
                     }
 
                     "getState" -> {
-                        val state = XrayVpnService.getNativeState()
-                        val socks = if (state == "connected") {
-                            XrayVpnService.getSocksCredentials()
-                        } else {
-                            mapOf("port" to 0, "user" to "", "password" to "", "connectedAtMs" to 0L)
-                        }
+                        // The SOCKS login and connectedAtMs are set only while connected (SessionSnapshot)
+                        val s = XrayVpnService.snapshot
                         result.success(mapOf(
-                            "state" to state,
-                            "socksPort" to socks["port"],
-                            "socksUser" to socks["user"],
-                            "socksPassword" to socks["password"],
-                            "connectedAtMs" to socks["connectedAtMs"],
-                            "attempt" to XrayVpnService.sessionAttempt,
+                            "state" to s.state.wire,
+                            "socksPort" to s.socksPort,
+                            "socksUser" to s.socksUser,
+                            "socksPassword" to s.socksPassword,
+                            "connectedAtMs" to s.connectedAtMs,
+                            "attempt" to s.attempt,
                         ))
                     }
 

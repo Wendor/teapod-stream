@@ -61,11 +61,11 @@ class VpnTileService : TileService() {
 
     override fun onClick() {
         super.onClick()
-        val currentState = XrayVpnService.getNativeState()
-        val isDisconnect = currentState in setOf("connected", "connecting", "reconnecting")
+        val isDisconnect = XrayVpnService.snapshot.state in
+            setOf(SessionState.CONNECTED, SessionState.CONNECTING, SessionState.RECONNECTING)
         val toggle = {
             setIntermediateState(isDisconnect)
-            XrayVpnService.onStateNotification(this, if (isDisconnect) "disconnecting" else "connecting")
+            XrayVpnService.onStateNotification(this, if (isDisconnect) SessionState.DISCONNECTING else SessionState.CONNECTING)
             startService(Intent(this, XrayVpnService::class.java).apply {
                 action = if (isDisconnect) XrayVpnService.ACTION_DISCONNECT else XrayVpnService.ACTION_CONNECT_QUICK
             })
@@ -84,23 +84,24 @@ class VpnTileService : TileService() {
 
     private fun updateTile() {
         val tile = qsTile ?: return
-        val vpnState = XrayVpnService.getNativeState()
+        val vpnState = XrayVpnService.snapshot.state
 
-        setTileBase(tile, active = vpnState in setOf("connected", "connecting", "reconnecting", "disconnecting", "blocked"))
+        setTileBase(tile, active = vpnState != SessionState.DISCONNECTED && vpnState != SessionState.ERROR)
         when (vpnState) {
-            "connected" -> {
+            SessionState.CONNECTED -> {
                 tile.state = Tile.STATE_ACTIVE
                 setSubtitle(appString(R.string.state_connected))
             }
-            "connecting", "reconnecting", "disconnecting" -> {
+            SessionState.CONNECTING, SessionState.RECONNECTING, SessionState.DISCONNECTING -> {
                 tile.state = Tile.STATE_UNAVAILABLE
-                setSubtitle(appString(if (vpnState == "disconnecting") R.string.state_disconnecting else R.string.state_connecting))
+                setSubtitle(appString(
+                    if (vpnState == SessionState.DISCONNECTING) R.string.state_disconnecting else R.string.state_connecting))
             }
-            "blocked" -> {
+            SessionState.BLOCKED -> {
                 tile.state = Tile.STATE_INACTIVE
                 setSubtitle("Kill switch")
             }
-            else -> {
+            SessionState.DISCONNECTED, SessionState.ERROR -> {
                 tile.state = Tile.STATE_INACTIVE
                 // Off: the title is the app, the subtitle is what the tile will connect.
                 setSubtitle(configName())

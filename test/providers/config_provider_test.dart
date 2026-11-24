@@ -463,6 +463,39 @@ void main() {
         expect(s().subscriptions.single.rawHwid, isTrue);
         expect((await storage.loadSubscriptions()).single.rawHwid, isTrue);
       });
+
+      Subscription legacy() => Subscription.fromJson(_sub('s', url: server.url('/sub')).toJson()..remove('rawHwid'));
+
+      test('a URL change on the same host keeps the raw id', () async {
+        await bootWithHwid(subs: [legacy()]);
+        server.serve(_trojan('a.example', 'A'));
+        await n().addSubscriptionFromUrl(server.url('/other'), replaceId: 's');
+        expect(sentId(), 'android-id');
+        expect((await storage.loadSubscriptions()).single.rawHwid, isTrue);
+      });
+
+      test('a URL change to another host switches to the per-host id for good', () async {
+        await bootWithHwid(subs: [legacy()]);
+        final otherHost = server.url('/sub').replaceFirst('127.0.0.1', 'localhost');
+        final derived = const HwidDeviceInfo(
+          deviceId: 'android-id',
+          deviceModel: 'X1',
+          osVersion: 34,
+        ).forHost('localhost').deviceId;
+        server.serve(_trojan('a.example', 'A'));
+        await n().addSubscriptionFromUrl(otherHost, replaceId: 's');
+        expect(sentId(), derived);
+        expect((await storage.loadSubscriptions()).single.rawHwid, isFalse);
+
+        // After a restart the refresh keeps the per-host id.
+        c.dispose();
+        c = ProviderContainer();
+        addTearDown(c.dispose);
+        await c.read(configProvider.future);
+        await c.read(settingsProvider.future);
+        await n().addSubscriptionFromUrl(otherHost);
+        expect(sentId(), derived);
+      });
     });
 
     test('an accepted certificate is pinned exactly; another one on the retry is refused', () async {

@@ -122,4 +122,28 @@ class SessionCommandsTest {
         finish(last)
         assertEquals(listOf("skip quick 1", "quick 2"), ran)
     }
+
+    @Test
+    fun `a start is in flight from its receipt until it has finished`() {
+        assertFalse(commands.startInFlight())
+        val release = CountDownLatch(1)
+        longStart(release)
+        assertTrue("the running start is in flight", commands.startInFlight())
+        submit(Kind.DISCONNECT, "disconnect")
+        val last = submit(Kind.QUICK, "quick")
+        release.countDown()
+        finish(last)
+        assertFalse(commands.startInFlight())
+    }
+
+    @Test
+    fun `afterEach runs after every command, once it has finished`() {
+        val seen = Collections.synchronizedList(mutableListOf<Boolean>())
+        lateinit var queue: SessionCommands
+        queue = SessionCommands(afterEach = { seen += queue.startInFlight() })
+        queue.submit(Kind.CONNECT) {}
+        val last = queue.submit(Kind.DISCONNECT) {}
+        last.done.get(2, TimeUnit.SECONDS)
+        assertEquals(listOf(false, false), seen)
+    }
 }

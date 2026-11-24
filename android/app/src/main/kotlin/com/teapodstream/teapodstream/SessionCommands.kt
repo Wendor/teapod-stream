@@ -21,6 +21,8 @@ internal class SessionCommands(
     private val executor: ExecutorService = Executors.newSingleThreadExecutor { r ->
         Thread(r, "session-commands").apply { isDaemon = true }
     },
+    /** Runs on the queue thread after every command, outside [lock]. */
+    private val afterEach: () -> Unit = {},
 ) {
     enum class Kind { CONNECT, DISCONNECT, QUICK }
 
@@ -30,6 +32,7 @@ internal class SessionCommands(
     @Volatile private var lastConnect = 0L
     @Volatile private var lastDisconnect = 0L
     @Volatile private var lastQuick = 0L
+    @Volatile private var finished = 0L
 
     /** Queues [block]; [skipped] runs instead (also in order, under [lock]) when a connect turns out superseded. */
     fun submit(kind: Kind, skipped: () -> Unit = {}, block: () -> Unit): Command {
@@ -46,12 +49,20 @@ internal class SessionCommands(
                     Kind.QUICK -> lastQuick != id || lastConnect > id || lastDisconnect > id
                     Kind.DISCONNECT -> false
                 }
-                if (replaced) skipped() else block()
+                try {
+                    if (replaced) skipped() else block()
+                } finally {
+                    finished = id
+                }
             }
+            afterEach()
         }
         return Command(id, done)
     }
 
     /** Whether a connect or a quick start was received after [id] — its session owns the state from then on. */
     fun startAfter(id: Long): Boolean = lastConnect > id || lastQuick > id
+
+    /** Whether a connect or a quick start was received and hasn't finished yet (waiting or running). */
+    fun startInFlight(): Boolean = maxOf(lastConnect, lastQuick) > finished
 }

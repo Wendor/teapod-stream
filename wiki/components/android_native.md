@@ -55,7 +55,7 @@ after `onRevoke()` (which stops outside the queue) or a disconnect set `userRequ
   stops, `sessionAttempt` takes Flutter's connect attempt (`EXTRA_ATTEMPT`), and every snapshot the session
   publishes carries it as `attempt` (quick starts reset it to 0 — untagged); if a session is running this is a **hot
   switch** — `stopVpn(reconnecting=true)` keeps TUN as a sink until the new session is up, no leak window.
-- **`ACTION_CONNECT_QUICK`** (tile, notification, boot, `reconnectInternal`, START_STICKY restart): parameters from
+- **`ACTION_CONNECT_QUICK`** (tile, the `blocked` notification, boot, `reconnectInternal`, START_STICKY restart): parameters from
   `last_connection_meta.json`. Ignored while a session is running. Without a config or VPN permission
   (`abortQuickConnect`) the state is finished properly: kill switch → `blocked`, otherwise TUN is closed →
   `disconnected`, and the app opens.
@@ -103,7 +103,14 @@ phantom connection, and the heartbeat's own tun2socks check stays as a fallback.
   (5 s × attempt); the old fd survives the retries. Final failure with kill switch → sink stays, state `blocked`.
   A failed manual connect keeps a sink only if there already was one — a broken config must not lock the network.
 - **`blocked`.** The kill switch keeps TUN with `setUnderlyingNetworks(emptyArray())` after an unexpected drop: traffic
-  enters TUN and nobody reads it. Notification and tile show it; tapping the tile reconnects.
+  enters TUN and nobody reads it. Notification and tile show it; tapping the tile or the notification's Connect
+  reconnects.
+- **Off → the service stops.** A published `disconnected` / `error`, and every finished session command while the
+  state is off, post `stopIfIdle` to the main thread: with no session running, no TUN held and no start waiting or
+  running in the queue (`serviceIdle`, `SessionCommands.startInFlight`) the service calls `stopSelf(lastStartId)` (the
+  system ignores it if a newer intent is on its way) and its notification goes away. So a user disconnect, a failed
+  manual connect without a sink, `onRevoke` and a START_STICKY restart with nothing to start leave no service behind;
+  `blocked` keeps it. The tile, boot and automation start it again.
 
 ## Network changes
 
@@ -159,7 +166,8 @@ the first one and every power of two after it go to the log as a warning. [secur
 
 - **Stats** thread: every 1 s with the screen on (counters, history for the chart, notification), every 10 s with it
   off (counters only — the chart shows a gap). Flutter polls `getStats` / `getStatsHistory`.
-- **Notification** is always present while the service lives (otherwise Android kills the process); `showNotification`
+- **Notification** is present while the service lives (a foreground service; the service lives only while the VPN
+  is on or `blocked`); `showNotification`
   chooses full (`vpn_service`) or minimal (`vpn_service_minimal`). Updates are deduplicated, at most every 5 s, not with
   the screen off. All notifications come from `baseNotification()` (`setOnlyAlertOnce`, fixed `when`,
   `FOREGROUND_SERVICE_IMMEDIATE`). Intermediate "Connecting…/Disconnecting…" only once per state.

@@ -169,16 +169,29 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
   /// from what storage holds. The only writer of the stored state.
   Future<void> _commit(ConfigState from, ConfigState next) async {
     var saved = from;
+    Future<void> saveSubscriptions() async {
+      if (identical(next.subscriptions, from.subscriptions)) return;
+      await storage.saveSubscriptions(next.subscriptions);
+      saved = saved.copyWith(subscriptions: next.subscriptions);
+    }
+
+    Future<void> saveConfigs() async {
+      if (identical(next.configs, from.configs)) return;
+      await storage.saveConfigs(next.configs);
+      saved = saved.copyWith(configs: next.configs);
+    }
+
     try {
-      // Subscriptions before the configs that point to them: a failure in between never leaves stored configs of a
-      // subscription that isn't stored.
-      if (!identical(next.subscriptions, from.subscriptions)) {
-        await storage.saveSubscriptions(next.subscriptions);
-        saved = saved.copyWith(subscriptions: next.subscriptions);
-      }
-      if (!identical(next.configs, from.configs)) {
-        await storage.saveConfigs(next.configs);
-        saved = saved.copyWith(configs: next.configs);
+      // A failure between the two writes must not leave configs pointing to a subscription that isn't stored, nor a
+      // refresh time without the refreshed configs: a new subscription is saved before its configs, otherwise the
+      // configs go first (a removed subscription's configs before it, a refresh's configs before its fetch time).
+      final addsSubscription = next.subscriptions.any((s) => !from.subscriptions.any((o) => o.id == s.id));
+      if (addsSubscription) {
+        await saveSubscriptions();
+        await saveConfigs();
+      } else {
+        await saveConfigs();
+        await saveSubscriptions();
       }
       if (!identical(next.pins, from.pins)) {
         await storage.savePins(next.pins);

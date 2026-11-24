@@ -330,6 +330,8 @@
   "settingsAutomationHint": "Tasker/Anubis: CONNECT/DISCONNECT commands and state broadcasts. Any app will be able to turn off the VPN and learn that it is on",
   "settingsNotification": "Notification",
   "settingsNotificationHint": "Speed and a disconnect button in the shade",
+  "settingsBattery": "Battery optimization",
+  "settingsBatteryHint": "Let the VPN run in the background without being stopped",
   "settingsSubscriptions": "Subscriptions",
   "settingsSubAutoRefreshOn": "auto-refresh · {hours}h",
   "@settingsSubAutoRefreshOn": {

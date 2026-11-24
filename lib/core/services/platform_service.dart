@@ -46,6 +46,9 @@ class PlatformService {
 
   Future<void> installApk(String filePath) => _channel.invokeMethod<void>('installApk', {'filePath': filePath});
 
+  /// The system prompt to exempt the app from battery optimization; the system list once it is exempt (to revert).
+  Future<void> openBatteryOptimizationSettings() => _channel.invokeMethod<void>('openBatteryOptimizationSettings');
+
   Future<String?> deviceId() => _channel.invokeMethod<String>('getDeviceId');
 
   Future<Map<Object?, Object?>?> deviceInfo() => _channel.invokeMethod<Map<Object?, Object?>>('getDeviceInfo');

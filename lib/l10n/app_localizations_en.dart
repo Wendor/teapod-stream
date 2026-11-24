@@ -578,6 +578,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsNotificationHint => 'Speed and a disconnect button in the shade';
 
   @override
+  String get settingsBattery => 'Battery optimization';
+
+  @override
+  String get settingsBatteryHint => 'Let the VPN run in the background without being stopped';
+
+  @override
   String get settingsSubscriptions => 'Subscriptions';
 
   @override

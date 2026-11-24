@@ -599,6 +599,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsNotificationHint => 'Скорость и кнопка отключения в шторке';
 
   @override
+  String get settingsBattery => 'Оптимизация батареи';
+
+  @override
+  String get settingsBatteryHint => 'Чтобы система не останавливала VPN в фоне';
+
+  @override
   String get settingsSubscriptions => 'Подписки';
 
   @override

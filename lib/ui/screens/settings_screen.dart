@@ -449,6 +449,7 @@ class _SettingsBody extends StatelessWidget {
             // ── 0x50 SYSTEM ───────────────────────────────────────
             SetSectionHeader(t: t, addr: '0x50', label: 'system'),
             _ProfilesRow(t: t),
+            const _BatteryRow(),
             SetInlineField(t: t, label: l.settingsUpdateChannel, child: const _UpdateChannelSegment()),
             // Update tile (complex) — shown at the top when an update is available
             if (!hasUpdate)
@@ -1055,6 +1056,21 @@ class _UpdateVersionTile extends ConsumerWidget {
 }
 
 // ── Profiles row ──────────────────────────────────────────────────
+
+class _BatteryRow extends ConsumerWidget {
+  const _BatteryRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = Theme.of(context).extension<TeapodTokens>()!;
+    return SetRowChev(
+      t: t,
+      title: context.l10n.settingsBattery,
+      hint: context.l10n.settingsBatteryHint,
+      onTap: () => ref.read(platformServiceProvider).openBatteryOptimizationSettings().ignore(),
+    );
+  }
+}
 
 class _ProfilesRow extends ConsumerWidget {
   final TeapodTokens t;

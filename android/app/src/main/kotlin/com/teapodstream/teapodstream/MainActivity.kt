@@ -30,6 +30,7 @@ class MainActivity : FlutterActivity() {
         private const val METHOD_CHANNEL = "com.teapodstream/vpn"
         private const val EVENT_CHANNEL = "com.teapodstream/vpn/events"
         private const val VPN_PERMISSION_REQUEST = 1001
+        private const val PREF_BATTERY_PROMPT_SHOWN = "battery_prompt_shown"
     }
 
     private val pendingVpnStart = PendingVpnStart()
@@ -309,6 +310,11 @@ class MainActivity : FlutterActivity() {
                         ))
                     }
 
+                    "openBatteryOptimizationSettings" -> {
+                        openBatteryOptimizationSettings()
+                        result.success(null)
+                    }
+
                     "installApk" -> {
                         val filePath = call.argument<String>("filePath") ?: run {
                             result.error("INVALID_ARGS", "filePath required", null)
@@ -389,17 +395,30 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun requestBatteryOptimizationExemption() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val pm = getSystemService(POWER_SERVICE) as PowerManager
-            if (!pm.isIgnoringBatteryOptimizations(packageName)) {
-                try {
-                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-                        .setData(Uri.parse("package:$packageName"))
-                    startActivity(intent)
-                } catch (_: Exception) {}
-            }
+    /** The system "ignore battery optimizations" prompt, once per install: a user who declined isn't asked on every
+     *  connect. Settings → Battery opens it again ([openBatteryOptimizationSettings]). */
+    private fun requestBatteryOptimizationExemptionOnce() {
+        val prefs = getSharedPreferences(XrayVpnService.PREFS_NAME, MODE_PRIVATE)
+        if (prefs.getBoolean(PREF_BATTERY_PROMPT_SHOWN, false)) return
+        prefs.edit().putBoolean(PREF_BATTERY_PROMPT_SHOWN, true).apply()
+        if (!isIgnoringBatteryOptimizations()) openBatteryOptimizationSettings()
+    }
+
+    private fun isIgnoringBatteryOptimizations(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
+            (getSystemService(POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(packageName)
+
+    /** The exemption prompt while the app is optimized; the system list (to revert it) once it is exempt. */
+    private fun openBatteryOptimizationSettings() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        val intent = if (isIgnoringBatteryOptimizations()) {
+            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+        } else {
+            Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).setData(Uri.parse("package:$packageName"))
         }
+        try {
+            startActivity(intent)
+        } catch (_: Exception) {}
     }
 
     private fun startVpnService(
@@ -410,7 +429,7 @@ class MainActivity : FlutterActivity() {
         configName: String?,
         attempt: Long,
     ) {
-        requestBatteryOptimizationExemption()
+        requestBatteryOptimizationExemptionOnce()
         val intent = Intent(this, XrayVpnService::class.java).apply {
             action = XrayVpnService.ACTION_CONNECT
             putExtra(XrayVpnService.EXTRA_XRAY_CONFIG, xrayConfig)

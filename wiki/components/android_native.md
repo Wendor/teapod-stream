@@ -195,6 +195,10 @@ server dial timeout 10 s.
 `dataExtractionRules` exclude everything. `FileProvider` for update APKs, limited to `filesDir/updates/`. The VPN service is not exported; the
 activity, tile and command receiver are (the receiver checks `automationEnabled`).
 
+The battery-optimization exemption prompt is shown once per install, on the first connect while the app is
+optimized (`battery_prompt_shown` in `vpn_prefs`); Settings → Battery optimization opens it again
+(`openBatteryOptimizationSettings`: the prompt while optimized, the system list once exempt).
+
 ## Related
 
 [VpnProvider](vpn_provider.md) · [XrayEngine](xray_engine.md) · [teapod-core](teapod_core.md) ·

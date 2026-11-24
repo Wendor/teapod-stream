@@ -81,6 +81,17 @@ void main() {
       await unmount(tester, c);
     });
 
+    testWidgets('battery row opens the system battery optimization settings', (tester) async {
+      final native = await setUpScreenTest();
+      final c = await pumpScreen(tester, const SettingsScreen());
+      final row = find.text('Battery optimization');
+      await tester.scrollUntilVisible(row, 200, scrollable: find.byType(Scrollable).first);
+      await tester.tap(row);
+      await settle(tester);
+      expect(native.named('openBatteryOptimizationSettings'), hasLength(1));
+      await unmount(tester, c);
+    });
+
     testWidgets('changelog row opens the release history in the app language', (tester) async {
       await setUpScreenTest();
       final c = await pumpScreen(tester, const SettingsScreen());

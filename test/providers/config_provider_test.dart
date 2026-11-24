@@ -215,6 +215,11 @@ void main() {
       expect(after.activeConfigId, isNull);
       expect(after.activeSubscriptionId, isNull);
     });
+
+    test('withoutSubscription clears a selection that resolves to nothing', () {
+      final before = ConfigState(configs: [_cfg('a')], subscriptions: [sub], activeConfigId: 'gone');
+      expect(before.withoutSubscription('s').activeConfigId, isNull);
+    });
   });
 
   test('a mutation queued before build() finishes is kept', () async {
@@ -452,6 +457,13 @@ void main() {
       await boot(configs: [_cfg('1')], activeId: '1');
       await n().importBundle(ConnectionsBundle(exportedAt: DateTime(2026), configs: [_cfg('2')]));
       expect(s().activeConfigId, '1');
+    });
+
+    test('selects the first one when the selection resolves to nothing', () async {
+      await boot(configs: [_cfg('1')], activeId: 'gone');
+      await n().importBundle(ConnectionsBundle(exportedAt: DateTime(2026), configs: [_cfg('2')]));
+      expect(s().activeConfig?.address, _cfg('2').address);
+      expect(s().activeConfigId, isNot('gone'));
     });
   });
 

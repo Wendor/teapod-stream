@@ -87,12 +87,12 @@ class ConfigState {
       copyWith(configs: configs.where((c) => c.id != id).toList(), clearActive: activeConfigId == id);
 
   /// Without subscription [subId], its configs and its pins; the selection and the subscription mode are cleared
-  /// when they pointed into it.
+  /// when they pointed into it. A selection that resolves to nothing is cleared too.
   ConfigState withoutSubscription(String subId) => copyWith(
     configs: configs.where((c) => c.subscriptionId != subId).toList(),
     subscriptions: subscriptions.where((s) => s.id != subId).toList(),
     pins: pins.where((p) => p.subscriptionId != subId).toList(),
-    clearActive: activeConfig?.subscriptionId == subId,
+    clearActive: activeConfig == null || activeConfig?.subscriptionId == subId,
     clearActiveSub: activeSubscriptionId == subId,
   );
 
@@ -459,7 +459,8 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     if (newConfigs.isNotEmpty) {
       next = next.copyWith(configs: [...next.configs, ...newConfigs]);
       // Selecting a config leaves the subscription mode, as setActiveConfig does.
-      if (next.activeConfigId == null) next = next.copyWith(activeConfigId: newConfigs.first.id, clearActiveSub: true);
+      // An id that resolves to nothing counts as no selection.
+      if (next.activeConfig == null) next = next.copyWith(activeConfigId: newConfigs.first.id, clearActiveSub: true);
     }
     if (!identical(next, current)) await _commit(current, next);
 

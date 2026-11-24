@@ -173,6 +173,8 @@
   "settingsAutomationHint": "Tasker/Anubis: команды CONNECT/DISCONNECT и рассылка состояния. Любое приложение сможет выключить VPN и узнать, что он включён",
   "settingsNotification": "Уведомление",
   "settingsNotificationHint": "Скорость и кнопка отключения в шторке",
+  "settingsBattery": "Оптимизация батареи",
+  "settingsBatteryHint": "Чтобы система не останавливала VPN в фоне",
   "settingsSubscriptions": "Подписки",
   "settingsSubAutoRefreshOn": "автообновление · {hours}ч",
   "settingsSubAutoRefreshOff": "автообновление выкл",

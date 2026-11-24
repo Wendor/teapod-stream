@@ -1130,6 +1130,18 @@ abstract class AppLocalizations {
   /// **'Speed and a disconnect button in the shade'**
   String get settingsNotificationHint;
 
+  /// No description provided for @settingsBattery.
+  ///
+  /// In en, this message translates to:
+  /// **'Battery optimization'**
+  String get settingsBattery;
+
+  /// No description provided for @settingsBatteryHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Let the VPN run in the background without being stopped'**
+  String get settingsBatteryHint;
+
   /// No description provided for @settingsSubscriptions.
   ///
   /// In en, this message translates to:

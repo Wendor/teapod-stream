@@ -1678,14 +1678,14 @@ class XrayVpnService : VpnService() {
 
     /**
      * Stops the service once the VPN is off and nothing is held ([serviceIdle]). On the main thread, like
-     * onStartCommand: every start it has received is already in the queue (in flight), and `stopSelf(lastStartId)`
+     * onStartCommand: every command it has received is already in the queue, and `stopSelf(lastStartId)`
      * is ignored by the system if a newer intent is on its way.
      */
     private fun stopIfIdle() {
-        // In flight first: a start finishing after this read is checked again by afterEach; once it reads false no
-        // new start can begin (they are queued here, on the main thread).
-        if (sessionCommands.startInFlight() || isRunning.get()) return
-        if (!serviceIdle(snapshot.state, tunHeld = tunInterface != null, startInFlight = false)) return
+        // The queue first: a command finishing after this read is checked again by afterEach (after its reports were
+        // posted); once it reads idle no new command can begin (they are queued here, on the main thread).
+        if (sessionCommands.busy() || isRunning.get()) return
+        if (!serviceIdle(snapshot.state, tunHeld = tunInterface != null, queueBusy = false)) return
         log("info", "VPN off: the service stops")
         stopSelf(lastStartId)
     }

@@ -66,6 +66,6 @@ internal class SessionCommands(
     /** Whether a connect or a quick start was received after [id] — its session owns the state from then on. */
     fun startAfter(id: Long): Boolean = lastConnect > id || lastQuick > id
 
-    /** Whether a connect or a quick start was received and hasn't finished yet (waiting or running). */
-    fun startInFlight(): Boolean = maxOf(lastConnect, lastQuick) > finished
+    /** Whether a command was received and hasn't finished yet (waiting or running): its own reports are still due. */
+    fun busy(): Boolean = issued.get() > finished
 }

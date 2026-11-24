@@ -79,13 +79,13 @@ class SessionSnapshotTest {
 
     @Test
     fun theServiceStopsOnlyWhenOffWithNothingHeld() {
-        assertTrue(serviceIdle(SessionState.DISCONNECTED, tunHeld = false, startInFlight = false))
-        assertTrue("a failed start without a sink", serviceIdle(SessionState.ERROR, tunHeld = false, startInFlight = false))
-        assertFalse("the kill switch's sink", serviceIdle(SessionState.BLOCKED, tunHeld = true, startInFlight = false))
-        assertFalse("a TUN still held", serviceIdle(SessionState.DISCONNECTED, tunHeld = true, startInFlight = false))
-        assertFalse("a start waiting in the queue", serviceIdle(SessionState.DISCONNECTED, tunHeld = false, startInFlight = true))
+        assertTrue(serviceIdle(SessionState.DISCONNECTED, tunHeld = false, queueBusy = false))
+        assertTrue("a failed start without a sink", serviceIdle(SessionState.ERROR, tunHeld = false, queueBusy = false))
+        assertFalse("the kill switch's sink", serviceIdle(SessionState.BLOCKED, tunHeld = true, queueBusy = false))
+        assertFalse("a TUN still held", serviceIdle(SessionState.DISCONNECTED, tunHeld = true, queueBusy = false))
+        assertFalse("a command waiting or running in the queue", serviceIdle(SessionState.DISCONNECTED, tunHeld = false, queueBusy = true))
         for (state in listOf(SessionState.CONNECTING, SessionState.RECONNECTING, SessionState.CONNECTED, SessionState.DISCONNECTING)) {
-            assertFalse(state.wire, serviceIdle(state, tunHeld = false, startInFlight = false))
+            assertFalse(state.wire, serviceIdle(state, tunHeld = false, queueBusy = false))
         }
     }
 }

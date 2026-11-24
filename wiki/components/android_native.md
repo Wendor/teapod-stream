@@ -106,11 +106,11 @@ phantom connection, and the heartbeat's own tun2socks check stays as a fallback.
   enters TUN and nobody reads it. Notification and tile show it; tapping the tile or the notification's Connect
   reconnects.
 - **Off → the service stops.** A published `disconnected` / `error`, and every finished session command while the
-  state is off, post `stopIfIdle` to the main thread: with no session running, no TUN held and no start waiting or
-  running in the queue (`serviceIdle`, `SessionCommands.startInFlight`) the service calls `stopSelf(lastStartId)` (the
-  system ignores it if a newer intent is on its way) and its notification goes away. So a user disconnect, a failed
-  manual connect without a sink, `onRevoke` and a START_STICKY restart with nothing to start leave no service behind;
-  `blocked` keeps it. The tile, boot and automation start it again.
+  state is off, post `stopIfIdle` to the main thread: with no session running, no TUN held and no command waiting or
+  running in the queue (`serviceIdle`, `SessionCommands.busy`; a disconnect still posts its final report) the service
+  calls `stopSelf(lastStartId)` (the system ignores it if a newer intent is on its way) and its notification goes
+  away. So a user disconnect, a failed manual connect without a sink, `onRevoke` and a START_STICKY restart with
+  nothing to start leave no service behind; `blocked` keeps it. The tile, boot and automation start it again.
 
 ## Network changes
 

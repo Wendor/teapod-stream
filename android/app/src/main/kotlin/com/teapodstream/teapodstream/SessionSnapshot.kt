@@ -21,10 +21,10 @@ enum class SessionState(val wire: String) {
 
 /**
  * Whether the service has nothing left to hold and stops: the VPN is off, no TUN is held (a kill-switch sink keeps
- * the service) and no start is waiting or running in the session queue. The tile, boot and automation start it again.
+ * the service) and the session queue is idle (a start would bring the VPN up, a disconnect still reports its end). The tile, boot and automation start it again.
  */
-internal fun serviceIdle(state: SessionState, tunHeld: Boolean, startInFlight: Boolean): Boolean =
-    state.isOff && !tunHeld && !startInFlight
+internal fun serviceIdle(state: SessionState, tunHeld: Boolean, queueBusy: Boolean): Boolean =
+    state.isOff && !tunHeld && !queueBusy
 
 /**
  * The whole session state as Flutter and the rest of the app see it. Immutable: the service changes it only by

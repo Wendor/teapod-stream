@@ -14,7 +14,17 @@ enum class SessionState(val wire: String) {
 
     /** The states that report why the session failed. */
     val carriesError: Boolean get() = this == ERROR || this == BLOCKED
+
+    /** The VPN is off: disconnected or failed without the kill switch's sink ([BLOCKED] is not off). */
+    val isOff: Boolean get() = this == DISCONNECTED || this == ERROR
 }
+
+/**
+ * Whether the service has nothing left to hold and stops: the VPN is off, no TUN is held (a kill-switch sink keeps
+ * the service) and the session queue is idle (a start would bring the VPN up, a disconnect still reports its end). The tile, boot and automation start it again.
+ */
+internal fun serviceIdle(state: SessionState, tunHeld: Boolean, queueBusy: Boolean): Boolean =
+    state.isOff && !tunHeld && !queueBusy
 
 /**
  * The whole session state as Flutter and the rest of the app see it. Immutable: the service changes it only by

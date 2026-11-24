@@ -122,4 +122,38 @@ class SessionCommandsTest {
         finish(last)
         assertEquals(listOf("skip quick 1", "quick 2"), ran)
     }
+
+    @Test
+    fun `the queue is busy from a command's receipt until it has finished`() {
+        assertFalse(commands.busy())
+        val release = CountDownLatch(1)
+        longStart(release)
+        assertTrue("a running command", commands.busy())
+        submit(Kind.DISCONNECT, "disconnect")
+        val last = submit(Kind.QUICK, "quick")
+        release.countDown()
+        finish(last)
+        assertFalse(commands.busy())
+    }
+
+    @Test
+    fun `afterEach runs after every command, once it has finished`() {
+        val seen = Collections.synchronizedList(mutableListOf<Boolean>())
+        lateinit var queue: SessionCommands
+        queue = SessionCommands(afterEach = { seen += queue.busy() })
+        queue.submit(Kind.CONNECT) {}.done.get(2, TimeUnit.SECONDS)
+        queue.submit(Kind.DISCONNECT) {}.done.get(2, TimeUnit.SECONDS)
+        assertEquals("each one sees itself finished and nothing queued", listOf(false, false), seen)
+    }
+
+    @Test
+    fun `afterEach runs and the command is finished even when the command throws`() {
+        val after = CountDownLatch(1)
+        lateinit var queue: SessionCommands
+        var inFlightAfter = true
+        queue = SessionCommands(afterEach = { inFlightAfter = queue.busy(); after.countDown() })
+        queue.submit(Kind.CONNECT) { throw IllegalStateException("boom") }
+        assertTrue(after.await(2, TimeUnit.SECONDS))
+        assertFalse(inFlightAfter)
+    }
 }

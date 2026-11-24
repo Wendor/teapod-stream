@@ -273,7 +273,12 @@ class XrayVpnService : VpnService() {
     // Session commands (ACTION_CONNECT / ACTION_DISCONNECT) run in the order they were received;
     // their lock is also the one session changes and a deferred reconnect's stop take, so a stale
     // reconnect won't stop an already new session.
-    private val sessionCommands = SessionCommands()
+    // A start that ends off (failed, cancelled) is checked once it has finished: while it runs it holds the service.
+    private val sessionCommands = SessionCommands(afterEach = { if (snapshot.state.isOff) mainHandler.post(::stopIfIdle) })
+    /** The startId of the last onStartCommand (main thread): see [stopIfIdle]. */
+    private var lastStartId = 0
+    /** Set in onDestroy (main thread): reports posted later belong to a stopped instance. */
+    private var destroyed = false
     private val sessionLock = sessionCommands.lock
     // Among the deferred events there was a loss of VALIDATED — reconnect without checking the network.
     @Volatile private var pendingForce = false
@@ -310,6 +315,7 @@ class XrayVpnService : VpnService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        lastStartId = startId
         if (intent?.action == ACTION_ITEST_DROP) {
             // itest build only: a drop along the failure path (explicit=false), as on
             // an unexpected tunnel death — the kill switch keeps the TUN sink.
@@ -342,12 +348,15 @@ class XrayVpnService : VpnService() {
                 // state. Answers the connect Flutter may wait for.
                 val report = {
                     mainHandler.post {
-                        if (sessionCommands.startAfter(command.id)) {
+                        if (destroyed) {
+                            // A late report (the 5 s supervisor) of a stopped instance: a newer one may own the
+                            // session state, which is process-wide.
+                            log("info", "disconnect report after the service stopped: dropped")
+                        } else if (sessionCommands.startAfter(command.id)) {
                             log("info", "disconnect finished after a new start: final state left to it")
                         } else {
                             sessionAttempt = answers
                             setState(SessionState.DISCONNECTED)
-                            showDisconnectedNotification()
                         }
                     }
                 }
@@ -541,7 +550,8 @@ class XrayVpnService : VpnService() {
                 }
             }
         }
-        showDisconnectedNotification()
+        // Nothing to start: the service doesn't stay in the foreground for an off VPN.
+        stopIfIdle()
         return START_STICKY
     }
 
@@ -932,16 +942,15 @@ class XrayVpnService : VpnService() {
                 else -> resultState
             }
             setState(finalState, error)
-            if (!reconnecting) {
-                // Otherwise after a connection error "Connecting…" hung (issue #76).
-                showDisconnectedNotification(keptTunAsSink)
-            }
+            // Off without a sink, the service stops (publish); the kill switch's block keeps it with its notification.
+            if (keptTunAsSink && !reconnecting) showBlockedNotification()
             log("info", "stopVpn: done (state=${finalState.wire})")
             flushLogBuffer(filesDir)
         }
     }
 
     override fun onDestroy() {
+        destroyed = true
         try { unregisterReceiver(screenReceiver) } catch (_: Exception) {}
         screenReceiver = null
         stopVpn()
@@ -1615,7 +1624,7 @@ class XrayVpnService : VpnService() {
             .build()
     }
 
-    private fun buildDisconnectedNotification(text: String): Notification {
+    private fun buildBlockedNotification(): Notification {
         val flags = pendingFlags()
         val connectIntent = PendingIntent.getService(this, 1,
             Intent(this, XrayVpnService::class.java).apply { action = ACTION_CONNECT_QUICK }, flags)
@@ -1623,7 +1632,7 @@ class XrayVpnService : VpnService() {
             packageManager.getLaunchIntentForPackage(packageName)
                 ?.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), flags)
         return baseNotification(this, NOTIFICATION_CHANNEL_ID)
-            .setContentText(text)
+            .setContentText(appString(R.string.state_kill_switch))
             .setContentIntent(openIntent)
             .addAction(android.R.drawable.ic_media_play, appString(R.string.action_connect), connectIntent)
             .build()
@@ -1660,18 +1669,32 @@ class XrayVpnService : VpnService() {
         val blocked = killSwitch && tunInterface != null
         if (!blocked) closeTunSink()
         setState(if (blocked) SessionState.BLOCKED else SessionState.DISCONNECTED)
-        showDisconnectedNotification(blocked)
+        if (blocked) showBlockedNotification()
         openApp()
     }
 
-    private fun showDisconnectedNotification(blocked: Boolean = false) {
+    /** The kill switch holds the TUN sink: the service stays, its notification offers to connect again. */
+    private fun showBlockedNotification() {
         lastIntermediate = null
         if (!showNotification) return
         try {
             val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-            val text = appString(if (blocked) R.string.state_kill_switch else R.string.state_disconnected)
-            manager.notify(NOTIFICATION_ID, buildDisconnectedNotification(text))
+            manager.notify(NOTIFICATION_ID, buildBlockedNotification())
         } catch (_: Exception) {}
+    }
+
+    /**
+     * Stops the service once the VPN is off and nothing is held ([serviceIdle]). On the main thread, like
+     * onStartCommand: every command it has received is already in the queue, and `stopSelf(lastStartId)`
+     * is ignored by the system if a newer intent is on its way.
+     */
+    private fun stopIfIdle() {
+        // The queue first: a command finishing after this read is checked again by afterEach (after its reports were
+        // posted); once it reads idle no new command can begin (they are queued here, on the main thread).
+        if (sessionCommands.busy() || isRunning.get()) return
+        if (!serviceIdle(snapshot.state, tunHeld = tunInterface != null, queueBusy = false)) return
+        log("info", "VPN off: the service stops")
+        stopSelf(lastStartId)
     }
 
     /** A state other than connected, tagged with [sessionAttempt]; [error] replaces the failure reason. */
@@ -1693,6 +1716,7 @@ class XrayVpnService : VpnService() {
         }
         VpnTileService.updateTile(this)
         onStateNotification(this, published.state)
+        if (published.state.isOff) mainHandler.post(::stopIfIdle)
         // An implicit broadcast is readable by any app — only with the option and without the SOCKS port.
         if (automationEnabled(this)) {
             sendBroadcast(Intent("com.teapodstream.STATE_CHANGED").putExtra("state", published.state.wire))

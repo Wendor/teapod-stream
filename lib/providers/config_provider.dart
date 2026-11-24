@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/models/vpn_config.dart';
@@ -142,7 +143,8 @@ class ConfigState {
 }
 
 class ConfigNotifier extends AsyncNotifier<ConfigState> {
-  static final storage = ConfigStorageService();
+  @visibleForTesting
+  static ConfigStorageService storage = ConfigStorageService();
 
   /// Mutations run strictly in order: each reads the state, computes the next one and commits it. Run in parallel (a
   /// ping in the middle of a subscription refresh) they overwrote each other.

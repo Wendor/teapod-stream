@@ -54,6 +54,20 @@ Subscription _sub(String id, {String? url, String? pin, DateTime? fetched}) => S
 String _trojan(String host, String name, {int port = 443}) =>
     'trojan://pw@$host:$port?security=tls#${Uri.encodeComponent(name)}';
 
+/// Storage whose list writes fail on demand.
+class _FailingStorage extends ConfigStorageService {
+  bool failConfigs = false;
+  bool failSubscriptions = false;
+
+  @override
+  Future<void> saveConfigs(List<VpnConfig> configs) =>
+      failConfigs ? Future.error(StateError('configs')) : super.saveConfigs(configs);
+
+  @override
+  Future<void> saveSubscriptions(List<Subscription> subs) =>
+      failSubscriptions ? Future.error(StateError('subscriptions')) : super.saveSubscriptions(subs);
+}
+
 void main() {
   late ProviderContainer c;
   final storage = ConfigStorageService();
@@ -219,6 +233,52 @@ void main() {
     test('withoutSubscription clears a selection that resolves to nothing', () {
       final before = ConfigState(configs: [_cfg('a')], subscriptions: [sub], activeConfigId: 'gone');
       expect(before.withoutSubscription('s').activeConfigId, isNull);
+    });
+  });
+
+  group('a failed write', () {
+    late _FailingStorage failing;
+    setUp(() {
+      final original = ConfigNotifier.storage;
+      ConfigNotifier.storage = failing = _FailingStorage();
+      addTearDown(() => ConfigNotifier.storage = original);
+    });
+
+    test('in a removal publishes the configs saved before it; the next mutation keeps them', () async {
+      await boot(
+        configs: [
+          _cfg('a'),
+          _cfg('b', subId: 's'),
+        ],
+        subs: [_sub('s')],
+      );
+      failing.failSubscriptions = true;
+      await expectLater(n().removeSubscription('s'), throwsStateError);
+      expect(s().configs.map((x) => x.id), ['a']);
+      expect(s().subscriptions.map((x) => x.id), ['s']);
+
+      failing.failSubscriptions = false;
+      await n().addConfig(_cfg('c'));
+      expect((await storage.loadConfigs()).map((x) => x.id), ['a', 'c']);
+      expect((await storage.loadSubscriptions()).map((x) => x.id), ['s']);
+    });
+
+    test('in an addition publishes the subscription saved before it; the next mutation keeps it', () async {
+      await boot(configs: [_cfg('a')]);
+      failing.failConfigs = true;
+      final bundle = ConnectionsBundle(
+        exportedAt: DateTime(2026),
+        configs: [_cfg('x', subId: 'remote')],
+        subscriptions: [_sub('remote', url: 'https://new')],
+      );
+      await expectLater(n().importBundle(bundle), throwsStateError);
+      expect(s().subscriptions.map((x) => x.url), ['https://new']);
+      expect(s().configs.map((x) => x.id), ['a']);
+
+      failing.failConfigs = false;
+      await n().addConfig(_cfg('c'));
+      expect((await storage.loadSubscriptions()).map((x) => x.url), ['https://new']);
+      expect((await storage.loadConfigs()).map((x) => x.id), ['a', 'c']);
     });
   });
 

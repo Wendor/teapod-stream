@@ -245,6 +245,27 @@ void main() {
     expect(hex('a' * 1000000), 'cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0');
   });
 
+  group('HWID per host', () {
+    test('HMAC-SHA256 matches RFC 4231 test case 2', () {
+      final mac = hmacSha256(utf8.encode('Jefe'), utf8.encode('what do ya want for nothing?'));
+      expect(
+        mac.map((b) => b.toRadixString(16).padLeft(2, '0')).join(),
+        '5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843',
+      );
+    });
+
+    test('two hosts get two ids, each stable, the host case-insensitive', () {
+      const device = HwidDeviceInfo(deviceId: 'android-id', deviceModel: 'X1', osVersion: 34);
+      final a = device.forHost('a.example').deviceId;
+      expect(a, hasLength(64));
+      expect(a, isNot('android-id'));
+      expect(device.forHost('a.example').deviceId, a);
+      expect(device.forHost('A.Example').deviceId, a);
+      expect(device.forHost('b.example').deviceId, isNot(a));
+      expect(device.forHost('a.example').deviceModel, 'X1');
+    });
+  });
+
   group('self-signed certificate', () {
     late LocalServer tls;
     late String der;

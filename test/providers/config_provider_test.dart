@@ -9,10 +9,12 @@ import 'package:teapodstream/core/models/pinned_ref.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/core/models/vpn_log_entry.dart';
 import 'package:teapodstream/core/services/config_storage_service.dart';
+import 'package:teapodstream/core/services/device_service.dart';
 import 'package:teapodstream/core/models/subscription.dart';
 import 'package:teapodstream/core/services/log_service.dart';
 import 'package:teapodstream/core/services/subscription_service.dart';
 import 'package:teapodstream/providers/config_provider.dart';
+import 'package:teapodstream/providers/settings_provider.dart';
 
 import '../helpers/local_server.dart';
 
@@ -65,9 +67,13 @@ void main() {
     List<PinnedRef> pins = const [],
     String? activeId,
     String? activeSubId,
+    Map<String, Object> prefs = const {},
+    Map<String, String> secure = const {},
   }) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({...prefs});
     FlutterSecureStorage.setMockInitialValues({});
+    await DeviceService.clearCache();
+    FlutterSecureStorage.setMockInitialValues({...secure});
     await storage.saveConfigs(configs);
     await storage.saveSubscriptions(subs);
     await storage.savePins(pins);
@@ -417,6 +423,79 @@ void main() {
       expect(s().activeConfigId, s().configs.first.id);
       expect((await storage.loadConfigs()).length, 2);
       expect(server.requests.single.value('x-hwid'), isNull);
+    });
+
+    group('HWID', () {
+      Future<void> bootWithHwid({List<Subscription> subs = const []}) async {
+        await boot(
+          subs: subs,
+          prefs: {'hwid_enabled': true},
+          secure: {'cached_device_id': 'android-id', 'cached_device_info': '{"model":"X1","osVersion":34}'},
+        );
+        expect((await c.read(settingsProvider.future)).hwidEnabled, isTrue);
+      }
+
+      String? sentId() => server.requests.last.value('x-hwid');
+      final perHost = const HwidDeviceInfo(
+        deviceId: 'android-id',
+        deviceModel: 'X1',
+        osVersion: 34,
+      ).forHost('127.0.0.1').deviceId;
+
+      test('a new subscription sends the id derived for its host', () async {
+        await bootWithHwid();
+        server.serve(_trojan('a.example', 'A'));
+        await n().addSubscriptionFromUrl(server.url('/sub'));
+        expect(sentId(), perHost);
+        expect(s().subscriptions.single.rawHwid, isFalse);
+        server.serve(_trojan('a.example', 'A'));
+        await n().addSubscriptionFromUrl(server.url('/sub'));
+        expect(sentId(), perHost, reason: 'stable across refreshes');
+      });
+
+      test('a subscription stored before per-host ids keeps sending the raw id', () async {
+        final old = Subscription.fromJson((_sub('s', url: server.url('/sub')).toJson()..remove('rawHwid')));
+        expect(old.rawHwid, isTrue);
+        await bootWithHwid(subs: [old]);
+        server.serve(_trojan('a.example', 'A'));
+        await n().addSubscriptionFromUrl(server.url('/sub'));
+        expect(sentId(), 'android-id');
+        expect(s().subscriptions.single.rawHwid, isTrue);
+        expect((await storage.loadSubscriptions()).single.rawHwid, isTrue);
+      });
+
+      Subscription legacy() => Subscription.fromJson(_sub('s', url: server.url('/sub')).toJson()..remove('rawHwid'));
+
+      test('a URL change on the same host keeps the raw id', () async {
+        await bootWithHwid(subs: [legacy()]);
+        server.serve(_trojan('a.example', 'A'));
+        await n().addSubscriptionFromUrl(server.url('/other'), replaceId: 's');
+        expect(sentId(), 'android-id');
+        expect((await storage.loadSubscriptions()).single.rawHwid, isTrue);
+      });
+
+      test('a URL change to another host switches to the per-host id for good', () async {
+        await bootWithHwid(subs: [legacy()]);
+        final otherHost = server.url('/sub').replaceFirst('127.0.0.1', 'localhost');
+        final derived = const HwidDeviceInfo(
+          deviceId: 'android-id',
+          deviceModel: 'X1',
+          osVersion: 34,
+        ).forHost('localhost').deviceId;
+        server.serve(_trojan('a.example', 'A'));
+        await n().addSubscriptionFromUrl(otherHost, replaceId: 's');
+        expect(sentId(), derived);
+        expect((await storage.loadSubscriptions()).single.rawHwid, isFalse);
+
+        // After a restart the refresh keeps the per-host id.
+        c.dispose();
+        c = ProviderContainer();
+        addTearDown(c.dispose);
+        await c.read(configProvider.future);
+        await c.read(settingsProvider.future);
+        await n().addSubscriptionFromUrl(otherHost);
+        expect(sentId(), derived);
+      });
     });
 
     test('an accepted certificate is pinned exactly; another one on the retry is refused', () async {

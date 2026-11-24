@@ -15,6 +15,10 @@ class Subscription {
   /// manually (TOFU). Auto-refresh trusts only it, not any certificate.
   final String? pinnedCertDer;
 
+  /// Sends the raw device id as HWID (a subscription added before ids became per host: the provider already counts
+  /// the device by it); otherwise the id derived for the subscription host (`HwidDeviceInfo.forHost`).
+  final bool rawHwid;
+
   const Subscription({
     required this.id,
     required this.name,
@@ -28,6 +32,7 @@ class Subscription {
     this.announce,
     this.announceUrl,
     this.pinnedCertDer,
+    this.rawHwid = false,
   });
 
   Map<String, dynamic> toJson() => {
@@ -43,6 +48,7 @@ class Subscription {
     'announce': announce,
     'announceUrl': announceUrl,
     'pinnedCertDer': pinnedCertDer,
+    'rawHwid': rawHwid,
   };
 
   factory Subscription.fromJson(Map<String, dynamic> json) => Subscription(
@@ -58,6 +64,8 @@ class Subscription {
     announce: json['announce'] as String?,
     announceUrl: json['announceUrl'] as String?,
     pinnedCertDer: json['pinnedCertDer'] as String?,
+    // Stored before the field existed: the subscription has registered the raw id.
+    rawHwid: json['rawHwid'] as bool? ?? true,
   );
 
   Subscription copyWith({
@@ -83,6 +91,7 @@ class Subscription {
       announce: announce ?? this.announce,
       announceUrl: announceUrl ?? this.announceUrl,
       pinnedCertDer: pinnedCertDer,
+      rawHwid: rawHwid,
     );
   }
 }

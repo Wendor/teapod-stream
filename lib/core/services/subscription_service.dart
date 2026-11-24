@@ -73,6 +73,17 @@ class HwidDeviceInfo {
 
   const HwidDeviceInfo({required this.deviceId, required this.deviceModel, required this.osVersion});
 
+  /// The device id for one subscription host: hex HMAC-SHA256 of [host] under the raw id, so providers can't match
+  /// one device across services. Stable for a host; the host is compared case-insensitively.
+  HwidDeviceInfo forHost(String host) => HwidDeviceInfo(
+    deviceId: hmacSha256(
+      utf8.encode(deviceId),
+      utf8.encode(host.toLowerCase()),
+    ).map((b) => b.toRadixString(16).padLeft(2, '0')).join(),
+    deviceModel: deviceModel,
+    osVersion: osVersion,
+  );
+
   Map<String, dynamic> toJson() => {'deviceId': deviceId, 'deviceModel': deviceModel, 'osVersion': osVersion};
 }
 
@@ -390,6 +401,13 @@ class _HeaderMeta {
     this.announceUrl,
     this.hwidStatus,
   });
+}
+
+/// HMAC-SHA256 (RFC 2104) of [message] under [key].
+Uint8List hmacSha256(List<int> key, List<int> message) {
+  final block = Uint8List(64)..setAll(0, key.length > 64 ? sha256(key) : key);
+  final inner = sha256([for (final b in block) b ^ 0x36, ...message]);
+  return sha256([for (final b in block) b ^ 0x5c, ...inner]);
 }
 
 /// SHA-256 (FIPS 180-4) of [data]: the certificate fingerprint shown to the user. No hashing package is a dependency.

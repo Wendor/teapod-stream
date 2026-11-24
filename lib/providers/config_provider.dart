@@ -221,7 +221,11 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     final subId = target?.id ?? 'sub_${DateTime.now().millisecondsSinceEpoch}';
 
     final settings = ref.read(settingsProvider).value;
-    final hwid = (settings?.hwidEnabled ?? false) ? await DeviceService.getHwidInfo() : null;
+    final host = Uri.parse(url).host;
+    // A subscription that registered the raw id keeps it while its host stays the same.
+    final rawHwid = target != null && target.rawHwid && Uri.parse(target.url).host == host;
+    final device = (settings?.hwidEnabled ?? false) ? await DeviceService.getHwidInfo() : null;
+    final hwid = rawHwid ? device : device?.forHost(host);
     // Network — outside the mutation queue so config selection doesn't wait for the download.
     final (tagged, fetchResult) = await _fetchAndTagConfigs(
       url,
@@ -278,7 +282,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
       final sub = Subscription(
         id: subId,
         // A user-given name isn't overwritten by profile-title on refresh
-        name: name ?? existing?.name ?? fetchResult.profileTitle ?? Uri.parse(url).host,
+        name: name ?? existing?.name ?? fetchResult.profileTitle ?? host,
         url: url,
         createdAt: existing?.createdAt ?? DateTime.now(),
         lastFetchedAt: DateTime.now(),
@@ -289,6 +293,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
         announce: fetchResult.announce,
         announceUrl: fetchResult.announceUrl,
         pinnedCertDer: fetchResult.acceptedCertDer ?? existing?.pinnedCertDer,
+        rawHwid: rawHwid,
       );
 
       // Remove old first, then add new — prevents duplicates if interrupted mid-update

@@ -30,8 +30,11 @@ forever.
 ### HWID
 
 `hwidEnabled` is on by default: some panels answer a request without a non-empty `X-Hwid` with a redirect to an HTML
-page, and the subscription would import zero configs. Headers: `X-Hwid` (ANDROID_ID), `X-Device-Os: Android`,
+page, and the subscription would import zero configs. Headers: `X-Hwid`, `X-Device-Os: Android`,
 `X-Device-Model`, `X-Ver-Os`. `DeviceService` reads them over the channel once and caches them in secure storage.
+`X-Hwid` is per subscription host: `HwidDeviceInfo.forHost` — hex HMAC-SHA256 of the lower-cased host under
+ANDROID_ID (`hmacSha256`, on the local `sha256`), so providers can't match one device across services. A subscription
+with `rawHwid` (stored before per-host ids) keeps sending ANDROID_ID while its URL keeps the same host.
 
 ## AppHttp
 

@@ -45,7 +45,9 @@ Sealed, JSON with a `type` discriminator; null for the xray protocols.
 
 `id`, `name`, `url`, `createdAt`, `lastFetchedAt`; usage info from the response headers (`expireAt`,
 `uploadBytes`, `downloadBytes`, `totalBytes`, `announce`, `announceUrl`); `pinnedCertDer` — the self-signed
-certificate the user accepted (trust on first use; auto-refresh accepts only it).
+certificate the user accepted (trust on first use; auto-refresh accepts only it); `rawHwid` — sends the raw
+device id as HWID: `true` for subscriptions stored before the field existed (`fromJson` default), so a provider that
+counts devices by it doesn't see a new one; new subscriptions get `false` (the per-host id, [services](services.md#hwid)).
 
 ## RoutingSettings
 

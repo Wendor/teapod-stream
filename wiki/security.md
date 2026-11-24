@@ -24,6 +24,7 @@ says how, and what counts.
 | Backups / device transfer copy secrets | `allowBackup=false`, `dataExtractionRules` exclude everything |
 | Browsing history on disk | core access logs only at `debug`; sing-box `info` mapped to `warn` |
 | A shared log reveals servers or credentials | "share" on the logs screen sends a masked copy (`maskLog` in `log_service.dart`): hosts, UUIDs, passwords and share links of saved configs, subscription URLs and hosts, SOCKS credentials, any UUID, `user=`/`pass=`-like values and public IPv4/IPv6 become `<hidden>` / `<uuid>` / `<ip>`; loopback, private and link-local addresses stay. One copy, `teapod_log.txt` in the cache dir, overwritten on every export. The prefix-proxy line doesn't name the server |
+| Subscription providers match one device across services by HWID | `X-Hwid` is derived per subscription host (HMAC-SHA256 under ANDROID_ID); only subscriptions added before that keep the raw id ([services](components/services.md#hwid)) |
 | Self-signed subscription servers | explicit user confirmation showing the SHA-256 fingerprint; the retry trusts only the certificate shown, only for the subscription host (TOFU pin) |
 
 ## Accepted risks

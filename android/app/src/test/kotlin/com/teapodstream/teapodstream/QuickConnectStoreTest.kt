@@ -28,6 +28,15 @@ class QuickConnectStoreTest {
     }
 
     @Test
+    fun aFailedWriteLeavesNoTempFile() {
+        // A non-empty directory under the target name: the rename fails.
+        File(dir, QuickConnectStore.CONFIG).mkdir()
+        File(dir, "${QuickConnectStore.CONFIG}/x").writeText("")
+        assertTrue(runCatching { store.saveConfig("{config}") }.isFailure)
+        assertTrue(dir.listFiles()!!.none { it.name.endsWith(".tmp") })
+    }
+
+    @Test
     fun quickStartPrefersTheStoredLogin() {
         store.save("{config}", params, "u", "p")
         assertEquals(StartRequest("{config}", params, "u", "p", reconnect = true), store.quickStart(fromConfig))

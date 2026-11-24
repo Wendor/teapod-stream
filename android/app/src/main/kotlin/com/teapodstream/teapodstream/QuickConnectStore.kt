@@ -92,10 +92,11 @@ internal class QuickConnectStore(private val dir: File) {
     private fun write(name: String, text: String) {
         // A temp file of its own per write: the activity and the service may write the same file at once.
         val tmp = File.createTempFile("$name.", ".tmp", dir)
-        tmp.writeText(text)
-        if (!tmp.renameTo(File(dir, name))) {
-            tmp.delete()
-            throw java.io.IOException("rename failed: $name")
+        try {
+            tmp.writeText(text)
+            if (!tmp.renameTo(File(dir, name))) throw java.io.IOException("rename failed: $name")
+        } finally {
+            tmp.delete() // after a rename there is nothing under the temp name
         }
     }
 

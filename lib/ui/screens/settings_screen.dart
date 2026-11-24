@@ -1055,7 +1055,7 @@ class _UpdateVersionTile extends ConsumerWidget {
   }
 }
 
-// ── Profiles row ──────────────────────────────────────────────────
+// ── Battery row ───────────────────────────────────────────────────
 
 class _BatteryRow extends ConsumerWidget {
   const _BatteryRow();
@@ -1071,6 +1071,8 @@ class _BatteryRow extends ConsumerWidget {
     );
   }
 }
+
+// ── Profiles row ──────────────────────────────────────────────────
 
 class _ProfilesRow extends ConsumerWidget {
   final TeapodTokens t;

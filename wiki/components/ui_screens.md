@@ -58,8 +58,10 @@ pause, auto-connects on start (`autoConnect`), pings stale configs, checks geoda
 
 `HeroPanel`, `LiveSparkline` (speed chart; a single point is drawn flat), `ServerPickerSheet`, `ReconnectBanner`
 (settings changed on a live VPN → reconnect), `Pressable` (whole-row tap target), `settings_shared.dart`
-(`SetRowToggle`, `SetSquareSwitch`, `SetSegSquare`), `BreadcrumbBar`, `FeatureGate`, `CoreSupportGate`, `core_sheet`, `confirmUntrustedCertificate` (the untrusted
-subscription certificate dialog with its SHA-256, used by Add and Configs).
+(`SetRowToggle`, `SetSquareSwitch`, `SetSegSquare`), `BreadcrumbBar`, `FeatureGate`, `CoreSupportGate`, `core_sheet`,
+`confirmUntrustedCertificate` (the untrusted subscription certificate dialog with its SHA-256, used by Add and
+Configs), `import_review.dart` (`ImportReviewDetails`, `confirmImportReview`: what an import changes,
+[profiles](profiles.md)).
 
 ## Read-only profiles
 

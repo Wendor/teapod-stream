@@ -455,5 +455,12 @@
   "updateInstallError": "Ошибка установки",
   "vpnConnectTimeout": "Таймаут подключения",
   "vpnConnectError": "Ошибка подключения",
-  "vpnNoConfigSelected": "Конфигурация не выбрана"
+  "vpnNoConfigSelected": "Конфигурация не выбрана",
+  "importReviewTitle": "Проверьте перед импортом",
+  "importReviewTraffic": "Меняет путь трафика:",
+  "importReviewSubscriptions": "Добавляет подписки, приложение будет загружать их с:",
+  "importChangeKillSwitch": "Kill switch",
+  "importChangeDns": "DNS",
+  "importChangeRouting": "Правила маршрутизации",
+  "importChangeLogLevel": "Уровень логов"
 }

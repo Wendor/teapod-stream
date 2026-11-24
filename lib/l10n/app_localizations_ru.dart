@@ -1579,4 +1579,25 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get vpnNoConfigSelected => 'Конфигурация не выбрана';
+
+  @override
+  String get importReviewTitle => 'Проверьте перед импортом';
+
+  @override
+  String get importReviewTraffic => 'Меняет путь трафика:';
+
+  @override
+  String get importReviewSubscriptions => 'Добавляет подписки, приложение будет загружать их с:';
+
+  @override
+  String get importChangeKillSwitch => 'Kill switch';
+
+  @override
+  String get importChangeDns => 'DNS';
+
+  @override
+  String get importChangeRouting => 'Правила маршрутизации';
+
+  @override
+  String get importChangeLogLevel => 'Уровень логов';
 }

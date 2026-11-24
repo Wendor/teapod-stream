@@ -1556,4 +1556,25 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get vpnNoConfigSelected => 'No configuration selected';
+
+  @override
+  String get importReviewTitle => 'Check before importing';
+
+  @override
+  String get importReviewTraffic => 'Changes how traffic goes:';
+
+  @override
+  String get importReviewSubscriptions => 'Adds subscriptions, the app will load them from:';
+
+  @override
+  String get importChangeKillSwitch => 'Kill switch';
+
+  @override
+  String get importChangeDns => 'DNS';
+
+  @override
+  String get importChangeRouting => 'Routing rules';
+
+  @override
+  String get importChangeLogLevel => 'Log level';
 }

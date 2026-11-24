@@ -11,6 +11,7 @@ import '../../providers/config_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/breadcrumb_bar.dart';
+import '../widgets/import_review.dart';
 import '../widgets/untrusted_cert_dialog.dart';
 import 'qr_scan_screen.dart';
 import '../../l10n/l10n.dart';
@@ -293,6 +294,8 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
           return;
         }
         final bundle = result.connectionsBundle!;
+        final review = ref.read(configProvider.notifier).reviewBundle(bundle);
+        if (!await confirmImportReview(context, review) || !mounted) return;
         int addedConfigs = 0;
         int addedSubscriptions = 0;
         if (bundle.isCompact) {

@@ -63,7 +63,8 @@ prevents parallel runs. It is triggered from `VpnNotifier.refreshStaleSubscripti
 `reorderSubscriptions` / `reorderGroupConfigs(subId, …)` (indices from `ReorderableListView.onReorderItem`:
 `newIndex` is the position after the move),
 `batchUpdatePingResults` (one write for all pings), `importBundle` (connections from a profile or deep link,
-[profiles](profiles.md)), `applySelection` (a profile's remembered server, [profiles](profiles.md#selected-server)).
+[profiles](profiles.md)), `reviewBundle` / `newSubscriptionHosts` (hosts of the subscriptions an import would add,
+shown before it), `applySelection` (a profile's remembered server, [profiles](profiles.md#selected-server)).
 
 ## Related
 

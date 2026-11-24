@@ -1,8 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../core/models/vpn_config.dart';
 import '../core/models/pinned_ref.dart';
 import '../core/models/config_selection.dart';
 import '../core/models/connections_bundle.dart';
+import '../core/models/import_review.dart';
 import '../core/services/config_storage_service.dart';
 import '../core/models/subscription.dart';
 import '../core/services/subscription_service.dart' show SubscriptionService, SubscriptionFetchResult, HwidDeviceInfo;
@@ -394,6 +396,15 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
   final _subFailedAt = <String, DateTime>{};
 
   // ─── Import from ConnectionsBundle ───
+
+  /// Hosts of the subscriptions among [urls] that an import would add (one already present is skipped).
+  List<String> newSubscriptionHosts(Iterable<String> urls) =>
+      ImportReview.newHosts(urls, (state.value?.subscriptions ?? const <Subscription>[]).map((s) => s.url));
+
+  /// What importing [bundle] adds that the user sees before it is applied: the subscription hosts.
+  ImportReview reviewBundle(ConnectionsBundle bundle) => ImportReview(
+    subscriptionHosts: newSubscriptionHosts([...bundle.subscriptions.map((s) => s.url), ...bundle.subscriptionUrls]),
+  );
 
   Future<ImportConnectionsResult> importBundle(ConnectionsBundle bundle) => _serial(() async {
     final current = state.maybeWhen(data: (d) => d, orElse: () => null) ?? ConfigState();

@@ -80,8 +80,9 @@ class SubscriptionService {
   /// Fetch and parse a subscription URL.
   ///
   /// An untrusted certificate throws [UntrustedCertificateException] with its details so the caller can ask the
-  /// user. [pinnedCertDer] — the certificate the user accepted (base64 DER): only it, and only from the host of
-  /// [url], passes without verification.
+  /// user — only for the host of [url]; an untrusted certificate after a redirect to another host is a plain error.
+  /// [pinnedCertDer] — the certificate the user accepted (base64 DER): only it, and only from the host of [url],
+  /// passes without verification.
   /// If [hwidEnabled] is true, HWID headers are sent to support device limits.
   /// If [userAgent] is non-empty, it overrides the default User-Agent.
   Future<SubscriptionFetchResult> fetchSubscription(
@@ -107,9 +108,11 @@ class SubscriptionService {
     String? acceptedCert;
 
     bool onBadCertificate(X509Certificate cert, String host, int port) {
+      // A redirect to another host is never trusted and never offered to the user: accepting it couldn't be
+      // retried, since the pin belongs to the subscription host only.
+      if (host != uri.host) return false;
       final der = base64.encode(cert.der);
-      // A redirect to another host never inherits the pin.
-      if (pinnedCertDer != null && der == pinnedCertDer && host == uri.host) {
+      if (pinnedCertDer != null && der == pinnedCertDer) {
         acceptedCert = der;
         return true;
       }

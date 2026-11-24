@@ -9,6 +9,7 @@ import 'package:teapodstream/providers/core_provider.dart';
 import 'package:teapodstream/core/constants/app_constants.dart';
 import 'package:teapodstream/core/cores/core_switch.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
+import 'package:teapodstream/core/services/app_http.dart';
 import 'package:teapodstream/core/services/subscription_service.dart';
 
 import 'package:teapodstream/protocols/xray/xray_go_backend.dart';
@@ -281,7 +282,7 @@ void main() {
       expect(r.acceptedCertDer, der);
     });
 
-    test('the pin holds only for the subscription host, not after a redirect', () async {
+    test('a redirect to an untrusted host is an error, not a certificate to accept', () async {
       tls.handler = (r) async {
         if (r.uri.path == '/') {
           r.response.statusCode = HttpStatus.found;
@@ -294,7 +295,7 @@ void main() {
       final viaLocalhost = 'https://localhost:${tls.port}/';
       await expectLater(
         svc.fetchSubscription(viaLocalhost, pinnedCertDer: der),
-        throwsA(isA<UntrustedCertificateException>().having((e) => e.host, 'host', '127.0.0.1')),
+        throwsA(allOf(isA<AppHttpException>(), isNot(isA<UntrustedCertificateException>()))),
       );
       expect(tls.paths, ['/'], reason: 'the redirected request never got past the handshake');
     });

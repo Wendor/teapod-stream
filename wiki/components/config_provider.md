@@ -40,8 +40,8 @@ carries over:
 
 `replaceId` changes the URL of an existing subscription; on a download error the old one stays intact. A
 self-signed certificate raises `UntrustedCertificateException`; after the user confirms, the call is repeated with
-`pinnedCertDer` = the DER of the certificate shown, which is stored as the pin (trust on first use); later refreshes
-require the same certificate ([services](services.md)).
+`pinnedCertDer` = the DER of the certificate shown, which is stored as the pin (trust on first use); on later
+refreshes an otherwise untrusted certificate passes only if it is that one ([services](services.md)).
 
 `refreshStaleSubscriptions(intervalHours)` refreshes subscriptions never fetched or older than the interval; one
 failure is logged and backed off for 1 h in memory (`_subFailedAt`) without stopping the others; `_refreshingSubs`

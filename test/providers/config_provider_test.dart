@@ -149,6 +149,14 @@ void main() {
         'n1',
       ),
       (
+        'a dangling selection id falls back to the first',
+        [old('o1', 'A', 'h1')],
+        'gone',
+        [fresh('n1', 'A', 'h1')],
+        [('n1', null, null)],
+        'n1',
+      ),
+      (
         'a selection outside the subscription stays',
         [old('o1', 'A', 'h1'), _cfg('mine')],
         'mine',

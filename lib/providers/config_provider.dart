@@ -99,8 +99,8 @@ class ConfigState {
   /// [sub] (added, or replacing the one with its id) with its freshly fetched [fetched] configs in place of the old
   /// ones. Carried over from the old configs: the ping by endpoint (`address:port`), the pinned core by name+endpoint
   /// or by an endpoint unique in the subscription, and the selection by name+endpoint → endpoint → name (the parser
-  /// issues new ids; names in a subscription aren't unique). No active config, or it vanished — the first fetched
-  /// one; the subscription mode is left as it is. [fetched] is not empty.
+  /// issues new ids; names in a subscription aren't unique). No active config, or it vanished (also an id that
+  /// resolves to nothing) — the first fetched one; the subscription mode is left as it is. [fetched] is not empty.
   ConfigState withSubscription(Subscription sub, List<VpnConfig> fetched) {
     final subId = sub.id;
     final oldByEndpoint = <String, List<VpnConfig>>{};
@@ -119,8 +119,9 @@ class ConfigState {
           c,
     ];
 
-    var activeId = activeConfigId;
     final oldActive = activeConfig;
+    // An id that resolves to no config (a commit that failed before saving the selection) counts as none.
+    var activeId = oldActive?.id;
     if (oldActive != null && oldActive.subscriptionId == subId) {
       bool sameEndpoint(VpnConfig c) => c.address == oldActive.address && c.port == oldActive.port;
       activeId =
@@ -169,13 +170,15 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
   Future<void> _commit(ConfigState from, ConfigState next) async {
     var saved = from;
     try {
-      if (!identical(next.configs, from.configs)) {
-        await storage.saveConfigs(next.configs);
-        saved = saved.copyWith(configs: next.configs);
-      }
+      // Subscriptions before the configs that point to them: a failure in between never leaves stored configs of a
+      // subscription that isn't stored.
       if (!identical(next.subscriptions, from.subscriptions)) {
         await storage.saveSubscriptions(next.subscriptions);
         saved = saved.copyWith(subscriptions: next.subscriptions);
+      }
+      if (!identical(next.configs, from.configs)) {
+        await storage.saveConfigs(next.configs);
+        saved = saved.copyWith(configs: next.configs);
       }
       if (!identical(next.pins, from.pins)) {
         await storage.savePins(next.pins);

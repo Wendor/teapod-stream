@@ -399,9 +399,10 @@ class MainActivity : FlutterActivity() {
      *  connect. Settings → Battery opens it again ([openBatteryOptimizationSettings]). */
     private fun requestBatteryOptimizationExemptionOnce() {
         val prefs = getSharedPreferences(XrayVpnService.PREFS_NAME, MODE_PRIVATE)
-        if (prefs.getBoolean(PREF_BATTERY_PROMPT_SHOWN, false)) return
+        // An exempt app isn't asked and the flag stays unset: if the exemption is removed later, the next connect asks.
+        if (prefs.getBoolean(PREF_BATTERY_PROMPT_SHOWN, false) || isIgnoringBatteryOptimizations()) return
         prefs.edit().putBoolean(PREF_BATTERY_PROMPT_SHOWN, true).apply()
-        if (!isIgnoringBatteryOptimizations()) openBatteryOptimizationSettings()
+        openBatteryOptimizationSettings()
     }
 
     private fun isIgnoringBatteryOptimizations(): Boolean =

@@ -35,9 +35,14 @@ internal class QuickConnectStore(private val dir: File) {
 
     fun saveParams(params: ConnectionParams) = write(PARAMS, params.toJson().toString())
 
-    /** The SOCKS login of the last session; null when none is stored or the file is broken. */
+    /** The SOCKS login of the last session; null when none is stored or the file is broken (both fields must be
+     *  strings; empty ones are kept). */
     fun credentials(): Pair<String, String>? = try {
-        read(CREDENTIALS)?.let { JSONObject(it) }?.let { it.optString("user", "") to it.optString("pass", "") }
+        read(CREDENTIALS)?.let { JSONObject(it) }?.let { json ->
+            val user = json.opt("user") as? String
+            val pass = json.opt("pass") as? String
+            if (user != null && pass != null) user to pass else null
+        }
     } catch (_: Exception) {
         null
     }
@@ -85,7 +90,8 @@ internal class QuickConnectStore(private val dir: File) {
     private fun read(name: String): String? = File(dir, name).takeIf { it.exists() }?.readText()
 
     private fun write(name: String, text: String) {
-        val tmp = File(dir, "$name.tmp")
+        // A temp file of its own per write: the activity and the service may write the same file at once.
+        val tmp = File.createTempFile("$name.", ".tmp", dir)
         tmp.writeText(text)
         if (!tmp.renameTo(File(dir, name))) {
             tmp.delete()

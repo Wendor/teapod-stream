@@ -50,6 +50,17 @@ class QuickConnectStoreTest {
     }
 
     @Test
+    fun aLoginWithMissingFieldsFallsBackToTheConfig() {
+        store.save("{config}", params, "u", "p")
+        for (json in listOf("{}", "{\"user\":\"u\"}", "{\"user\":\"u\",\"pass\":1}")) {
+            File(dir, QuickConnectStore.CREDENTIALS).writeText(json)
+            assertNull(json, store.credentials())
+        }
+        File(dir, QuickConnectStore.CREDENTIALS).writeText("{\"user\":\"\",\"pass\":\"\"}")
+        assertEquals("empty strings are kept", "" to "", store.credentials())
+    }
+
+    @Test
     fun noQuickStartWithoutConfigOrParams() {
         assertNull(store.quickStart(fromConfig))
         store.saveParams(params)

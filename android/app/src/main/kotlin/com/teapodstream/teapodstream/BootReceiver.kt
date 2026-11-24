@@ -3,7 +3,6 @@ package com.teapodstream.teapodstream
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import java.io.File
 
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -14,11 +13,9 @@ class BootReceiver : BroadcastReceiver() {
         val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("flutter.auto_start_on_boot", false)) return
 
-        // Don't auto-start if user explicitly disconnected before reboot
-        if (File(context.filesDir, "user_disconnected.flag").exists()) return
-
-        // Don't auto-start if there's no saved connection config
-        if (!File(context.filesDir, "xray_config.json").exists()) return
+        // Not after the user turned the VPN off, and not without a saved connection.
+        val store = QuickConnectStore(context.filesDir)
+        if (store.userOff() || store.config() == null) return
 
         context.startForegroundService(
             Intent(context, XrayVpnService::class.java).apply {

@@ -13,7 +13,8 @@ back. It keeps working when the Flutter UI is gone (tile, boot, Tasker, service 
 | `SessionSnapshot.kt` | `SessionState` (the state names Flutter sees) and the immutable `SessionSnapshot`: its map for Flutter, the itest marker, the pure transition `moved` |
 | `core/` | `VpnCore` and its implementations (below), `TunOwnerPolicy`, `SocksCredentials`, `ProxyRedirect` |
 | `VpnEventStreamHandler.kt` | EventChannel (`com.teapodstream/vpn/events`) singleton |
-| `ConnectionParams.kt` | the session parameters (everything but the config and the SOCKS login): one JSON form for the `ACTION_CONNECT` Intent (`EXTRA_PARAMS`) and `last_connection_meta.json`; `fromJson` holds every default and limit (MTU 576–9000, heartbeat threshold 1–10), `fromArgs` maps Flutter's `connect` / `saveQuickConnect` arguments through it |
+| `ConnectionParams.kt` | the session parameters (everything but the config and the SOCKS login): one JSON form for the `ACTION_CONNECT` Intent (`EXTRA_PARAMS`) and the stored parameters; `fromJson` holds every default and limit (MTU 576–9000, heartbeat threshold 1–10), `fromArgs` maps Flutter's `connect` / `saveQuickConnect` arguments through it |
+| `QuickConnectStore.kt` | the quick-reconnect data in `filesDir`, its only reader and writer: the core config (`xray_config.json`), `ConnectionParams` (`last_connection_meta.json`), the SOCKS login (`socks_creds.json`) and the user-off flag (`user_disconnected.flag`); writes go through a temp file and a rename. `quickStart()` builds the `StartRequest` (config, params, SOCKS login — the stored one, else read from the config — `reconnect`) that `startVpn(request)` takes |
 | `VpnTileService.kt` | Quick Settings tile |
 | `BootReceiver.kt` | auto-start after boot (`autoStartOnBoot`, a saved config, not after an explicit disconnect) |
 | `VpnCommandReceiver.kt` | Tasker/automation broadcasts `com.teapodstream.CONNECT` / `DISCONNECT`; ignored unless `automationEnabled` |
@@ -51,16 +52,19 @@ connect or a disconnect was received after it, a quick start also when a newer q
 after `onRevoke()` (which stops outside the queue) or a disconnect set `userRequestedDisconnect`; it reports
 `disconnected` under its attempt instead.
 
-- **`ACTION_CONNECT`** (from Flutter): parameters → `ConnectionParams.save`; under `sessionLock`, before the old session
+- **`ACTION_CONNECT`** (from Flutter): the session takes the parameters (`useParams`: the heartbeat, tethering and
+  notification settings are read from them) and the store keeps them; `startVpn(StartRequest)` stores the config it
+  runs, `setConnected` the SOCKS login. Under `sessionLock`, before the old session
   stops, `sessionAttempt` takes Flutter's connect attempt (`EXTRA_ATTEMPT`), and every snapshot the session
   publishes carries it as `attempt` (quick starts reset it to 0 — untagged); if a session is running this is a **hot
   switch** — `stopVpn(reconnecting=true)` keeps TUN as a sink until the new session is up, no leak window.
-- **`ACTION_CONNECT_QUICK`** (tile, the `blocked` notification, boot, `reconnectInternal`, START_STICKY restart): parameters from
-  `last_connection_meta.json`. Ignored while a session is running. Without a config or VPN permission
+- **`ACTION_CONNECT_QUICK`** (tile, the `blocked` notification, boot, `reconnectInternal`) and the START_STICKY restart
+  start from one request, `QuickConnectStore.quickStart()`. Ignored while a session is running; the restart also
+  not after the user turned the VPN off. Without a config or VPN permission
   (`abortQuickConnect`) the state is finished properly: kill switch → `blocked`, otherwise TUN is closed →
   `disconnected`, and the app opens.
-- **`ACTION_DISCONNECT`**: `userRequestedDisconnect` (+ `user_disconnected.flag` on disk, so a restarted process doesn't
-  reconnect), then in the queue: stop, close TUN (also an existing kill-switch sink) and post `disconnected` to the
+- **`ACTION_DISCONNECT`**: `setUserOff(true)` — `userRequestedDisconnect` and the store's flag on disk, so a restarted
+  process doesn't reconnect; then in the queue: stop, close TUN (also an existing kill-switch sink) and post `disconnected` to the
   main thread — skipped when a connect or a quick start arrived meanwhile (that session owns the state). If the queued
   stop hasn't finished in 5 s, a supervisor closes the sink and reports anyway. Its events carry the attempt of the
   last `ACTION_CONNECT` received before it (`requestedAttempt`): a connect Flutter still waits

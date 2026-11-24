@@ -1,7 +1,6 @@
 package com.teapodstream.teapodstream
 
 import com.teapodstream.teapodstream.core.CoreKind
-import java.io.File
 import com.teapodstream.teapodstream.core.VpnCores
 
 import android.app.Activity
@@ -121,13 +120,16 @@ class MainActivity : FlutterActivity() {
                             return@setMethodCallHandler
                         }
                         val params = ConnectionParams.fromArgs(call.arguments as Map<*, *>)
-                        params.save(filesDir) { _, msg -> android.util.Log.w("TeapodVPN", msg) }
-                        File(filesDir, "xray_config.json").writeText(xrayConfig)
-                        File(filesDir, "socks_creds.json").writeText(org.json.JSONObject().apply {
-                            put("port", params.socksPort)
-                            put("user", call.argument<String>("socksUser") ?: "")
-                            put("pass", call.argument<String>("socksPassword") ?: "")
-                        }.toString())
+                        try {
+                            QuickConnectStore(filesDir).save(
+                                xrayConfig, params,
+                                socksUser = call.argument<String>("socksUser") ?: "",
+                                socksPassword = call.argument<String>("socksPassword") ?: "",
+                            )
+                        } catch (e: Exception) {
+                            result.error("IO", "saveQuickConnect: ${e.message}", null)
+                            return@setMethodCallHandler
+                        }
                         VpnTileService.saveConfigName(this, call.argument<String>("configName"))
                         result.success(true)
                     }
@@ -137,9 +139,7 @@ class MainActivity : FlutterActivity() {
                             result.success(false)
                             return@setMethodCallHandler
                         }
-                        for (name in listOf("xray_config.json", "last_connection_meta.json", "socks_creds.json")) {
-                            File(filesDir, name).delete()
-                        }
+                        QuickConnectStore(filesDir).clear()
                         VpnTileService.saveConfigName(this, null)
                         result.success(true)
                     }

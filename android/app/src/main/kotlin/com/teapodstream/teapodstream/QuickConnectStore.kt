@@ -1,0 +1,102 @@
+package com.teapodstream.teapodstream
+
+import java.io.File
+import org.json.JSONObject
+
+/** A session start: the core config, its parameters and the SOCKS login; [reconnect] — a native restart. */
+internal data class StartRequest(
+    val config: String,
+    val params: ConnectionParams,
+    val socksUser: String,
+    val socksPassword: String,
+    val reconnect: Boolean,
+) {
+    override fun toString() = "StartRequest(engine=${params.engine}, reconnect=$reconnect)"
+}
+
+/**
+ * The quick-reconnect data in [dir] (the app's private files): the last core config, its [ConnectionParams], the
+ * SOCKS login and the "turned off by the user" flag. The tile, boot, the notification, a system restart and
+ * `reconnectInternal` start from it without Flutter. The only reader and writer of these files; every write goes
+ * through a temp file and a rename, so a reader never sees half a file.
+ */
+internal class QuickConnectStore(private val dir: File) {
+
+    fun config(): String? = read(CONFIG)
+
+    /** The config the session runs (with the prefix proxy injected, if any). */
+    fun saveConfig(config: String) = write(CONFIG, config)
+
+    fun params(): ConnectionParams? = try {
+        read(PARAMS)?.let { ConnectionParams.fromJson(JSONObject(it)) }
+    } catch (_: Exception) {
+        null
+    }
+
+    fun saveParams(params: ConnectionParams) = write(PARAMS, params.toJson().toString())
+
+    /** The SOCKS login of the last session; null when none is stored or the file is broken. */
+    fun credentials(): Pair<String, String>? = try {
+        read(CREDENTIALS)?.let { JSONObject(it) }?.let { it.optString("user", "") to it.optString("pass", "") }
+    } catch (_: Exception) {
+        null
+    }
+
+    fun saveCredentials(port: Int, user: String, password: String) = write(
+        CREDENTIALS,
+        JSONObject().put("port", port).put("user", user).put("pass", password).toString(),
+    )
+
+    fun clearCredentials() {
+        File(dir, CREDENTIALS).delete()
+    }
+
+    /** Flutter's `saveQuickConnect`: everything a quick start needs, before any session ran with it. */
+    fun save(config: String, params: ConnectionParams, socksUser: String, socksPassword: String) {
+        saveParams(params)
+        saveConfig(config)
+        saveCredentials(params.socksPort, socksUser, socksPassword)
+    }
+
+    /** Flutter's `clearQuickConnect`: nothing left to quick-start. The off flag stays. */
+    fun clear() {
+        for (name in listOf(CONFIG, PARAMS, CREDENTIALS)) File(dir, name).delete()
+    }
+
+    /** The user turned the VPN off: boot and a system restart don't start it again. Survives a process restart. */
+    fun userOff(): Boolean = File(dir, USER_OFF).exists()
+
+    fun setUserOff(off: Boolean) {
+        val flag = File(dir, USER_OFF)
+        if (off) flag.createNewFile() else flag.delete()
+    }
+
+    /**
+     * The quick start from what is stored, or null without a config or parameters. The SOCKS login comes from the
+     * stored one, else from the config ([socksFromConfig] reads it in the format of the session's core).
+     */
+    fun quickStart(socksFromConfig: (config: String, engine: String) -> Pair<String, String>): StartRequest? {
+        val params = params() ?: return null
+        val config = config() ?: return null
+        val (user, password) = credentials() ?: socksFromConfig(config, params.engine)
+        return StartRequest(config, params, user, password, reconnect = true)
+    }
+
+    private fun read(name: String): String? = File(dir, name).takeIf { it.exists() }?.readText()
+
+    private fun write(name: String, text: String) {
+        val tmp = File(dir, "$name.tmp")
+        tmp.writeText(text)
+        if (!tmp.renameTo(File(dir, name))) {
+            tmp.delete()
+            throw java.io.IOException("rename failed: $name")
+        }
+    }
+
+    companion object {
+        const val CONFIG = "xray_config.json"
+        const val PARAMS = "last_connection_meta.json"
+        const val CREDENTIALS = "socks_creds.json"
+        const val USER_OFF = "user_disconnected.flag"
+    }
+}

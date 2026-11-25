@@ -22,7 +22,7 @@ back. It keeps working when the Flutter UI is gone (tile, boot, Tasker, service 
 | `BootReceiver.kt` | auto-start after boot (`autoStartOnBoot`, a saved config, not after an explicit disconnect) |
 | `VpnCommandReceiver.kt` | Tasker/automation broadcasts `com.teapodstream.CONNECT` / `DISCONNECT`; ignored unless `automationEnabled` |
 | `PrefixTcpProxy.kt` | local TCP proxy for Shadowsocks `?prefix=` (Outline) |
-| `SessionCommands.kt` | the session command queue: connect / disconnect / quick start in arrival order on one thread under the session lock; a connect or quick start superseded by a later connect or disconnect is skipped |
+| `SessionReconciler.kt` | the one desired session state (`Desired.Off(attempt)` / `Desired.On(request, id)`) and the thread that brings the session to it: commands, `onRevoke`, reconnects and retries only replace it (`set`, or `replace` while an expected state is still wanted); a run loops the pure `nextAction(desired, actual)` (stop / close the sink / start / settled) through `SessionDriver` |
 | `SocksHttpProbe.kt` | the heartbeat's `socks` probe: SOCKS5 handshake and an HTTP GET over raw sockets, probe-URL parsing |
 | `SpeedHistory.kt` | ring buffer for the speed chart (`(epoch, seq)` increments) |
 | `AppLocale.kt` | `Context.appString()` — native strings in the app's chosen language ([localization](localization.md)) |
@@ -47,21 +47,22 @@ from the saved config (`SocksCredentials.xray` / `.singBox`), the `?prefix=` add
 
 ## Session lifecycle
 
-All starts and stops run under `sessionLock`. `ACTION_CONNECT`, `ACTION_DISCONNECT` and the quick starts go through
-one queue (`SessionCommands`): one thread runs them in the order the service received them, under the same lock as a
-deferred reconnect's stop. Threads waiting for a lock don't enter in arrival order; the queue does, so a disconnect
-that waited behind a long start can't stop the session of a connect received after it. A connect is skipped when a
-connect or a disconnect was received after it, a quick start also when a newer quick start was, and a connect doesn't start
-after `onRevoke()` (which stops outside the queue) or a disconnect set `userRequestedDisconnect`; it reports
-`disconnected` under its attempt instead.
+The service keeps one desired state, `SessionReconciler.desired`: `Off(attempt)` or `On(request, id)` (a retry or a
+reconnect of the same config is a new `id`). `ACTION_CONNECT`, `ACTION_DISCONNECT`, the quick starts, `onRevoke`,
+the network-change reconnect and the start retries only replace it; one thread brings the session to it by looping
+`nextAction(desired, actual)`: stop the running session (for a new one: TUN stays a sink), close a sink, start, or
+settled. A command replaced before its turn never acts — only the latest state exists — and a long start isn't
+interrupted: the loop then stops it and starts what is wanted now. A reconnect or a retry applies only while the
+state it was made for is still the desired one (`replace`). Before a stop or a start, `sessionAttempt` takes the
+desired state's attempt (`own`); an `Off` that is reached reports `disconnected` under its attempt once (`settled`).
 
-- **`ACTION_CONNECT`** (from Flutter): only the notification type is taken before the queue (when no session runs);
+- **`ACTION_CONNECT`** (from Flutter): only the notification type is taken before the state is set (when no session runs);
   `startVpn(StartRequest)` takes the parameters (`useParams`: the heartbeat, tethering and notification settings are
   read from them) once it owns the session, and stores them, the config it runs and its SOCKS login together with the
   tile's config name, then refreshes the tile (`QuickConnectStore.save`: one step under a lock shared with the activity's save and the quick-start read; the old login and
   config are removed first, so an interrupted save leaves nothing to quick-start rather than a mix of two connections; a failed save is logged
-  and costs only the quick start, not the session). Under `sessionLock`, before the old session
-  stops, `sessionAttempt` takes Flutter's connect attempt (`EXTRA_ATTEMPT`), and every snapshot the session
+  and costs only the quick start, not the session). Before the old session stops, `sessionAttempt` takes Flutter's
+  connect attempt (`EXTRA_ATTEMPT`), and every snapshot the session
   publishes carries it as `attempt` (quick starts reset it to 0 — untagged); if a session is running this is a **hot
   switch** — `stopVpn(reconnecting=true)` keeps TUN as a sink until the new session is up, no leak window.
 - **`ACTION_CONNECT_QUICK`** (tile, the `blocked` notification, boot, `reconnectInternal`) and the START_STICKY restart
@@ -70,11 +71,11 @@ after `onRevoke()` (which stops outside the queue) or a disconnect set `userRequ
   (`abortQuickConnect`) the state is finished properly: the kill switch of the session holding the sink (not the
   stored params, which a failed save may have removed) → `blocked`, otherwise TUN is closed →
   `disconnected`, and the app opens.
-- **`ACTION_DISCONNECT`**: `setUserOff(true)` — `userRequestedDisconnect` and the store's flag on disk, so a restarted
-  process doesn't reconnect; then in the queue: stop, close TUN (also an existing kill-switch sink) and post `disconnected` to the
-  main thread — skipped when a connect or a quick start arrived meanwhile (that session owns the state). If the queued
-  stop hasn't finished in 5 s, a supervisor closes the sink and reports anyway. Its events carry the attempt of the
-  last `ACTION_CONNECT` received before it (`requestedAttempt`): a connect Flutter still waits
+- **`ACTION_DISCONNECT`**: `setUserOff(true)` — the store's flag on disk, so a restarted process doesn't reconnect;
+  publishes `disconnecting` and sets `Off`: stop, close TUN (also an existing kill-switch sink), `disconnected`. A
+  connect or quick start received after it replaces it, and its session owns the state. If the stop hasn't finished in
+  5 s while this `Off` is still wanted, the main thread closes the sink and reports anyway. Its states carry the attempt
+  of the last `ACTION_CONNECT` received (`SessionReconciler.lastAttempt`): a connect Flutter still waits
   for, cancelled from the notification or the tile, gets its answer. Calls `ensureForeground()` first —
   it may arrive via `startForegroundService` into a fresh process.
 
@@ -113,17 +114,17 @@ phantom connection, and the heartbeat's own tun2socks check stays as a fallback.
   sink — no leak even without the kill switch. With other params (a failed manual connect stored new ones) the
   reconnect establishes a new TUN, which replaces the old fd as the sink. A user `ACTION_CONNECT` always establishes
   anew.
-- **Retries.** A failed reconnect retries `CONNECT_QUICK` up to `MAX_RECONNECT_ATTEMPTS` (3) with linear backoff
-  (5 s × attempt). A retry keeps the TUN held at the failure only while the stored params equal `tunParams`;
+- **Retries.** A failed reconnect asks, after a linear backoff (5 s × attempt), for a new `On` of the stored session —
+  only while the failed one is still wanted — up to `MAX_RECONNECT_ATTEMPTS` (3). A retry keeps the TUN held at the failure only while the stored params equal `tunParams`;
   otherwise it establishes a new TUN and closes the held one. Final failure with kill switch → sink stays, state
   `blocked`.
   A failed manual connect keeps a sink only if there already was one — a broken config must not lock the network.
 - **`blocked`.** The kill switch keeps TUN with `setUnderlyingNetworks(emptyArray())` after an unexpected drop: traffic
   enters TUN and nobody reads it. Notification and tile show it; tapping the tile or the notification's Connect
   reconnects.
-- **Off → the service stops.** A published `disconnected` / `error`, and every finished session command while the
-  state is off, post `stopIfIdle` to the main thread: with no session running, no TUN held and no command waiting or
-  running in the queue (`serviceIdle`, `SessionCommands.busy`; a disconnect still posts its final report) the service
+- **Off → the service stops.** A published `disconnected` / `error`, and every finished reconciler run while the
+  state is off, post `stopIfIdle` to the main thread: with no session running, no TUN held and no change waiting or
+  running (`serviceIdle`, `SessionReconciler.busy`; a disconnect still reports its end) the service
   calls `stopSelf(lastStartId)` (the system ignores it if a newer intent is on its way) and its notification goes
   away. So a user disconnect, a failed manual connect without a sink, `onRevoke` and a START_STICKY restart with
   nothing to start leave no service behind; `blocked` keeps it. The tile, boot and automation start it again.
@@ -135,8 +136,9 @@ excluded from TUN; otherwise VALIDATED first, then Wi-Fi) and sets it as the und
 
 - A change of the physical network (`onAvailable`/`onLost` compare the snapshot before and after
   `updateUnderlyingNetworks`, both event orders) → `scheduleNetworkChanged(switched=true)` → 2 s debounce →
-  `reconnectInternal()`: `stopVpn(reconnecting=true)`, state `reconnecting`, wait up to 30 s for direct internet
-  (`hasDirectInternet`: TCP to 8.8.8.8:53 bound to the physical network), then `CONNECT_QUICK`. A timed wakelock
+  `reconnectInternal()`: a new `On` of the stored session with `waitForNetwork`, only while the connected session's
+  state is still wanted. Its run stops the session (`reconnecting`, TUN kept as a sink), waits up to 30 s for direct
+  internet (`hasDirectInternet`: TCP to 8.8.8.8:53 bound to the physical network) while it is still wanted, then starts. A timed wakelock
   (40 s) covers the cycle. Takes ~3–5 s.
 - Back on the network the session was connected on → no reconnect (the core's sockets are still alive).
 - Loss of `VALIDATED` without a network change (captive portal, outage) forces a reconnect.

@@ -322,10 +322,12 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
               final review = await ref.read(profileProvider.notifier).reviewImport(result);
               if (!ctx.mounted || !await confirmImportReview(ctx, review) || !ctx.mounted) return;
               Navigator.pop(ctx);
+              // Taken before the import: the screen (and its ref) may be gone when it ends.
+              final vpn = ref.read(vpnProvider.notifier);
               final id = await ref
                   .read(profileProvider.notifier)
                   .importBundle(result, makeReadonly: makeReadonly, sourceUrl: sourceUrl);
-              if (switchTo && id != null) await ref.read(vpnProvider.notifier).switchProfile(id);
+              if (switchTo && id != null) await vpn.switchProfile(id);
             },
             child: Text(context.l10n.commonImport, style: AppTheme.mono(size: 11, color: t.accent)),
           ),

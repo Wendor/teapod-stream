@@ -131,6 +131,20 @@ void main() {
       expect((await settings()).mtu, _local.mtu);
     });
 
+    test('the flags native reads follow the active profile resolved at start', () async {
+      SharedPreferences.setMockInitialValues({'automation_enabled': true});
+      FlutterSecureStorage.setMockInitialValues({});
+      await SettingsService().markMigrated();
+      await profiles.saveProfiles([profile('a', settings: const AppSettings(autoStartOnBoot: true))]);
+      await profiles.saveActiveProfileId('gone');
+      c = ProviderContainer();
+      addTearDown(c.dispose);
+      await c.read(profileProvider.future);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getBool('automation_enabled'), isFalse);
+      expect(prefs.getBool('auto_start_on_boot'), isTrue);
+    });
+
     test('two quick saves both land', () async {
       await boot(stored: [profile('a')], activeId: 'a');
       final notifier = c.read(settingsProvider.notifier);

@@ -93,7 +93,10 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
       await _legacy.markMigrated();
     }
 
-    return ProfileState(profiles: profiles, activeProfileId: activeId);
+    final state = ProfileState(profiles: profiles, activeProfileId: activeId);
+    // The active profile may have changed above (migrated, or the stored id was gone): native reads its flags.
+    await _legacy.mirrorNative(state.activeSettings);
+    return state;
   }
 
   /// The only writer of the settings in force: [change] maps the settings of profile [profileId] (by default the one

@@ -10,12 +10,12 @@ import '../../core/models/vpn_log_entry.dart';
 import '../../core/services/log_service.dart';
 import '../../providers/config_provider.dart';
 import '../../providers/settings_provider.dart';
-import '../../providers/vpn_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/hero_panel.dart';
 import '../widgets/breadcrumb_bar.dart';
 import '../../l10n/l10n.dart';
+import '../../providers/native_logs_provider.dart';
 
 class LogsScreen extends ConsumerStatefulWidget {
   /// Parent screen name for the breadcrumb; null — no breadcrumb.
@@ -60,7 +60,7 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
   }
 
   Future<void> _exportLogs() async {
-    final srcPath = await ref.read(vpnProvider.notifier).getLogFilePath();
+    final srcPath = await ref.read(nativeLogsProvider).getLogFilePath();
     if (srcPath == null) return;
     final src = File(srcPath);
     if (!src.existsSync() || src.lengthSync() == 0) {
@@ -129,7 +129,7 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
     if (s == null) return;
     final enabled = !s.logsEnabled;
     await ref.read(settingsProvider.notifier).save(s.copyWith(logsEnabled: enabled));
-    await ref.read(vpnProvider.notifier).setLogsEnabled(enabled);
+    await ref.read(nativeLogsProvider).setLogsEnabled(enabled);
   }
 
   @override
@@ -198,7 +198,7 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
                   _IconBtn(
                     t: t,
                     icon: Icons.monitor_heart_outlined,
-                    onTap: () => ref.read(vpnProvider.notifier).dumpTunnelDiag(),
+                    onTap: () => ref.read(nativeLogsProvider).dumpTunnelDiag(),
                   ),
                   const SizedBox(width: 6),
                   _IconBtn(t: t, icon: Icons.upload_file_rounded, onTap: _exportLogs),
@@ -208,7 +208,7 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
                     icon: Icons.delete_sweep_rounded,
                     onTap: () {
                       ref.read(logServiceProvider.notifier).clear();
-                      ref.read(vpnProvider.notifier).clearNativeLogs();
+                      ref.read(nativeLogsProvider).clear();
                     },
                   ),
                 ],

@@ -376,6 +376,14 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
 
   Future<void> removeSubscription(String subId) => _mutate((s) => s.withoutSubscription(subId));
 
+  /// Refreshes the stale subscriptions when auto-refresh is on: at startup and on resume, after the VPN state sync —
+  /// before it a VPN started from the tile isn't known yet, and the download would bypass the tunnel.
+  Future<void> refreshStaleIfDue() async {
+    final settings = ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
+    if (settings?.subAutoRefresh != true) return;
+    await refreshStaleSubscriptions(intervalHours: settings!.subAutoRefreshHours);
+  }
+
   Future<void> refreshStaleSubscriptions({int intervalHours = 6}) async {
     final current = state.maybeWhen(data: (d) => d, orElse: () => null);
     if (current == null || current.subscriptions.isEmpty) return;

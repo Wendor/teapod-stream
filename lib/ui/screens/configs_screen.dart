@@ -25,6 +25,7 @@ import '../widgets/untrusted_cert_dialog.dart';
 import 'add_config_screen.dart';
 import 'subscription_settings_screen.dart';
 import '../../l10n/l10n.dart';
+import '../../providers/ping_provider.dart';
 
 class ConfigsScreen extends ConsumerStatefulWidget {
   const ConfigsScreen({super.key});
@@ -35,7 +36,6 @@ class ConfigsScreen extends ConsumerStatefulWidget {
 
 class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
   final Set<String> _expandedSubs = {'__local__'};
-  bool _isPinging = false;
   bool _isRefreshingAll = false;
   bool _hideGroups = false;
   bool _sortByPing = false;
@@ -106,9 +106,9 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
                 data: (d) => d.configs.length + d.subscriptions.length,
                 orElse: () => 0,
               ),
-              isPinging: _isPinging,
+              isPinging: ref.watch(pingProvider),
               onPing: configStateAsync.maybeWhen(
-                data: (s) => s.configs.isNotEmpty ? () => _pingAll(s.configs) : null,
+                data: (s) => s.configs.isNotEmpty ? () => ref.read(pingProvider.notifier).pingAll() : null,
                 orElse: () => null,
               ),
             ),
@@ -393,16 +393,6 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
       subscriptions: cs.subscriptions,
     );
     await SharePlus.instance.share(ShareParams(text: bundle.toCompactDeeplink(), subject: 'teapod configs'));
-  }
-
-  Future<void> _pingAll(List<VpnConfig> configs) async {
-    if (_isPinging) return;
-    setState(() => _isPinging = true);
-    try {
-      await ref.read(vpnProvider.notifier).pingAllConfigs();
-    } finally {
-      if (mounted) setState(() => _isPinging = false);
-    }
   }
 
   Future<void> _showConfigMenu(BuildContext context, WidgetRef ref, VpnConfig config) async {

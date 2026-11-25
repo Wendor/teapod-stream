@@ -99,7 +99,7 @@ phantom connection, and the heartbeat's own tun2socks check stays as a fallback.
 
 ## Kill switch and reconnect
 
-- **TUN fd reuse.** `stopVpn(reconnecting=true)` keeps TUN open, and `startVpn(isReconnect=true)` passes the **same fd**
+- **TUN fd reuse.** `stopVpn(reconnecting=true)` keeps TUN open, and `startVpn` of a request with `reconnect = true` passes the **same fd**
   to the core instead of a new `establish()` (tun2socks works on its own `dup`). No new VPN network agent, so no
   system "VPN active" notification on Android 15/16 and no connectivity flap for apps; traffic during the reconnect
   goes into the sink — no leak even without the kill switch. A user `ACTION_CONNECT` always establishes anew.

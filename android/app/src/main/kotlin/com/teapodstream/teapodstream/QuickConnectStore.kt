@@ -116,7 +116,12 @@ internal class QuickConnectStore(private val dir: File) {
         return StartRequest(config, params, user, password, attempt = 0, reconnect = true)
     }
 
-    private fun read(name: String): String? = File(dir, name).takeIf { it.exists() }?.readText()
+    /** Null when missing or unreadable (also removed between the check and the read). */
+    private fun read(name: String): String? = try {
+        File(dir, name).takeIf { it.exists() }?.readText()
+    } catch (_: java.io.IOException) {
+        null
+    }
 
     private fun write(name: String, text: String) {
         // A temp file of its own per write: the activity and the service may write the same file at once.

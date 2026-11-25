@@ -37,10 +37,10 @@ temporary file and a rename. A file that fails to parse isn't retried: the conne
   (`VpnEngineOptions.adBlockCodes`; none left → ad blocking off), and the connect logs them. The core sheet shows the
   same warning.
 - xray-rust refuses the whole file when one entry is over 32 MiB (runetfreedom's `ru-blocked-all`,
-  `antifilter-download`) and a code over 200,000 domains (Loyalsoldier's `category-ads-all`). The index then writes
-  `filesDir/geosite-rust.dat` with such entries trimmed to their first domains within both limits, and
-  `RustConfigBuilder` points the domain matchers at it (`ext:geosite-rust.dat:<code>` in `domain` / `domains` lists); the copy is deleted when the file no
-  longer needs it. The config-wide limit: [xray_config_builder](xray_config_builder.md#core-compatibility).
+  `antifilter-download`) and a code over 200,000 domains (Loyalsoldier's `category-ads-all`). The index writes
+  `filesDir/geosite-rust.dat`, with such entries trimmed to their first domains within both limits, and
+  `RustConfigBuilder` points the domain matchers at it (`ext:geosite-rust.dat:<code>` in `domain` / `domains`
+  lists). The copy is written even when nothing needs trimming: quick-connect configs saved earlier reference it. The config-wide limit: [xray_config_builder](xray_config_builder.md#core-compatibility).
 
 ## Related
 

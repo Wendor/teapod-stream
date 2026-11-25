@@ -11,9 +11,9 @@ class GeositeIndex {
   /// Entries by lower-case code.
   final Map<String, GeositeEntry> entries;
 
-  /// A copy of geosite.dat in the same directory with the entries over xray-rust's limits trimmed to them,
-  /// when the original has any: xray-rust refuses the whole file for one entry over 32 MiB, and a code
-  /// over 200k domains.
+  /// The copy of geosite.dat xray-rust reads, in the same directory: the entries over its limits trimmed to
+  /// them (it refuses the whole file for one entry over 32 MiB, and a code over 200k domains). It always
+  /// exists along with the index, even when nothing needs trimming: saved quick-connect configs reference it.
   final String? rustFile;
 
   const GeositeIndex(this.entries, {this.rustFile});
@@ -45,7 +45,7 @@ class GeositeIndex {
     try {
       final json = jsonDecode(cache.readAsStringSync()) as Map<String, dynamic>;
       final rustFile = json['rustFile'] as String?;
-      if (json['version'] == version && (rustFile == null || rust.existsSync())) {
+      if (json['version'] == version && rust.existsSync()) {
         final entries = (json['entries'] as Map<String, dynamic>).map((code, value) {
           final e = (value as List<dynamic>).cast<int>();
           return MapEntry(code, (domains: e[0], rustDomains: e[1]));
@@ -77,16 +77,10 @@ class GeositeIndex {
     final raf = source.openSync();
     try {
       final entries = <String, GeositeEntry>{};
-      var trimmed = false;
       for (final record in _records(raf)) {
         final entry = _scan(record.body);
         if (entry.code == null) continue;
         entries[entry.code!.toLowerCase()] = (domains: entry.domains, rustDomains: entry.rustDomains);
-        if (entry.rustDomains < entry.domains) trimmed = true;
-      }
-      if (!trimmed) {
-        if (rust.existsSync()) rust.deleteSync();
-        return GeositeIndex(entries);
       }
       raf.setPositionSync(0);
       _writeRustCopy(raf, rust);

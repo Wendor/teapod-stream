@@ -77,7 +77,6 @@ void main() {
     final copyDir = Directory('${dir.path}/copy')..createSync();
     File('${dir.path}/${GeositeIndex.rustFileName}').copySync('${copyDir.path}/geosite.dat');
     final copy = GeositeIndex.load(copyDir.path)!;
-    expect(copy.rustFile, isNull);
     expect(copy.entries, {
       for (final MapEntry(:key, :value) in index.entries.entries)
         key: (domains: value.rustDomains, rustDomains: value.rustDomains),
@@ -86,13 +85,14 @@ void main() {
     expect(copyBytes.sublist(copyBytes.length - small[0].length - small[1].length), [...small[0], ...small[1]]);
     expect(copyBytes.length, lessThan(file.length));
 
-    // A second load reads the cache; a new file version rebuilds it and drops the copy no longer needed.
+    // A second load reads the cache; a new file version rebuilds it. The copy stays, as is when nothing
+    // needs trimming: saved quick-connect configs reference it.
     expect(GeositeIndex.load(dir.path)!.entries, index.entries);
     File('${dir.path}/geosite.dat').writeAsBytesSync([...small[0], ...small[1]]);
     final updated = GeositeIndex.load(dir.path)!;
     expect(updated.entries.keys, unorderedEquals(['youtube', 'category-ads-all']));
-    expect(updated.rustFile, isNull);
-    expect(File('${dir.path}/${GeositeIndex.rustFileName}').existsSync(), isFalse);
+    expect(updated.rustFile, GeositeIndex.rustFileName);
+    expect(File('${dir.path}/${GeositeIndex.rustFileName}').readAsBytesSync(), [...small[0], ...small[1]]);
   });
 
   test('without geosite.dat there is no index', () {

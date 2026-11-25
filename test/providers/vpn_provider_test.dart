@@ -435,6 +435,27 @@ void main() {
       expect(native.lastConnect()['xrayConfig'], contains('hb.example'));
     });
 
+    test('overlapping selections end with the tunnel on the last one', () async {
+      await connected(configs: [_cfg('a'), _cfg('b')]);
+      final configs = c.read(configProvider).value!.configs;
+      // b, then back to a before b's save and reconnect are done.
+      final toB = n().selectConfig(configs.last);
+      final toA = n().selectConfig(configs.first);
+      expect(await toB, isNull);
+      expect(await toA, isNull);
+      // The native side answers: each connect ends connected, each disconnect disconnected.
+      for (var i = 0; i < 20; i++) {
+        await _settle();
+        if (!st().isBusy) break;
+        final value = st().isDisconnecting ? 'disconnected' : 'connected';
+        emit({'type': 'state', 'value': value, 'socksPort': 2080, 'socksUser': 'su', 'socksPassword': 'sp'});
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+      }
+      expect(c.read(configProvider).value!.activeConfigId, 'a');
+      expect(st().isConnected, isTrue);
+      expect(n().runsConfig(configs.first), isTrue, reason: 'the tunnel must not stay on b');
+    });
+
     test('selectConfig refuses a config no enabled core runs and changes nothing', () async {
       await boot(
         configs: [_cfg('a'), _cfg('b')],

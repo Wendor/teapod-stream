@@ -135,7 +135,7 @@ Shown to the user on Home: their DNS settings and ad block via DNS don't apply; 
 - **Rust geosite limits** (xray-rust 0.10, read from the [geosite index](geo_provider.md#geosite-index)): a code
   over 32 MiB or 200,000 domains comes trimmed from `geosite-rust.dat`, with a warning; a config holds at most
   250,000 domain matchers, one per geosite domain (trimmed codes count as trimmed; a `code@attr` selector
-  counts its whole entry) and one per literal domain (zones, sites, Russian services) — over it ad blocking is dropped
+  counts its whole entry) and one per literal domain (zones, sites, Russian services, `onlySelected` diagnostic hosts) — over it ad blocking is dropped
   first with a warning, and the user's codes alone over it block xray-rust: `CoreResolver` (which holds the index)
   picks the next core. Without the index (no `geosite.dat`) nothing is checked.
 

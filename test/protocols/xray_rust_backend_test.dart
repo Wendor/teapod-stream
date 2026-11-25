@@ -144,5 +144,16 @@ void main() {
       sites: [for (var i = 0; i < 30300; i++) 'site$i.example'],
     );
     expect(rust.checkOptions(_vless(), with_(sites)).blocking, contains('250k'));
+    // At the boundary: the onlySelected diagnostic hosts count too.
+    const exact = GeositeIndex({'big': (domains: 250000, rustDomains: 250000)});
+    VpnEngineOptions boundary(RoutingDirection direction) => VpnEngineOptions(
+      socksPort: 1,
+      socksUser: 'u',
+      socksPassword: 'p',
+      routing: RoutingSettings(direction: direction, geositeEnabled: true, geositeCodes: const ['big']),
+      geosite: exact,
+    );
+    expect(rust.checkOptions(_vless(), boundary(RoutingDirection.bypass)).blocking, isNull);
+    expect(rust.checkOptions(_vless(), boundary(RoutingDirection.onlySelected)).blocking, contains('250k'));
   });
 }

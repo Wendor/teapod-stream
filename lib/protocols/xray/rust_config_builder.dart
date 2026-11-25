@@ -230,14 +230,16 @@ class RustConfigBuilder {
   ];
 
   /// The domain matchers the routing rules of [o] take from the budget: the domains of [geositeCodes] as
-  /// xray-rust gets them (0 without the index), and the literal domains. A `code@attr` selector counts its
+  /// xray-rust gets them (0 without the index), and the literal domains (zones, sites, Russian services,
+  /// the `onlySelected` diagnostic hosts). A `code@attr` selector counts its
   /// whole entry: an upper bound, so a config over it falls to the next core rather than failing to start.
   static int domainMatchers(VpnEngineOptions o) {
     final r = o.routing;
     return geositeCodes(o).fold(0, (sum, code) => sum + (o.geosite?[code]?.rustDomains ?? 0)) +
         (r.isActive && r.domainEnabled ? r.domainZones.length : 0) +
         (r.isActive && r.sitesEnabled ? r.sites.length : 0) +
-        (r.isActive && r.ruServicesEnabled ? RoutingDefaults.ruServicesDomains.length : 0);
+        (r.isActive && r.ruServicesEnabled ? RoutingDefaults.ruServicesDomains.length : 0) +
+        XrayConfigBuilder.diagnosticRules(o).fold(0, (sum, rule) => sum + ((rule['domain'] as List?)?.length ?? 0));
   }
 
   /// The referenced codes xray-rust gets trimmed to its per-entry limits ([GeositeIndex.rustFile]).

@@ -4,7 +4,6 @@ import '../core/interfaces/vpn_engine.dart';
 import '../core/services/app_http.dart';
 import '../core/services/ip_lookup.dart';
 import '../core/services/tunnel_socks.dart';
-import '../protocols/xray/xray_engine.dart';
 import 'config_provider.dart';
 import 'vpn_provider.dart';
 import '../core/services/platform_service.dart';
@@ -33,12 +32,6 @@ class IpInfoNotifier extends AsyncNotifier<IpInfo?> {
       if (vpnState.activeSocksPort > 0) {
         return _fetch(TunnelSocks(vpnState.activeSocksPort, vpnState.activeSocksUser, vpnState.activeSocksPassword));
       }
-    }
-    // Fallback: Quick Tile started VPN — native state may be ahead of Flutter state
-    final engine = ref.read(xrayEngineProvider);
-    final nativeState = await engine.getVpnState();
-    if (nativeState.state == VpnState.connected && nativeState.socksPort > 0) {
-      return _fetch(TunnelSocks(nativeState.socksPort, nativeState.socksUser, nativeState.socksPassword));
     }
     return null;
   }

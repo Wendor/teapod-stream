@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:teapodstream/core/constants/app_constants.dart';
 import 'package:teapodstream/core/services/ip_lookup.dart';
 import 'package:teapodstream/providers/ip_info_provider.dart';
+import 'package:teapodstream/providers/vpn_provider.dart';
 
 /// Minimal SOCKS5 (user/pass) server: after CONNECT it answers the HTTP request itself.
 class _Socks5 {
@@ -133,7 +134,12 @@ void main() {
     addTearDown(c.dispose);
   });
 
-  Future<IpInfo?> read() => c.read(ipInfoProvider.future);
+  /// The lookup reads the VPN state; the notifier takes native's state at startup.
+  Future<IpInfo?> read() async {
+    c.read(vpnProvider);
+    await pumpEventQueue();
+    return c.read(ipInfoProvider.future);
+  }
 
   test('disconnected VPN gives null without a request', () async {
     expect(await read(), isNull);

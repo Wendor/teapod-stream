@@ -13,12 +13,37 @@ them.
 |---|---|
 | `connectionState` | `VpnState`: `disconnected`, `connecting`, `connected`, `disconnecting`, `error`, `blocked` |
 | `stats` | `VpnStats`: traffic, speed, duration, history for the chart |
-| `error` | reason for `error`/`blocked`: from Flutter (`_failConnect`, timeout) or from native (`error` field of the state event); shown on Home |
-| `activeSocksPort/User/Password` | the tunnel's local SOCKS; `tunnelSocks` exposes it for the app's own downloads ([services](services.md#tunnelsocks)) |
+| `error` | reason for `error`/`blocked` (or a refused switch over a running session): a Flutter failure or native's `error` (below); shown on Home |
+| `activeSocksPort/User/Password` | the tunnel's local SOCKS from the `connected` snapshot; `tunnelSocks` exposes it for the app's own downloads ([services](services.md#tunnelsocks)) |
 | `appliedFingerprint` | `connectionFingerprint(settings, core:)` the session was started with |
 
 `blocked` — the kill switch keeps the TUN sink after a drop. It is terminal like `error`; `connect()` from it is
 allowed, `disconnect()` closes the sink. Native `reconnecting` maps to `connecting`.
+
+## Session (`VpnSession`)
+
+`lib/providers/vpn_session.dart`. The notifier keeps one immutable `VpnSession`: the last native snapshot
+(`NativeSession`, [xray_engine](xray_engine.md)), what Flutter waits for (`PendingConnect(attempt)` or
+`PendingDisconnect`) and a `SessionFailure(reason, attempt)` Flutter found itself (a connect refused before native,
+rejected by it or timed out; a session stopped because no core runs its config). `connectionState` and `error` are
+its pure `view`; `_setSession` is the only writer, and derives the rest (SOCKS login, stats reset, polling, duration).
+A refusal (before native, or rejected by it) leaves native as it is; a *stopping* failure (the connect timeout, a
+session no core runs) asks native to stop that session.
+
+- **`onNative(snapshot, poll:)`** (pure). Every snapshot becomes native's latest state, but while a connect waits a
+  `foreign` one doesn't settle it: another attempt's (an old session's late report — also what a refused switch leaves
+  running) or an untagged poll (`getState` may predate the connect reaching the service); an untagged event is a
+  natively started session that replaced the connect. A connect waits through `connecting`/`disconnecting` of its
+  attempt, a disconnect through `disconnecting`. A refusal stays while native reports the same snapshot. A stopping
+  failure stays through the stop (its reports carry native's last Flutter connect, not the stopped session's tag) and
+  the stopped session's own reports, even a late `connected`; another session or the kill switch's sink replaces it.
+- **`view`**: a pending connect → `connecting`, a pending disconnect → `disconnecting` (with a failure's reason);
+  a failure → `error` with it (native's own reason wins when native is in `error`), or `connected` with it when a
+  refusal leaves the old session running; otherwise native's state, `error` with native's reason or the generic one.
+- **One deadline** for what is pending: 45 s for a connect (→ failure `vpnConnectTimeout`, a new attempt id so its late
+  answer is stale, native `disconnect`), 10 s for a disconnect (→ taken as off). A `reconnecting` report of the
+  pending connect drops the deadline (a native restart can outlast it; the service ends it itself); its `connecting`
+  (the start after a switch's stop) and a foreign poll arm it again.
 
 Derived providers: `vpnConnectionStateProvider`, `vpnStatsProvider`, `pendingReconnectProvider` — `connected` and the
 fingerprint of the current settings differs from `appliedFingerprint` → `ReconnectBanner`. Only connection-relevant
@@ -42,7 +67,7 @@ it can → reconnect banner; disconnected → refresh or clear the saved quick-c
 
 ## `connect({switching})`
 
-1. Sets `connecting` synchronously (the button reacts in the same frame) and starts a **45 s** timeout → `error`.
+1. Sets `PendingConnect` synchronously (the button reacts in the same frame) with the **45 s** deadline.
 2. Resolves the config: `effectiveConfigProvider` (the active config, or the best-latency config of the active
    subscription in auto mode — [config_provider](config_provider.md)); `config.validate()`.
 3. Waits for the geosite index (`geositeIndexProvider`, which `coreResolverProvider` watches) and resolves the
@@ -52,31 +77,24 @@ it can → reconnect banner; disconnected → refresh or clear the saved quick-c
    quick-connect) with the resolver's geosite index ([geo_provider](geo_provider.md#geosite-index)): geosite codes
    missing from the file are left out and logged as a warning → `checkOptions`: `blocking` fails the connect,
    `warnings` go to the log.
-5. `XrayEngine.connect(config, backend, options)`; stores the SOCKS credentials and `appliedFingerprint`.
+5. `XrayEngine.connect(config, backend, options)`; stores `appliedFingerprint`.
 
-**Attempt ownership.** A `connect()` that passes its entry guard (not busy, not connected unless switching) takes a
-new attempt number; a later such `connect()`, any `disconnect()` or the 45 s connect timeout makes it stale. After
-each await of the attempt
-(notification permission, available cores, the native call) a stale attempt returns without calling native and
-without writing `_connectedConfig`, SOCKS credentials, `appliedFingerprint` or an `error`. The attempt number goes
-to native with `connect`; state events of the session it starts carry it back (`attempt`), and `getState` reports
-it. Numbers start at the notifier's creation time (µs) and are raised above the native session's on every state
-sync, so a notifier recreated with the UI never reuses one. While a Flutter connect waits for its outcome
-(`_awaiting`, cleared by a settled state, a failure, the timeout or a disconnect), a state event tagged with another
-attempt — an old session's start failing late — is dropped. A `getState` snapshot (startup or resume sync) not
-tagged with the pending attempt is dropped too: another attempt's session, the service before the connect reached
-it (a resume after the notification-permission dialog), or a natively started session the connect replaces; a
-dropped snapshot re-arms the 45 s timeout if a reconnect report cancelled it. Untagged events (sessions started natively: tile, boot,
-restart) and events outside a pending connect (native reconnects, a session surviving a UI restart) apply as they
-come.
+**Attempt ownership.** `connect()` is refused while `disconnecting`, and while `connected` or `connecting` unless it
+switches (`reconnectWithNewConfig`). One that passes takes a new attempt id; a later such `connect()`, any `disconnect()` or the 45 s deadline makes it stale. After each await of
+the attempt (notification permission, available cores, the native call) a stale attempt returns without calling native
+and without writing `_connectedConfig`, `appliedFingerprint` or a failure. The id goes to native with `connect`, and
+the session's snapshots carry it back (`attempt`), so `onNative` can tell a connect's own outcome. Ids are random and
+only compared for equality: native keeps a session's id for the life of the process, and a notifier recreated with
+the UI must not reuse it.
 
 SOCKS credentials are random when `randomCredentials` is on **or** when the manual login is empty in TUN mode —
 a password-less SOCKS on localhost would be an open proxy for every app. In proxy-only mode empty credentials
 (noauth) are the user's choice.
 
-**Hot switch.** `reconnectWithNewConfig()` while `connected` calls `connect(switching: true)`: native receives a
-normal `ACTION_CONNECT` and rebuilds the session without closing TUN, so there is no leak window with the kill
-switch. A failure before native is called keeps the old session running and shows the error. Used by the reconnect
+**Hot switch.** `reconnectWithNewConfig()` while `connected` or `connecting` calls `connect(switching: true)`: native
+receives a normal `ACTION_CONNECT` and replaces the running or starting session ([android_native](android_native.md#session-lifecycle)),
+a running one without closing TUN, so there is no leak window with the kill switch. A failure before native is
+called keeps the old session running and shows the error. Used by the reconnect
 banner, the config switch below and `selectConfig(config)` — the one rule for a picked config (configs list, server
 picker): refused with the reason when no enabled core runs it; otherwise it becomes active, and a running or starting
 session switches to it unless it already runs it. That decision is queued with the profile switches below and taken
@@ -89,7 +107,7 @@ never starts while the earlier one's connect is in flight; a selection's save it
 with the error, as a core change does; otherwise a live tunnel goes through `reconnectIfStale`, an idle one through
 the core-change handling if the core differs ([profiles](profiles.md#selected-server)).
 
-`disconnect()` sets `disconnecting` with a **10 s** timeout that forces `disconnected`.
+`disconnect()` sets `PendingDisconnect` with the **10 s** deadline, after which the session is taken as off.
 
 ## Native events (`_handleEvent`)
 
@@ -98,7 +116,7 @@ channel would replace the first one's handler.
 
 | `type` | Handling |
 |---|---|
-| `state` | `_onNativeState`; `connected` carries `socksPort/socksUser/socksPassword/connectedAtMs`, `error`/`blocked` carry `error` |
+| `state` | `NativeSession.parse` → `onNative` (above); `connected` carries `socksPort/socksUser/socksPassword/connectedAtMs`, `error`/`blocked` carry `error` |
 | `log` | `LogService` |
 | `stats`, `statsHistory` | `VpnStats`; ignored outside `connected` so a late answer doesn't clear an error |
 | `tunnel_dead` | `_runConfigSwitch` (only with `heartbeat.failAction = switchConfig`) |
@@ -118,11 +136,14 @@ Guarded by `_urltestRunning`; logged with `source: urltest`.
 
 ## Lifecycle
 
-- **Start (`build`)** — `_syncOnStartup`: native state, credentials and `connectedAtMs` (the duration timer keeps the
-  real start), the log file (`getLogs`), `appliedFingerprint` once profiles and cores are loaded (otherwise the
-  banner would show falsely), then `refreshStaleSubscriptionsIfDue()`.
-- **Resume** (`app.dart`) — `syncNativeState()` → restarts the stats poller, then `refreshStaleSubscriptionsIfDue()`
-  (only now `tunnelSocksProvider` knows a VPN started from the tile, so subscriptions go through the tunnel).
+- **Sync** — `syncNativeState()`, the one path for start and resume: `getState` → `onNative(poll: true)`; a
+  `connected` session without a Flutter connect (tile, boot, a UI restart) takes the current settings as
+  `appliedFingerprint` once profiles and cores are loaded (otherwise the banner would show falsely). The SOCKS login
+  and `connectedAtMs` (the duration timer keeps the real start) come with the snapshot; `ipInfoProvider` reads them
+  from the notifier.
+- **Start (`build`)** — the log file (`getLogs`), the sync, then `refreshStaleSubscriptionsIfDue()`.
+- **Resume** (`app.dart`) — the sync (restarts the stats poller), then `refreshStaleSubscriptionsIfDue()` (only now
+  `tunnelSocksProvider` knows a VPN started from the tile, so subscriptions go through the tunnel).
 - **Pause** — `pauseStatsPolling()`: no per-second channel calls in the background.
 - **Stats** — `getStats` every second while connected; `getStatsHistory` only while the Home tab is visible
   (`setChartVisible`), incrementally by `(epoch, seq)`: a continuation is appended, anything else reloads the buffer.

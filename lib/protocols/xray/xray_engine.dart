@@ -259,6 +259,22 @@ class NativeSession {
   final String socksPassword;
   final int connectedAtMs;
   final String? error;
+
+  @override
+  bool operator ==(Object other) =>
+      other is NativeSession &&
+      other.state == state &&
+      other.reconnecting == reconnecting &&
+      other.attempt == attempt &&
+      other.socksPort == socksPort &&
+      other.socksUser == socksUser &&
+      other.socksPassword == socksPassword &&
+      other.connectedAtMs == connectedAtMs &&
+      other.error == error;
+
+  @override
+  int get hashCode =>
+      Object.hash(state, reconnecting, attempt, socksPort, socksUser, socksPassword, connectedAtMs, error);
 }
 
 /// The engine [VpnNotifier] and the other providers talk to; tests override it.

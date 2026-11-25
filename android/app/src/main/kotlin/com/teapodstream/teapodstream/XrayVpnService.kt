@@ -449,7 +449,9 @@ class XrayVpnService : VpnService() {
                 }
                 ensureForeground()
                 when {
-                    request == null -> abortQuickConnect(store.params()?.killSwitch == true)
+                    // Nothing stored to start (a failed save may have removed it): the session holding the sink, if
+                    // any, decides whether it stays.
+                    request == null -> abortQuickConnect(killSwitchEnabled)
                     // Permission revoked — the system already disconnected our TUN, nothing to block with.
                     !request.params.proxyOnly && VpnService.prepare(this) != null -> abortQuickConnect(killSwitch = false)
                     else -> {

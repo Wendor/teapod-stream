@@ -65,7 +65,8 @@ after `onRevoke()` (which stops outside the queue) or a disconnect set `userRequ
 - **`ACTION_CONNECT_QUICK`** (tile, the `blocked` notification, boot, `reconnectInternal`) and the START_STICKY restart
   start from one request, `QuickConnectStore.quickStart()`. Ignored while a session is running; the restart also
   not after the user turned the VPN off. Without a config or VPN permission
-  (`abortQuickConnect`) the state is finished properly: kill switch → `blocked`, otherwise TUN is closed →
+  (`abortQuickConnect`) the state is finished properly: the kill switch of the session holding the sink (not the
+  stored params, which a failed save may have removed) → `blocked`, otherwise TUN is closed →
   `disconnected`, and the app opens.
 - **`ACTION_DISCONNECT`**: `setUserOff(true)` — `userRequestedDisconnect` and the store's flag on disk, so a restarted
   process doesn't reconnect; then in the queue: stop, close TUN (also an existing kill-switch sink) and post `disconnected` to the

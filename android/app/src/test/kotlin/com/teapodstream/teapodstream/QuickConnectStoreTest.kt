@@ -76,7 +76,7 @@ class QuickConnectStoreTest {
                 try {
                     repeat(500) { i ->
                         // The last replacement waits for the reader's first session, so a read always overlaps one.
-                        if (i == 499) seen.await(10, java.util.concurrent.TimeUnit.SECONDS)
+                        if (i == 499) check(seen.await(10, java.util.concurrent.TimeUnit.SECONDS)) { "no session read" }
                         own.save("c-$w-$i", params.copy(socksPort = w * 1000 + i), "u-$w-$i", "p")
                     }
                 } finally {

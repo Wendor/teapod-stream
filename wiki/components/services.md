@@ -87,7 +87,7 @@ app itself is excluded from the VPN, so without it the app's own requests would 
 | Service | Stores | Backend |
 |---|---|---|
 | `StorageSecureService` | configs (`vpn_configs_v2`), subscriptions, active config/subscription, pins, profiles | flutter_secure_storage (AES-GCM, key wrapped by a Keystore RSA key) |
-| `ConfigStorageService` | typed load/save of configs, subscriptions, active ids, pins | through `StorageSecureService` |
+| `ConfigStorageService` | typed whole-list load/save of configs, subscriptions, active ids, pins (written only by `ConfigNotifier._commit`) | through `StorageSecureService` |
 | `ProfileStorageService` | profiles, active profile id | secure + SharedPreferences |
 | `SettingsService` | `AppSettings`: one key per field; SOCKS credentials in secure storage | SharedPreferences |
 

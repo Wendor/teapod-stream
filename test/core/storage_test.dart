@@ -45,22 +45,13 @@ void main() {
       expect(await s.loadActiveSubscriptionId(), isNull);
     });
 
-    test('add, batch add, update, remove', () async {
-      await s.addConfig(_cfg('1'));
-      await s.addConfigsBatch([_cfg('2'), _cfg('3')]);
-      await s.addConfigsBatch(const []);
-      expect((await s.loadConfigs()).map((c) => c.id), ['1', '2', '3']);
-
-      await s.updateConfig(_cfg('2').copyWith(name: 'renamed'));
-      await s.updateConfig(_cfg('missing'));
+    test('configs round trip as a whole list', () async {
+      await s.saveConfigs([_cfg('1'), _cfg('2').copyWith(name: 'renamed')]);
       final loaded = await s.loadConfigs();
+      expect(loaded.map((c) => c.id), ['1', '2']);
       expect(loaded[1].name, 'renamed');
-      expect(loaded.length, 3);
-
-      await s.removeConfig('1');
-      await s.removeConfigsBatch(['3', 'nope']);
-      await s.removeConfigsBatch(const []);
-      expect((await s.loadConfigs()).map((c) => c.id), ['2']);
+      await s.saveConfigs(const []);
+      expect(await s.loadConfigs(), isEmpty);
     });
 
     test('active ids can be set and cleared', () async {
@@ -78,21 +69,9 @@ void main() {
   group('ConfigStorageService subscriptions', () {
     final s = ConfigStorageService();
 
-    test('add and update', () async {
-      await s.addSubscription(_sub('1', url: 'https://one'));
-      await s.addSubscription(_sub('2', url: 'https://two'));
-      await s.updateSubscription(_sub('2', url: 'https://two').copyWith(name: 'Two'));
-      await s.updateSubscription(_sub('ghost'));
-      final subs = await s.loadSubscriptions();
-      expect(subs.map((x) => x.name), ['S1', 'Two']);
-    });
-
-    test('removing a subscription removes its configs', () async {
-      await s.addSubscription(_sub('1'));
-      await s.saveConfigs([_cfg('a'), _cfg('b', subId: '1'), _cfg('c', subId: '2')]);
-      await s.removeSubscription('1');
-      expect(await s.loadSubscriptions(), isEmpty);
-      expect((await s.loadConfigs()).map((c) => c.id), ['a', 'c']);
+    test('subscriptions round trip as a whole list', () async {
+      await s.saveSubscriptions([_sub('1', url: 'https://one'), _sub('2', url: 'https://two').copyWith(name: 'Two')]);
+      expect((await s.loadSubscriptions()).map((x) => x.name), ['S1', 'Two']);
     });
 
     test('pins round trip', () async {
@@ -105,7 +84,7 @@ void main() {
     });
 
     test('data is stored in secure storage only', () async {
-      await s.addConfig(_cfg('1'));
+      await s.saveConfigs([_cfg('1')]);
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getKeys(), isEmpty);
       final raw = await const FlutterSecureStorage().read(key: 'vpn_configs_v2');

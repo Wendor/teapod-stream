@@ -1,7 +1,7 @@
 # Tests
 
 Dart tests cover models, services, providers, protocol builders and screens; JVM tests cover the Kotlin logic that
-doesn't need Android (`ConnectionParams`, `QuickConnectStore`, `ChannelWork` / `ConnectArgs`, `QuickConnectRequests`, `PrefixTcpProxy`, `SocksHttpProbe`, `SessionReconciler`, `TunOwnerPolicy`, `SpeedHistory`, utilities). The
+doesn't need Android (`ConnectionParams`, `QuickConnectStore`, `ChannelWork` / `ConnectArgs`, `QuickConnectRequests`, `PrefixTcpProxy`, `SocksHttpProbe`, `SessionReconciler`, `HeartbeatPolicy`, `NetworkChangePolicy`, `TunOwnerPolicy`, `SpeedHistory`, utilities). The
 `VpnService`, the cores and TUN are verified on a device — by hand or with the integration tests below.
 
 ```bash

@@ -165,10 +165,10 @@ and applies its actions. A failure below the threshold is retried twice, 3 s apa
   request line carries the URL's raw, still-encoded path; it offers user/password only when the session has SOCKS credentials, and fails at once if the inbound demands them
   without any); `xrayDelay` — measured
   inside the core (also used for a custom `https://` URL); `passive` — none.
-- **Passive success:** if TUN received data within the interval, the tunnel is alive and the radio isn't woken.
+- **Passive success:** if TUN received data within the last 15 s, the tunnel is alive and the radio isn't woken.
 - **Warm-up** after a reconnect: probes every 15 s, failures don't count until the first success, hard limit 30 s
   (outbounds connect lazily; DNS + TLS on fresh LTE can be slow).
-- **Exhausted** (the threshold, or a TUN stall): TUN data within the last interval → keep the session (the probe can land on a dead balancer detour); otherwise: `reconnect` → `reconnectInternal()`; `switchConfig` → `tunnel_dead`
+- **Exhausted** (the threshold, or a TUN stall): TUN data within the last 15 s (`isTunRxFresh`, whatever the probe cadence; re-checked for a stall) → keep the session (the probe can land on a dead balancer detour); otherwise: `reconnect` → `reconnectInternal()`; `switchConfig` → `tunnel_dead`
   event to Flutter ([vpn_provider](vpn_provider.md)); if nothing happens within 45 s (app killed, no live candidate) →
   plain reconnect.
 - **Watchdogs:** no TUN RX for 120 s with ≥ 2 active connections → exhausted (a warning from 60 s, once a minute); more than 200 active tun2socks

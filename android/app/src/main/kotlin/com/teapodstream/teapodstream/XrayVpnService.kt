@@ -1306,7 +1306,7 @@ class XrayVpnService : VpnService() {
                         val lastRx = core.lastRxActivityMs()
                         if (lastRx > 0) {
                             val now = System.currentTimeMillis()
-                            if (!applyHeartbeat(policy.onTunIdle(now - lastRx, { core.activeConnections() }, now))) break
+                            if (!applyHeartbeat(policy.onTunIdle(now - lastRx, { core.activeConnections() }, { isTunRxFresh() }, now))) break
                         }
                     }
                 } catch (_: InterruptedException) {

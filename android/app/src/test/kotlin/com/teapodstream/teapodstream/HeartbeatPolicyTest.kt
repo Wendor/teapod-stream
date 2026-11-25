@@ -121,12 +121,27 @@ class HeartbeatPolicyTest {
     @Test
     fun tunStallIsExhaustionAndIdleWarnsOncePerMinute() {
         val p = policy()
-        assertEquals(Action.None, p.onTunIdle(59_000, { 5 }, t0))
-        assertTrue(p.onTunIdle(60_000, { 5 }, t0) is Action.Warn)
-        assertEquals(Action.None, p.onTunIdle(70_000, { 5 }, t0 + 10_000))
-        assertTrue(p.onTunIdle(90_000, { 5 }, t0 + 60_000) is Action.Warn)
-        assertEquals(Action.None, p.onTunIdle(200_000, { 1 }, t0))
-        val r = p.onTunIdle(HeartbeatPolicy.TUN_STALL_TIMEOUT_MS, { 2 }, t0)
+        val stale = { false }
+        assertEquals(Action.None, p.onTunIdle(59_000, { error("not counted") }, stale, t0))
+        assertTrue(p.onTunIdle(60_000, { 5 }, stale, t0) is Action.Warn)
+        assertEquals(Action.None, p.onTunIdle(70_000, { 5 }, stale, t0 + 10_000))
+        assertTrue(p.onTunIdle(90_000, { 5 }, stale, t0 + 60_000) is Action.Warn)
+        assertEquals(Action.None, p.onTunIdle(200_000, { 1 }, stale, t0))
+        val r = p.onTunIdle(HeartbeatPolicy.TUN_STALL_TIMEOUT_MS, { 2 }, stale, t0)
         assertEquals(Action.Reconnect("TUN stall: no data for 120s (conns=2) (failures: 3)"), r)
+    }
+
+    @Test
+    fun idleCheckCountsConnectionsOnce() {
+        var calls = 0L
+        val r = policy().onTunIdle(HeartbeatPolicy.TUN_STALL_TIMEOUT_MS, { calls++; 5L - calls * 3 }, { false }, t0)
+        assertEquals(1L, calls)
+        assertEquals(Action.Reconnect("TUN stall: no data for 120s (conns=2) (failures: 3)"), r)
+    }
+
+    @Test
+    fun stallWithDataArrivedMeanwhileKeepsSession() {
+        val p = policy(switchConfig = true)
+        assertTrue(p.onTunIdle(HeartbeatPolicy.TUN_STALL_TIMEOUT_MS, { 5 }, { true }, t0) is Action.Warn)
     }
 }

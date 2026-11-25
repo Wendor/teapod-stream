@@ -74,15 +74,20 @@ class HeartbeatPolicy(
 
     /// TUN mode, after a success: the SOCKS probe passes even when proxy goroutines are alive
     /// but no data reaches the TUN (half-open connections held by keepalives).
-    /// [idleMs] — time since tun2socks last wrote to the TUN.
-    @Synchronized fun onTunIdle(idleMs: Long, activeConns: () -> Long, now: Long): Action {
+    /// [idleMs] — time since tun2socks last wrote to the TUN; [activeConns] is counted once, only
+    /// when the idle time calls for it; [rxFresh] is re-checked before acting on a stall, since data
+    /// may reach the TUN after [idleMs] was read.
+    @Synchronized fun onTunIdle(idleMs: Long, activeConns: () -> Long, rxFresh: () -> Boolean, now: Long): Action {
         val idleSec = idleMs / 1000
+        if (idleSec < 60) return Action.None
+        val conns = activeConns()
         return when {
-            idleMs >= TUN_STALL_TIMEOUT_MS && activeConns() >= 2 ->
-                exhausted(threshold, "TUN stall: no data for ${idleSec}s (conns=${activeConns()})", false, now)
-            idleSec >= 60 && activeConns() >= 2 && now - lastStallWarnAt >= 60_000 -> {
+            conns < 2 -> Action.None
+            idleMs >= TUN_STALL_TIMEOUT_MS ->
+                exhausted(threshold, "TUN stall: no data for ${idleSec}s (conns=$conns)", rxFresh(), now)
+            now - lastStallWarnAt >= 60_000 -> {
                 lastStallWarnAt = now
-                Action.Warn("TUN rx idle for ${idleSec}s (conns=${activeConns()})")
+                Action.Warn("TUN rx idle for ${idleSec}s (conns=$conns)")
             }
             else -> Action.None
         }

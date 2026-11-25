@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/app_settings.dart';
 import '../models/vpn_log_entry.dart';
@@ -11,7 +12,12 @@ import '../models/xray_tuning.dart';
 import '../constants/app_constants.dart';
 import 'storage_secure_service.dart';
 
+/// The settings as they were stored before the active profile held them: one SharedPreferences key per field (and the
+/// SOCKS login in secure storage). Read once, by the migration into the active profile ([migrated]); written only for
+/// the two flags native code reads from SharedPreferences ([mirrorNative]).
 class SettingsService {
+  /// Set once the per-key settings became the active profile's.
+  static const _migratedKey = 'settings_in_profile';
   static const _socksPortKey = 'socks_port';
   static const _logLevelKey = 'log_level';
   static const _excludedPackagesKey = 'excluded_packages';
@@ -73,6 +79,19 @@ class SettingsService {
 
   final _secure = StorageSecureService();
 
+  Future<bool> migrated() async => (await SharedPreferences.getInstance()).getBool(_migratedKey) ?? false;
+
+  Future<void> markMigrated() async => (await SharedPreferences.getInstance()).setBool(_migratedKey, true);
+
+  /// The flags `BootReceiver` and `XrayVpnService` read from SharedPreferences, after every change of the active
+  /// settings.
+  Future<void> mirrorNative(AppSettings settings) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_autoStartOnBootKey, settings.autoStartOnBoot);
+    await prefs.setBool(_automationEnabledKey, settings.automationEnabled);
+  }
+
+  /// The per-key settings; defaults where a key is missing.
   Future<AppSettings> load() async {
     final prefs = await SharedPreferences.getInstance();
     final creds = await _secure.readSocksCredentials();
@@ -173,6 +192,8 @@ class SettingsService {
     );
   }
 
+  /// The per-key format as the versions before the migration wrote it: tests build stored snapshots with it.
+  @visibleForTesting
   Future<void> save(AppSettings settings) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_socksPortKey, settings.socksPort);

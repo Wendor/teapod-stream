@@ -17,7 +17,7 @@ A fix comes with a test that fails without it; a logic change comes with tests o
 
 | Directory | What |
 |---|---|
-| `test/core/` | models, bundles, `AppSettings`/`SettingsService`, storage, subscriptions, updates and release notes, `changelog/` files, deep links, logs, `DeviceService` |
+| `test/core/` | models, bundles, `AppSettings`/`SettingsService` (the per-key reader of the migration), storage, subscriptions, updates and release notes, `changelog/` files, deep links, logs, `DeviceService` |
 | `test/protocols/` | link parsers, Go/Rust/sing-box builders, `XrayEngine` (MethodChannel) |
 | `test/providers/` | `ConfigNotifier`, profiles/settings, `VpnNotifier`, update/geo/ipInfo and small providers |
 | `test/ui/` | smoke of every screen (empty / with data), interactions, deep link dialogs, settings |
@@ -41,8 +41,10 @@ A fix comes with a test that fails without it; a logic change comes with tests o
 - **fakeAsync:** EventChannel events aren't delivered in the fake zone (they go through the root zone); MethodChannel
   calls are. Test `VpnNotifier` timeouts through `syncNativeState()`, not events.
 - **Riverpod 3:** `ref.read(p.future)` inside a listener of `p` returns the **previous** value — use
-  `ref.read(p).value`. A fire-and-forget `syncActiveSettings` outlives the test — let the queue drain before disposing
-  the container.
+  `ref.read(p).value`. A provider's notifier can't `ref.read` a provider that depends on it (`CircularDependencyError`):
+  `settingsProvider` derives from `profileProvider`, so `ProfileNotifier` reads `ProfileState.activeSettings` and
+  never `vpnProvider`. Settings seeded with `SettingsService.save` (the per-key format) become the active profile's
+  on the first `profileProvider` build; `test/helpers/stored_settings.dart` reads the stored ones back.
 - **Widget tests:** no `runAsync` (google_fonts would hit the network). The test font is wider than the real one — use
   a 600 px viewport to avoid false overflows. Config groups in `ConfigsScreen` start collapsed.
 - **HTTP progress:** `dart:io` buffers small chunks until the response ends — use ~64 KB chunks to observe progress.

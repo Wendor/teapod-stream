@@ -4,6 +4,8 @@ import '../models/pinned_ref.dart';
 import '../models/subscription.dart';
 import 'storage_secure_service.dart';
 
+/// Whole-list load / save of the stored configs, subscriptions, pins and the selection; `ConfigNotifier._commit`
+/// is its only writer.
 class ConfigStorageService {
   final _secure = StorageSecureService();
 
@@ -18,42 +20,6 @@ class ConfigStorageService {
 
   Future<void> saveConfigs(List<VpnConfig> configs) async {
     await _secure.writeConfigsRaw(jsonEncode(configs.map((c) => c.toJson()).toList()));
-  }
-
-  Future<void> addConfig(VpnConfig config) async {
-    final configs = await loadConfigs();
-    configs.add(config);
-    await saveConfigs(configs);
-  }
-
-  Future<void> addConfigsBatch(List<VpnConfig> newConfigs) async {
-    if (newConfigs.isEmpty) return;
-    final configs = await loadConfigs();
-    configs.addAll(newConfigs);
-    await saveConfigs(configs);
-  }
-
-  Future<void> removeConfig(String id) async {
-    final configs = await loadConfigs();
-    configs.removeWhere((c) => c.id == id);
-    await saveConfigs(configs);
-  }
-
-  Future<void> removeConfigsBatch(List<String> ids) async {
-    if (ids.isEmpty) return;
-    final idSet = ids.toSet();
-    final configs = await loadConfigs();
-    configs.removeWhere((c) => idSet.contains(c.id));
-    await saveConfigs(configs);
-  }
-
-  Future<void> updateConfig(VpnConfig updated) async {
-    final configs = await loadConfigs();
-    final idx = configs.indexWhere((c) => c.id == updated.id);
-    if (idx >= 0) {
-      configs[idx] = updated;
-      await saveConfigs(configs);
-    }
   }
 
   Future<String?> loadActiveConfigId() async {
@@ -96,30 +62,5 @@ class ConfigStorageService {
 
   Future<void> savePins(List<PinnedRef> pins) async {
     await _secure.writePinsRaw(jsonEncode(pins.map((p) => p.toJson()).toList()));
-  }
-
-  Future<void> addSubscription(Subscription sub) async {
-    final subs = await loadSubscriptions();
-    subs.add(sub);
-    await saveSubscriptions(subs);
-  }
-
-  Future<void> updateSubscription(Subscription sub) async {
-    final subs = await loadSubscriptions();
-    final idx = subs.indexWhere((s) => s.id == sub.id);
-    if (idx >= 0) {
-      subs[idx] = sub;
-      await saveSubscriptions(subs);
-    }
-  }
-
-  Future<void> removeSubscription(String id) async {
-    final subs = await loadSubscriptions();
-    subs.removeWhere((s) => s.id == id);
-    await saveSubscriptions(subs);
-    // Also remove configs that belonged to this subscription
-    final configs = await loadConfigs();
-    configs.removeWhere((c) => c.subscriptionId == id);
-    await saveConfigs(configs);
   }
 }

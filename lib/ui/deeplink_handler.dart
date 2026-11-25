@@ -94,7 +94,10 @@ class DeeplinkHandler {
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              await ref.read(profileProvider.notifier).importBundle(bundle, sourceUrl: sourceUrl);
+              // Taken before the import: the widget (and its ref) may be gone when it ends.
+              final vpn = ref.read(vpnProvider.notifier);
+              final id = await ref.read(profileProvider.notifier).importBundle(bundle, sourceUrl: sourceUrl);
+              if (id != null) await vpn.switchProfile(id);
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(

@@ -31,21 +31,31 @@ class QuickConnectRequestsTest {
     private fun inOrder(vararg calls: () -> Boolean) {
         val queued = CountDownLatch(1)
         val answered = CountDownLatch(calls.size)
+        val errors = java.util.Collections.synchronizedList(mutableListOf<String>())
         val work = ChannelWork { it.run() }
         calls.forEachIndexed { i, call ->
-            work.answer(Answered(answered), ChannelWork.quickConnect) {
+            work.answer(Answered(answered, errors), ChannelWork.quickConnect) {
                 if (i == 0) queued.await(5, TimeUnit.SECONDS)
                 call()
             }
         }
         queued.countDown()
         assertTrue(answered.await(5, TimeUnit.SECONDS))
+        assertTrue(errors.toString(), errors.isEmpty())
     }
 
-    private class Answered(private val latch: CountDownLatch) : MethodChannel.Result {
+    /** Counts every answer down; errors are checked on the test's thread. */
+    private class Answered(private val latch: CountDownLatch, private val errors: MutableList<String>) :
+        MethodChannel.Result {
         override fun success(result: Any?) = latch.countDown()
-        override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) = throw AssertionError(errorMessage)
-        override fun notImplemented() = throw AssertionError("notImplemented")
+        override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {
+            errors += "$errorCode: $errorMessage"
+            latch.countDown()
+        }
+        override fun notImplemented() {
+            errors += "notImplemented"
+            latch.countDown()
+        }
     }
 
     @Test

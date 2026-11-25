@@ -49,6 +49,16 @@ class QuickConnectStoreTest {
     }
 
     @Test
+    fun anInterruptedSaveLeavesNoOldName() {
+        store.save("{a}", params, "u", "p", tileName = "Berlin")
+        File(dir, QuickConnectStore.PARAMS).delete()
+        File(dir, QuickConnectStore.PARAMS).mkdir()
+        File(dir, "${QuickConnectStore.PARAMS}/x").writeText("")
+        assertTrue(runCatching { store.save("{b}", params, "u", "p", tileName = "Oslo") }.isFailure)
+        assertNull(store.tileName())
+    }
+
+    @Test
     fun aLoginThatCantBeRemovedFailsTheClear() {
         store.save("{config}", params, "u", "p")
         dir.setWritable(false)

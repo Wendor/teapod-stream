@@ -91,7 +91,7 @@ class XrayVpnService : VpnService() {
         const val PREF_LOGS_ENABLED = "logs_enabled"
 
         // User toggle: when off, only warning/error are logged (file + UI) so a broken
-        // session still leaves diagnostics. Persisted in PREFS_NAME by MainActivity.
+        // session still leaves diagnostics. Persisted in PREFS_NAME by VpnChannelHandler.
         @Volatile var logsEnabled = true
 
         // Log lines are buffered and flushed in batches: a FileWriter open per line wakes

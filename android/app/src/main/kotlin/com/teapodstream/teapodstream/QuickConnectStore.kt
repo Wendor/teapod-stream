@@ -92,6 +92,8 @@ internal class QuickConnectStore(private val dir: File) {
         clearCredentials()
         val old = File(dir, CONFIG)
         if (!old.delete() && old.exists()) throw java.io.IOException("can't remove $CONFIG")
+        // The old name goes with the old config: an interrupted save leaves no label for a config it didn't store.
+        if (tileName != null) File(dir, TILE_NAME).delete()
         saveParams(params)
         saveConfig(config)
         try {

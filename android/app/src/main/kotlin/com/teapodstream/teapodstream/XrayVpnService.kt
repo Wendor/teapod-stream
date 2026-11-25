@@ -529,7 +529,10 @@ class XrayVpnService : VpnService() {
         val mtu = params.mtu
         val engine = params.engine
         if (!isRunning.compareAndSet(false, true)) return
+        val notificationTypeChanged = showNotification != request.params.showNotification
         useParams(request.params)
+        // The previous session's notification type stayed until here: switch the foreground one to this session's.
+        if (notificationTypeChanged) ensureForeground()
         sessionCore = VpnCores.get(CoreKind.fromId(engine))
         VpnCores.active = sessionCore
         // Keep the previous TUN (kill-switch sink left by a reconnect) open until the

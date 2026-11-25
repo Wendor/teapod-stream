@@ -65,27 +65,40 @@ class QuickConnectStoreTest {
 
     @Test
     fun concurrentReplacementsNeverPairOneConfigWithAnothersParamsOrLogin() {
+        val go = java.util.concurrent.CountDownLatch(1)
+        val writing = java.util.concurrent.atomic.AtomicInteger(2)
         val writers = (1..2).map { w ->
             Thread {
                 // A store of its own per writer, as the activity and the service have.
                 val own = QuickConnectStore(dir)
-                repeat(300) { i -> own.save("c-$w-$i", params.copy(socksPort = w * 1000 + i), "u-$w-$i", "p") }
+                go.await()
+                try {
+                    repeat(500) { i -> own.save("c-$w-$i", params.copy(socksPort = w * 1000 + i), "u-$w-$i", "p") }
+                } finally {
+                    writing.decrementAndGet()
+                }
             }
         }
         val mismatches = mutableListOf<String>()
+        var checked = 0
         val failures = java.util.Collections.synchronizedList(mutableListOf<Throwable>())
         val reader = Thread {
             val own = QuickConnectStore(dir)
-            repeat(600) {
-                val r = own.quickStart { config, _ -> "from-$config" to "p" } ?: return@repeat
+            go.await()
+            // Reads for as long as the writers write, so every read overlaps a replacement.
+            while (writing.get() > 0) {
+                val r = own.quickStart { config, _ -> "from-$config" to "p" } ?: continue
+                checked++
                 val (w, i) = r.config.removePrefix("c-").split("-").map(String::toInt)
                 if (r.socksUser != "u-$w-$i" && r.socksUser != "from-${r.config}") mismatches += "${r.config}/${r.socksUser}"
                 if (r.params.socksPort != w * 1000 + i) mismatches += "${r.config}/port ${r.params.socksPort}"
             }
         }
         (writers + reader).forEach { t -> t.setUncaughtExceptionHandler { _, e -> failures += e }; t.start() }
+        go.countDown()
         (writers + reader).forEach { it.join() }
         assertTrue(failures.toString(), failures.isEmpty())
+        assertTrue("the reader saw saved sessions", checked > 0)
         assertTrue(mismatches.take(3).toString(), mismatches.isEmpty())
     }
 

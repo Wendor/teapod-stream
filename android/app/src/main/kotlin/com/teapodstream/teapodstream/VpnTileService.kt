@@ -26,7 +26,9 @@ class VpnTileService : TileService() {
     fun requestUpdate() = updateTile()
 
     companion object {
+        @Volatile
         private var tileService: VpnTileService? = null
+        private val main = android.os.Handler(android.os.Looper.getMainLooper())
         /** Where the name was kept before [QuickConnectStore]. */
         private const val LEGACY_PREF_CONFIG_NAME = "tile_config_name"
 
@@ -40,18 +42,17 @@ class VpnTileService : TileService() {
             if (!prefs.contains(LEGACY_PREF_CONFIG_NAME)) return
             val store = QuickConnectStore(context.filesDir)
             store.locked {
-                val legacy = prefs.getString(LEGACY_PREF_CONFIG_NAME, null)
-                try {
-                    if (store.tileName() == null && store.config() != null) store.saveTileName(legacy)
-                } catch (_: Exception) {
-                    // Only the label: no retry, which could attach the old name to a config saved later.
-                }
+                store.adoptLegacyTileName(prefs.getString(LEGACY_PREF_CONFIG_NAME, null))
                 prefs.edit().remove(LEGACY_PREF_CONFIG_NAME).commit()
             }
         }
 
-        /** The name in [QuickConnectStore] changed (saved with the quick-connect data): the tile shows it. */
-        fun configNameChanged(context: Context) = updateTile(context)
+        /** The name in [QuickConnectStore] changed (saved with the quick-connect data): the tile shows it. From any
+         *  thread: the tile is updated on the main one. */
+        fun configNameChanged(context: Context) {
+            val app = context.applicationContext
+            main.post { updateTile(app) }
+        }
 
         fun registerTileService(service: VpnTileService) {
             tileService = service

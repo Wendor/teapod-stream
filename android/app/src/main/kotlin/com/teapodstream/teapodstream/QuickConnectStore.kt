@@ -30,13 +30,13 @@ internal data class StartRequest(
  */
 internal class QuickConnectStore(private val dir: File) {
 
-    fun config(): String? = read(CONFIG)
+    fun config(): String? = synchronized(LOCK) { read(CONFIG) }
 
     /** The config the session runs (with the prefix proxy injected, if any); only with its params and login ([save]). */
     private fun saveConfig(config: String) = write(CONFIG, config)
 
     fun params(): ConnectionParams? = try {
-        read(PARAMS)?.let { ConnectionParams.fromJson(JSONObject(it)) }
+        synchronized(LOCK) { read(PARAMS) }?.let { ConnectionParams.fromJson(JSONObject(it)) }
     } catch (_: Exception) {
         null
     }
@@ -46,7 +46,7 @@ internal class QuickConnectStore(private val dir: File) {
     /** The SOCKS login of the last session; null when none is stored or the file is broken (both fields must be
      *  strings; empty ones are kept). */
     fun credentials(): Pair<String, String>? = try {
-        read(CREDENTIALS)?.let { JSONObject(it) }?.let { json ->
+        synchronized(LOCK) { read(CREDENTIALS) }?.let { JSONObject(it) }?.let { json ->
             val user = json.opt("user") as? String
             val pass = json.opt("pass") as? String
             if (user != null && pass != null) user to pass else null
@@ -67,11 +67,23 @@ internal class QuickConnectStore(private val dir: File) {
     }
 
     /** The name of the config a quick start connects (the tile shows it); null — none. */
-    fun tileName(): String? = read(TILE_NAME)
+    fun tileName(): String? = synchronized(LOCK) { read(TILE_NAME) }
 
     /** A blank or null [name] removes it. */
-    fun saveTileName(name: String?) {
+    fun saveTileName(name: String?) = synchronized(LOCK) {
         if (name.isNullOrBlank()) File(dir, TILE_NAME).delete() else write(TILE_NAME, name)
+    }
+
+    /**
+     * A name kept before this store: taken only for a stored config without a name of its own. A failed write only
+     * costs the label (the caller drops the old name either way, so it can't attach to a config saved later).
+     */
+    fun adoptLegacyTileName(legacy: String?) = synchronized(LOCK) {
+        if (legacy.isNullOrBlank() || tileName() != null || config() == null) return@synchronized
+        try {
+            saveTileName(legacy)
+        } catch (_: Exception) {
+        }
     }
 
     /**

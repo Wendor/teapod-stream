@@ -583,9 +583,10 @@ class XrayVpnService : VpnService() {
             // proxy port).
             try {
                 store.save(finalConfig, request.params, socksUser, socksPassword, tileName = request.configName ?: "")
-                VpnTileService.configNameChanged(this)
             } catch (e: Exception) {
                 log("warning", "Quick-connect data not saved: ${e.message}")
+            } finally {
+                VpnTileService.configNameChanged(this) // a failed save may have removed the old name too
             }
             prepareBinaries(this)
 

@@ -49,6 +49,28 @@ class QuickConnectStoreTest {
     }
 
     @Test
+    fun aLegacyNameIsTakenOnlyByAStoredConfigWithoutAName() {
+        store.adoptLegacyTileName("Old")
+        assertNull("no config to name", store.tileName())
+        store.save("{a}", params, "u", "p", tileName = "")
+        store.adoptLegacyTileName(" ")
+        assertNull("blank", store.tileName())
+        store.adoptLegacyTileName("Old")
+        assertEquals("Old", store.tileName())
+        store.adoptLegacyTileName("Older")
+        assertEquals("the store's own name stays", "Old", store.tileName())
+    }
+
+    @Test
+    fun aLegacyNameThatCantBeWrittenIsDropped() {
+        store.save("{a}", params, "u", "p", tileName = "")
+        File(dir, QuickConnectStore.TILE_NAME).mkdir()
+        File(dir, "${QuickConnectStore.TILE_NAME}/x").writeText("")
+        store.adoptLegacyTileName("Old") // doesn't throw
+        assertEquals("{a}", store.config())
+    }
+
+    @Test
     fun anInterruptedSaveLeavesNoOldName() {
         store.save("{a}", params, "u", "p", tileName = "Berlin")
         File(dir, QuickConnectStore.PARAMS).delete()

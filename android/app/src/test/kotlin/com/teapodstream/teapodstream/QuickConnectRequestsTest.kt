@@ -74,6 +74,14 @@ class QuickConnectRequestsTest {
     }
 
     @Test
+    fun aFailedSaveStillTellsTheTile() {
+        java.io.File(tmp.root, QuickConnectStore.PARAMS).mkdir()
+        java.io.File(tmp.root, "${QuickConnectStore.PARAMS}/x").writeText("")
+        assertTrue(runCatching { requests.save(args("{a}"), 0) }.isFailure)
+        assertEquals(listOf<String?>(null), tileNames)
+    }
+
+    @Test
     fun aSessionStartedSinceTheCheckKeepsItsData() {
         store.save("{session}", args("{session}").params, "u", "p")
         val seen = starts.get()

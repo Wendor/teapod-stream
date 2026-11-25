@@ -23,7 +23,7 @@ internal class VpnChannelHandler(
     private val quickConnect = QuickConnectRequests(
         QuickConnectStore(activity.filesDir),
         XrayVpnService.sessionStarts::get,
-    ) { VpnTileService.configNameChanged(activity) }
+    ) { VpnTileService.configNameChanged(activity.applicationContext) }
     private val filesDir: File get() = activity.filesDir
 
     val methods: Map<String, ChannelMethod> = mapOf(
@@ -228,11 +228,20 @@ internal class QuickConnectRequests(
     private val sessionStarts: () -> Long,
     private val tileNameChanged: () -> Unit,
 ) {
-    fun save(args: ConnectArgs, seen: Long): Boolean = store.locked {
-        if (sessionStarts() != seen) return@locked false
-        store.save(args.config, args.params, args.socksUser, args.socksPassword, tileName = args.configName ?: "")
-        true
-    }.also { if (it) tileNameChanged() }
+    fun save(args: ConnectArgs, seen: Long): Boolean {
+        var admitted = false
+        try {
+            return store.locked {
+                if (sessionStarts() != seen) return@locked false
+                admitted = true
+                store.save(args.config, args.params, args.socksUser, args.socksPassword, tileName = args.configName ?: "")
+                true
+            }
+        } finally {
+            // Also after a failed save: it may have removed the old name.
+            if (admitted) tileNameChanged()
+        }
+    }
 
     fun clear(seen: Long): Boolean = store.locked {
         if (sessionStarts() != seen) return@locked false

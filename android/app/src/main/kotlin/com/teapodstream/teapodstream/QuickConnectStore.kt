@@ -21,7 +21,7 @@ internal data class StartRequest(
 /**
  * The quick-reconnect data in [dir] (the app's private files): the last core config, its [ConnectionParams], the
  * SOCKS login, the config name the tile shows and the "turned off by the user" flag. The config and its login are
- * replaced and read together under one lock shared by every instance (the activity and the service write them), so
+ * (with the params) replaced and read together under one lock shared by every instance (the activity and the service write them), so
  * a quick start never pairs one session's config with another's login. The tile, boot, the notification, a system restart and
  * `reconnectInternal` start from it without Flutter. The only reader and writer of these files; every write goes
  * through a temp file and a rename, so a reader never sees half a file.
@@ -39,7 +39,7 @@ internal class QuickConnectStore(private val dir: File) {
         null
     }
 
-    fun saveParams(params: ConnectionParams) = write(PARAMS, params.toJson().toString())
+    fun saveParams(params: ConnectionParams) = synchronized(LOCK) { write(PARAMS, params.toJson().toString()) }
 
     /** The SOCKS login of the last session; null when none is stored or the file is broken (both fields must be
      *  strings; empty ones are kept). */
@@ -73,7 +73,7 @@ internal class QuickConnectStore(private val dir: File) {
     }
 
     /** Flutter's `saveQuickConnect`: everything a quick start needs, before any session ran with it. */
-    fun save(config: String, params: ConnectionParams, socksUser: String, socksPassword: String) {
+    fun save(config: String, params: ConnectionParams, socksUser: String, socksPassword: String) = synchronized(LOCK) {
         saveParams(params)
         saveSession(config, params.socksPort, socksUser, socksPassword)
     }
@@ -110,8 +110,9 @@ internal class QuickConnectStore(private val dir: File) {
      * stored one, else from the config ([socksFromConfig] reads it in the format of the session's core).
      */
     fun quickStart(socksFromConfig: (config: String, engine: String) -> Pair<String, String>): StartRequest? {
-        val params = params() ?: return null
-        val (config, login) = synchronized(LOCK) { (config() ?: return null) to credentials() }
+        val (params, config, login) = synchronized(LOCK) {
+            Triple(params() ?: return null, config() ?: return null, credentials())
+        }
         val (user, password) = login ?: socksFromConfig(config, params.engine)
         return StartRequest(config, params, user, password, attempt = 0, reconnect = true)
     }

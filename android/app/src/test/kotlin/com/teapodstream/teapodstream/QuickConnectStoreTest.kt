@@ -73,6 +73,7 @@ class QuickConnectStoreTest {
             }
         }
         val mismatches = mutableListOf<String>()
+        val failures = java.util.Collections.synchronizedList(mutableListOf<Throwable>())
         val reader = Thread {
             val own = QuickConnectStore(dir)
             repeat(600) {
@@ -81,8 +82,9 @@ class QuickConnectStoreTest {
                 if (r.socksUser != expected && r.socksUser != "from-${r.config}") mismatches += "${r.config}/${r.socksUser}"
             }
         }
-        (writers + reader).forEach { it.start() }
+        (writers + reader).forEach { t -> t.setUncaughtExceptionHandler { _, e -> failures += e }; t.start() }
         (writers + reader).forEach { it.join() }
+        assertTrue(failures.toString(), failures.isEmpty())
         assertTrue(mismatches.take(3).toString(), mismatches.isEmpty())
     }
 

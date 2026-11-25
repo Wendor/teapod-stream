@@ -4,10 +4,22 @@
 `GeoPresets`), `lib/core/services/settings_service.dart` (`SettingsService`),
 `lib/core/models/xray_tuning.dart`, `lib/core/models/heartbeat_settings.dart`, `lib/core/models/routing_settings.dart`
 
-`SettingsNotifier` (`AsyncNotifier<AppSettings>`) loads `AppSettings` through `SettingsService` and saves every
-change. `save()` waits for the active profile: a read-only profile ignores the change, otherwise the profile's
-snapshot is updated too ([profiles](profiles.md)). `cleanGhostPackages` drops uninstalled apps from the split
-tunneling lists.
+The settings in force are the active profile's ([profiles](profiles.md)): stored once, inside the profile.
+`SettingsNotifier` (`AsyncNotifier<AppSettings>`) derives them from `profileProvider` (synchronously once it is
+loaded, so a reader right after a save sees the saved value) and writes through
+`ProfileNotifier.updateActiveSettings`: one queue with the other profile writes, a read-only profile refuses there.
+`save(settings)` goes to the profile active when it was called (the settings were built from that profile's);
+`toggleExcludedPackage` and `cleanGhostPackages` (drops uninstalled apps from the split tunneling lists) apply their
+change to the settings current when they run, so two quick ones both land.
+
+**Native flags.** `BootReceiver` reads `flutter.auto_start_on_boot`, `XrayVpnService` `flutter.automation_enabled`
+from SharedPreferences: `SettingsService.mirrorNative` writes both after every change of the active settings (a save,
+a switch, a refresh of the active profile). `logsEnabled` reaches native through the `setLogsEnabled` channel call.
+
+**Migration.** Before, every field had its own SharedPreferences key (`SettingsService.load`, SOCKS login in secure
+storage), and the profile held a copy. On the first `profileProvider` build without the `settings_in_profile` flag
+those per-key settings become the active profile's (or the new default profile's); then the flag is set and the old
+keys are no longer read.
 
 ## `AppSettings`
 
@@ -24,12 +36,12 @@ tunneling lists.
 | Subscriptions | `hwidEnabled` (default on: some panels return HTML without `X-Hwid`), `subAutoRefresh`, `subAutoRefreshHours`, `subUserAgent` (empty = `AppConstants.subscriptionUserAgent`) |
 | App | `autoConnect`, `autoStartOnBoot`, `automationEnabled` (Tasker broadcasts, off by default — [security](../security.md)), `showNotification`, `logLevel`, `logsEnabled`, `updateChannel`, `fontScale`, `geoipUrl`, `geositeUrl` |
 
-**Invariant** (`test/core/app_settings_test.dart`): every field survives `toJson/fromJson` and
-`SettingsService.save/load`, and an empty JSON or a fresh install gives the constructor defaults. A new field
-without its storage key fails the test. Connection-relevant fields must also be added to `connectionFingerprint`
+**Invariant** (`test/core/app_settings_test.dart`): every field survives `toJson/fromJson` (the profile's form), and
+an empty JSON or a fresh install gives the constructor defaults; the per-key reader of the migration keeps reading
+every field of before (`SettingsService.save` writes that format for tests). Connection-relevant fields must also be added to `connectionFingerprint`
 so a change on a live VPN shows the reconnect banner.
 
-`coreOrder` is stored as `core_order`; `CoreKind.parseOrder` drops unknown names and appends missing cores.
+`coreOrder` (per-key: `core_order`); `CoreKind.parseOrder` drops unknown names and appends missing cores.
 
 ## Tuning (`xray_tuning.dart`)
 

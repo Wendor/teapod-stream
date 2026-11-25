@@ -24,6 +24,7 @@ import 'package:teapodstream/providers/profile_provider.dart';
 import 'package:teapodstream/providers/settings_provider.dart';
 
 import '../helpers/local_server.dart';
+import '../helpers/stored_settings.dart';
 
 const _local = AppSettings(
   socksPort: 1111,
@@ -91,8 +92,13 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       FlutterSecureStorage.setMockInitialValues({});
     }
-    await SettingsService().save(_local);
-    if (stored != null) await profiles.saveProfiles(stored);
+    // Stored profiles hold the settings in force; without them the per-key ones of before become the default's.
+    if (stored == null) {
+      await SettingsService().save(_local);
+    } else {
+      await SettingsService().markMigrated();
+      await profiles.saveProfiles(stored);
+    }
     if (activeId != null) await profiles.saveActiveProfileId(activeId);
     c = ProviderContainer(overrides: overrides);
     addTearDown(c.dispose);
@@ -102,6 +108,75 @@ void main() {
 
   Profile profile(String id, {bool isDefault = false, AppSettings settings = const AppSettings()}) =>
       Profile(id: id, name: id, isDefault: isDefault, settings: settings, createdAt: DateTime(2026));
+
+  group('settings in the active profile', () {
+    test('the per-key settings of before become the active profile\'s once', () async {
+      SharedPreferences.setMockInitialValues({});
+      FlutterSecureStorage.setMockInitialValues({});
+      // What 1.8.x stored: the settings per key, profiles with their own snapshot.
+      await SettingsService().save(_local);
+      await profiles.saveProfiles([profile('a'), profile('b', settings: const AppSettings(mtu: 1300))]);
+      await profiles.saveActiveProfileId('b');
+      c = ProviderContainer();
+      addTearDown(c.dispose);
+
+      expect((await settings()).toJson(), _local.toJson());
+      final stored = {for (final p in await profiles.loadProfiles()) p.id: p.settings};
+      expect(stored['b']!.toJson(), _local.toJson());
+      expect(stored['a']!.toJson(), const AppSettings().toJson());
+
+      // Done once: a later change of the old keys is not read again.
+      await SettingsService().save(const AppSettings(mtu: 1400));
+      c.invalidate(profileProvider);
+      expect((await settings()).mtu, _local.mtu);
+    });
+
+    test('the flags native reads follow the active profile resolved at start', () async {
+      SharedPreferences.setMockInitialValues({'automation_enabled': true});
+      FlutterSecureStorage.setMockInitialValues({});
+      await SettingsService().markMigrated();
+      await profiles.saveProfiles([profile('a', settings: const AppSettings(autoStartOnBoot: true))]);
+      await profiles.saveActiveProfileId('gone');
+      c = ProviderContainer();
+      addTearDown(c.dispose);
+      await c.read(profileProvider.future);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getBool('automation_enabled'), isFalse);
+      expect(prefs.getBool('auto_start_on_boot'), isTrue);
+    });
+
+    test('two quick saves both land', () async {
+      await boot(stored: [profile('a')], activeId: 'a');
+      final notifier = c.read(settingsProvider.notifier);
+      await Future.wait([notifier.toggleExcludedPackage('x.one'), notifier.toggleExcludedPackage('x.two')]);
+      expect((await settings()).excludedPackages, {'x.one', 'x.two'});
+      expect((await storedSettings()).excludedPackages, {'x.one', 'x.two'});
+    });
+
+    test('a readonly profile refuses a save', () async {
+      await boot(stored: [profile('a').copyWith(readonly: true)], activeId: 'a');
+      await c.read(settingsProvider.notifier).save(const AppSettings(mtu: 1300));
+      expect((await settings()).mtu, const AppSettings().mtu);
+      expect((await storedSettings()).mtu, const AppSettings().mtu);
+    });
+
+    test('the flags native reads follow a save and a switch', () async {
+      await boot(
+        stored: [
+          profile('a'),
+          profile('b', settings: const AppSettings(autoStartOnBoot: true)),
+        ],
+        activeId: 'a',
+      );
+      final prefs = await SharedPreferences.getInstance();
+      await c.read(settingsProvider.notifier).save(const AppSettings(automationEnabled: true));
+      expect(prefs.getBool('automation_enabled'), isTrue);
+      expect(prefs.getBool('auto_start_on_boot'), isFalse);
+      await n().switchProfile('b');
+      expect(prefs.getBool('automation_enabled'), isFalse);
+      expect(prefs.getBool('auto_start_on_boot'), isTrue);
+    });
+  });
 
   group('build', () {
     test('first launch creates the default profile from current settings', () async {
@@ -166,7 +241,7 @@ void main() {
     expect(s().activeProfileId, 'b');
     expect(await profiles.loadActiveProfileId(), 'b');
     expect((await settings()).mtu, 1300);
-    expect((await SettingsService().load()).mtu, 1300);
+    expect((await storedSettings()).mtu, 1300);
   });
 
   group('switchProfile and the selected server', () {
@@ -255,7 +330,7 @@ void main() {
         ],
         activeId: 'a',
       );
-      final sync = n().syncActiveSettings(_local.copyWith(mtu: 1234));
+      final sync = c.read(settingsProvider.notifier).save(_local.copyWith(mtu: 1234));
       await n().switchProfile('b');
       await sync;
       expect((await profiles.loadProfiles()).first.settings.mtu, 1234);
@@ -271,7 +346,7 @@ void main() {
         activeId: 'a',
       );
       final switching = n().switchProfile('b');
-      final sync = n().syncActiveSettings(_local.copyWith(mtu: 1234));
+      final sync = c.read(settingsProvider.notifier).save(_local.copyWith(mtu: 1234));
       await switching;
       await sync;
       final stored = await profiles.loadProfiles();
@@ -391,7 +466,7 @@ void main() {
     test('save persists and syncs the active profile', () async {
       await boot();
       await c.read(settingsProvider.notifier).save(_local.copyWith(mtu: 1350));
-      expect((await SettingsService().load()).mtu, 1350);
+      expect((await storedSettings()).mtu, 1350);
       await Future<void>.delayed(Duration.zero);
       expect(s().activeProfile!.settings.mtu, 1350);
       expect((await profiles.loadProfiles()).single.settings.mtu, 1350);
@@ -405,7 +480,7 @@ void main() {
       expect(s().isReadonly, isTrue);
       await c.read(settingsProvider.notifier).save(_local.copyWith(mtu: 1000));
       expect((await settings()).mtu, 1500);
-      expect((await SettingsService().load()).mtu, 1500);
+      expect((await storedSettings()).mtu, 1500);
     });
 
     test('toggleExcludedPackage and cleanGhostPackages', () async {
@@ -420,7 +495,7 @@ void main() {
       final cleaned = await settings();
       expect(cleaned.includedPackages, {'in.a'});
       expect(cleaned.excludedPackages, {'ex.b'});
-      expect((await SettingsService().load()).includedPackages, {'in.a'});
+      expect((await storedSettings()).includedPackages, {'in.a'});
     });
   });
 
@@ -428,6 +503,7 @@ void main() {
     test('foreign profile cannot change tunnel-critical settings', () async {
       await boot();
       final id = (await n().importBundle(_bundle(), sourceUrl: 'https://src'))!;
+      await n().switchProfile(id);
       final p = s().profiles.firstWhere((p) => p.id == id);
       expect(s().activeProfileId, id);
       expect(p.sourceUrl, 'https://src');
@@ -476,7 +552,7 @@ void main() {
 
     test('readonly import without switching, connections imported', () async {
       await boot();
-      final id = await n().importBundle(_bundle(withConfigs: true), switchToProfile: false, makeReadonly: true);
+      final id = await n().importBundle(_bundle(withConfigs: true), makeReadonly: true);
       expect(s().activeProfileId, 'default');
       expect(s().profiles.firstWhere((p) => p.id == id).readonly, isTrue);
       expect((await ConfigStorageService().loadConfigs()).single.name, 'r1');

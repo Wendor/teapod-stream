@@ -21,6 +21,7 @@ import '../core/cores/core_switch.dart';
 import 'core_provider.dart';
 import 'settings_provider.dart';
 import 'config_provider.dart';
+import 'profile_provider.dart';
 import '../l10n/l10n.dart';
 
 class VpnState2 {
@@ -788,6 +789,11 @@ class VpnNotifier extends Notifier<VpnState2> {
   /// Runs a profile switch ([body] returns false — nothing switched), then makes the VPN follow the
   /// final state: a profile no core runs disconnects (as a core change does), a live tunnel is
   /// rebuilt if stale, a core change suppressed meanwhile is handled.
+  /// Switches to profile [id]; the VPN follows once its settings and server are in place, also when restoring the
+  /// server failed: the profile is already switched, and a retry can't — it is active.
+  Future<void> switchProfile(String id) =>
+      duringProfileSwitch(() => ref.read(profileProvider.notifier).switchProfile(id));
+
   Future<void> duringProfileSwitch(Future<bool> Function() body) {
     final run = _profileSwitches.then((_) => _profileSwitch(body));
     _profileSwitches = run.then((_) {}, onError: (_) {});

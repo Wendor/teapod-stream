@@ -143,7 +143,7 @@ class _ProfBody extends ConsumerWidget {
 
   void _onProfileTap(BuildContext context, WidgetRef ref, Profile profile, ProfileState state) {
     if (profile.id == state.activeProfileId) return;
-    ref.read(profileProvider.notifier).switchProfile(profile.id);
+    ref.read(vpnProvider.notifier).switchProfile(profile.id);
   }
 }
 
@@ -322,9 +322,12 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
               final review = await ref.read(profileProvider.notifier).reviewImport(result);
               if (!ctx.mounted || !await confirmImportReview(ctx, review) || !ctx.mounted) return;
               Navigator.pop(ctx);
-              await ref
+              // Taken before the import: the screen (and its ref) may be gone when it ends.
+              final vpn = ref.read(vpnProvider.notifier);
+              final id = await ref
                   .read(profileProvider.notifier)
-                  .importBundle(result, switchToProfile: switchTo, makeReadonly: makeReadonly, sourceUrl: sourceUrl);
+                  .importBundle(result, makeReadonly: makeReadonly, sourceUrl: sourceUrl);
+              if (switchTo && id != null) await vpn.switchProfile(id);
             },
             child: Text(context.l10n.commonImport, style: AppTheme.mono(size: 11, color: t.accent)),
           ),
@@ -345,7 +348,7 @@ void _showActionsSheet(BuildContext context, WidgetRef ref, Profile profile, Pro
       t: t,
       onSwitch: () {
         Navigator.pop(ctx);
-        ref.read(profileProvider.notifier).switchProfile(profile.id);
+        ref.read(vpnProvider.notifier).switchProfile(profile.id);
       },
       onRename: () {
         Navigator.pop(ctx);

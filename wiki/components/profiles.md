@@ -17,23 +17,23 @@ profiles that refresh from a URL, `selection` — the selected server.
 (subscription, name, `address:port`) for when the id is gone after a subscription refresh — and the subscription
 in auto-select mode. It is recorded on switch, not on every selection change: `switchProfile` stores
 the current selection (`ConfigState.selection`) in the outgoing profile, and in the incoming one too if it has none
-yet (`null` — a profile created before this field, or never active). Then the incoming profile's settings are reloaded and
+yet (`null` — a profile created before this field, or never active). Then the incoming profile becomes active (its settings are the ones in force) and
 `ConfigNotifier.applySelection` restores its selection; whatever no longer exists is skipped, and if nothing of it is left the current
 selection stays. Bundles never carry it: export clears it, import doesn't read it. Every write of the
-profile list (switch with restoring the selection, settings sync, create, rename, delete, read-only, import, the
+profile list (switch with restoring the selection, a settings change, create, rename, delete, read-only, import, the
 merge after a refresh download) runs through one queue and re-reads the state inside it, so none drops another's
-change; a sync writes to the profile that was active when the settings were saved, and the switch reads the
+change; a settings save writes to the profile that was active when it was called, and the switch reads the
 outgoing selection through the configs queue (`ConfigNotifier.currentSelection`).
 
 ## ProfileNotifier
 
 | Method | What it does |
 |---|---|
-| `switchProfile(id)` | remembers the outgoing profile's server, applies the profile's settings, then its server, inside `VpnNotifier.duringProfileSwitch`: the VPN follows the final state (a live tunnel is rebuilt if the server or connection settings changed), also when restoring the server failed |
-| `syncActiveSettings(settings)` | called by `SettingsNotifier.save()`: keeps the active profile's snapshot current |
+| `switchProfile(id)` | remembers the outgoing profile's server, makes the profile active (its settings apply), then restores its server; false — nothing to switch. The app switches through `VpnNotifier.switchProfile(id)`, which runs it inside `duringProfileSwitch`: the VPN follows the final state (a live tunnel is rebuilt if the server or connection settings changed), also when restoring the server failed. (`ProfileNotifier` can't read `vpnProvider`: that one depends on the settings, which derive from profiles.) |
+| `updateActiveSettings(change, {profileId})` | the only writer of the settings in force (`SettingsNotifier` calls it): queued, refused for a read-only profile, mirrors the native flags ([settings](settings_provider.md)) |
 | `refreshProfile(id, url, {confirm})` | downloads the profile again; if it changes traffic settings or adds subscriptions, `confirm` is asked first (declined — nothing applied); applies settings, imports its connections |
 | `reviewImport(bundle)` | the `ImportReview` shown before `importBundle` (below) |
-| `importBundle(bundle, …)` | adds a profile and imports its connections through `ConfigNotifier.importBundle` (deduplicated by subscription URL / server) |
+| `importBundle(bundle, …)` | adds a profile and imports its connections through `ConfigNotifier.importBundle` (deduplicated by subscription URL / server); returns its id — switching to it is the caller's (`VpnNotifier.switchProfile`) |
 | `exportBundle` | a `ProfileBundle` for sharing |
 
 **Security fields stay local** (`_keepLocalSecurity`): an imported or refreshed profile never sets the SOCKS port and
@@ -54,7 +54,7 @@ the Add screen and a profile refresh ask through `confirmImportReview` when the 
 
 | Data | Key | Storage |
 |---|---|---|
-| Profiles | `profiles_v1` | flutter_secure_storage (`StorageSecureService`) |
+| Profiles (with the settings in force: the active one's) | `profiles_v1` | flutter_secure_storage (`StorageSecureService`) |
 | Active profile id | `active_profile_id` | SharedPreferences |
 
 ## Bundles and deep links

@@ -82,8 +82,8 @@ Safety timeouts in Flutter: 45 s for connecting, 10 s for disconnecting.
 ## Native autonomy
 
 Reconnects after a network change or a dead tunnel run entirely in `XrayVpnService`, also when the UI is gone:
-`reconnectInternal()` → wait for direct internet → `ACTION_CONNECT_QUICK` with parameters from disk, reusing the TUN
-fd. The tile, boot receiver and automation broadcasts use the same quick-connect path. Flutter only mirrors state —
+`reconnectInternal()` replaces the connected session's desired state in `SessionReconciler` with a new one that waits
+for direct internet first (parameters from disk), reusing the TUN fd. The tile, boot receiver and automation broadcasts use the same quick-connect path. Flutter only mirrors state —
 except `switchConfig`, where native asks Flutter (`tunnel_dead`) to pick another config.
 [android_native](components/android_native.md#network-changes)
 

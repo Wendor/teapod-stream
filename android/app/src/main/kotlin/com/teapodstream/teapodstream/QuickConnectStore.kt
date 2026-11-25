@@ -20,7 +20,9 @@ internal data class StartRequest(
 
 /**
  * The quick-reconnect data in [dir] (the app's private files): the last core config, its [ConnectionParams], the
- * SOCKS login, the config name the tile shows and the "turned off by the user" flag. The tile, boot, the notification, a system restart and
+ * SOCKS login, the config name the tile shows and the "turned off by the user" flag. The config and its login are
+ * replaced and read together under one lock shared by every instance (the activity and the service write them), so
+ * a quick start never pairs one session's config with another's login. The tile, boot, the notification, a system restart and
  * `reconnectInternal` start from it without Flutter. The only reader and writer of these files; every write goes
  * through a temp file and a rename, so a reader never sees half a file.
  */
@@ -28,8 +30,8 @@ internal class QuickConnectStore(private val dir: File) {
 
     fun config(): String? = read(CONFIG)
 
-    /** The config the session runs (with the prefix proxy injected, if any). */
-    fun saveConfig(config: String) = write(CONFIG, config)
+    /** The config the session runs (with the prefix proxy injected, if any); only with its login ([saveSession]). */
+    private fun saveConfig(config: String) = write(CONFIG, config)
 
     fun params(): ConnectionParams? = try {
         read(PARAMS)?.let { ConnectionParams.fromJson(JSONObject(it)) }
@@ -51,13 +53,13 @@ internal class QuickConnectStore(private val dir: File) {
         null
     }
 
-    fun saveCredentials(port: Int, user: String, password: String) = write(
+    private fun saveCredentials(port: Int, user: String, password: String) = write(
         CREDENTIALS,
         JSONObject().put("port", port).put("user", user).put("pass", password).toString(),
     )
 
     /** Throws when the file stays: a caller replacing the config must not keep a login that doesn't match it. */
-    fun clearCredentials() {
+    fun clearCredentials() = synchronized(LOCK) {
         val file = File(dir, CREDENTIALS)
         if (!file.delete() && file.exists()) throw java.io.IOException("can't remove $CREDENTIALS")
     }
@@ -73,9 +75,21 @@ internal class QuickConnectStore(private val dir: File) {
     /** Flutter's `saveQuickConnect`: everything a quick start needs, before any session ran with it. */
     fun save(config: String, params: ConnectionParams, socksUser: String, socksPassword: String) {
         saveParams(params)
-        clearCredentials() // an interrupted save must not pair the new config with the old login
+        saveSession(config, params.socksPort, socksUser, socksPassword)
+    }
+
+    /**
+     * The config a session runs and its SOCKS login, as one replacement. The old login goes first: an interrupted
+     * write leaves the login read from the config, never one that doesn't match it. A failed login write is left to
+     * that fallback rather than thrown.
+     */
+    fun saveSession(config: String, socksPort: Int, socksUser: String, socksPassword: String) = synchronized(LOCK) {
+        clearCredentials()
         saveConfig(config)
-        saveCredentials(params.socksPort, socksUser, socksPassword)
+        try {
+            saveCredentials(socksPort, socksUser, socksPassword)
+        } catch (_: Exception) {
+        }
     }
 
     /** Flutter's `clearQuickConnect`: nothing left to quick-start. The off flag stays. */
@@ -97,8 +111,8 @@ internal class QuickConnectStore(private val dir: File) {
      */
     fun quickStart(socksFromConfig: (config: String, engine: String) -> Pair<String, String>): StartRequest? {
         val params = params() ?: return null
-        val config = config() ?: return null
-        val (user, password) = credentials() ?: socksFromConfig(config, params.engine)
+        val (config, login) = synchronized(LOCK) { (config() ?: return null) to credentials() }
+        val (user, password) = login ?: socksFromConfig(config, params.engine)
         return StartRequest(config, params, user, password, attempt = 0, reconnect = true)
     }
 
@@ -116,6 +130,7 @@ internal class QuickConnectStore(private val dir: File) {
     }
 
     companion object {
+        private val LOCK = Any()
         const val CONFIG = "xray_config.json"
         const val PARAMS = "last_connection_meta.json"
         const val CREDENTIALS = "socks_creds.json"

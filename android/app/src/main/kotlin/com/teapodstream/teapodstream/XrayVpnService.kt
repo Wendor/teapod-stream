@@ -551,15 +551,8 @@ class XrayVpnService : VpnService() {
                 xrayConfig
             }
 
-            // The config and its SOCKS login together, for a quick start: the old login goes first, so an interrupted
-            // write leaves the login read from the config rather than one that doesn't match it.
-            store.clearCredentials()
-            store.saveConfig(finalConfig)
-            try {
-                store.saveCredentials(socksPort, socksUser, socksPassword)
-            } catch (e: Exception) {
-                log("warning", "Failed to save socks_creds: ${e.message}")
-            }
+            // The config and its SOCKS login together, for a quick start.
+            store.saveSession(finalConfig, socksPort, socksUser, socksPassword)
             prepareBinaries(this)
 
             core.init(this) { level, message -> log(level, message) }

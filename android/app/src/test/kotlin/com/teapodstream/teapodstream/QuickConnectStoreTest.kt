@@ -40,7 +40,7 @@ class QuickConnectStoreTest {
 
     @Test
     fun aLoginThatCantBeRemovedFailsTheClear() {
-        store.saveCredentials(2080, "u", "p")
+        store.saveSession("{config}", 2080, "u", "p")
         dir.setWritable(false)
         try {
             assertTrue(runCatching { store.clearCredentials() }.isFailure)
@@ -67,7 +67,7 @@ class QuickConnectStoreTest {
         // A non-empty directory under the target name: the rename fails.
         File(dir, QuickConnectStore.CONFIG).mkdir()
         File(dir, "${QuickConnectStore.CONFIG}/x").writeText("")
-        assertTrue(runCatching { store.saveConfig("{config}") }.isFailure)
+        assertTrue(runCatching { store.saveSession("{config}", 2080, "u", "p") }.isFailure)
         assertTrue(dir.listFiles()!!.none { it.name.endsWith(".tmp") })
     }
 
@@ -110,7 +110,7 @@ class QuickConnectStoreTest {
         store.saveParams(params)
         assertNull("no config", store.quickStart(fromConfig))
         store.clear()
-        store.saveConfig("{config}")
+        store.saveSession("{config}", 2080, "u", "p")
         assertNull("no params", store.quickStart(fromConfig))
     }
 

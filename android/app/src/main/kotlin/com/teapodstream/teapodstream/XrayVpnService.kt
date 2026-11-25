@@ -551,7 +551,15 @@ class XrayVpnService : VpnService() {
                 xrayConfig
             }
 
+            // The config and its SOCKS login together, for a quick start: the old login goes first, so an interrupted
+            // write leaves the login read from the config rather than one that doesn't match it.
+            store.clearCredentials()
             store.saveConfig(finalConfig)
+            try {
+                store.saveCredentials(socksPort, socksUser, socksPassword)
+            } catch (e: Exception) {
+                log("warning", "Failed to save socks_creds: ${e.message}")
+            }
             prepareBinaries(this)
 
             core.init(this) { level, message -> log(level, message) }
@@ -1660,12 +1668,6 @@ class XrayVpnService : VpnService() {
         val now = System.currentTimeMillis()
         lastConnectedMs = now
         connectedNetwork = lastUnderlyingNetwork
-        // The login for a quick reconnect.
-        try {
-            store.saveCredentials(socksPort, socksUser, socksPassword)
-        } catch (e: Exception) {
-            log("warning", "Failed to save socks_creds: ${e.message}")
-        }
         publish { SessionSnapshot.connected(sessionAttempt, socksPort, socksUser, socksPassword, now) }
         // The "Disconnected"/intermediate notification bypasses the dedupe cache —
         // reset it so the connected layout is always posted.

@@ -23,6 +23,7 @@ import 'geo_provider.dart';
 import 'settings_provider.dart';
 import 'config_provider.dart';
 import 'profile_provider.dart';
+import 'vpn_session.dart';
 import '../l10n/l10n.dart';
 
 class VpnState2 {
@@ -58,22 +59,15 @@ class VpnState2 {
   TunnelSocks? get tunnelSocks =>
       isConnected && activeSocksPort > 0 ? TunnelSocks(activeSocksPort, activeSocksUser, activeSocksPassword) : null;
 
-  VpnState2 copyWith({
-    VpnState? connectionState,
-    VpnStats? stats,
-    String? error,
-    int? activeSocksPort,
-    String? activeSocksUser,
-    String? activeSocksPassword,
-    String? appliedFingerprint,
-  }) {
+  /// The stats and the fingerprint; the connection state and its reason come only from [VpnSession.view].
+  VpnState2 copyWith({VpnStats? stats, String? appliedFingerprint}) {
     return VpnState2(
-      connectionState: connectionState ?? this.connectionState,
+      connectionState: connectionState,
       stats: stats ?? this.stats,
       error: error,
-      activeSocksPort: activeSocksPort ?? this.activeSocksPort,
-      activeSocksUser: activeSocksUser ?? this.activeSocksUser,
-      activeSocksPassword: activeSocksPassword ?? this.activeSocksPassword,
+      activeSocksPort: activeSocksPort,
+      activeSocksUser: activeSocksUser,
+      activeSocksPassword: activeSocksPassword,
       appliedFingerprint: appliedFingerprint ?? this.appliedFingerprint,
     );
   }
@@ -101,8 +95,6 @@ class VpnNotifier extends Notifier<VpnState2> {
   late final XrayEngine _engine;
 
   StreamSubscription<dynamic>? _eventSub;
-  Timer? _connectTimeout;
-  Timer? _disconnectTimeout;
   Timer? _statsPoller;
   bool _isPinging = false;
   bool _urltestRunning = false;
@@ -155,8 +147,7 @@ class VpnNotifier extends Notifier<VpnState2> {
 
     ref.onDispose(() {
       _eventSub?.cancel();
-      _connectTimeout?.cancel();
-      _disconnectTimeout?.cancel();
+      _deadline?.cancel();
       _statsPoller?.cancel();
     });
 
@@ -191,33 +182,7 @@ class VpnNotifier extends Notifier<VpnState2> {
       ref.read(logServiceProvider.notifier).loadFromEntries(logEntries);
     }
 
-    final vpnState = await _engine.getVpnState();
-    _seenNativeAttempt(vpnState.attempt);
-    if (_staleSnapshot(vpnState.attempt)) return;
-    if (vpnState.state == VpnState.connected && vpnState.socksPort > 0) {
-      if (vpnState.connectedAtMs > 0) {
-        _connectedAt = DateTime.fromMillisecondsSinceEpoch(vpnState.connectedAtMs);
-      }
-      // The pending connect's own session: it has settled.
-      _awaiting = null;
-      _connectTimeout?.cancel();
-      _connectTimeout = null;
-      state = VpnState2(
-        connectionState: VpnState.connected,
-        activeSocksPort: vpnState.socksPort,
-        activeSocksUser: vpnState.socksUser,
-        activeSocksPassword: vpnState.socksPassword,
-      );
-      // ipInfoProvider rebuilds itself: it watches vpnConnectionStateProvider.
-      // ref.refresh from here is a circular dependency (in debug it broke this block).
-      _startStatsPolling();
-      // The VPN was already running before the app started — treat the current
-      // settings as applied (an exact snapshot at connect time isn't available).
-      final s = await ref.read(settingsProvider.future);
-      await ref.read(configProvider.future);
-      await ref.read(availableCoresProvider.future);
-      state = state.copyWith(appliedFingerprint: connectionFingerprint(s, core: ref.read(activeCoreProvider)?.kind));
-    }
+    await syncNativeState();
   }
 
   void _startStatsPolling() {
@@ -267,26 +232,11 @@ class VpnNotifier extends Notifier<VpnState2> {
     switch (type) {
       case 'state':
         final session = NativeSession.parse(event);
-        // A late event of a session a newer connect replaced (its start failing after the user moved on): while
-        // a Flutter connect waits for its outcome, it owns the state. Untagged events — sessions started natively —
-        // and events outside a pending connect (native reconnects, a session surviving a UI restart) apply as before.
-        if (session.attempt > 0 && _awaiting != null && session.attempt != _awaiting) {
+        if (!_applyNative(session)) {
           ref
               .read(logServiceProvider.notifier)
               .addDebug('Ignored ${event['value']} of connect attempt ${session.attempt}');
-          return;
         }
-        if (session.state == VpnState.connected && session.socksPort > 0) {
-          if (session.connectedAtMs > 0) {
-            _connectedAt ??= DateTime.fromMillisecondsSinceEpoch(session.connectedAtMs);
-          }
-          state = state.copyWith(
-            activeSocksPort: session.socksPort,
-            activeSocksUser: session.socksUser,
-            activeSocksPassword: session.socksPassword,
-          );
-        }
-        _onNativeState(session.state, isReconnect: session.reconnecting, error: session.error);
       case 'log':
         final level = event['level'] as String? ?? 'info';
         final msg = event['message'] as String? ?? '';
@@ -382,67 +332,58 @@ class VpnNotifier extends Notifier<VpnState2> {
     };
   }
 
-  /// [error] — the native reason for a failed start (for error/blocked).
-  void _onNativeState(VpnState nativeState, {bool isReconnect = false, String? error}) {
-    // A settled state ends the wait of the pending connect (its own outcome, or an untagged one that replaced it).
-    if (nativeState != VpnState.connecting && nativeState != VpnState.disconnecting) _awaiting = null;
-    if (nativeState == VpnState.connected) {
-      _connectedAt ??= DateTime.now();
-      _connectTimeout?.cancel();
-      _connectTimeout = null;
-      // Start polling as backup for when EventChannel doesn't deliver (app in background)
-      _startStatsPolling();
-    } else if (nativeState == VpnState.disconnected ||
-        nativeState == VpnState.error ||
-        nativeState == VpnState.blocked) {
+  /// The session: the last native snapshot, what Flutter waits for, a failure it found itself. The state the UI sees
+  /// is its [VpnSession.view]; [_setSession] is the only writer of both.
+  VpnSession _session = const VpnSession();
+
+  /// The deadline of what Flutter waits for: 45 s for a connect, 10 s for a disconnect.
+  Timer? _deadline;
+
+  void _setSession(VpnSession next) {
+    _session = next;
+    if (next.pending == null) {
+      _deadline?.cancel();
+      _deadline = null;
+    }
+    final v = next.view;
+    final n = next.native;
+    final connected = v.state == VpnState.connected;
+    final off = v.state == VpnState.disconnected || v.state == VpnState.error || v.state == VpnState.blocked;
+    if (connected) {
+      _connectedAt ??= n.connectedAtMs > 0 ? DateTime.fromMillisecondsSinceEpoch(n.connectedAtMs) : DateTime.now();
+    } else if (off) {
       _connectedAt = null;
       _connectedConfig = null;
-      _connectTimeout?.cancel();
-      _connectTimeout = null;
-      _disconnectTimeout?.cancel();
-      _disconnectTimeout = null;
-    } else if (nativeState == VpnState.connecting) {
-      if (isReconnect) {
-        // Native-triggered reconnect: cancel Flutter-side timeout so it doesn't
-        // force error while the service is mid-reconnect (cycle can exceed 45s).
-        _connectTimeout?.cancel();
-        _connectTimeout = null;
-      } else {
-        _armConnectTimeout();
-      }
-    } else if (nativeState == VpnState.disconnecting) {
-      _disconnectTimeout ??= Timer(const Duration(seconds: 10), () {
-        if (state.connectionState == VpnState.disconnecting) {
-          state = VpnState2(connectionState: VpnState.disconnected);
-          _disconnectTimeout = null;
-        }
-      });
-    }
-
-    if (state.connectionState == nativeState) {
-      // The Flutter timeout could have set error before native sent the reason.
-      if (error != null && (nativeState == VpnState.error || nativeState == VpnState.blocked)) {
-        state = state.copyWith(error: error);
-      }
-      return;
-    }
-
-    if (nativeState == VpnState.disconnected || nativeState == VpnState.error || nativeState == VpnState.blocked) {
-      // Reset stats on disconnect/error/blocked
       _statsPoller?.cancel();
-      state = VpnState2(
-        connectionState: nativeState,
-        // Reset stats including speedHistory
-        stats: const VpnStats(),
-        error: switch (nativeState) {
-          VpnState.error => error ?? state.error ?? L10n.current.vpnConnectError,
-          VpnState.blocked => error,
-          _ => null,
-        },
-      );
-    } else {
-      state = state.copyWith(connectionState: nativeState);
     }
+    state = VpnState2(
+      connectionState: v.state,
+      error: v.error,
+      stats: off ? const VpnStats() : state.stats,
+      activeSocksPort: connected ? n.socksPort : 0,
+      activeSocksUser: connected ? n.socksUser : '',
+      activeSocksPassword: connected ? n.socksPassword : '',
+      appliedFingerprint: off ? null : state.appliedFingerprint,
+    );
+    // Polling is the backup for when the EventChannel doesn't deliver (app in background).
+    if (connected) _startStatsPolling();
+  }
+
+  /// Applies a native snapshot ([poll] — from `getState`); false — dropped ([VpnSession.onNative]).
+  bool _applyNative(NativeSession s, {bool poll = false}) {
+    final next = _session.onNative(s, poll: poll);
+    if (next == null) {
+      // A reconnect report may have dropped the deadline: the pending connect still ends.
+      if (poll) _armConnectDeadline();
+      return false;
+    }
+    if (next.pending is PendingConnect && s.reconnecting) {
+      // A native restart of the pending session can outlast the deadline: the service ends it itself.
+      _deadline?.cancel();
+      _deadline = null;
+    }
+    _setSession(next);
+    return true;
   }
 
   void _handleStats(Map<String, dynamic> event) {
@@ -501,64 +442,44 @@ class VpnNotifier extends Notifier<VpnState2> {
     state = state.copyWith(stats: state.stats.copyWith(speedHistory: _history));
   }
 
-  /// The latest connect attempt; a newer attempt or a disconnect bumps it. An attempt that is no
-  /// longer the latest neither calls native nor writes state.
-  ///
-  /// Starts at the creation time in microseconds, not 0: native keeps the running session's attempt for the life of
-  /// the process, and a notifier recreated with the UI must not reuse a number an older session still reports.
-  int _attempt = DateTime.now().microsecondsSinceEpoch;
+  /// The latest connect attempt's id; a newer attempt or a disconnect replaces it. An attempt that is no longer the
+  /// latest neither calls native nor writes state. Random and compared for equality only: native keeps the running
+  /// session's id for the life of the process, and a notifier recreated with the UI must not reuse it.
+  int _attempt = _newAttempt();
 
-  /// The Flutter connect attempt still waiting for its outcome; null — none. Only while it waits are native state
-  /// events tagged with another attempt dropped: a native reconnect or a session surviving a UI restart must still
-  /// reach the state.
-  int? _awaiting;
+  static final _random = Random.secure();
+  static int _newAttempt() => (_random.nextInt(1 << 32) << 20 | _random.nextInt(1 << 20)) + 1;
 
-  /// Keeps attempt numbers above the one the surviving native session reports (the time seed could repeat after a
-  /// clock change). Not while a connect waits: raising the counter would make that attempt stale.
-  void _seenNativeAttempt(int native) {
-    if (_awaiting == null && native > _attempt) _attempt = native;
-  }
-
-  /// A native snapshot (`getState`) while a Flutter connect waits that isn't about it: another attempt's session,
-  /// or an untagged one — the service before the connect reached it (a resume after the notification-permission
-  /// dialog) or a natively started session the connect replaces. The pending connect owns the state; rejecting a
-  /// snapshot re-arms the connect timeout (a reconnect report may have cancelled it), so the wait still ends.
-  bool _staleSnapshot(int native) {
-    if (_awaiting == null || native == _awaiting) return false;
-    _armConnectTimeout();
-    return true;
-  }
-
-  /// Safety timeout of a connect: if native never confirms, force error after 45 s. Keeps a running timer.
-  void _armConnectTimeout() {
-    _connectTimeout ??= Timer(const Duration(seconds: 45), () {
-      if (state.connectionState == VpnState.connecting) {
-        state = state.copyWith(connectionState: VpnState.error, error: L10n.current.vpnConnectTimeout);
-        _connectTimeout = null;
-        _attempt++; // the timed-out attempt's late answer must not replace the timeout error
-        _awaiting = null;
-        _engine.disconnect().ignore();
-      }
+  /// If native never reports the pending connect's outcome, it fails after 45 s. Keeps a running deadline.
+  void _armConnectDeadline() {
+    _deadline ??= Timer(const Duration(seconds: 45), () {
+      _deadline = null;
+      final p = _session.pending;
+      if (p is! PendingConnect) return;
+      _attempt = _newAttempt(); // the timed-out attempt's late answer must not replace the timeout error
+      _setSession(
+        VpnSession(native: _session.native, failure: SessionFailure(L10n.current.vpnConnectTimeout, p.attempt)),
+      );
+      _engine.disconnect().ignore();
     });
   }
 
   /// [switching] — changing server/settings on a live tunnel: native rebuilds
   /// the session without closing TUN. A refusal before the native call keeps the old connection.
   Future<void> connect({bool switching = false}) async {
-    if (state.isBusy || (state.isConnected && !switching)) return;
-    final attempt = ++_attempt;
-    _awaiting = attempt;
+    // A switch also replaces a session native is still starting.
+    if (state.isDisconnecting || ((state.isConnected || state.isConnecting) && !switching)) return;
+    final attempt = _attempt = _newAttempt();
     bool superseded() => attempt != _attempt;
     void fail(String reason) {
-      if (!superseded()) _failConnect(reason, switching: switching);
+      if (!superseded()) _failConnect(reason, attempt);
     }
 
-    // Update state synchronously — button turns yellow in the same frame as tap
-    state = state.copyWith(connectionState: VpnState.connecting, error: null);
-
-    _connectTimeout?.cancel();
-    _connectTimeout = null;
-    _armConnectTimeout();
+    // The button reacts in the same frame as the tap.
+    _deadline?.cancel();
+    _deadline = null;
+    _setSession(VpnSession(native: _session.native, pending: PendingConnect(attempt)));
+    _armConnectDeadline();
 
     // Notification permission for foreground service (Android 13+) — best-effort
     await Permission.notification.request();
@@ -607,13 +528,7 @@ class VpnNotifier extends Notifier<VpnState2> {
       if (superseded()) return;
       _connectedConfig = config;
       if (switching) _connectedAt = null;
-      // Polling is started in _onNativeState when connected
-      state = state.copyWith(
-        activeSocksPort: options.socksPort,
-        activeSocksUser: credentials.user,
-        activeSocksPassword: credentials.password,
-        appliedFingerprint: connectionFingerprint(settings, core: backend.kind),
-      );
+      state = state.copyWith(appliedFingerprint: connectionFingerprint(settings, core: backend.kind));
     } on PlatformException catch (e) {
       fail(e.message ?? L10n.current.vpnConnectError);
     }
@@ -629,13 +544,10 @@ class VpnNotifier extends Notifier<VpnState2> {
     }
   }
 
-  /// The connection wasn't started. With [switching] native continues the previous session.
-  void _failConnect(String reason, {bool switching = false}) {
-    _awaiting = null;
+  /// The connection of [attempt] wasn't started; a running session (a switch) goes on ([VpnSession.view]).
+  void _failConnect(String reason, int attempt) {
     ref.read(logServiceProvider.notifier).addError(reason);
-    state = state.copyWith(connectionState: switching ? VpnState.connected : VpnState.error, error: reason);
-    _connectTimeout?.cancel();
-    _connectTimeout = null;
+    _setSession(VpnSession(native: _session.native, failure: SessionFailure(reason, attempt)));
   }
 
   /// In TUN mode SOCKS is internal: without a password any app could use it
@@ -677,9 +589,17 @@ class VpnNotifier extends Notifier<VpnState2> {
         case CoreSwitchAction.none:
           break;
         case CoreSwitchAction.disconnect:
+          final session = _session.native.attempt;
           await disconnect();
           ref.read(logServiceProvider.notifier).addError('Core: $unsupported');
-          state = state.copyWith(error: unsupported);
+          // Shown through the stop of that session.
+          _setSession(
+            VpnSession(
+              native: _session.native,
+              pending: _session.pending,
+              failure: SessionFailure(unsupported!, session),
+            ),
+          );
         case CoreSwitchAction.saveQuickConnect:
           await _engine.saveQuickConnect(
             config!,
@@ -704,56 +624,42 @@ class VpnNotifier extends Notifier<VpnState2> {
   Future<void> disconnect() async {
     // A connect still in flight must not dispatch or write state after this — also when native already reported
     // `disconnected` while that connect waited.
-    _attempt++;
-    _awaiting = null;
-    if (state.connectionState == VpnState.disconnected || state.connectionState == VpnState.disconnecting) {
-      return;
-    }
+    _attempt = _newAttempt();
+    if (state.connectionState == VpnState.disconnected || state.isDisconnecting) return;
 
-    // Update state synchronously
-    state = state.copyWith(connectionState: VpnState.disconnecting);
-
-    // Safety timeout — if native never confirms, force disconnected after 10s
-    _disconnectTimeout?.cancel();
-    _disconnectTimeout = Timer(const Duration(seconds: 10), () {
-      if (state.connectionState == VpnState.disconnecting) {
-        state = VpnState2(connectionState: VpnState.disconnected);
-        _disconnectTimeout = null;
-      }
-    });
+    _deadline?.cancel();
+    _setSession(VpnSession(native: _session.native, pending: const PendingDisconnect()));
+    _deadline = Timer(const Duration(seconds: 10), _forceOff);
 
     try {
       await _engine.disconnect();
     } on PlatformException catch (e) {
       ref.read(logServiceProvider.notifier).addError('Disconnect error: ${e.message}');
-      // Force disconnected so the UI doesn't get stuck
-      state = VpnState2(connectionState: VpnState.disconnected);
-      _disconnectTimeout?.cancel();
-      _disconnectTimeout = null;
+      _forceOff();
     }
   }
 
-  /// Syncs Flutter state from native when the app resumes from background.
-  /// Critical: restarts _statsPoller after pauseStatsPolling().
+  /// Native didn't confirm a disconnect: the UI must not stay in `disconnecting`.
+  void _forceOff() {
+    _deadline?.cancel();
+    _deadline = null;
+    if (_session.pending is PendingDisconnect) _setSession(VpnSession(failure: _session.failure));
+  }
+
+  /// Takes native's state at startup and on resume; restarts the stats polling paused in the background. A session
+  /// running without a Flutter connect (tile, boot, a UI restart) is taken as started with the current settings (the
+  /// exact ones aren't known): they become `appliedFingerprint`, so the reconnect banner doesn't show falsely.
   Future<void> syncNativeState() async {
     try {
       final native = await _engine.getVpnState();
-      _seenNativeAttempt(native.attempt);
-      if (_staleSnapshot(native.attempt)) return;
-      if (native.state == VpnState.connected && native.socksPort > 0) {
-        if (native.connectedAtMs > 0) {
-          _connectedAt ??= DateTime.fromMillisecondsSinceEpoch(native.connectedAtMs);
-        }
-        state = state.copyWith(
-          activeSocksPort: native.socksPort,
-          activeSocksUser: native.socksUser,
-          activeSocksPassword: native.socksPassword,
-        );
-      }
-      // We don't know whether this is a user connecting or a native reconnect — don't set
-      // the 45-second timeout that could force error on top of a live
-      // reconnect cycle.
-      _onNativeState(native.state, isReconnect: native.state == VpnState.connecting, error: native.error);
+      if (!ref.mounted) return;
+      _applyNative(native, poll: true);
+      if (!state.isConnected || state.appliedFingerprint != null) return;
+      final s = await ref.read(settingsProvider.future);
+      await ref.read(configProvider.future);
+      await ref.read(availableCoresProvider.future);
+      if (!ref.mounted || !state.isConnected || state.appliedFingerprint != null) return;
+      state = state.copyWith(appliedFingerprint: connectionFingerprint(s, core: ref.read(activeCoreProvider)?.kind));
     } catch (_) {}
   }
 
@@ -787,19 +693,9 @@ class VpnNotifier extends Notifier<VpnState2> {
     if (state.isConnected && config != null && !runsConfig(config)) await reconnectWithNewConfig();
   }
 
-  Future<void> reconnectWithNewConfig() async {
-    // A live tunnel switches natively: the old TUN carries traffic until the new one is up.
-    if (state.isConnected) return connect(switching: true);
-    if (state.isConnecting) {
-      await disconnect();
-      // _disconnectTimeout is 10s; wait up to 12s so the forced-disconnect fires first.
-      for (int i = 0; i < 120; i++) {
-        if (!state.isBusy && !state.isConnected) break;
-        await Future<void>.delayed(const Duration(milliseconds: 100));
-      }
-    }
-    await connect();
-  }
+  /// Native replaces a running or starting session with the new one; a live tunnel keeps TUN as a sink until the new
+  /// one is up.
+  Future<void> reconnectWithNewConfig() => connect(switching: state.isConnected || state.isConnecting);
 
   /// A profile switch changes the settings and the server one after the other: the core resolved
   /// in between belongs to neither profile and must not disconnect the tunnel.
@@ -915,7 +811,7 @@ class VpnNotifier extends Notifier<VpnState2> {
   }
 
   /// Stops the per-second stats polling while the app is in the background —
-  /// on return syncNativeState() → _onNativeState(connected) restarts it.
+  /// on return syncNativeState() restarts it.
   void pauseStatsPolling() {
     _statsPoller?.cancel();
     _statsPoller = null;

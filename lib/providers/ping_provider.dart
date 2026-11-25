@@ -58,6 +58,7 @@ class PingNotifier extends Notifier<bool> {
       }),
     );
     final latencyMap = Map.fromEntries(results);
+    if (!ref.mounted) return;
 
     // Single batch update — one storage write, one state update
     await ref.read(configProvider.notifier).batchUpdatePingResults(latencyMap, now);

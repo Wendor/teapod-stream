@@ -378,10 +378,13 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
 
   /// Refreshes the stale subscriptions when auto-refresh is on: at startup and on resume, after the VPN state sync —
   /// before it a VPN started from the tile isn't known yet, and the download would bypass the tunnel.
+  /// The settings and the configs may still be loading at startup: it waits for both.
   Future<void> refreshStaleIfDue() async {
-    final settings = ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
-    if (settings?.subAutoRefresh != true) return;
-    await refreshStaleSubscriptions(intervalHours: settings!.subAutoRefreshHours);
+    final settings = await ref.read(settingsProvider.future);
+    if (!ref.mounted || !settings.subAutoRefresh) return;
+    await future;
+    if (!ref.mounted) return;
+    await refreshStaleSubscriptions(intervalHours: settings.subAutoRefreshHours);
   }
 
   Future<void> refreshStaleSubscriptions({int intervalHours = 6}) async {

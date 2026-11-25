@@ -16,6 +16,8 @@ import 'package:teapodstream/core/services/log_service.dart';
 import 'package:teapodstream/core/services/subscription_service.dart';
 import 'package:teapodstream/providers/config_provider.dart';
 import 'package:teapodstream/providers/settings_provider.dart';
+import 'package:teapodstream/core/models/app_settings.dart';
+import 'package:teapodstream/providers/profile_provider.dart';
 
 import '../helpers/local_server.dart';
 
@@ -1023,6 +1025,22 @@ void main() {
 
       await n().refreshStaleSubscriptions(intervalHours: 6);
       expect(server.paths, ['/stale', '/never'], reason: 'fresh after refresh, failed one waits an hour');
+    });
+
+    test('refreshStaleIfDue follows subAutoRefresh and waits for the settings to load', () async {
+      await boot(subs: [_sub('never', url: server.url('/never'))]);
+      server.handler = (r) async {
+        r.response.write(_trojan('x.example', 'X'));
+        await r.response.close();
+      };
+      await n().refreshStaleIfDue();
+      expect(server.paths, isEmpty, reason: 'auto-refresh is off by default');
+
+      await c.read(settingsProvider.notifier).save(const AppSettings(subAutoRefresh: true));
+      c.invalidate(profileProvider); // the settings load again, as at startup
+      expect(c.read(settingsProvider).isLoading, isTrue);
+      await n().refreshStaleIfDue();
+      expect(server.paths, ['/never']);
     });
   });
 }

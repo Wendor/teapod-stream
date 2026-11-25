@@ -19,6 +19,7 @@ import '../core/cores/core_resolver.dart';
 import '../core/cores/engine_options.dart';
 import '../core/cores/core_switch.dart';
 import 'core_provider.dart';
+import 'geo_provider.dart';
 import 'settings_provider.dart';
 import 'config_provider.dart';
 import 'profile_provider.dart';
@@ -589,8 +590,12 @@ class VpnNotifier extends Notifier<VpnState2> {
     final settings = ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null) ?? const AppSettings();
 
     await ref.read(availableCoresProvider.future);
+    // The resolver weighs a core's limits on the geosite rules.
+    await _loadGeosite();
     if (superseded()) return;
-    final resolution = ref.read(coreResolverProvider).resolve(config);
+    final resolver = ref.read(coreResolverProvider);
+    final geosite = resolver.geosite;
+    final resolution = resolver.resolve(config);
     final backend = resolution.backend;
     if (backend == null) return fail(resolution.reason!);
     _logCoreChoice(resolution);
@@ -602,10 +607,12 @@ class VpnNotifier extends Notifier<VpnState2> {
       backend,
       socksPort: _socksPort(settings),
       credentials: credentials,
+      geosite: geosite,
     );
     final check = backend.checkOptions(config, options);
     if (check.blocking != null) return fail(check.blocking!);
-    for (final w in check.warnings) {
+    final missing = missingGeositeCodes(settings.routing, geosite);
+    for (final w in [if (missing.isNotEmpty) L10n.current.geositeMissing(missing.join(', ')), ...check.warnings]) {
       ref.read(logServiceProvider.notifier).addWarning(w, source: 'core');
     }
 
@@ -623,6 +630,16 @@ class VpnNotifier extends Notifier<VpnState2> {
       );
     } on PlatformException catch (e) {
       fail(e.message ?? L10n.current.vpnConnectError);
+    }
+  }
+
+  /// Waits for geosite.dat's index ([CoreResolver.geosite]); an unreadable file is logged and the rules
+  /// go unchecked.
+  Future<void> _loadGeosite() async {
+    try {
+      await ref.read(geositeIndexProvider.future);
+    } catch (e) {
+      ref.read(logServiceProvider.notifier).addError('geosite.dat: $e');
     }
   }
 
@@ -687,6 +704,7 @@ class VpnNotifier extends Notifier<VpnState2> {
               backend,
               socksPort: _socksPort(settings),
               credentials: _socksCredentials(settings),
+              geosite: ref.read(coreResolverProvider).geosite,
             ),
           );
         case CoreSwitchAction.clearQuickConnect:

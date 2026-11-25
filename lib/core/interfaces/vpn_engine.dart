@@ -1,4 +1,6 @@
+import '../constants/xray_defaults.dart';
 import '../models/vpn_log_entry.dart';
+import '../services/geosite_index.dart';
 import '../models/dns_config.dart';
 import '../models/heartbeat_settings.dart';
 import '../models/routing_settings.dart';
@@ -37,6 +39,12 @@ class VpnEngineOptions {
   final MuxSettings mux;
   final HeartbeatSettings heartbeat;
 
+  /// The geosite codes ad blocking matches.
+  final List<String> adBlockCodes;
+
+  /// geosite.dat's index; null when unknown.
+  final GeositeIndex? geosite;
+
   const VpnEngineOptions({
     required this.socksPort,
     required this.socksUser,
@@ -65,6 +73,8 @@ class VpnEngineOptions {
     this.noise = const NoiseSettings(),
     this.mux = const MuxSettings(),
     this.heartbeat = const HeartbeatSettings(),
+    this.adBlockCodes = XrayDefaults.adBlockCodes,
+    this.geosite,
   });
 
   /// Fields the core may replace with allowed values.
@@ -75,6 +85,7 @@ class VpnEngineOptions {
     FragmentSettings? fragment,
     NoiseSettings? noise,
     MuxSettings? mux,
+    List<String>? adBlockCodes,
   }) => VpnEngineOptions(
     socksPort: socksPort,
     socksUser: socksUser,
@@ -103,5 +114,7 @@ class VpnEngineOptions {
     noise: noise ?? this.noise,
     mux: mux ?? this.mux,
     heartbeat: heartbeat,
+    adBlockCodes: adBlockCodes ?? this.adBlockCodes,
+    geosite: geosite,
   );
 }

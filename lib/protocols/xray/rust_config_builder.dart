@@ -2,12 +2,14 @@
 import 'dart:convert';
 import 'dart:math';
 
+import '../../core/constants/routing_defaults.dart';
 import '../../core/interfaces/vpn_engine.dart';
 import '../../core/models/routing_settings.dart';
 import '../../core/models/vpn_config.dart';
 import '../../core/models/xray_tuning.dart';
 import 'vless_parser.dart';
 import 'xray_config_builder.dart';
+import '../../core/services/geosite_index.dart';
 import '../../l10n/l10n.dart';
 
 /// Profiles xray-rust 0.8.1 runs through Android TUN: VLESS, Trojan, VMess
@@ -217,13 +219,34 @@ class RustConfigBuilder {
 
   static bool _isUuid(String value) => _uuid.hasMatch(value.trim());
 
-  /// xray-rust 0.7.0 caps a config at 250,000 domain matchers
-  /// (MAX_CONFIG_DOMAIN_MATCHERS), shared by routing and DNS-outbound rules, and
-  /// expands each geosite entry into one matcher. Ad blocking alone takes about
-  /// 187k (category-ads-all 186,402 + win-spy 327 in the bundled Loyalsoldier
-  /// 202609082347), so a GeoSite rule with one of these (cn 111,168,
-  /// china-list 110,433) cannot be parsed and the VPN would not start.
-  static const largeGeositeCodes = {'cn', 'china-list', 'category-ads-all'};
+  /// xray-rust caps a config at 250,000 domain matchers (MAX_CONFIG_DOMAIN_MATCHERS), shared by routing
+  /// and DNS-outbound rules, and expands each geosite domain into one matcher.
+  static const maxDomainMatchers = 250000;
+
+  /// The geosite codes an xray-rust config built from [o] references.
+  static List<String> geositeCodes(VpnEngineOptions o) => [
+    if (o.routing.isActive && o.routing.geositeEnabled) ...o.routing.geositeCodes,
+    if (o.routing.adBlockEnabled) ...o.adBlockCodes,
+  ];
+
+  /// The domain matchers the routing rules of [o] take from the budget: the domains of [geositeCodes] as
+  /// xray-rust gets them (0 without the index), and the literal domains (zones, sites, Russian services,
+  /// the `onlySelected` diagnostic hosts). A `code@attr` selector counts its
+  /// whole entry: an upper bound, so a config over it falls to the next core rather than failing to start.
+  static int domainMatchers(VpnEngineOptions o) {
+    final r = o.routing;
+    return geositeCodes(o).fold(0, (sum, code) => sum + (o.geosite?[code]?.rustDomains ?? 0)) +
+        (r.isActive && r.domainEnabled ? r.domainZones.length : 0) +
+        (r.isActive && r.sitesEnabled ? r.sites.length : 0) +
+        (r.isActive && r.ruServicesEnabled ? RoutingDefaults.ruServicesDomains.length : 0) +
+        XrayConfigBuilder.diagnosticRules(o).fold(0, (sum, rule) => sum + ((rule['domain'] as List?)?.length ?? 0));
+  }
+
+  /// The referenced codes xray-rust gets trimmed to its per-entry limits ([GeositeIndex.rustFile]).
+  static List<String> trimmedGeosite(VpnEngineOptions o) => {
+    for (final code in geositeCodes(o))
+      if (o.geosite?[code] case final e? when e.rustDomains < e.domains) GeositeIndex.baseCode(code),
+  }.toList();
 
   static String get _insecureReason => L10n.current.rustInsecure;
 
@@ -300,12 +323,7 @@ class RustConfigBuilder {
             options.routing.ruServicesEnabled)) {
       throw FormatException(L10n.current.rustSniffing);
     }
-    if (options.routing.adBlockEnabled &&
-        options.routing.isActive &&
-        options.routing.geositeEnabled &&
-        options.routing.geositeCodes.any((c) => largeGeositeCodes.contains(c.trim().toLowerCase()))) {
-      throw FormatException(L10n.current.rustAdBlockLimit);
-    }
+    if (domainMatchers(options) > maxDomainMatchers) throw FormatException(L10n.current.rustGeositeLimit);
 
     // Composed from the Go builder's parts by name; its policy, dialer-out, SOCKS UDP rule and catch-all
     // aren't taken. Native TUN traffic never uses SOCKS.
@@ -596,7 +614,22 @@ class RustConfigBuilder {
     }
   }
 
-  static String buildJson(VpnConfig config, VpnEngineOptions options) => jsonEncode(build(config, options));
+  static String buildJson(VpnConfig config, VpnEngineOptions options) =>
+      jsonEncode(_rustGeosite(build(config, options), options.geosite?.rustFile));
+
+  /// xray-rust refuses all of geosite.dat for one entry over its limits: rules then read the copy with
+  /// such entries trimmed ([GeositeIndex.rustFile]) as `ext:<file>:<code>`. Only domain matcher lists
+  /// (`domain` / `domains`) are rewritten; credentials and other strings stay as they are.
+  static Object? _rustGeosite(Object? node, String? file, {bool domains = false}) => file == null
+      ? node
+      : switch (node) {
+          final String s when domains && s.startsWith('geosite:') => 'ext:$file:${s.substring('geosite:'.length)}',
+          final Map<String, dynamic> m => m.map(
+            (k, v) => MapEntry(k, _rustGeosite(v, file, domains: k == 'domain' || k == 'domains')),
+          ),
+          final List<dynamic> l => [for (final v in l) _rustGeosite(v, file, domains: domains)],
+          _ => node,
+        };
 
   /// Candidate check for switchConfig (`XrayEngine.measureOutbound`): the
   /// profile's proxy outbound, exactly as [build] writes it for the VPN, in a

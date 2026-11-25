@@ -1,6 +1,7 @@
 import '../models/core_kind.dart';
 import '../models/vpn_config.dart';
 import '../models/app_settings.dart';
+import '../services/geosite_index.dart';
 import 'core_backend.dart';
 import 'engine_options.dart';
 import '../../l10n/l10n.dart';
@@ -41,7 +42,10 @@ class CoreResolver {
   final Set<CoreKind> available;
   final CoreBackend Function(CoreKind) backendFor;
 
-  CoreResolver(this.settings, this.available, this.backendFor);
+  /// geosite.dat's index: a core's limits on the rules count in the choice.
+  final GeositeIndex? geosite;
+
+  CoreResolver(this.settings, this.available, this.backendFor, {this.geosite});
 
   /// The resolver is recreated on settings/core changes and VpnConfig is immutable — the result
   /// is cached per instance: config list rows call resolve on every rebuild.
@@ -78,6 +82,6 @@ class CoreResolver {
     if (settings.disabledCores.contains(kind)) return disabledReason;
     final backend = backendFor(kind);
     return backend.checkConfig(config) ??
-        backend.checkOptions(config, buildEngineOptions(settings, config, backend)).blocking;
+        backend.checkOptions(config, buildEngineOptions(settings, config, backend, geosite: geosite)).blocking;
   }
 }

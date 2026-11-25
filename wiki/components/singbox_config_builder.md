@@ -18,7 +18,8 @@
   (`IpLookupSource.hosts`) through the proxy; `final` is `direct` for `onlySelected`, otherwise `proxy`.
 - DNS: `dns-main` by `DnsType` (`detour: proxy` in proxy mode), `dns-local` — the system resolver and
   `default_domain_resolver`. SSH and Naive carry no UDP, so in proxy mode a UDP `dns-main` becomes TCP.
-- Ad block: DNS rule `predefined NOERROR` for `geosite-category-ads-all` / `geosite-win-spy`.
+- Ad block: DNS rule `predefined NOERROR` for the rule-sets of `VpnEngineOptions.adBlockCodes`
+  (`geosite-category-ads-all` / `geosite-win-spy`, those present in geosite.dat).
 - Geo: local rule-sets `geoip-<code>` / `geosite-<code>` (`<tag>.srs`, lower case); teapod-core builds them from the
   `.dat` files (`geoconv`). The Russian services list comes from `RoutingDefaults.ruServicesDomains` (`domain:` →
   `domain_suffix`, `full:` → `domain`).

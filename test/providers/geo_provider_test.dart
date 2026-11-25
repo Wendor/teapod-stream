@@ -48,6 +48,14 @@ void main() {
     return c.read(geoProvider);
   }
 
+  test('an unreadable geosite.dat fails the index at once, without retries', () async {
+    File('${dir.path}/geosite.dat').writeAsStringSync('not a geosite file');
+    await expectLater(
+      c.read(geositeIndexProvider.future).timeout(const Duration(seconds: 3)),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
   group('check', () {
     test('missing files ask native to extract the bundled copy', () async {
       expect(await start(), isA<GeoMissing>());

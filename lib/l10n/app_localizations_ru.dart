@@ -1335,8 +1335,8 @@ class AppLocalizationsRu extends AppLocalizations {
   String get rustSniffing => 'Включи определение доменов для GeoSite и доменных правил.';
 
   @override
-  String get rustAdBlockLimit =>
-      'Блокировка рекламы (~187 тыс. доменов) вместе с большой категорией GeoSite (cn, china-list, category-ads-all) превышает лимит Rust-ядра в 250 тыс. доменных правил. Отключи одно из двух.';
+  String get rustGeositeLimit =>
+      'Выбранные категории GeoSite превышают лимит ядра xray-rust в 250 тыс. доменных правил. Убери часть из них или выбери другое ядро.';
 
   @override
   String get rustFragmentPackets =>
@@ -1517,7 +1517,17 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get rustAdBlockDropped =>
-      'Блокировка рекламы вместе с большой категорией GeoSite превышает лимит ядра xray-rust в 250 тыс. доменных правил — блокировка рекламы не применяется.';
+      'Блокировка рекламы вместе с выбранными категориями GeoSite превышает лимит ядра xray-rust в 250 тыс. доменных правил — блокировка рекламы не применяется.';
+
+  @override
+  String rustGeositeTrimmed(String codes) {
+    return 'GeoSite $codes: больше лимита ядра xray-rust на одну категорию (32 МБ или 200 тыс. доменов) — применяются только первые домены в пределах лимита.';
+  }
+
+  @override
+  String geositeMissing(String codes) {
+    return 'В geosite.dat нет $codes — эти правила не применяются.';
+  }
 
   @override
   String rustFragmentDropped(String reason) {

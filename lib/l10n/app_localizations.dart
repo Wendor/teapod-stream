@@ -2414,11 +2414,11 @@ abstract class AppLocalizations {
   /// **'Enable domain sniffing for GeoSite and domain rules.'**
   String get rustSniffing;
 
-  /// No description provided for @rustAdBlockLimit.
+  /// No description provided for @rustGeositeLimit.
   ///
   /// In en, this message translates to:
-  /// **'Ad blocking (~187k domains) together with a large GeoSite category (cn, china-list, category-ads-all) exceeds the Rust core\'s limit of 250k domain rules. Turn off one of the two.'**
-  String get rustAdBlockLimit;
+  /// **'The selected GeoSite categories exceed the xray-rust core\'s limit of 250k domain rules. Remove some of them or use another core.'**
+  String get rustGeositeLimit;
 
   /// No description provided for @rustFragmentPackets.
   ///
@@ -2729,8 +2729,20 @@ abstract class AppLocalizations {
   /// No description provided for @rustAdBlockDropped.
   ///
   /// In en, this message translates to:
-  /// **'Ad blocking together with a large GeoSite category exceeds the xray-rust core\'s limit of 250k domain rules — ad blocking is not applied.'**
+  /// **'Ad blocking together with the selected GeoSite categories exceeds the xray-rust core\'s limit of 250k domain rules — ad blocking is not applied.'**
   String get rustAdBlockDropped;
+
+  /// No description provided for @rustGeositeTrimmed.
+  ///
+  /// In en, this message translates to:
+  /// **'GeoSite {codes}: over the xray-rust core\'s limit for one category (32 MB or 200k domains) — only its first domains within the limit are applied.'**
+  String rustGeositeTrimmed(String codes);
+
+  /// No description provided for @geositeMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'geosite.dat has no {codes} — these rules are not applied.'**
+  String geositeMissing(String codes);
 
   /// No description provided for @rustFragmentDropped.
   ///

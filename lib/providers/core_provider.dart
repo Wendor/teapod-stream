@@ -8,6 +8,7 @@ import '../protocols/xray/xray_go_backend.dart';
 import '../protocols/xray/xray_rust_backend.dart';
 import '../core/models/app_settings.dart';
 import 'config_provider.dart';
+import 'geo_provider.dart';
 import 'settings_provider.dart';
 import '../core/services/platform_service.dart';
 
@@ -24,6 +25,7 @@ final coreResolverProvider = Provider<CoreResolver>(
     ref.watch(settingsProvider).value ?? const AppSettings(),
     ref.watch(availableCoresProvider).value ?? CoreKind.values.toSet(),
     coreBackendFor,
+    geosite: ref.watch(geositeIndexProvider).value,
   ),
 );
 

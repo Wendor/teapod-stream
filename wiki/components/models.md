@@ -56,8 +56,8 @@ File: `routing_settings.dart`.
 `direction` (`global` / `bypass` / `onlySelected`) decides where matched traffic goes (`selectedOut`) and where the
 rest goes. Matchers, each with its own switch: `bypassLocal` (`geoip:private` → direct), `domainZones`
 (`domain:ru`), `geositeCodes`, `geoCodes` (`geoip:xx`), `sites`, `ruServicesEnabled` (a built-in list of Russian
-services). `adBlockEnabled` works in DNS, not routing: `geosite:category-ads-all` and `geosite:win-spy` are answered
-locally. Rule order and per-core translation: [xray_config_builder](xray_config_builder.md),
+services). `adBlockEnabled` works in DNS, not routing: `geosite:category-ads-all` and `geosite:win-spy` (those
+present in geosite.dat) are answered locally. Rule order and per-core translation: [xray_config_builder](xray_config_builder.md),
 [singbox_config_builder](singbox_config_builder.md).
 
 ## Other models

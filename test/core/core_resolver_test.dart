@@ -5,6 +5,8 @@ import 'package:teapodstream/core/models/core_kind.dart';
 import 'package:teapodstream/core/models/protocol_settings.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/core/models/app_settings.dart';
+import 'package:teapodstream/core/models/routing_settings.dart';
+import 'package:teapodstream/core/services/geosite_index.dart';
 import 'package:teapodstream/protocols/xray/xray_rust_backend.dart';
 import 'package:teapodstream/providers/core_provider.dart';
 
@@ -89,5 +91,29 @@ void main() {
     );
     expect(r.usable, [CoreKind.singBox]);
     expect(r.primary, CoreKind.singBox);
+  });
+
+  test('a core whose geosite limits the rules exceed is skipped for the next one', () {
+    const routing = RoutingSettings(
+      direction: RoutingDirection.bypass,
+      geositeEnabled: true,
+      geositeCodes: ['cn', 'china-list', 'ru-blocked'],
+    );
+    const geosite = GeositeIndex({
+      'cn': (domains: 110258, rustDomains: 110258),
+      'china-list': (domains: 109486, rustDomains: 109486),
+      'ru-blocked': (domains: 73607, rustDomains: 73607),
+    });
+    CoreResolver resolver(GeositeIndex? geosite) => CoreResolver(
+      const AppSettings(coreOrder: _rustFirst, routing: routing),
+      _all,
+      coreBackendFor,
+      geosite: geosite,
+    );
+    final r = resolver(geosite).resolve(_cfg());
+    expect(r.backend?.kind, CoreKind.xrayGo);
+    expect(r.verdicts.first.reason, contains('250k'));
+    // Without the index nothing is known about the rules' size.
+    expect(resolver(null).resolve(_cfg()).backend?.kind, CoreKind.xrayRust);
   });
 }

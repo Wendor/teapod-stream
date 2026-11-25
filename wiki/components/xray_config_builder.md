@@ -49,7 +49,8 @@ One SOCKS5 inbound `socks-in` on `127.0.0.1:socksPort`, `auth: password` when cr
 - **Bootstrap.** The DNS module can't resolve its own DoH/DoT hostname. Presets use `hosts`
   (`cloudflare-dns.com → 1.1.1.1`); a custom hostname gets a UDP `8.8.8.8` entry filtered to that hostname only.
   Not added for an IP address.
-- Ad block (any routing direction): `geosite:category-ads-all` + `geosite:win-spy` → `rcode://success`.
+- Ad block (any routing direction): `VpnEngineOptions.adBlockCodes` (`category-ads-all`, `win-spy`, those present in
+  geosite.dat) → `rcode://success`.
 
 ### Proxy outbound
 
@@ -131,6 +132,12 @@ Shown to the user on Home: their DNS settings and ad block via DNS don't apply; 
   first outbound: `direct` for `onlySelected`, else `proxy`), strips `sockopt` from the proxy outbound, and converts
   `udphop` back to `quicParams.udpHop`. `buildProbe` makes a password-protected probe inbound for latency
   measurement.
+- **Rust geosite limits** (xray-rust 0.10, read from the [geosite index](geo_provider.md#geosite-index)): a code
+  over 32 MiB or 200,000 domains comes trimmed from `geosite-rust.dat`, with a warning; a config holds at most
+  250,000 domain matchers, one per geosite domain (trimmed codes count as trimmed; a `code@attr` selector
+  counts its whole entry) and one per literal domain (zones, sites, Russian services, `onlySelected` diagnostic hosts) — over it ad blocking is dropped
+  first with a warning, and the user's codes alone over it block xray-rust: `CoreResolver` (which holds the index)
+  picks the next core. Without the index (no `geosite.dat`) nothing is checked.
 
 ## Related
 

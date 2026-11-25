@@ -36,9 +36,16 @@ class _CoreSheet extends ConsumerWidget {
     final resolver = ref.watch(coreResolverProvider);
     final r = resolver.resolve(config);
     final chosen = r.backend;
+    final geosite = resolver.geosite;
+    final missing = missingGeositeCodes(resolver.settings.routing, geosite);
     final warnings = chosen == null
         ? const <String>[]
-        : chosen.checkOptions(config, buildEngineOptions(resolver.settings, config, chosen)).warnings;
+        : [
+            if (missing.isNotEmpty) context.l10n.geositeMissing(missing.join(', ')),
+            ...chosen
+                .checkOptions(config, buildEngineOptions(resolver.settings, config, chosen, geosite: geosite))
+                .warnings,
+          ];
     final pinOptions = [
       for (final v in r.verdicts)
         if (v.reason == null || v.kind == config.core) v.kind,

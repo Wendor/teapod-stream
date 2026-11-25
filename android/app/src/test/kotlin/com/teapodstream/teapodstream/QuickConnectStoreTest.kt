@@ -39,6 +39,19 @@ class QuickConnectStoreTest {
     }
 
     @Test
+    fun aLoginThatCantBeRemovedFailsTheClear() {
+        store.saveCredentials(2080, "u", "p")
+        dir.setWritable(false)
+        try {
+            assertTrue(runCatching { store.clearCredentials() }.isFailure)
+        } finally {
+            dir.setWritable(true)
+        }
+        store.clearCredentials()
+        assertNull(store.credentials())
+    }
+
+    @Test
     fun aFailedWriteLeavesNoTempFile() {
         // A non-empty directory under the target name: the rename fails.
         File(dir, QuickConnectStore.CONFIG).mkdir()

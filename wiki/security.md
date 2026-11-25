@@ -45,8 +45,8 @@ says how, and what counts.
 | SOCKS user / password | `socks_user_v2`, `socks_password_v2` (encrypted) | SENSITIVE |
 | HWID cache | `cached_device_id`, `cached_device_info` (encrypted) | SENSITIVE |
 | Other settings (ports, DNS, split tunneling, kill switch, …) | SharedPreferences | PUBLIC |
-| Core config | `filesDir/xray_config.json` | SECRET, process-private |
-| Quick-reconnect parameters | `filesDir/last_connection_meta.json` (no SOCKS credentials), `socks_creds.json`, `user_disconnected.flag` — all through `QuickConnectStore` | SENSITIVE, process-private |
+| Core config | `filesDir/xray_config.json` through `QuickConnectStore` | SECRET, process-private |
+| Quick-reconnect parameters | `filesDir/last_connection_meta.json` (no SOCKS credentials), `socks_creds.json`, `tile_config_name.txt` (the config name the tile shows), `user_disconnected.flag` — all through `QuickConnectStore` | SENSITIVE, process-private |
 | Logs | `filesDir/vpn_log.txt` (+ `.prev`) | SENSITIVE: core warnings and errors carry server and destination addresses, `debug` adds access lines; masked on export |
 | Exported log | `cacheDir/teapod_log.txt` | masked, overwritten by the next export |
 

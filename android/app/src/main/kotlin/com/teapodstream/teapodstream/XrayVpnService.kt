@@ -859,7 +859,9 @@ class XrayVpnService : VpnService() {
             if (!core.borrowsTunFd) core.stop()
 
             // Clean up saved credentials on explicit disconnect
-            if (explicit) store.clearCredentials()
+            if (explicit) {
+                try { store.clearCredentials() } catch (e: Exception) { log("warning", "clearing socks_creds: ${e.message}") }
+            }
 
             if (keepTunAsSink) {
                 if (reconnecting) {

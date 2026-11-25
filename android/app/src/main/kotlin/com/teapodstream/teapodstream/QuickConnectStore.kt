@@ -56,8 +56,10 @@ internal class QuickConnectStore(private val dir: File) {
         JSONObject().put("port", port).put("user", user).put("pass", password).toString(),
     )
 
+    /** Throws when the file stays: a caller replacing the config must not keep a login that doesn't match it. */
     fun clearCredentials() {
-        File(dir, CREDENTIALS).delete()
+        val file = File(dir, CREDENTIALS)
+        if (!file.delete() && file.exists()) throw java.io.IOException("can't remove $CREDENTIALS")
     }
 
     /** The name of the config a quick start connects (the tile shows it); null — none. */

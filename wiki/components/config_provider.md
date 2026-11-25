@@ -48,6 +48,10 @@ subscription get **new ids on every download**, so the refresh carries over:
   vanished — the first fetched one; the subscription mode is left as it is;
 - the subscription name: `name ?? existing ?? profile-title ?? host` — a user rename survives auto-refresh.
 
+The fresh state decides which subscription the download belongs to. A refresh or a `replaceId` update whose
+subscription was removed during the download applies nothing — a removed subscription doesn't come back. A new URL
+that was added meanwhile (another add, an import) is updated under that subscription's id — no duplicate.
+
 `replaceId` changes the URL of an existing subscription; on a download error the old one stays intact. A
 self-signed certificate raises `UntrustedCertificateException`; after the user confirms, the call is repeated with
 `pinnedCertDer` = the DER of the certificate shown, which is stored as the pin (trust on first use); on later

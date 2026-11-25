@@ -13,7 +13,8 @@ back. It keeps working when the Flutter UI is gone (tile, boot, Tasker, service 
 | `SessionSnapshot.kt` | `SessionState` (the state names Flutter sees) and the immutable `SessionSnapshot`: its map for Flutter, the itest marker, the pure transition `moved` |
 | `core/` | `VpnCore` and its implementations (below), `TunOwnerPolicy`, `SocksCredentials`, `ProxyRedirect` |
 | `VpnEventStreamHandler.kt` | EventChannel (`com.teapodstream/vpn/events`) singleton |
-| `ConnectionParams.kt` | the session parameters (everything but the config and the SOCKS login): one JSON form for the `ACTION_CONNECT` Intent (`EXTRA_PARAMS`) and `last_connection_meta.json`; `fromJson` holds every default and limit (MTU 576–9000, heartbeat threshold 1–10), `fromArgs` maps Flutter's `connect` / `saveQuickConnect` arguments through it |
+| `ConnectionParams.kt` | the session parameters (everything but the config and the SOCKS login): one JSON form for the `ACTION_CONNECT` Intent (`EXTRA_PARAMS`) and the stored parameters; `fromJson` holds every default and limit (MTU 576–9000, heartbeat threshold 1–10), `fromArgs` maps Flutter's `connect` / `saveQuickConnect` arguments through it |
+| `QuickConnectStore.kt` | the quick-reconnect data in `filesDir`, its only reader and writer: the core config (`xray_config.json`), `ConnectionParams` (`last_connection_meta.json`), the SOCKS login (`socks_creds.json`), the tile's config name (`tile_config_name.txt`) and the user-off flag (`user_disconnected.flag`); writes go through a temp file and a rename. `quickStart()` builds the `StartRequest` (config, params, SOCKS login — the stored one, else read from the config — the Flutter `attempt` it answers, 0 for a native start, `reconnect` and, for a Flutter connect, the tile's config name) that `startVpn(request)` takes |
 | `VpnTileService.kt` | Quick Settings tile |
 | `BootReceiver.kt` | auto-start after boot (`autoStartOnBoot`, a saved config, not after an explicit disconnect) |
 | `VpnCommandReceiver.kt` | Tasker/automation broadcasts `com.teapodstream.CONNECT` / `DISCONNECT`; ignored unless `automationEnabled` |
@@ -51,16 +52,24 @@ connect or a disconnect was received after it, a quick start also when a newer q
 after `onRevoke()` (which stops outside the queue) or a disconnect set `userRequestedDisconnect`; it reports
 `disconnected` under its attempt instead.
 
-- **`ACTION_CONNECT`** (from Flutter): parameters → `ConnectionParams.save`; under `sessionLock`, before the old session
+- **`ACTION_CONNECT`** (from Flutter): only the notification type is taken before the queue (when no session runs);
+  `startVpn(StartRequest)` takes the parameters (`useParams`: the heartbeat, tethering and notification settings are
+  read from them) once it owns the session, and stores them, the config it runs and its SOCKS login together, then the
+  tile's config name
+  (`QuickConnectStore.save`: under a lock shared with the activity's save and the quick-start read; the old login and
+  config are removed first, so an interrupted save leaves nothing to quick-start rather than a mix of two connections; a failed save is logged
+  and costs only the quick start, not the session). Under `sessionLock`, before the old session
   stops, `sessionAttempt` takes Flutter's connect attempt (`EXTRA_ATTEMPT`), and every snapshot the session
   publishes carries it as `attempt` (quick starts reset it to 0 — untagged); if a session is running this is a **hot
   switch** — `stopVpn(reconnecting=true)` keeps TUN as a sink until the new session is up, no leak window.
-- **`ACTION_CONNECT_QUICK`** (tile, the `blocked` notification, boot, `reconnectInternal`, START_STICKY restart): parameters from
-  `last_connection_meta.json`. Ignored while a session is running. Without a config or VPN permission
-  (`abortQuickConnect`) the state is finished properly: kill switch → `blocked`, otherwise TUN is closed →
+- **`ACTION_CONNECT_QUICK`** (tile, the `blocked` notification, boot, `reconnectInternal`) and the START_STICKY restart
+  start from one request, `QuickConnectStore.quickStart()`. Ignored while a session is running; the restart also
+  not after the user turned the VPN off. Without a config or VPN permission
+  (`abortQuickConnect`) the state is finished properly: the kill switch of the session holding the sink (not the
+  stored params, which a failed save may have removed) → `blocked`, otherwise TUN is closed →
   `disconnected`, and the app opens.
-- **`ACTION_DISCONNECT`**: `userRequestedDisconnect` (+ `user_disconnected.flag` on disk, so a restarted process doesn't
-  reconnect), then in the queue: stop, close TUN (also an existing kill-switch sink) and post `disconnected` to the
+- **`ACTION_DISCONNECT`**: `setUserOff(true)` — `userRequestedDisconnect` and the store's flag on disk, so a restarted
+  process doesn't reconnect; then in the queue: stop, close TUN (also an existing kill-switch sink) and post `disconnected` to the
   main thread — skipped when a connect or a quick start arrived meanwhile (that session owns the state). If the queued
   stop hasn't finished in 5 s, a supervisor closes the sink and reports anyway. Its events carry the attempt of the
   last `ACTION_CONNECT` received before it (`requestedAttempt`): a connect Flutter still waits
@@ -95,12 +104,17 @@ phantom connection, and the heartbeat's own tun2socks check stays as a fallback.
 
 ## Kill switch and reconnect
 
-- **TUN fd reuse.** `stopVpn(reconnecting=true)` keeps TUN open, and `startVpn(isReconnect=true)` passes the **same fd**
-  to the core instead of a new `establish()` (tun2socks works on its own `dup`). No new VPN network agent, so no
-  system "VPN active" notification on Android 15/16 and no connectivity flap for apps; traffic during the reconnect
-  goes into the sink — no leak even without the kill switch. A user `ACTION_CONNECT` always establishes anew.
+- **TUN fd reuse.** `stopVpn(reconnecting=true)` keeps TUN open, and `startVpn` of a request with `reconnect = true`
+  whose `ConnectionParams` are the ones the TUN was built with (`tunParams`) passes the **same fd** to the core
+  instead of a new `establish()` (tun2socks works on its own `dup`). No new VPN network agent, so no system "VPN
+  active" notification on Android 15/16 and no connectivity flap for apps; traffic during the reconnect goes into the
+  sink — no leak even without the kill switch. With other params (a failed manual connect stored new ones) the
+  reconnect establishes a new TUN, which replaces the old fd as the sink. A user `ACTION_CONNECT` always establishes
+  anew.
 - **Retries.** A failed reconnect retries `CONNECT_QUICK` up to `MAX_RECONNECT_ATTEMPTS` (3) with linear backoff
-  (5 s × attempt); the old fd survives the retries. Final failure with kill switch → sink stays, state `blocked`.
+  (5 s × attempt). A retry keeps the TUN held at the failure only while the stored params equal `tunParams`;
+  otherwise it establishes a new TUN and closes the held one. Final failure with kill switch → sink stays, state
+  `blocked`.
   A failed manual connect keeps a sink only if there already was one — a broken config must not lock the network.
 - **`blocked`.** The kill switch keeps TUN with `setUnderlyingNetworks(emptyArray())` after an unexpected drop: traffic
   enters TUN and nobody reads it. Notification and tile show it; tapping the tile or the notification's Connect
@@ -184,8 +198,8 @@ UI catches up. It only sends: the tile and the notification follow the service's
 
 ## Tile
 
-Disconnected: label "TeapodStream", subtitle = the config the tile will connect (`tile_config_name` in `vpn_prefs`,
-saved with the quick-connect parameters). Active / transition / kill switch: label = config name, subtitle = status.
+Disconnected: label "TeapodStream", subtitle = the config the tile will connect (`tile_config_name.txt` in
+`QuickConnectStore`, saved with the quick-connect parameters). Active / transition / kill switch: label = config name, subtitle = status.
 Tap: disconnect when connected or connecting, otherwise `CONNECT_QUICK`; `unlockAndRun` on the lock screen.
 
 ## PrefixTcpProxy

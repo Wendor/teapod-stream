@@ -1,7 +1,6 @@
 package com.teapodstream.teapodstream
 
 import com.teapodstream.teapodstream.core.CoreKind
-import java.io.File
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -30,7 +29,7 @@ internal data class ConnectionParams(
     /// "go" | "rust" | "box" — the session core; quick-reconnect brings up the same core.
     val engine: String = "go",
 ) {
-    /** The persisted and Intent form; [fromJson] reads it back. */
+    /** The persisted ([QuickConnectStore]) and Intent form; [fromJson] reads it back. */
     fun toJson(): JSONObject = JSONObject().apply {
         put("socksPort", socksPort)
         put("excludedPackages", JSONArray(excludedPackages))
@@ -52,16 +51,7 @@ internal data class ConnectionParams(
         put("engine", engine)
     }
 
-    fun save(dir: File, log: (String, String) -> Unit) {
-        try {
-            File(dir, FILE).writeText(toJson().toString())
-        } catch (e: Exception) {
-            log("warning", "Failed to save connection params: ${e.message}")
-        }
-    }
-
     companion object {
-        private const val FILE = "last_connection_meta.json"
         const val DEFAULT_HEARTBEAT_URL = "http://cp.cloudflare.com/generate_204"
 
         /**
@@ -100,12 +90,6 @@ internal data class ConnectionParams(
             if (!json.has("excludedPackages")) json.put("excludedPackages", JSONArray())
             if (!json.has("includedPackages")) json.put("includedPackages", JSONArray())
             return fromJson(json)
-        }
-
-        fun load(dir: File): ConnectionParams? = try {
-            fromJson(JSONObject(File(dir, FILE).readText()))
-        } catch (_: Exception) {
-            null
         }
 
         private fun JSONArray.strings() = List(length()) { getString(it) }

@@ -175,7 +175,7 @@ class XrayVpnService : VpnService() {
 
         private fun notificationsEnabled(context: Context): Boolean =
             showNotificationFlag
-                ?: (ConnectionParams.load(context.filesDir)?.showNotification ?: true).also { showNotificationFlag = it }
+                ?: (QuickConnectStore(context.filesDir).params()?.showNotification ?: true).also { showNotificationFlag = it }
 
         /** Notification on state change: intermediate for connecting/disconnecting/reconnecting. */
         @JvmStatic fun onStateNotification(context: Context, state: SessionState) {
@@ -285,16 +285,22 @@ class XrayVpnService : VpnService() {
     private var pendingNetworkRunnable: Runnable? = null
     private var heartbeatThread: Thread? = null
     private val heartbeatFailures = AtomicInteger(0)
+    private val store by lazy { QuickConnectStore(filesDir) }
+    /** The parameters [tunInterface] was built with: a reconnect reuses the fd only for the same ones. */
+    @Volatile private var tunParams: ConnectionParams? = null
+
+    /** The parameters of the session being started or run ([useParams]); null before the first start. */
+    @Volatile private var params: ConnectionParams? = null
     // How we probe the tunnel: "socks" (HTTP via SOCKS5), "xrayDelay" (measured inside
     // the core) or "passive" (only tun2socks metrics, no active probes).
-    private var heartbeatProbe: String = "socks"
+    private val heartbeatProbe get() = params?.heartbeatProbe ?: "socks"
     // Behavior on a dead tunnel: "reconnect" — reconnect to the same server,
     // "switchConfig" — leave the decision to Flutter (it picks a live config).
-    private var heartbeatAction: String = "reconnect"
-    private var heartbeatThreshold: Int = 3
-    private var heartbeatUrl: String = ConnectionParams.DEFAULT_HEARTBEAT_URL
+    private val heartbeatAction get() = params?.heartbeatAction ?: "reconnect"
+    private val heartbeatThreshold get() = params?.heartbeatThreshold ?: 3
+    private val heartbeatUrl get() = params?.heartbeatUrl ?: ConnectionParams.DEFAULT_HEARTBEAT_URL
+    private val allowTethering get() = params?.allowTethering ?: false
     private val mainHandler = Handler(Looper.getMainLooper())
-    @Volatile private var allowTethering = false
     private var lastTunnelDeadNotifyAt = 0L
     private val wakeProbeRunning = AtomicBoolean(false)
     private val reconnectAttempts = AtomicInteger(0)
@@ -332,8 +338,7 @@ class XrayVpnService : VpnService() {
                 // Arrived via startForegroundService (Tasker, MainActivity) into a fresh
                 // process — without startForeground() the system kills the service after 5 s.
                 if (!isRunning.get()) ensureForeground(connecting = false)
-                userRequestedDisconnect.set(true)
-                try { File(filesDir, "user_disconnected.flag").createNewFile() } catch (_: Exception) {}
+                setUserOff(true)
                 // Flutter may still wait for the last connect it sent (a disconnect from the notification or
                 // the tile cancels it): the stop's events answer that attempt — the one received before this.
                 val answers = requestedAttempt
@@ -396,20 +401,16 @@ class XrayVpnService : VpnService() {
                     return START_NOT_STICKY
                 }
                 requestedAttempt = attempt
-                showNotification = params.showNotification
-                heartbeatProbe = params.heartbeatProbe
-                heartbeatAction = params.heartbeatAction
-                heartbeatThreshold = params.heartbeatThreshold
-                heartbeatUrl = params.heartbeatUrl
-                allowTethering = params.allowTethering
-                // Persist non-sensitive params for CONNECT_QUICK reconnect (no credentials)
-                params.save(filesDir, ::log)
-                // Together with the quick-reconnect parameters — the tile shows what it will connect.
-                VpnTileService.saveConfigName(this, intent.getStringExtra(EXTRA_CONFIG_NAME))
-                userRequestedDisconnect.set(false)
+                showNotificationFor(params)
+                setUserOff(false)
                 reconnectAttempts.set(0)
-                try { File(filesDir, "user_disconnected.flag").delete() } catch (_: Exception) {}
                 ensureForeground()
+                // The tile's name, like the params, config and login for a quick start, is stored once the session
+                // runs with them (startVpn): a cancelled connect leaves the tile with what it will connect.
+                val request = StartRequest(
+                    xrayConfig, params, socksUser, socksPassword, attempt, reconnect = false,
+                    configName = intent.getStringExtra(EXTRA_CONFIG_NAME),
+                )
                 // Changing server/settings on a live tunnel: the old TUN stays a sink
                 // until the new one's establish() — no explicit disconnect and no leak window.
                 sessionCommands.submit(SessionCommands.Kind.CONNECT, skipped = {
@@ -419,32 +420,22 @@ class XrayVpnService : VpnService() {
                     // waits for this attempt, so answer it.
                     if (userRequestedDisconnect.get()) {
                         log("info", "CONNECT cancelled: VPN revoked or disconnected meanwhile")
-                        sessionAttempt = attempt
+                        sessionAttempt = request.attempt
                         setState(SessionState.DISCONNECTED)
                         return@submit
                     }
                     // Before the old session stops: its events from here on belong to this attempt.
-                    sessionAttempt = attempt
+                    sessionAttempt = request.attempt
                     if (isRunning.get()) stopVpn(reconnecting = true)
-                    startVpn(xrayConfig, params.socksPort, socksUser, socksPassword,
-                        params.excludedPackages, params.includedPackages, params.vpnMode, params.ssPrefix,
-                        params.proxyOnly, params.killSwitch, params.allowIcmp, params.blockQuic,
-                        params.ipv6Enabled, mtu = params.mtu, engine = params.engine)
+                    startVpn(request)
                 }
                 return START_STICKY
             }
             ACTION_CONNECT_QUICK -> {
-                // Load params and set showNotification BEFORE ensureForeground so the
-                // correct notification type (full vs minimal) is shown from the start.
-                val params = ConnectionParams.load(filesDir)
-                if (params != null) {
-                    showNotification = params.showNotification
-                    heartbeatProbe = params.heartbeatProbe
-                    heartbeatAction = params.heartbeatAction
-                    heartbeatThreshold = params.heartbeatThreshold
-                    heartbeatUrl = params.heartbeatUrl
-                    allowTethering = params.allowTethering
-                }
+                // The parameters before ensureForeground, so the right notification type (full or minimal) shows
+                // from the start.
+                val request = quickStartRequest()
+                (request?.params ?: store.params())?.let(::showNotificationFor)
                 if (isRunning.get()) {
                     // startVpn would bail on its CAS anyway — bail here instead so the
                     // state isn't left stuck at "reconnecting" over a live tunnel.
@@ -457,102 +448,66 @@ class XrayVpnService : VpnService() {
                     return START_STICKY
                 }
                 ensureForeground()
-                val configFile = File(filesDir, "xray_config.json")
-                if (params != null && configFile.exists()) {
-                    val needsPermission = !params.proxyOnly && VpnService.prepare(this) != null
-                    if (needsPermission) {
-                        // Permission revoked — the system already disconnected our TUN, nothing to block with.
-                        abortQuickConnect(killSwitch = false)
-                    } else {
-                        userRequestedDisconnect.set(false)
-                        try { File(filesDir, "user_disconnected.flag").delete() } catch (_: Exception) {}
+                when {
+                    // Nothing stored to start (a failed save may have removed it): the session holding the sink, if
+                    // any, decides whether it stays.
+                    request == null -> abortQuickConnect(killSwitchEnabled)
+                    // Permission revoked — the system already disconnected our TUN, nothing to block with.
+                    !request.params.proxyOnly && VpnService.prepare(this) != null -> abortQuickConnect(killSwitch = false)
+                    else -> {
+                        setUserOff(false)
                         setState(SessionState.RECONNECTING)
-                        val configText = configFile.readText()
-                        // Load SOCKS credentials from saved file (survives reconnect)
-                        var socksUser = ""
-                        var socksPassword = ""
-                        try {
-                            val credsFile = File(filesDir, "socks_creds.json")
-                            if (credsFile.exists()) {
-                                val json = org.json.JSONObject(credsFile.readText())
-                                socksUser = json.optString("user", "")
-                                socksPassword = json.optString("pass", "")
-                                log("debug", "CONNECT_QUICK: loaded creds from file, user=$socksUser")
-                            } else {
-                                // Fallback: extract from config
-                                val (u, p) = extractSocksFromConfig(configText, params.engine)
-                                socksUser = u
-                                socksPassword = p
-                            }
-                        } catch (e: Exception) {
-                            log("warning", "Failed to load socks_creds: ${e.message}")
-                            val (u, p) = extractSocksFromConfig(configText, params.engine)
-                            socksUser = u
-                            socksPassword = p
-                        }
-                        startQuick {
-                            startVpn(
-                                configText,
-                                params.socksPort, socksUser, socksPassword,
-                                params.excludedPackages, params.includedPackages, params.vpnMode,
-                                params.ssPrefix, params.proxyOnly, params.killSwitch,
-                                params.allowIcmp, params.blockQuic, params.ipv6Enabled, mtu = params.mtu, isReconnect = true, engine = params.engine
-                            )
-                        }
+                        startQuick(request)
                     }
-                } else {
-                    abortQuickConnect(params?.killSwitch == true)
                 }
                 return START_STICKY
             }
         }
         // Service restarted by Android after being killed, or started by always-on VPN.
-        // Load params and set showNotification BEFORE ensureForeground (same fix as CONNECT_QUICK).
-        val params = ConnectionParams.load(filesDir)
-        if (params != null) {
-            showNotification = params.showNotification
-            heartbeatProbe = params.heartbeatProbe
-            heartbeatAction = params.heartbeatAction
-            heartbeatThreshold = params.heartbeatThreshold
-            heartbeatUrl = params.heartbeatUrl
-            allowTethering = params.allowTethering
-        }
+        // The parameters before ensureForeground (as in CONNECT_QUICK).
+        val request = quickStartRequest()
+        (request?.params ?: store.params())?.let(::showNotificationFor)
         ensureForeground()
-        // Auto-connect if saved params exist and user didn't explicitly disconnect.
-        // The flag file covers process restarts: the static userRequestedDisconnect
-        // is reset to false in a fresh process, but the user's choice must survive.
-        val configFile = File(filesDir, "xray_config.json")
-        if (params != null && configFile.exists()
-            && !userRequestedDisconnect.get()
-            && !File(filesDir, "user_disconnected.flag").exists()
-            && !isRunning.get()
+        // Auto-connect unless the user turned the VPN off: the flag file covers process restarts (the static
+        // userRequestedDisconnect is false in a fresh process, but the user's choice must survive).
+        if (request != null && !userRequestedDisconnect.get() && !store.userOff() && !isRunning.get() &&
+            (request.params.proxyOnly || VpnService.prepare(this) == null)
         ) {
-            val needsPermission = !params.proxyOnly && VpnService.prepare(this) != null
-            if (!needsPermission) {
-                userRequestedDisconnect.set(false)
-                setState(SessionState.RECONNECTING)
-                try {
-                    val configText = configFile.readText()
-                    val (socksUser, socksPassword) = extractSocksFromConfig(configText, params.engine)
-                    startQuick {
-                        startVpn(
-                            configText,
-                            params.socksPort, socksUser, socksPassword,
-                            params.excludedPackages, params.includedPackages, params.vpnMode,
-                            params.ssPrefix, params.proxyOnly, params.killSwitch,
-                            params.allowIcmp, params.blockQuic, params.ipv6Enabled, mtu = params.mtu, isReconnect = true, engine = params.engine
-                        )
-                    }
-                    return START_STICKY
-                } catch (e: Exception) {
-                    log("warning", "Auto-connect failed: ${e.message}")
-                    setState(SessionState.DISCONNECTED)
-                }
-            }
+            setState(SessionState.RECONNECTING)
+            startQuick(request)
+            return START_STICKY
         }
         // Nothing to start: the service doesn't stay in the foreground for an off VPN.
         stopIfIdle()
         return START_STICKY
+    }
+
+    /** The session's parameters: the fields derived from them follow ([heartbeatProbe], [showNotification], …). */
+    private fun useParams(p: ConnectionParams) {
+        params = p
+        showNotification = p.showNotification
+    }
+
+    /**
+     * Before ensureForeground: the notification type (full or minimal) of the session about to start, so the right one
+     * shows from the start. A running session keeps its own until [startVpn] replaces it.
+     */
+    private fun showNotificationFor(p: ConnectionParams) {
+        if (!isRunning.get()) showNotification = p.showNotification
+    }
+
+    /** "Turned off by the user", in memory and on disk (boot and a system restart read the file). */
+    private fun setUserOff(off: Boolean) {
+        userRequestedDisconnect.set(off)
+        try { store.setUserOff(off) } catch (e: Exception) { log("warning", "user-off flag: ${e.message}") }
+    }
+
+    /** The quick start from the store (tile, notification, boot, reconnect, system restart); null — nothing stored. */
+    private fun quickStartRequest(): StartRequest? = try {
+        store.quickStart(::extractSocksFromConfig)
+    } catch (e: Exception) {
+        log("warning", "quick start: stored connection unreadable: ${e.message}")
+        null
     }
 
     /** SOCKS login/password from the saved config in the format of core [engine]. */
@@ -565,31 +520,33 @@ class XrayVpnService : VpnService() {
             ?.let { startActivity(it) }
     }
 
-    private fun startVpn(
-        xrayConfig: String,
-        socksPort: Int,
-        socksUser: String,
-        socksPassword: String,
-        excludedPackages: List<String>,
-        includedPackages: List<String>,
-        vpnMode: String,
-        ssPrefix: String? = null,
-        proxyOnly: Boolean = false,
-        killSwitch: Boolean = false,
-        allowIcmp: Boolean = true,
-        blockQuic: Boolean = false,
-        ipv6Enabled: Boolean = false,
-        mtu: Int = 1500,
-        isReconnect: Boolean = false,
-        engine: String = CoreKind.GO.id,
-    ) {
+    private fun startVpn(request: StartRequest) {
+        val (xrayConfig, params, socksUser, socksPassword) = request
+        val isReconnect = request.reconnect
+        val socksPort = params.socksPort
+        val excludedPackages = params.excludedPackages
+        val includedPackages = params.includedPackages
+        val vpnMode = params.vpnMode
+        val ssPrefix = params.ssPrefix
+        val proxyOnly = params.proxyOnly
+        val killSwitch = params.killSwitch
+        val allowIcmp = params.allowIcmp
+        val blockQuic = params.blockQuic
+        val ipv6Enabled = params.ipv6Enabled
+        val mtu = params.mtu
+        val engine = params.engine
         if (!isRunning.compareAndSet(false, true)) return
+        val notificationTypeChanged = showNotification != request.params.showNotification
+        useParams(request.params)
+        // The previous session's notification type stayed until here: switch the foreground one to this session's.
+        if (notificationTypeChanged) ensureForeground()
         sessionCore = VpnCores.get(CoreKind.fromId(engine))
         VpnCores.active = sessionCore
         // Keep the previous TUN (kill-switch sink left by a reconnect) open until the
         // new one is established: establish() atomically replaces the interface, so
         // app traffic is blackholed by the old TUN instead of leaking while xray starts.
         var previousTun = tunInterface
+        val previousTunParams = tunParams
         // A manual connect with the kill switch keeps the sink after a failure only if traffic
         // was already blocked (BLOCKED) — otherwise a broken config would lock the network.
         val keepSinkOnFailure = killSwitch && (isReconnect || previousTun != null)
@@ -612,8 +569,15 @@ class XrayVpnService : VpnService() {
                 xrayConfig
             }
 
-            val configFile = File(filesDir, "xray_config.json")
-            configFile.writeText(finalConfig)
+            // For a quick start (tile, boot, reconnect): the params, the config and its SOCKS login together, then
+            // the tile's name. A failed save costs the quick start, not this session. Saved on a reconnect too: the
+            // config it runs may differ from the stored one (a new prefix proxy port).
+            try {
+                store.save(finalConfig, request.params, socksUser, socksPassword)
+                if (!request.reconnect) VpnTileService.saveConfigName(this, request.configName)
+            } catch (e: Exception) {
+                log("warning", "Quick-connect data not saved: ${e.message}")
+            }
             prepareBinaries(this)
 
             core.init(this) { level, message -> log(level, message) }
@@ -638,9 +602,9 @@ class XrayVpnService : VpnService() {
                 startHeartbeat(isReconnect)
                 log("info", "Proxy-only mode active")
             } else {
-                if (isReconnect && previousTun != null) {
-                    // Auto-reconnect: Builder params come from the same ConnectionParams
-                    // that established this TUN, so the fd is reused as-is. Skipping
+                if (isReconnect && previousTun != null && previousTunParams == request.params) {
+                    // Auto-reconnect with the ConnectionParams that established this TUN (a failed manual
+                    // connect may have stored other ones — then it is rebuilt), so the fd is reused as-is. Skipping
                     // establish() keeps the VPN network agent alive — no system
                     // "VPN active" notification, no connectivity flap for apps (issue #81).
                     // tun2socks works on a dup'd fd, so the previous engine's shutdown
@@ -704,6 +668,7 @@ class XrayVpnService : VpnService() {
                     log("info", "nativeSetMaxFds result: $fdResult")
 
                     tunInterface = builder.establish() ?: throw IllegalStateException("Failed to establish TUN")
+                    tunParams = request.params
                     // The new interface replaced the old one atomically — the sink fd can go now.
                     try { previousTun?.close() } catch (_: Exception) {}
                     log("info", "TUN established with IP $dynamicTunIp")
@@ -732,6 +697,7 @@ class XrayVpnService : VpnService() {
             // Otherwise the old fd is obsolete.
             if (tunInterface == null && previousTun != null && (killSwitch || isReconnect) && !proxyOnly) {
                 tunInterface = previousTun
+                tunParams = previousTunParams
             } else {
                 try { previousTun?.close() } catch (_: Exception) {}
             }
@@ -914,7 +880,7 @@ class XrayVpnService : VpnService() {
 
             // Clean up saved credentials on explicit disconnect
             if (explicit) {
-                try { File(filesDir, "socks_creds.json").delete() } catch (_: Exception) {}
+                try { store.clearCredentials() } catch (e: Exception) { log("warning", "clearing socks_creds: ${e.message}") }
             }
 
             if (keepTunAsSink) {
@@ -926,11 +892,7 @@ class XrayVpnService : VpnService() {
                 }
             }
 
-            // Keep xray_config.json for Quick Settings tile reconnect.
-            // File is in process-private filesDir, not accessible to other apps.
-            // if (explicit && !reconnecting) {
-            //     try { File(filesDir, "xray_config.json").delete() } catch (_: Exception) {}
-            // }
+            // The stored config stays for a quick reconnect (tile, boot): process-private filesDir.
         } finally {
             val finalState = when {
                 // TUN is already a sink: no traffic while we wait for the network (up to 30 s) — not "connected".
@@ -1258,7 +1220,7 @@ class XrayVpnService : VpnService() {
 
     /// Restart from saved parameters (CONNECT_QUICK, system restart) — queued in [sessionCommands] after the
     /// commands received before it. Won't begin on top of a live session or after the user disconnected.
-    private fun startQuick(start: () -> Unit) {
+    private fun startQuick(request: StartRequest) {
         // Not queued after the user disconnected: it would only skip itself, and as a start received after the
         // disconnect it would take the disconnect's final state.
         if (userRequestedDisconnect.get()) {
@@ -1270,8 +1232,8 @@ class XrayVpnService : VpnService() {
                 log("info", "quick start skipped (disconnected by user or already running)")
                 return@submit
             }
-            sessionAttempt = 0
-            start()
+            sessionAttempt = request.attempt
+            startVpn(request)
         }
     }
 
@@ -1728,17 +1690,6 @@ class XrayVpnService : VpnService() {
         val now = System.currentTimeMillis()
         lastConnectedMs = now
         connectedNetwork = lastUnderlyingNetwork
-        // Save credentials to file for CONNECT_QUICK reconnect
-        try {
-            val credsFile = File(filesDir, "socks_creds.json")
-            credsFile.writeText(org.json.JSONObject().apply {
-                put("port", socksPort)
-                put("user", socksUser)
-                put("pass", socksPassword)
-            }.toString())
-        } catch (e: Exception) {
-            log("warning", "Failed to save socks_creds: ${e.message}")
-        }
         publish { SessionSnapshot.connected(sessionAttempt, socksPort, socksUser, socksPassword, now) }
         // The "Disconnected"/intermediate notification bypasses the dedupe cache —
         // reset it so the connected layout is always posted.

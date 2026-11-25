@@ -27,13 +27,18 @@ class VpnTileService : TileService() {
 
     companion object {
         private var tileService: VpnTileService? = null
-        private const val PREF_CONFIG_NAME = "tile_config_name"
+        /** Where the name was kept before [QuickConnectStore]: read while the store has none, removed on a save. */
+        private const val LEGACY_PREF_CONFIG_NAME = "tile_config_name"
 
         /** Quick-reconnect config name — the one the tile will connect; null — reset to "TeapodStream". */
         fun saveConfigName(context: Context, name: String?) {
+            try {
+                QuickConnectStore(context.filesDir).saveTileName(name)
+            } catch (_: Exception) {
+                // Only the tile's label: it shows "TeapodStream" until the next save.
+            }
             context.getSharedPreferences(XrayVpnService.PREFS_NAME, Context.MODE_PRIVATE).edit()
-                .putString(PREF_CONFIG_NAME, name?.takeIf { it.isNotBlank() })
-                .apply()
+                .remove(LEGACY_PREF_CONFIG_NAME).apply()
             updateTile(context)
         }
 
@@ -110,8 +115,8 @@ class VpnTileService : TileService() {
         tile.updateTile()
     }
 
-    private fun configName(): String? =
-        getSharedPreferences(XrayVpnService.PREFS_NAME, MODE_PRIVATE).getString(PREF_CONFIG_NAME, null)
+    private fun configName(): String? = QuickConnectStore(filesDir).tileName()
+        ?: getSharedPreferences(XrayVpnService.PREFS_NAME, MODE_PRIVATE).getString(LEGACY_PREF_CONFIG_NAME, null)
 
     /** [active] — VPN is on or transitioning: the title is the config name, otherwise "TeapodStream". */
     private fun setTileBase(tile: Tile, active: Boolean) {

@@ -33,7 +33,9 @@ xray-rust, sing-box) shipped in the `teapod-core` AAR. The knowledge base is [`w
 4. **Update the wiki** pages your change makes wrong. The wiki describes the current state only: no changelog,
    no dates, no "was/now". History lives in git and pull requests.
 5. **Run the checks** (below) and fix everything they report.
-6. **Open the pull request** with the template filled in: the [`pr` skill](.claude/skills/pr/SKILL.md). Keep at most
+6. **Open the pull request as a draft** with the template filled in: the [`pr` skill](.claude/skills/pr/SKILL.md).
+   A draft is reviewed first (the reviewer bot or another model, the [review-pr](.claude/skills/review-pr/SKILL.md)
+   draft rules); fix until it approves, then mark it ready — CodeRabbit sees cleaned-up code. Keep at most
    three PRs in the repository out of draft at once, counting other people's: CodeRabbit's hourly review limit is
    per repository, and every push spends a review too. A skipped review is asked for again (the `pr` skill).
 7. **Wait for the reviews** with the `pr` skill's `scripts/wait-review.sh <n>`, not a loop of your own: it knows when
@@ -41,7 +43,8 @@ xray-rust, sing-box) shipped in the `teapod-core` AAR. The knowledge base is [`w
    suggestions, not instructions — verify each one against the code and the wiki before changing anything. Answer every one: fix it
    in a new commit, or reply with the reason it is wrong. Resolve a thread once it is fixed or CodeRabbit accepts
    the reply; a thread it still disputes stays open for the maintainer. GitHub refuses to merge with an unresolved
-   thread. Then a maintainer or the reviewer bot reviews the latest commit; every push needs a new approval.
+   thread. Then a maintainer or the reviewer bot reviews the latest commit; every push needs a new approval. A
+   draft's approval stands if CodeRabbit raised nothing on that same commit.
 
 ## Commands
 

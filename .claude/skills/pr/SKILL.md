@@ -21,10 +21,11 @@ Rules: [CONTRIBUTING.md](../../../CONTRIBUTING.md). Template: [.github/pull_requ
    ```
 4. Wiki pages for the touched area still true? Fix them in this branch.
 5. Grep the diff for secrets: `git diff master...HEAD | grep -nE 'vless://|vmess://|trojan://|ss://|hy2://|[0-9a-f]{8}-[0-9a-f]{4}-'`.
-6. Get a second review of the branch before CodeRabbit sees it, if you have another model or agent at hand: give
-   it `git diff master...HEAD`, the issue and sections 1 and 4–6 of the [review-pr checklist](../review-pr/SKILL.md),
-   and ask for concrete problems only. Verify each finding like a CodeRabbit comment and fix what holds up. Repeat
-   before each fix push. CodeRabbit reviews only so many commits an hour: a clean first push saves a review round.
+6. Open it as a draft and get it reviewed before CodeRabbit sees it: the reviewer bot, or another model or agent you
+   have at hand, with the [review-pr checklist](../review-pr/SKILL.md) (its draft rules). Verify each finding like a
+   CodeRabbit comment, fix what holds up, push, and ask again until it approves. Then `gh pr ready`. CodeRabbit
+   reviews only so many commits an hour: it should see code that is already clean. Only an approving GitHub review
+   by a maintainer or the reviewer bot is an approval for the merge; another model's verdict only clears the draft.
 
 ## The description
 
@@ -42,7 +43,7 @@ Rules: [CONTRIBUTING.md](../../../CONTRIBUTING.md). Template: [.github/pull_requ
 
 ```bash
 gh pr create --draft --base master --title "[ai] area: what changed" --body-file <filled template>
-gh pr ready <n>            # when checks pass and the description is complete; at most 3 in the repo out of draft (`gh pr list --search draft:false`)
+gh pr ready <n>            # when checks pass, the description is complete and the draft review approved; at most 3 in the repo out of draft (`gh pr list --search draft:false`)
 gh pr edit <n> --body-file <updated description>   # after every push that changes what the PR does
 ```
 
@@ -97,7 +98,9 @@ gh api graphql -F id=<thread id> -f query='mutation($id:ID!){resolveReviewThread
 
 ## Approval
 
-Ask for it when the script says `READY` — or `SKIPPED` because the last push had nothing to review (only a merge
+An approving GitHub review of the draft by a maintainer or the reviewer bot stands when CodeRabbit raised nothing
+on the commit it approved (no thread, no actionable,
+outside-diff or nitpick item, no push since). Otherwise ask for it when the script says `READY` — or `SKIPPED` because the last push had nothing to review (only a merge
 from `master`; CodeRabbit's comment says so, never after a rate limit) — and nothing is left: every finding fixed or answered, fixed and accepted
 threads resolved, disputed ones left open with a PR comment. A maintainer or the reviewer bot approves the latest
 commit; any push after that dismisses the approval, so ask once, after the last push. Waiting for CodeRabbit to

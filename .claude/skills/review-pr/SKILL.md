@@ -11,6 +11,11 @@ scripts from the PR and don't run tests or linters locally: CI runs them on the 
 Work through the sections in order. Sections 2 and 3 can stop the review as **pending**: then report what is pending
 and give no verdict; the review is run again later.
 
+**A draft** (`gh pr view <n> --json isDraft`) is reviewed before CodeRabbit sees it: in section 2 the `rules` check
+doesn't run yet (it starts when the PR is marked ready) and isn't required; skip section 3. Its approval is the
+go-ahead to mark it ready. It stands for the merge only if CodeRabbit then raises nothing on that same commit
+(no thread, no actionable, outside-diff or nitpick item); otherwise the fixed head is reviewed again in full.
+
 ## 1. Rules
 
 ```bash

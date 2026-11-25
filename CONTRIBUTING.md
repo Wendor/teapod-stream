@@ -78,7 +78,8 @@ AI tools are welcome. The rules don't change:
 [CodeRabbit](https://coderabbit.ai) reviews every PR automatically once it is out of draft. Answer each of its
 comments — fix it, or reply why it doesn't apply — and resolve the thread once it is settled: GitHub won't merge a
 PR with an open conversation. Then the maintainer (or the maintainer's review bot) reviews; a push after the approval
-needs a new one. Expect questions about *why*, about the device test, and requests to split large PRs. PRs that ignore these rules may be closed with a pointer to this file — you're welcome to reopen once
+needs a new one. The bot may review a draft before CodeRabbit does; its approval stands when CodeRabbit then raises
+nothing on that commit. Expect questions about *why*, about the device test, and requests to split large PRs. PRs that ignore these rules may be closed with a pointer to this file — you're welcome to reopen once
 they're addressed.
 
 ## License

@@ -58,8 +58,9 @@ class QuickConnectStoreTest {
         store.clearCredentials()
         File(dir, QuickConnectStore.CREDENTIALS).mkdir()
         File(dir, "${QuickConnectStore.CREDENTIALS}/x").writeText("")
-        assertTrue(runCatching { store.save("{new}", params, "u", "p") }.isFailure)
+        assertTrue(runCatching { store.save("{new}", params.copy(engine = "go"), "u", "p") }.isFailure)
         assertEquals("{old}", store.config())
+        assertEquals("the params stay with the config", params, store.params())
     }
 
     @Test

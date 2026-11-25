@@ -74,8 +74,15 @@ internal class QuickConnectStore(private val dir: File) {
 
     /** Flutter's `saveQuickConnect`: everything a quick start needs, before any session ran with it. */
     fun save(config: String, params: ConnectionParams, socksUser: String, socksPassword: String) = synchronized(LOCK) {
+        val oldParams = read(PARAMS)
         saveParams(params)
-        saveSession(config, params.socksPort, socksUser, socksPassword)
+        try {
+            saveSession(config, params.socksPort, socksUser, socksPassword)
+        } catch (e: Exception) {
+            // The config stayed the old one: so do its params.
+            if (oldParams != null) write(PARAMS, oldParams) else File(dir, PARAMS).delete()
+            throw e
+        }
     }
 
     /**

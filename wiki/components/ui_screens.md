@@ -23,7 +23,9 @@ TeapodApp (app.dart) → _TeapodMaterialApp (theme, locale, text scale; builder 
 ```
 
 `_AppShell` also: listens to `XrayEngine.events` for deep links, syncs native state on resume and pauses stats on
-pause, auto-connects on start (`autoConnect`), pings stale configs, checks geodata.
+pause, auto-connects on start (`autoConnect`), pings stale configs, checks geodata. The system bars follow the theme
+through an `AnnotatedRegion<SystemUiOverlayStyle>` around its scaffold. Deep-link imports (profile or connections)
+share one confirmation dialog in `DeeplinkHandler` (`_showImportDialog`).
 
 ## Screens
 
@@ -77,7 +79,8 @@ text helpers (minimum 11 px). Font scale (`fontScale`) applies through the app's
 ## Conventions
 
 - Every visible string through `context.l10n` ([localization](localization.md)).
-- Widgets read providers and call notifier methods; no business logic in widgets.
+- Widgets read providers and call notifier methods; no business logic in widgets (picking a config:
+  `VpnNotifier.selectConfig`, [vpn_provider](vpn_provider.md)).
 - UI tests: `test/ui/` — smoke of every screen, interactions ([tests](tests.md)).
 
 ## Related

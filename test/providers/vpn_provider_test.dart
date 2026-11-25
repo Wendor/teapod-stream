@@ -423,6 +423,37 @@ void main() {
       expect(native.lastConnect()['xrayConfig'], contains('hb.example'));
     });
 
+    test('selectConfig switches a live tunnel to another config and leaves the running one alone', () async {
+      await connected(configs: [_cfg('a'), _cfg('b')]);
+      expect(await n().selectConfig(c.read(configProvider).value!.configs.first), isNull);
+      await _settle();
+      expect(native.named('connect'), hasLength(1), reason: 'the running config: no rebuild');
+      expect(await n().selectConfig(c.read(configProvider).value!.configs.last), isNull);
+      await _settle();
+      expect(c.read(configProvider).value!.activeConfigId, 'b');
+      expect(native.named('connect'), hasLength(2));
+      expect(native.lastConnect()['xrayConfig'], contains('hb.example'));
+    });
+
+    test('selectConfig refuses a config no enabled core runs and changes nothing', () async {
+      await boot(
+        configs: [_cfg('a'), _cfg('b')],
+        activeId: 'a',
+        settings: _settings.copyWith(proxyOnly: true, disabledCores: {CoreKind.xrayGo, CoreKind.singBox}),
+      );
+      final reason = await n().selectConfig(c.read(configProvider).value!.configs.last);
+      expect(reason, const XrayRustBackend().unavailableReason(CoreFeature.proxyOnly));
+      expect(c.read(configProvider).value!.activeConfigId, 'a');
+    });
+
+    test('selectConfig while disconnected only selects', () async {
+      await boot(configs: [_cfg('a'), _cfg('b')], activeId: 'a');
+      expect(await n().selectConfig(c.read(configProvider).value!.configs.last), isNull);
+      await _settle();
+      expect(c.read(configProvider).value!.activeConfigId, 'b');
+      expect(native.named('connect'), isEmpty);
+    });
+
     test('invalid config keeps the old session', () async {
       await connected(
         configs: [

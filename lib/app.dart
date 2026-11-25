@@ -181,30 +181,28 @@ class _AppShellState extends ConsumerState<_AppShell> with WidgetsBindingObserve
     final hasUpdate =
         updateState is UpdateAvailable || updateState is UpdateDownloading || updateState is UpdateDownloaded;
 
-    // Sync nav bar color with active theme
-    final t = Theme.of(context).extension<TeapodTokens>()!;
-    SystemChrome.setSystemUIOverlayStyle(
-      SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Theme.of(context).brightness == Brightness.dark ? Brightness.light : Brightness.dark,
-        systemNavigationBarColor: t.bg,
-        systemNavigationBarIconBrightness: Theme.of(context).brightness == Brightness.dark
-            ? Brightness.light
-            : Brightness.dark,
-      ),
-    );
-
     final currentIndex = ref.watch(tabIndexProvider);
     // Chart history is pulled only while the home tab is visible
     ref.listen(tabIndexProvider, (_, next) {
       ref.read(vpnProvider.notifier).setChartVisible(next == 0);
     });
-    return Scaffold(
-      body: IndexedStack(index: currentIndex, children: _pages),
-      bottomNavigationBar: _ConsoleTabBar(
-        currentIndex: currentIndex,
-        hasUpdateBadge: hasUpdate,
-        onTap: (i) => ref.read(tabIndexProvider.notifier).set(i),
+    // The system bars follow the theme: the framework applies the region's style when it changes, not on every build.
+    final theme = Theme.of(context);
+    final icons = theme.brightness == Brightness.dark ? Brightness.light : Brightness.dark;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: icons,
+        systemNavigationBarColor: theme.extension<TeapodTokens>()!.bg,
+        systemNavigationBarIconBrightness: icons,
+      ),
+      child: Scaffold(
+        body: IndexedStack(index: currentIndex, children: _pages),
+        bottomNavigationBar: _ConsoleTabBar(
+          currentIndex: currentIndex,
+          hasUpdateBadge: hasUpdate,
+          onTap: (i) => ref.read(tabIndexProvider.notifier).set(i),
+        ),
       ),
     );
   }

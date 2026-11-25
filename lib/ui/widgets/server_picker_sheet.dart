@@ -24,19 +24,14 @@ Future<void> showServerPicker(BuildContext context, WidgetRef ref) {
 class _ServerPickerSheet extends ConsumerWidget {
   const _ServerPickerSheet();
 
-  void _select(BuildContext context, WidgetRef ref, VpnConfig c) {
-    final reason = unsupportedReason(ref, c);
+  Future<void> _select(BuildContext context, WidgetRef ref, VpnConfig c) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final reason = await ref.read(vpnProvider.notifier).selectConfig(c);
     if (reason != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(reason)));
-      return;
-    }
-    Navigator.pop(context);
-    // Same config as the connected one — no tunnel rebuild.
-    final unchanged = ref.read(vpnProvider.notifier).runsConfig(c);
-    ref.read(configProvider.notifier).setActiveConfig(c.id);
-    final vpnState = ref.read(vpnProvider);
-    if (!unchanged && (vpnState.isConnected || vpnState.isBusy)) {
-      ref.read(vpnProvider.notifier).reconnectWithNewConfig();
+      messenger.showSnackBar(SnackBar(content: Text(reason)));
+    } else {
+      navigator.pop();
     }
   }
 

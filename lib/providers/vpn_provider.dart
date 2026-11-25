@@ -764,6 +764,19 @@ class VpnNotifier extends Notifier<VpnState2> {
     }
   }
 
+  /// The user picked [config] (configs list, server picker): it becomes the active one, and a running or starting
+  /// session switches to it unless it already runs it (not awaited: the caller only waits for the selection). Returns
+  /// why no enabled core can run it (nothing changes then).
+  Future<String?> selectConfig(VpnConfig config) async {
+    final reason = ref.read(coreResolverProvider).resolve(config).reason;
+    if (reason != null) return reason;
+    // Same config as the connected one — no tunnel rebuild.
+    final unchanged = runsConfig(config);
+    await ref.read(configProvider.notifier).setActiveConfig(config.id);
+    if (!unchanged && (state.isConnected || state.isBusy)) unawaited(reconnectWithNewConfig());
+    return null;
+  }
+
   Future<void> reconnectWithNewConfig() async {
     // A live tunnel switches natively: the old TUN carries traffic until the new one is up.
     if (state.isConnected) return connect(switching: true);

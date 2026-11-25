@@ -402,13 +402,15 @@ class XrayVpnService : VpnService() {
                 }
                 requestedAttempt = attempt
                 showNotificationFor(params)
-                // The tile shows what it will connect; the params, config and login for a quick start are stored
-                // once the session runs with them (startVpn).
-                VpnTileService.saveConfigName(this, intent.getStringExtra(EXTRA_CONFIG_NAME))
                 setUserOff(false)
                 reconnectAttempts.set(0)
                 ensureForeground()
-                val request = StartRequest(xrayConfig, params, socksUser, socksPassword, attempt, reconnect = false)
+                // The tile's name, like the params, config and login for a quick start, is stored once the session
+                // runs with them (startVpn): a cancelled connect leaves the tile with what it will connect.
+                val request = StartRequest(
+                    xrayConfig, params, socksUser, socksPassword, attempt, reconnect = false,
+                    configName = intent.getStringExtra(EXTRA_CONFIG_NAME),
+                )
                 // Changing server/settings on a live tunnel: the old TUN stays a sink
                 // until the new one's establish() — no explicit disconnect and no leak window.
                 sessionCommands.submit(SessionCommands.Kind.CONNECT, skipped = {
@@ -565,8 +567,15 @@ class XrayVpnService : VpnService() {
                 xrayConfig
             }
 
-            // For a quick start (tile, boot, reconnect): the params, the config and its SOCKS login together.
-            store.save(finalConfig, request.params, socksUser, socksPassword)
+            // For a quick start (tile, boot, reconnect): the params, the config and its SOCKS login together, then
+            // the tile's name. A failed save costs the quick start, not this session. Saved on a reconnect too: the
+            // config it runs may differ from the stored one (a new prefix proxy port).
+            try {
+                store.save(finalConfig, request.params, socksUser, socksPassword)
+                if (!request.reconnect) VpnTileService.saveConfigName(this, request.configName)
+            } catch (e: Exception) {
+                log("warning", "Quick-connect data not saved: ${e.message}")
+            }
             prepareBinaries(this)
 
             core.init(this) { level, message -> log(level, message) }

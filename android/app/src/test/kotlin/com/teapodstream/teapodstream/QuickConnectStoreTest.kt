@@ -67,13 +67,18 @@ class QuickConnectStoreTest {
     fun concurrentReplacementsNeverPairOneConfigWithAnothersParamsOrLogin() {
         val go = java.util.concurrent.CountDownLatch(1)
         val writing = java.util.concurrent.atomic.AtomicInteger(2)
+        val seen = java.util.concurrent.CountDownLatch(1)
         val writers = (1..2).map { w ->
             Thread {
                 // A store of its own per writer, as the activity and the service have.
                 val own = QuickConnectStore(dir)
                 go.await()
                 try {
-                    repeat(500) { i -> own.save("c-$w-$i", params.copy(socksPort = w * 1000 + i), "u-$w-$i", "p") }
+                    repeat(500) { i ->
+                        // The last replacement waits for the reader's first session, so a read always overlaps one.
+                        if (i == 499) seen.await(10, java.util.concurrent.TimeUnit.SECONDS)
+                        own.save("c-$w-$i", params.copy(socksPort = w * 1000 + i), "u-$w-$i", "p")
+                    }
                 } finally {
                     writing.decrementAndGet()
                 }
@@ -89,6 +94,7 @@ class QuickConnectStoreTest {
             while (writing.get() > 0) {
                 val r = own.quickStart { config, _ -> "from-$config" to "p" } ?: continue
                 checked++
+                seen.countDown()
                 val (w, i) = r.config.removePrefix("c-").split("-").map(String::toInt)
                 if (r.socksUser != "u-$w-$i" && r.socksUser != "from-${r.config}") mismatches += "${r.config}/${r.socksUser}"
                 if (r.params.socksPort != w * 1000 + i) mismatches += "${r.config}/port ${r.params.socksPort}"

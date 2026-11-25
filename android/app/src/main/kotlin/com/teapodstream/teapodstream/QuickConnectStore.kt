@@ -5,7 +5,7 @@ import org.json.JSONObject
 
 /**
  * A session start: the core config, its parameters and the SOCKS login; [attempt] — the Flutter connect it answers
- * (0 — a native start), [reconnect] — a native restart.
+ * (0 — a native start), [reconnect] — a native restart; [configName] — what the tile shows for a Flutter connect.
  */
 internal data class StartRequest(
     val config: String,
@@ -14,6 +14,7 @@ internal data class StartRequest(
     val socksPassword: String,
     val attempt: Long,
     val reconnect: Boolean,
+    val configName: String? = null,
 ) {
     override fun toString() = "StartRequest(engine=${params.engine}, attempt=$attempt, reconnect=$reconnect)"
 }

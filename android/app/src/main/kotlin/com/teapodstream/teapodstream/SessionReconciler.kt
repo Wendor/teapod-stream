@@ -104,18 +104,21 @@ internal class SessionReconciler(
     fun newId(): Long = ids.incrementAndGet()
 
     fun set(next: Desired) {
+        replace(null, next)
+    }
+
+    /**
+     * Sets [next] only while [expected] is still the desired state (a reconnect or a retry of that session); null —
+     * whatever it is. The check and the change are one step.
+     */
+    fun replace(expected: Desired?, next: Desired): Boolean {
         synchronized(lock) {
+            if (expected != null && desired !== expected) return false
             desired = next
             if (next is Desired.On && next.request.attempt > 0) lastAttempt = next.request.attempt
             pending++
         }
         executor.execute(::run)
-    }
-
-    /** Sets [next] only while [expected] is still the desired state (a reconnect or a retry of that session). */
-    fun replace(expected: Desired, next: Desired): Boolean {
-        synchronized(lock) { if (desired !== expected) return false }
-        set(next)
         return true
     }
 

@@ -65,8 +65,9 @@ desired state's attempt (`own`); an `Off` that is reached reports `disconnected`
   connect attempt (`EXTRA_ATTEMPT`), and every snapshot the session
   publishes carries it as `attempt` (quick starts reset it to 0 — untagged); if a session is running this is a **hot
   switch** — `stopVpn(reconnecting=true)` keeps TUN as a sink until the new session is up, no leak window.
-- **`ACTION_CONNECT_QUICK`** (tile, the `blocked` notification, boot, `reconnectInternal`) and the START_STICKY restart
-  start from one request, `QuickConnectStore.quickStart()`. Ignored while a session is running; the restart also
+- **`ACTION_CONNECT_QUICK`** (tile, the `blocked` notification, boot) and the START_STICKY restart
+  start from one request, `QuickConnectStore.quickStart()` (so do reconnects and retries; without a stored one they
+  reuse the session's own request). Ignored while a session is wanted and running or being started; the restart also
   not after the user turned the VPN off. Without a config or VPN permission
   (`abortQuickConnect`) the state is finished properly: the kill switch of the session holding the sink (not the
   stored params, which a failed save may have removed) → `blocked`, otherwise TUN is closed →

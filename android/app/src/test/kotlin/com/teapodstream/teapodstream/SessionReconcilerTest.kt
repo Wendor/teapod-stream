@@ -1,5 +1,6 @@
 package com.teapodstream.teapodstream
 
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -89,6 +90,11 @@ class SessionReconcilerTest {
     private val driver = Driver()
     private val executor = Executors.newSingleThreadExecutor()
     private val reconciler = SessionReconciler(driver, executor)
+
+    @After
+    fun tearDown() {
+        executor.shutdownNow()
+    }
 
     private fun idle() {
         // Runs are queued on the executor: a no-op task after them marks the end.
@@ -211,6 +217,6 @@ class SessionReconcilerTest {
         assertTrue(reconciler.busy())
         release.countDown()
         idle()
-        assertEquals("every run reports its end", driver.runs, 1)
+        assertEquals("every run reports its end", 1, driver.runs)
     }
 }

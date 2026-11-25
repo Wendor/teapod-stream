@@ -63,6 +63,30 @@ class QuickConnectStoreTest {
     }
 
     @Test
+    fun concurrentReplacementsNeverPairOneConfigWithAnothersLogin() {
+        store.saveParams(params)
+        val writers = (1..2).map { w ->
+            Thread {
+                // A store of its own per writer, as the activity and the service have.
+                val own = QuickConnectStore(dir)
+                repeat(300) { i -> own.saveSession("c-$w-$i", 2080, "u-$w-$i", "p") }
+            }
+        }
+        val mismatches = mutableListOf<String>()
+        val reader = Thread {
+            val own = QuickConnectStore(dir)
+            repeat(600) {
+                val r = own.quickStart { config, _ -> "from-$config" to "p" } ?: return@repeat
+                val expected = r.config.removePrefix("c-").let { "u-$it" }
+                if (r.socksUser != expected && r.socksUser != "from-${r.config}") mismatches += "${r.config}/${r.socksUser}"
+            }
+        }
+        (writers + reader).forEach { it.start() }
+        (writers + reader).forEach { it.join() }
+        assertTrue(mismatches.take(3).toString(), mismatches.isEmpty())
+    }
+
+    @Test
     fun aFailedWriteLeavesNoTempFile() {
         // A non-empty directory under the target name: the rename fails.
         File(dir, QuickConnectStore.CONFIG).mkdir()

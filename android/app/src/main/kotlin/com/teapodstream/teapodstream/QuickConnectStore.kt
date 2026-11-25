@@ -3,20 +3,24 @@ package com.teapodstream.teapodstream
 import java.io.File
 import org.json.JSONObject
 
-/** A session start: the core config, its parameters and the SOCKS login; [reconnect] — a native restart. */
+/**
+ * A session start: the core config, its parameters and the SOCKS login; [attempt] — the Flutter connect it answers
+ * (0 — a native start), [reconnect] — a native restart.
+ */
 internal data class StartRequest(
     val config: String,
     val params: ConnectionParams,
     val socksUser: String,
     val socksPassword: String,
+    val attempt: Long,
     val reconnect: Boolean,
 ) {
-    override fun toString() = "StartRequest(engine=${params.engine}, reconnect=$reconnect)"
+    override fun toString() = "StartRequest(engine=${params.engine}, attempt=$attempt, reconnect=$reconnect)"
 }
 
 /**
  * The quick-reconnect data in [dir] (the app's private files): the last core config, its [ConnectionParams], the
- * SOCKS login and the "turned off by the user" flag. The tile, boot, the notification, a system restart and
+ * SOCKS login, the config name the tile shows and the "turned off by the user" flag. The tile, boot, the notification, a system restart and
  * `reconnectInternal` start from it without Flutter. The only reader and writer of these files; every write goes
  * through a temp file and a rename, so a reader never sees half a file.
  */
@@ -56,6 +60,14 @@ internal class QuickConnectStore(private val dir: File) {
         File(dir, CREDENTIALS).delete()
     }
 
+    /** The name of the config a quick start connects (the tile shows it); null — none. */
+    fun tileName(): String? = read(TILE_NAME)
+
+    /** A blank or null [name] removes it. */
+    fun saveTileName(name: String?) {
+        if (name.isNullOrBlank()) File(dir, TILE_NAME).delete() else write(TILE_NAME, name)
+    }
+
     /** Flutter's `saveQuickConnect`: everything a quick start needs, before any session ran with it. */
     fun save(config: String, params: ConnectionParams, socksUser: String, socksPassword: String) {
         saveParams(params)
@@ -65,7 +77,7 @@ internal class QuickConnectStore(private val dir: File) {
 
     /** Flutter's `clearQuickConnect`: nothing left to quick-start. The off flag stays. */
     fun clear() {
-        for (name in listOf(CONFIG, PARAMS, CREDENTIALS)) File(dir, name).delete()
+        for (name in listOf(CONFIG, PARAMS, CREDENTIALS, TILE_NAME)) File(dir, name).delete()
     }
 
     /** The user turned the VPN off: boot and a system restart don't start it again. Survives a process restart. */
@@ -84,7 +96,7 @@ internal class QuickConnectStore(private val dir: File) {
         val params = params() ?: return null
         val config = config() ?: return null
         val (user, password) = credentials() ?: socksFromConfig(config, params.engine)
-        return StartRequest(config, params, user, password, reconnect = true)
+        return StartRequest(config, params, user, password, attempt = 0, reconnect = true)
     }
 
     private fun read(name: String): String? = File(dir, name).takeIf { it.exists() }?.readText()
@@ -105,5 +117,6 @@ internal class QuickConnectStore(private val dir: File) {
         const val PARAMS = "last_connection_meta.json"
         const val CREDENTIALS = "socks_creds.json"
         const val USER_OFF = "user_disconnected.flag"
+        const val TILE_NAME = "tile_config_name.txt"
     }
 }

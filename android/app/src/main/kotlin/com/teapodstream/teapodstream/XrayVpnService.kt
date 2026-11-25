@@ -407,7 +407,7 @@ class XrayVpnService : VpnService() {
                 setUserOff(false)
                 reconnectAttempts.set(0)
                 ensureForeground()
-                val request = StartRequest(xrayConfig, params, socksUser, socksPassword, reconnect = false)
+                val request = StartRequest(xrayConfig, params, socksUser, socksPassword, attempt, reconnect = false)
                 // Changing server/settings on a live tunnel: the old TUN stays a sink
                 // until the new one's establish() — no explicit disconnect and no leak window.
                 sessionCommands.submit(SessionCommands.Kind.CONNECT, skipped = {
@@ -417,12 +417,12 @@ class XrayVpnService : VpnService() {
                     // waits for this attempt, so answer it.
                     if (userRequestedDisconnect.get()) {
                         log("info", "CONNECT cancelled: VPN revoked or disconnected meanwhile")
-                        sessionAttempt = attempt
+                        sessionAttempt = request.attempt
                         setState(SessionState.DISCONNECTED)
                         return@submit
                     }
                     // Before the old session stops: its events from here on belong to this attempt.
-                    sessionAttempt = attempt
+                    sessionAttempt = request.attempt
                     if (isRunning.get()) stopVpn(reconnecting = true)
                     startVpn(request)
                 }
@@ -452,7 +452,7 @@ class XrayVpnService : VpnService() {
                     else -> {
                         setUserOff(false)
                         setState(SessionState.RECONNECTING)
-                        startQuick { startVpn(request) }
+                        startQuick(request)
                     }
                 }
                 return START_STICKY
@@ -469,7 +469,7 @@ class XrayVpnService : VpnService() {
             (request.params.proxyOnly || VpnService.prepare(this) == null)
         ) {
             setState(SessionState.RECONNECTING)
-            startQuick { startVpn(request) }
+            startQuick(request)
             return START_STICKY
         }
         // Nothing to start: the service doesn't stay in the foreground for an off VPN.
@@ -508,7 +508,8 @@ class XrayVpnService : VpnService() {
     }
 
     private fun startVpn(request: StartRequest) {
-        val (xrayConfig, params, socksUser, socksPassword, isReconnect) = request
+        val (xrayConfig, params, socksUser, socksPassword) = request
+        val isReconnect = request.reconnect
         val socksPort = params.socksPort
         val excludedPackages = params.excludedPackages
         val includedPackages = params.includedPackages
@@ -1189,7 +1190,7 @@ class XrayVpnService : VpnService() {
 
     /// Restart from saved parameters (CONNECT_QUICK, system restart) — queued in [sessionCommands] after the
     /// commands received before it. Won't begin on top of a live session or after the user disconnected.
-    private fun startQuick(start: () -> Unit) {
+    private fun startQuick(request: StartRequest) {
         // Not queued after the user disconnected: it would only skip itself, and as a start received after the
         // disconnect it would take the disconnect's final state.
         if (userRequestedDisconnect.get()) {
@@ -1201,8 +1202,8 @@ class XrayVpnService : VpnService() {
                 log("info", "quick start skipped (disconnected by user or already running)")
                 return@submit
             }
-            sessionAttempt = 0
-            start()
+            sessionAttempt = request.attempt
+            startVpn(request)
         }
     }
 

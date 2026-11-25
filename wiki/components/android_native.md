@@ -14,7 +14,7 @@ back. It keeps working when the Flutter UI is gone (tile, boot, Tasker, service 
 | `core/` | `VpnCore` and its implementations (below), `TunOwnerPolicy`, `SocksCredentials`, `ProxyRedirect` |
 | `VpnEventStreamHandler.kt` | EventChannel (`com.teapodstream/vpn/events`) singleton |
 | `ConnectionParams.kt` | the session parameters (everything but the config and the SOCKS login): one JSON form for the `ACTION_CONNECT` Intent (`EXTRA_PARAMS`) and the stored parameters; `fromJson` holds every default and limit (MTU 576–9000, heartbeat threshold 1–10), `fromArgs` maps Flutter's `connect` / `saveQuickConnect` arguments through it |
-| `QuickConnectStore.kt` | the quick-reconnect data in `filesDir`, its only reader and writer: the core config (`xray_config.json`), `ConnectionParams` (`last_connection_meta.json`), the SOCKS login (`socks_creds.json`) and the user-off flag (`user_disconnected.flag`); writes go through a temp file and a rename. `quickStart()` builds the `StartRequest` (config, params, SOCKS login — the stored one, else read from the config — `reconnect`) that `startVpn(request)` takes |
+| `QuickConnectStore.kt` | the quick-reconnect data in `filesDir`, its only reader and writer: the core config (`xray_config.json`), `ConnectionParams` (`last_connection_meta.json`), the SOCKS login (`socks_creds.json`), the tile's config name (`tile_config_name.txt`) and the user-off flag (`user_disconnected.flag`); writes go through a temp file and a rename. `quickStart()` builds the `StartRequest` (config, params, SOCKS login — the stored one, else read from the config — the Flutter `attempt` it answers, 0 for a native start, and `reconnect`) that `startVpn(request)` takes |
 | `VpnTileService.kt` | Quick Settings tile |
 | `BootReceiver.kt` | auto-start after boot (`autoStartOnBoot`, a saved config, not after an explicit disconnect) |
 | `VpnCommandReceiver.kt` | Tasker/automation broadcasts `com.teapodstream.CONNECT` / `DISCONNECT`; ignored unless `automationEnabled` |
@@ -188,8 +188,8 @@ UI catches up. It only sends: the tile and the notification follow the service's
 
 ## Tile
 
-Disconnected: label "TeapodStream", subtitle = the config the tile will connect (`tile_config_name` in `vpn_prefs`,
-saved with the quick-connect parameters). Active / transition / kill switch: label = config name, subtitle = status.
+Disconnected: label "TeapodStream", subtitle = the config the tile will connect (`tile_config_name.txt` in
+`QuickConnectStore`, saved with the quick-connect parameters). Active / transition / kill switch: label = config name, subtitle = status.
 Tap: disconnect when connected or connecting, otherwise `CONNECT_QUICK`; `unlockAndRun` on the lock screen.
 
 ## PrefixTcpProxy

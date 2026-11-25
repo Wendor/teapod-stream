@@ -28,6 +28,17 @@ class QuickConnectStoreTest {
     }
 
     @Test
+    fun tileNameIsSavedRemovedByABlankOneAndCleared() {
+        store.saveTileName("Oslo")
+        assertEquals("Oslo", store.tileName())
+        store.saveTileName(" ")
+        assertNull(store.tileName())
+        store.saveTileName("Oslo")
+        store.clear()
+        assertNull(store.tileName())
+    }
+
+    @Test
     fun aFailedWriteLeavesNoTempFile() {
         // A non-empty directory under the target name: the rename fails.
         File(dir, QuickConnectStore.CONFIG).mkdir()
@@ -39,7 +50,7 @@ class QuickConnectStoreTest {
     @Test
     fun quickStartPrefersTheStoredLogin() {
         store.save("{config}", params, "u", "p")
-        assertEquals(StartRequest("{config}", params, "u", "p", reconnect = true), store.quickStart(fromConfig))
+        assertEquals(StartRequest("{config}", params, "u", "p", attempt = 0, reconnect = true), store.quickStart(fromConfig))
     }
 
     @Test

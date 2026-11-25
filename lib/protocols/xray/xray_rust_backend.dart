@@ -40,7 +40,7 @@ class XrayRustBackend implements CoreBackend {
       return (blocking: _unsupported[CoreFeature.proxyOnly], warnings: const <String>[]);
     }
     final sanitized = _sanitize(config, options);
-    final overBudget = RustConfigBuilder.geositeDomains(sanitized.options) > RustConfigBuilder.maxDomainMatchers;
+    final overBudget = RustConfigBuilder.domainMatchers(sanitized.options) > RustConfigBuilder.maxDomainMatchers;
     return (blocking: overBudget ? L10n.current.rustGeositeLimit : null, warnings: sanitized.warnings);
   }
 
@@ -83,7 +83,7 @@ class XrayRustBackend implements CoreBackend {
     s.drop(
       when:
           s.result.options.routing.adBlockEnabled &&
-          RustConfigBuilder.geositeDomains(s.result.options) > RustConfigBuilder.maxDomainMatchers,
+          RustConfigBuilder.domainMatchers(s.result.options) > RustConfigBuilder.maxDomainMatchers,
       warning: L10n.current.rustAdBlockDropped,
       fix: (v) => v.copyWith(routing: v.routing.copyWith(adBlockEnabled: false)),
     );

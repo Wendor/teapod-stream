@@ -137,5 +137,12 @@ void main() {
     final tooMany = blocked.copyWith(geositeCodes: ['cn', 'china-list', 'ru-blocked']);
     expect(rust.checkOptions(_vless(), with_(tooMany)).blocking, contains('250k'));
     expect(rust.checkOptions(_vless(), with_(blocked.copyWith(geositeCodes: ['cn', 'china-list']))).blocking, isNull);
+    // Literal domains take from the same budget.
+    final sites = blocked.copyWith(
+      geositeCodes: ['cn', 'china-list'],
+      sitesEnabled: true,
+      sites: [for (var i = 0; i < 30300; i++) 'site$i.example'],
+    );
+    expect(rust.checkOptions(_vless(), with_(sites)).blocking, contains('250k'));
   });
 }

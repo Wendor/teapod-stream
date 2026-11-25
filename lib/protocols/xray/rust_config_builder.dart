@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import '../../core/constants/routing_defaults.dart';
 import '../../core/interfaces/vpn_engine.dart';
 import '../../core/models/routing_settings.dart';
 import '../../core/models/vpn_config.dart';
@@ -228,9 +229,16 @@ class RustConfigBuilder {
     if (o.routing.adBlockEnabled) ...o.adBlockCodes,
   ];
 
-  /// The domains [geositeCodes] add to the matcher budget, trimmed ones counted as trimmed; 0 without the index.
-  static int geositeDomains(VpnEngineOptions o) =>
-      geositeCodes(o).fold(0, (sum, code) => sum + (o.geosite?[code]?.rustDomains ?? 0));
+  /// The domain matchers the routing rules of [o] take from the budget: the domains of [geositeCodes] as
+  /// xray-rust gets them (0 without the index), and the literal domains. A `code@attr` selector counts its
+  /// whole entry: an upper bound, so a config over it falls to the next core rather than failing to start.
+  static int domainMatchers(VpnEngineOptions o) {
+    final r = o.routing;
+    return geositeCodes(o).fold(0, (sum, code) => sum + (o.geosite?[code]?.rustDomains ?? 0)) +
+        (r.isActive && r.domainEnabled ? r.domainZones.length : 0) +
+        (r.isActive && r.sitesEnabled ? r.sites.length : 0) +
+        (r.isActive && r.ruServicesEnabled ? RoutingDefaults.ruServicesDomains.length : 0);
+  }
 
   /// The referenced codes xray-rust gets trimmed to its per-entry limits ([GeositeIndex.rustFile]).
   static List<String> trimmedGeosite(VpnEngineOptions o) => {
@@ -313,7 +321,7 @@ class RustConfigBuilder {
             options.routing.ruServicesEnabled)) {
       throw FormatException(L10n.current.rustSniffing);
     }
-    if (geositeDomains(options) > maxDomainMatchers) throw FormatException(L10n.current.rustGeositeLimit);
+    if (domainMatchers(options) > maxDomainMatchers) throw FormatException(L10n.current.rustGeositeLimit);
 
     // Composed from the Go builder's parts by name; its policy, dialer-out, SOCKS UDP rule and catch-all
     // aren't taken. Native TUN traffic never uses SOCKS.

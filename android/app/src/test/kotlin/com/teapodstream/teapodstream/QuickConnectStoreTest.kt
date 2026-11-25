@@ -64,13 +64,12 @@ class QuickConnectStoreTest {
     }
 
     @Test
-    fun concurrentReplacementsNeverPairOneConfigWithAnothersLogin() {
-        store.saveParams(params)
+    fun concurrentReplacementsNeverPairOneConfigWithAnothersParamsOrLogin() {
         val writers = (1..2).map { w ->
             Thread {
                 // A store of its own per writer, as the activity and the service have.
                 val own = QuickConnectStore(dir)
-                repeat(300) { i -> own.save("c-$w-$i", params, "u-$w-$i", "p") }
+                repeat(300) { i -> own.save("c-$w-$i", params.copy(socksPort = w * 1000 + i), "u-$w-$i", "p") }
             }
         }
         val mismatches = mutableListOf<String>()
@@ -79,8 +78,9 @@ class QuickConnectStoreTest {
             val own = QuickConnectStore(dir)
             repeat(600) {
                 val r = own.quickStart { config, _ -> "from-$config" to "p" } ?: return@repeat
-                val expected = r.config.removePrefix("c-").let { "u-$it" }
-                if (r.socksUser != expected && r.socksUser != "from-${r.config}") mismatches += "${r.config}/${r.socksUser}"
+                val (w, i) = r.config.removePrefix("c-").split("-").map(String::toInt)
+                if (r.socksUser != "u-$w-$i" && r.socksUser != "from-${r.config}") mismatches += "${r.config}/${r.socksUser}"
+                if (r.params.socksPort != w * 1000 + i) mismatches += "${r.config}/port ${r.params.socksPort}"
             }
         }
         (writers + reader).forEach { t -> t.setUncaughtExceptionHandler { _, e -> failures += e }; t.start() }
@@ -92,10 +92,21 @@ class QuickConnectStoreTest {
     @Test
     fun aFailedWriteLeavesNoTempFile() {
         // A non-empty directory under the target name: the rename fails.
-        File(dir, QuickConnectStore.CONFIG).mkdir()
-        File(dir, "${QuickConnectStore.CONFIG}/x").writeText("")
+        File(dir, QuickConnectStore.PARAMS).mkdir()
+        File(dir, "${QuickConnectStore.PARAMS}/x").writeText("")
         assertTrue(runCatching { store.save("{config}", params, "u", "p") }.isFailure)
         assertTrue(dir.listFiles()!!.none { it.name.endsWith(".tmp") })
+    }
+
+    @Test
+    fun paramsThatCantBeWrittenLeaveNothingToQuickStart() {
+        store.save("{old}", params, "old-u", "old-p")
+        File(dir, QuickConnectStore.PARAMS).delete()
+        File(dir, QuickConnectStore.PARAMS).mkdir()
+        File(dir, "${QuickConnectStore.PARAMS}/x").writeText("")
+        assertTrue(runCatching { store.save("{new}", params.copy(engine = "go"), "u", "p") }.isFailure)
+        assertNull("the old config doesn't stay with other params", store.config())
+        assertNull(store.quickStart(fromConfig))
     }
 
     @Test

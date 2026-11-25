@@ -55,8 +55,8 @@ after `onRevoke()` (which stops outside the queue) or a disconnect set `userRequ
 - **`ACTION_CONNECT`** (from Flutter): only the notification type is taken before the queue (when no session runs);
   `startVpn(StartRequest)` takes the parameters (`useParams`: the heartbeat, tethering and notification settings are
   read from them) once it owns the session, and stores them, the config it runs and its SOCKS login together
-  (`QuickConnectStore.save`: under a lock shared with the activity's save and the quick-start read; the old login is
-  removed first and a failed save restores the old params, so the stored set never mixes two connections). Under `sessionLock`, before the old session
+  (`QuickConnectStore.save`: under a lock shared with the activity's save and the quick-start read; the old login and
+  config are removed first, so an interrupted save leaves nothing to quick-start rather than a mix of two connections). Under `sessionLock`, before the old session
   stops, `sessionAttempt` takes Flutter's connect attempt (`EXTRA_ATTEMPT`), and every snapshot the session
   publishes carries it as `attempt` (quick starts reset it to 0 — untagged); if a session is running this is a **hot
   switch** — `stopVpn(reconnecting=true)` keeps TUN as a sink until the new session is up, no leak window.

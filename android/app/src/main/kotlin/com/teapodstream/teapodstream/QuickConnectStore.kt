@@ -30,7 +30,7 @@ internal class QuickConnectStore(private val dir: File) {
 
     fun config(): String? = read(CONFIG)
 
-    /** The config the session runs (with the prefix proxy injected, if any); only with its login ([saveSession]). */
+    /** The config the session runs (with the prefix proxy injected, if any); only with its params and login ([save]). */
     private fun saveConfig(config: String) = write(CONFIG, config)
 
     fun params(): ConnectionParams? = try {
@@ -72,29 +72,20 @@ internal class QuickConnectStore(private val dir: File) {
         if (name.isNullOrBlank()) File(dir, TILE_NAME).delete() else write(TILE_NAME, name)
     }
 
-    /** Flutter's `saveQuickConnect`: everything a quick start needs, before any session ran with it. */
-    fun save(config: String, params: ConnectionParams, socksUser: String, socksPassword: String) = synchronized(LOCK) {
-        val oldParams = read(PARAMS)
-        saveParams(params)
-        try {
-            saveSession(config, params.socksPort, socksUser, socksPassword)
-        } catch (e: Exception) {
-            // The config stayed the old one: so do its params.
-            if (oldParams != null) write(PARAMS, oldParams) else File(dir, PARAMS).delete()
-            throw e
-        }
-    }
-
     /**
-     * The config a session runs and its SOCKS login, as one replacement. The old login goes first: an interrupted
-     * write leaves the login read from the config, never one that doesn't match it. A failed login write is left to
-     * that fallback rather than thrown.
+     * Flutter's `saveQuickConnect` and every session start: the config, its params and its SOCKS login as one
+     * replacement. The old login and config go first, so an interrupted replacement leaves no config (nothing to
+     * quick-start) or the new config with the login read from it, never a config paired with another one's params or
+     * login. A failed login write is left to that fallback rather than thrown.
      */
-    private fun saveSession(config: String, socksPort: Int, socksUser: String, socksPassword: String) = synchronized(LOCK) {
+    fun save(config: String, params: ConnectionParams, socksUser: String, socksPassword: String) = synchronized(LOCK) {
         clearCredentials()
+        val old = File(dir, CONFIG)
+        if (!old.delete() && old.exists()) throw java.io.IOException("can't remove $CONFIG")
+        saveParams(params)
         saveConfig(config)
         try {
-            saveCredentials(socksPort, socksUser, socksPassword)
+            saveCredentials(params.socksPort, socksUser, socksPassword)
         } catch (_: Exception) {
         }
     }

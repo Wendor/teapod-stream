@@ -27,20 +27,23 @@ allowed, `disconnect()` closes the sink. Native `reconnecting` maps to `connecti
 `PendingDisconnect`) and a `SessionFailure(reason, attempt)` Flutter found itself (a connect refused before native,
 rejected by it or timed out; a session stopped because no core runs its config). `connectionState` and `error` are
 its pure `view`; `_setSession` is the only writer, and derives the rest (SOCKS login, stats reset, polling, duration).
+A refusal (before native, or rejected by it) leaves native as it is; a *stopping* failure (the connect timeout, a
+session no core runs) asks native to stop that session.
 
-- **`onNative(snapshot, poll:)`** (pure; null — dropped). While a connect waits, a snapshot of another attempt is
-  dropped (an old session's late report), and so is an untagged poll (`getState` may predate the connect reaching the
-  service); an untagged event is a natively started session that replaced the connect. A connect waits through
-  `connecting`/`disconnecting` of its attempt, a disconnect through `disconnecting`. A failure stays while native
-  reports the same snapshot or the stop of the session it is about; a running session or the kill switch's sink
-  replaces it.
+- **`onNative(snapshot, poll:)`** (pure). Every snapshot becomes native's latest state, but while a connect waits a
+  `foreign` one doesn't settle it: another attempt's (an old session's late report — also what a refused switch leaves
+  running) or an untagged poll (`getState` may predate the connect reaching the service); an untagged event is a
+  natively started session that replaced the connect. A connect waits through `connecting`/`disconnecting` of its
+  attempt, a disconnect through `disconnecting`. A refusal stays while native reports the same snapshot. A stopping
+  failure stays through the stop (its reports carry native's last Flutter connect, not the stopped session's tag) and
+  the stopped session's own reports, even a late `connected`; another session or the kill switch's sink replaces it.
 - **`view`**: a pending connect → `connecting`, a pending disconnect → `disconnecting` (with a failure's reason);
-  a failure → `error` with it (native's own reason wins when native is in `error`), or `connected` with it when the
-  old session still runs (a refused switch); otherwise native's state, `error` with native's reason or the generic one.
+  a failure → `error` with it (native's own reason wins when native is in `error`), or `connected` with it when a
+  refusal leaves the old session running; otherwise native's state, `error` with native's reason or the generic one.
 - **One deadline** for what is pending: 45 s for a connect (→ failure `vpnConnectTimeout`, a new attempt id so its late
   answer is stale, native `disconnect`), 10 s for a disconnect (→ taken as off). A `reconnecting` report of the
-  pending connect drops the deadline (a native restart can outlast it; the service ends it itself); a dropped poll
-  arms it again.
+  pending connect drops the deadline (a native restart can outlast it; the service ends it itself); its `connecting`
+  (the start after a switch's stop) and a foreign poll arm it again.
 
 Derived providers: `vpnConnectionStateProvider`, `vpnStatsProvider`, `pendingReconnectProvider` — `connected` and the
 fingerprint of the current settings differs from `appliedFingerprint` → `ReconnectBanner`. Only connection-relevant
@@ -76,8 +79,8 @@ it can → reconnect banner; disconnected → refresh or clear the saved quick-c
    `warnings` go to the log.
 5. `XrayEngine.connect(config, backend, options)`; stores `appliedFingerprint`.
 
-**Attempt ownership.** A `connect()` that passes its entry guard (not busy, not connected unless switching) takes a
-new attempt id; a later such `connect()`, any `disconnect()` or the 45 s deadline makes it stale. After each await of
+**Attempt ownership.** `connect()` is refused while `disconnecting`, and while `connected` or `connecting` unless it
+switches (`reconnectWithNewConfig`). One that passes takes a new attempt id; a later such `connect()`, any `disconnect()` or the 45 s deadline makes it stale. After each await of
 the attempt (notification permission, available cores, the native call) a stale attempt returns without calling native
 and without writing `_connectedConfig`, `appliedFingerprint` or a failure. The id goes to native with `connect`, and
 the session's snapshots carry it back (`attempt`), so `onNative` can tell a connect's own outcome. Ids are random and

@@ -369,21 +369,26 @@ class VpnNotifier extends Notifier<VpnState2> {
     if (connected) _startStatsPolling();
   }
 
-  /// Applies a native snapshot ([poll] — from `getState`); false — dropped ([VpnSession.onNative]).
+  /// Applies a native snapshot ([poll] — from `getState`); false — not about the pending connect
+  /// ([VpnSession.foreign]).
   bool _applyNative(NativeSession s, {bool poll = false}) {
+    final foreign = _session.foreign(s, poll: poll);
     final next = _session.onNative(s, poll: poll);
-    if (next == null) {
+    if (foreign) {
       // A reconnect report may have dropped the deadline: the pending connect still ends.
       if (poll) _armConnectDeadline();
-      return false;
-    }
-    if (next.pending is PendingConnect && s.reconnecting) {
-      // A native restart of the pending session can outlast the deadline: the service ends it itself.
-      _deadline?.cancel();
-      _deadline = null;
+    } else if (next.pending is PendingConnect) {
+      // A native restart of the pending session can outlast the deadline (the service ends it itself); its start
+      // (also after a switch's stop of the old session) has one again.
+      if (s.reconnecting) {
+        _deadline?.cancel();
+        _deadline = null;
+      } else if (s.state == VpnState.connecting) {
+        _armConnectDeadline();
+      }
     }
     _setSession(next);
-    return true;
+    return !foreign;
   }
 
   void _handleStats(Map<String, dynamic> event) {
@@ -458,7 +463,10 @@ class VpnNotifier extends Notifier<VpnState2> {
       if (p is! PendingConnect) return;
       _attempt = _newAttempt(); // the timed-out attempt's late answer must not replace the timeout error
       _setSession(
-        VpnSession(native: _session.native, failure: SessionFailure(L10n.current.vpnConnectTimeout, p.attempt)),
+        VpnSession(
+          native: _session.native,
+          failure: SessionFailure(L10n.current.vpnConnectTimeout, p.attempt, stopping: true),
+        ),
       );
       _engine.disconnect().ignore();
     });
@@ -589,17 +597,8 @@ class VpnNotifier extends Notifier<VpnState2> {
         case CoreSwitchAction.none:
           break;
         case CoreSwitchAction.disconnect:
-          final session = _session.native.attempt;
-          await disconnect();
           ref.read(logServiceProvider.notifier).addError('Core: $unsupported');
-          // Shown through the stop of that session.
-          _setSession(
-            VpnSession(
-              native: _session.native,
-              pending: _session.pending,
-              failure: SessionFailure(unsupported!, session),
-            ),
-          );
+          await _disconnect(reason: unsupported);
         case CoreSwitchAction.saveQuickConnect:
           await _engine.saveQuickConnect(
             config!,
@@ -621,14 +620,24 @@ class VpnNotifier extends Notifier<VpnState2> {
     }
   }
 
-  Future<void> disconnect() async {
+  Future<void> disconnect() => _disconnect();
+
+  /// [reason] — why Flutter stops the session: shown through the stop ([SessionFailure.stopping]).
+  Future<void> _disconnect({String? reason}) async {
     // A connect still in flight must not dispatch or write state after this — also when native already reported
     // `disconnected` while that connect waited.
     _attempt = _newAttempt();
     if (state.connectionState == VpnState.disconnected || state.isDisconnecting) return;
 
     _deadline?.cancel();
-    _setSession(VpnSession(native: _session.native, pending: const PendingDisconnect()));
+    final n = _session.native;
+    _setSession(
+      VpnSession(
+        native: n,
+        pending: const PendingDisconnect(),
+        failure: reason == null ? null : SessionFailure(reason, n.attempt, stopping: true),
+      ),
+    );
     _deadline = Timer(const Duration(seconds: 10), _forceOff);
 
     try {
@@ -641,9 +650,11 @@ class VpnNotifier extends Notifier<VpnState2> {
 
   /// Native didn't confirm a disconnect: the UI must not stay in `disconnecting`.
   void _forceOff() {
+    // A late failure of an earlier disconnect: a newer command owns the deadline.
+    if (_session.pending is! PendingDisconnect) return;
     _deadline?.cancel();
     _deadline = null;
-    if (_session.pending is PendingDisconnect) _setSession(VpnSession(failure: _session.failure));
+    _setSession(VpnSession(failure: _session.failure));
   }
 
   /// Takes native's state at startup and on resume; restarts the stats polling paused in the background. A session

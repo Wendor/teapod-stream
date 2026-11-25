@@ -635,8 +635,8 @@ void main() {
       await _settle();
       expect(native.named('disconnect'), hasLength(1));
       expect(st().error, isNotNull);
-      // The reason outlives the stop it caused.
-      emit({'type': 'state', 'value': 'disconnected'});
+      // The reason outlives the stop it caused; native tags the stop with its last Flutter connect, not the session's.
+      emit({'type': 'state', 'value': 'disconnected', 'attempt': 4242});
       await _settle();
       expect(st().connectionState, VpnState.error);
       expect(st().error, isNotNull);
@@ -955,6 +955,29 @@ void main() {
       emit({'type': 'state', 'value': 'connected', 'socksPort': 2080, 'attempt': second});
       await _settle();
       expect(n().runsConfig(_cfg('b')), isTrue);
+    });
+
+    test("a refused switch shows the old session's latest state", () async {
+      await connected(
+        configs: [
+          _cfg('a'),
+          _cfg('bad', password: ''),
+        ],
+      );
+      final permission = Completer<Map<int, int>>();
+      messenger.setMockMethodCallHandler(_permissions, (call) => permission.future);
+      await c.read(configProvider.notifier).setActiveConfig('bad');
+      final switching = n().reconnectWithNewConfig();
+      await _settle();
+      // The old session drops while the switch waits; its report isn't the switch's outcome.
+      emit({'type': 'state', 'value': 'error', 'error': 'old dropped', 'attempt': 4242});
+      await _settle();
+      expect(st().connectionState, VpnState.connecting);
+      permission.complete({17: 1});
+      await switching;
+      await _settle();
+      expect((st().connectionState, st().error), (VpnState.error, 'old dropped'));
+      expect(c.read(tunnelSocksProvider), isNull);
     });
 
     test('disconnect after native reported disconnected still drops the waiting connect', () async {
@@ -1442,6 +1465,81 @@ void main() {
         async.flushMicrotasks();
         native.state = {'value': 'connecting', 'attempt': native.lastConnect()['attempt']};
         n().syncNativeState();
+        async.flushMicrotasks();
+        async.elapse(const Duration(seconds: 46));
+        expect(st().error, 'Connection timeout');
+        c.dispose();
+      });
+    });
+
+    test('a timed-out switch shows the timeout over the running session, also through its stop', () {
+      fakeAsync((async) {
+        native.state = {
+          'value': 'connected',
+          'socksPort': 2080,
+          'socksUser': 'su',
+          'socksPassword': 'sp',
+          'attempt': 3,
+        };
+        boot(configs: [_cfg('a')], activeId: 'a');
+        async.flushMicrotasks();
+        expect(st().isConnected, isTrue);
+        // The VPN-permission dialog never answers.
+        native.onConnect = () => Completer<void>().future;
+        n().reconnectWithNewConfig();
+        async.flushMicrotasks();
+        final attempt = native.lastConnect()['attempt'];
+        async.elapse(const Duration(seconds: 46));
+        expect((st().connectionState, st().error), (VpnState.error, 'Connection timeout'));
+        expect(st().activeSocksPort, 0);
+        // A late connected of the timed-out attempt, then the stop tagged with it.
+        for (final v in ['connected', 'disconnected']) {
+          native.state = {'value': v, 'socksPort': 2080, 'attempt': attempt};
+          n().syncNativeState();
+          async.flushMicrotasks();
+          expect((st().connectionState, st().error), (VpnState.error, 'Connection timeout'), reason: v);
+          expect(c.read(tunnelSocksProvider), isNull);
+        }
+        c.dispose();
+      });
+    });
+
+    test('the deadline returns when the pending session starts after a restart report', () {
+      fakeAsync((async) {
+        boot(configs: [_cfg('a')], activeId: 'a');
+        async.flushMicrotasks();
+        n().connect();
+        async.flushMicrotasks();
+        final attempt = native.lastConnect()['attempt'];
+        // A switch stops the old session under the new attempt, then starts the new one.
+        for (final v in ['reconnecting', 'connecting']) {
+          native.state = {'value': v, 'attempt': attempt};
+          n().syncNativeState();
+          async.flushMicrotasks();
+        }
+        async.elapse(const Duration(seconds: 46));
+        expect(st().error, 'Connection timeout');
+        c.dispose();
+      });
+    });
+
+    test("a late failure of an earlier disconnect doesn't cancel a newer connect's deadline", () {
+      fakeAsync((async) {
+        boot(configs: [_cfg('a')], activeId: 'a');
+        async.flushMicrotasks();
+        n().connect();
+        async.flushMicrotasks();
+        final reply = Completer<void>();
+        native.onDisconnect = () => reply.future;
+        n().disconnect();
+        async.flushMicrotasks();
+        native.state = {'value': 'disconnected'};
+        n().syncNativeState();
+        async.flushMicrotasks();
+        expect(st().connectionState, VpnState.disconnected);
+        n().connect();
+        async.flushMicrotasks();
+        reply.completeError(PlatformException(code: 'X', message: 'late'));
         async.flushMicrotasks();
         async.elapse(const Duration(seconds: 46));
         expect(st().error, 'Connection timeout');

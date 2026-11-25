@@ -17,13 +17,15 @@ final class PendingDisconnect extends Pending {
   const PendingDisconnect();
 }
 
-/// Why the session failed on the Flutter side: a connect refused before native, rejected by it or timed out, or a
-/// session stopped because no core runs its config. [attempt] — the native session it is about: native's states of
-/// that session (the stop that follows) keep it on screen.
+/// Why the session failed on the Flutter side. A refusal (a connect refused before native or rejected by it) leaves
+/// native as it is and shows over its current state. A [stopping] failure (a connect timed out, a session no core runs)
+/// asked native to stop the session [attempt]: it shows as `error` through that session's reports and the stop's, whose
+/// tag is native's last Flutter connect rather than the session's.
 final class SessionFailure {
-  const SessionFailure(this.reason, this.attempt);
+  const SessionFailure(this.reason, this.attempt, {this.stopping = false});
   final String reason;
   final int attempt;
+  final bool stopping;
 }
 
 /// The session as `VpnNotifier` knows it: the last native snapshot, what Flutter waits for, and a failure Flutter
@@ -35,12 +37,19 @@ final class VpnSession {
   final Pending? pending;
   final SessionFailure? failure;
 
-  /// Native reported [s]: from an event, or from `getState` ([poll]: startup or resume). Null — dropped: while a
-  /// Flutter connect waits, a snapshot of another attempt is an old session's late report, and an untagged poll may
-  /// predate the connect reaching the service (an untagged event is a session started natively that replaced it).
-  VpnSession? onNative(NativeSession s, {bool poll = false}) {
+  /// [s] is not about the connect Flutter waits for: a snapshot of another attempt is an old session's late report,
+  /// and an untagged poll may predate the connect reaching the service (an untagged event is a session started
+  /// natively that replaced it).
+  bool foreign(NativeSession s, {bool poll = false}) {
     final p = pending;
-    if (p is PendingConnect && s.attempt != p.attempt && (s.attempt != 0 || poll)) return null;
+    return p is PendingConnect && s.attempt != p.attempt && (s.attempt != 0 || poll);
+  }
+
+  /// Native reported [s]: from an event, or from `getState` ([poll]: startup or resume). A [foreign] report is still
+  /// native's latest state (what a refused switch leaves running), but doesn't settle the connect.
+  VpnSession onNative(NativeSession s, {bool poll = false}) {
+    final p = pending;
+    if (foreign(s, poll: poll)) return VpnSession(native: s, pending: p, failure: failure);
     final keepPending = switch (p) {
       // Settled: connected, or off — the connect's own failure or a natively started session that replaced it.
       PendingConnect() => s.state == VpnState.connecting || s.state == VpnState.disconnecting,
@@ -48,12 +57,19 @@ final class VpnSession {
       null => false,
     };
     final f = failure;
-    // A failure stays while native reports the same thing, or the stop of the session it is about; a session that
-    // runs or holds the kill switch's sink replaces it.
+    // A refusal stays while native reports the same thing. A stopping failure stays through the stop and the stopped
+    // session's own reports; another session or the kill switch's sink replaces it.
+    final stop = s.state == VpnState.disconnecting || s.state == VpnState.disconnected || s.state == VpnState.error;
     final keepFailure =
-        f != null &&
-        (s == native || (s.attempt == f.attempt && s.state != VpnState.connected && s.state != VpnState.blocked));
-    return VpnSession(native: s, pending: keepPending ? p : null, failure: keepFailure ? f : null);
+        f != null && (s == native || (f.stopping && s.state != VpnState.blocked && (stop || s.attempt == f.attempt)));
+    // Once the stop is done, the stopped session's tag means nothing (a tile session reuses 0): only the same
+    // snapshot keeps the reason.
+    final stopped = keepFailure && f.stopping && (s.state == VpnState.disconnected || s.state == VpnState.error);
+    return VpnSession(
+      native: s,
+      pending: keepPending ? p : null,
+      failure: !keepFailure ? null : (stopped ? SessionFailure(f.reason, f.attempt) : f),
+    );
   }
 
   /// The state and the reason the UI shows.
@@ -68,7 +84,7 @@ final class VpnSession {
     }
     if (f != null) {
       // A switch refused before native: the old session runs on.
-      if (native.state == VpnState.connected) return (state: VpnState.connected, error: f.reason);
+      if (!f.stopping && native.state == VpnState.connected) return (state: VpnState.connected, error: f.reason);
       // Native may name the reason after Flutter's timeout already did.
       return (state: VpnState.error, error: native.state == VpnState.error ? native.error ?? f.reason : f.reason);
     }

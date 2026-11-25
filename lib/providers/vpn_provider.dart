@@ -764,6 +764,27 @@ class VpnNotifier extends Notifier<VpnState2> {
     }
   }
 
+  /// The user picked [config] (configs list, server picker): it becomes the active one, and a running or starting
+  /// session switches to it unless it already runs it (not awaited: the caller only waits for the selection). Returns
+  /// why no enabled core can run it (nothing changes then).
+  Future<String?> selectConfig(VpnConfig config) async {
+    final reason = ref.read(coreResolverProvider).resolve(config).reason;
+    if (reason != null) return reason;
+    await ref.read(configProvider.notifier).setActiveConfig(config.id);
+    // Queued behind earlier selections' reconnects and decided against what runs then: overlapping selections end
+    // on the last one saved.
+    unawaited(_queued(_followSelection));
+    return null;
+  }
+
+  /// Makes the tunnel run the active config: a connect in flight is redone, a live tunnel on another config switches,
+  /// one on this config stays.
+  Future<void> _followSelection() async {
+    if (state.isBusy) return reconnectWithNewConfig();
+    final config = ref.read(effectiveConfigProvider);
+    if (state.isConnected && config != null && !runsConfig(config)) await reconnectWithNewConfig();
+  }
+
   Future<void> reconnectWithNewConfig() async {
     // A live tunnel switches natively: the old TUN carries traffic until the new one is up.
     if (state.isConnected) return connect(switching: true);
@@ -782,9 +803,15 @@ class VpnNotifier extends Notifier<VpnState2> {
   /// in between belongs to neither profile and must not disconnect the tunnel.
   bool _profileSwitching = false;
 
-  /// Switches run one at a time, each with its reconciliation: a later switch can't start while the
-  /// earlier one's connect is in flight.
-  Future<void> _profileSwitches = Future.value();
+  /// Profile switches and config selections run one at a time, each with its reconciliation: a later one can't
+  /// start while the earlier one's connect is in flight.
+  Future<void> _switches = Future.value();
+
+  Future<void> _queued(Future<void> Function() body) {
+    final run = _switches.then((_) => body());
+    _switches = run.then((_) {}, onError: (_) {});
+    return run;
+  }
 
   /// Runs a profile switch ([body] returns false — nothing switched), then makes the VPN follow the
   /// final state: a profile no core runs disconnects (as a core change does), a live tunnel is
@@ -794,11 +821,7 @@ class VpnNotifier extends Notifier<VpnState2> {
   Future<void> switchProfile(String id) =>
       duringProfileSwitch(() => ref.read(profileProvider.notifier).switchProfile(id));
 
-  Future<void> duringProfileSwitch(Future<bool> Function() body) {
-    final run = _profileSwitches.then((_) => _profileSwitch(body));
-    _profileSwitches = run.then((_) {}, onError: (_) {});
-    return run;
-  }
+  Future<void> duringProfileSwitch(Future<bool> Function() body) => _queued(() => _profileSwitch(body));
 
   Future<void> _profileSwitch(Future<bool> Function() body) async {
     final coreBefore = ref.read(activeCoreProvider);

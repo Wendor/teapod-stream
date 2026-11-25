@@ -73,13 +73,16 @@ a password-less SOCKS on localhost would be an open proxy for every app. In prox
 
 **Hot switch.** `reconnectWithNewConfig()` while `connected` calls `connect(switching: true)`: native receives a
 normal `ACTION_CONNECT` and rebuilds the session without closing TUN, so there is no leak window with the kill
-switch. A failure before native is called keeps the old session running and shows the error. Used by the server
-picker, the reconnect banner and the config switch below. `reconnectIfStale()` calls it only when needed: while
+switch. A failure before native is called keeps the old session running and shows the error. Used by the reconnect
+banner, the config switch below and `selectConfig(config)` — the one rule for a picked config (configs list, server
+picker): refused with the reason when no enabled core runs it; otherwise it becomes active, and a running or starting
+session switches to it unless it already runs it. That decision is queued with the profile switches below and taken
+when its turn comes, against what runs then, so overlapping selections end on the last one. `reconnectIfStale()` calls it only when needed: while
 `connecting`, or when `connected` and the effective config isn't the running one (`runsConfig`) or the settings
 fingerprint changed. A profile switch runs inside `duringProfileSwitch`: it changes settings and the server one
 after the other, and the core resolved in between belongs to neither profile, so core changes are ignored while it
-runs. Switches go through a queue, each with its reconciliation, so a later one never starts while the earlier
-one's connect is in flight. After each switch the VPN follows the final state: a profile no core runs disconnects
+runs. Profile switches (body and reconciliation) and selections' reconciliations go through one queue, so a later one
+never starts while the earlier one's connect is in flight; a selection's save itself isn't queued. After each switch the VPN follows the final state: a profile no core runs disconnects
 with the error, as a core change does; otherwise a live tunnel goes through `reconnectIfStale`, an idle one through
 the core-change handling if the core differs ([profiles](profiles.md#selected-server)).
 

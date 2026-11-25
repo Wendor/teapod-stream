@@ -378,19 +378,10 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
 
   // ── Actions ────────────────────────────────────────────────────
 
-  void _selectConfig(WidgetRef ref, VpnConfig config) {
-    final reason = unsupportedReason(ref, config);
-    if (reason != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(reason)));
-      return;
-    }
-    // Same config as the connected one — no tunnel rebuild.
-    final unchanged = ref.read(vpnProvider.notifier).runsConfig(config);
-    ref.read(configProvider.notifier).setActiveConfig(config.id);
-    final vpnState = ref.read(vpnProvider);
-    if (!unchanged && (vpnState.isConnected || vpnState.isBusy)) {
-      ref.read(vpnProvider.notifier).reconnectWithNewConfig();
-    }
+  Future<void> _selectConfig(WidgetRef ref, VpnConfig config) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final reason = await ref.read(vpnProvider.notifier).selectConfig(config);
+    if (reason != null) messenger.showSnackBar(SnackBar(content: Text(reason)));
   }
 
   Future<void> _exportAll(List<VpnConfig> configs) async {

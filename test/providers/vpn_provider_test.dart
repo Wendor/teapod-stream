@@ -423,6 +423,58 @@ void main() {
       expect(native.lastConnect()['xrayConfig'], contains('hb.example'));
     });
 
+    test('selectConfig switches a live tunnel to another config and leaves the running one alone', () async {
+      await connected(configs: [_cfg('a'), _cfg('b')]);
+      expect(await n().selectConfig(c.read(configProvider).value!.configs.first), isNull);
+      await _settle();
+      expect(native.named('connect'), hasLength(1), reason: 'the running config: no rebuild');
+      expect(await n().selectConfig(c.read(configProvider).value!.configs.last), isNull);
+      await _settle();
+      expect(c.read(configProvider).value!.activeConfigId, 'b');
+      expect(native.named('connect'), hasLength(2));
+      expect(native.lastConnect()['xrayConfig'], contains('hb.example'));
+    });
+
+    test('overlapping selections end with the tunnel on the last one', () async {
+      await connected(configs: [_cfg('a'), _cfg('b')]);
+      final configs = c.read(configProvider).value!.configs;
+      // b, then back to a before b's save and reconnect are done.
+      final toB = n().selectConfig(configs.last);
+      final toA = n().selectConfig(configs.first);
+      expect(await toB, isNull);
+      expect(await toA, isNull);
+      // The native side answers: each connect ends connected, each disconnect disconnected.
+      for (var i = 0; i < 20; i++) {
+        await _settle();
+        if (!st().isBusy) break;
+        final value = st().isDisconnecting ? 'disconnected' : 'connected';
+        emit({'type': 'state', 'value': value, 'socksPort': 2080, 'socksUser': 'su', 'socksPassword': 'sp'});
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+      }
+      expect(c.read(configProvider).value!.activeConfigId, 'a');
+      expect(st().isConnected, isTrue);
+      expect(n().runsConfig(configs.first), isTrue, reason: 'the tunnel must not stay on b');
+    });
+
+    test('selectConfig refuses a config no enabled core runs and changes nothing', () async {
+      await boot(
+        configs: [_cfg('a'), _cfg('b')],
+        activeId: 'a',
+        settings: _settings.copyWith(proxyOnly: true, disabledCores: {CoreKind.xrayGo, CoreKind.singBox}),
+      );
+      final reason = await n().selectConfig(c.read(configProvider).value!.configs.last);
+      expect(reason, const XrayRustBackend().unavailableReason(CoreFeature.proxyOnly));
+      expect(c.read(configProvider).value!.activeConfigId, 'a');
+    });
+
+    test('selectConfig while disconnected only selects', () async {
+      await boot(configs: [_cfg('a'), _cfg('b')], activeId: 'a');
+      expect(await n().selectConfig(c.read(configProvider).value!.configs.last), isNull);
+      await _settle();
+      expect(c.read(configProvider).value!.activeConfigId, 'b');
+      expect(native.named('connect'), isEmpty);
+    });
+
     test('invalid config keeps the old session', () async {
       await connected(
         configs: [

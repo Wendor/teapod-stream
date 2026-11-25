@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/services/deeplink_router.dart';
 import '../core/models/profile_bundle.dart';
 import '../core/models/connections_bundle.dart';
+import '../core/models/import_review.dart';
 import '../providers/profile_provider.dart';
 import '../providers/config_provider.dart';
 import '../providers/vpn_provider.dart';
@@ -44,7 +45,7 @@ class DeeplinkHandler {
       case DeeplinkType.profile:
         await _showProfileImportDialog(bundle as ProfileBundle, sourceUrl: sourceUrl);
       case DeeplinkType.connections:
-        _showConnectionsImportDialog(bundle as ConnectionsBundle);
+        await _showConnectionsImportDialog(bundle as ConnectionsBundle);
     }
   }
 
@@ -52,104 +53,90 @@ class DeeplinkHandler {
     final review = await ref.read(profileProvider.notifier).reviewImport(bundle);
     if (!context.mounted) return;
     final t = Theme.of(context).extension<TeapodTokens>()!;
-
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: t.bg,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-        title: Text(
-          context.l10n.profileImportTitle,
-          style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500),
+    await _showImportDialog(
+      title: context.l10n.profileImportTitle,
+      lines: [
+        Text(context.l10n.deeplinkProfile(bundle.profile.name), style: AppTheme.mono(size: 12, color: t.text)),
+        const SizedBox(height: 6),
+        Text(
+          context.l10n.deeplinkExported(_formatDate(bundle.exportedAt)),
+          style: AppTheme.mono(size: 10, color: t.textMuted),
         ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(context.l10n.deeplinkProfile(bundle.profile.name), style: AppTheme.mono(size: 12, color: t.text)),
-              const SizedBox(height: 6),
-              Text(
-                context.l10n.deeplinkExported(_formatDate(bundle.exportedAt)),
-                style: AppTheme.mono(size: 10, color: t.textMuted),
-              ),
-              if (sourceUrl != null) ...[
-                const SizedBox(height: 4),
-                Text(context.l10n.deeplinkSource(sourceUrl), style: AppTheme.mono(size: 9, color: t.accent)),
-              ],
-              if (bundle.hasConnections)
-                Text(
-                  '+ ${context.l10n.configsCount(bundle.configs?.length ?? 0)}, ${context.l10n.subscriptionsCount(bundle.subscriptions?.length ?? 0)}',
-                  style: AppTheme.mono(size: 10, color: t.accent),
-                ),
-              ImportReviewDetails(review),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(context.l10n.commonCancel, style: AppTheme.mono(size: 11, color: t.textMuted)),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              // Taken before the import: the widget (and its ref) may be gone when it ends.
-              final vpn = ref.read(vpnProvider.notifier);
-              final id = await ref.read(profileProvider.notifier).importBundle(bundle, sourceUrl: sourceUrl);
-              if (id != null) await vpn.switchProfile(id);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      context.l10n.deeplinkProfileImported(bundle.profile.name),
-                      style: AppTheme.mono(size: 12, color: t.bg),
-                    ),
-                    backgroundColor: t.accent,
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
-              }
-            },
-            child: Text(context.l10n.commonImport, style: AppTheme.mono(size: 11, color: t.accent)),
-          ),
+        if (sourceUrl != null) ...[
+          const SizedBox(height: 4),
+          Text(context.l10n.deeplinkSource(sourceUrl), style: AppTheme.mono(size: 9, color: t.accent)),
         ],
-      ),
+        if (bundle.hasConnections)
+          Text(
+            '+ ${context.l10n.configsCount(bundle.configs?.length ?? 0)}, ${context.l10n.subscriptionsCount(bundle.subscriptions?.length ?? 0)}',
+            style: AppTheme.mono(size: 10, color: t.accent),
+          ),
+      ],
+      review: review,
+      import: () async {
+        // Taken before the import: the widget (and its ref) may be gone when it ends.
+        final vpn = ref.read(vpnProvider.notifier);
+        final id = await ref.read(profileProvider.notifier).importBundle(bundle, sourceUrl: sourceUrl);
+        if (id != null) await vpn.switchProfile(id);
+        return context.mounted ? context.l10n.deeplinkProfileImported(bundle.profile.name) : null;
+      },
     );
   }
 
-  void _showConnectionsImportDialog(ConnectionsBundle bundle) {
+  Future<void> _showConnectionsImportDialog(ConnectionsBundle bundle) {
     final t = Theme.of(context).extension<TeapodTokens>()!;
-    final review = ref.read(configProvider.notifier).reviewBundle(bundle);
+    return _showImportDialog(
+      title: context.l10n.deeplinkConnectionsTitle,
+      lines: [
+        if (bundle.label != null)
+          Text(context.l10n.deeplinkBundle(bundle.label!), style: AppTheme.mono(size: 12, color: t.text)),
+        const SizedBox(height: 6),
+        Text(
+          '${context.l10n.configsCount(bundle.configs.length)}, ${context.l10n.subscriptionsCount(bundle.subscriptions.length)}',
+          style: AppTheme.mono(size: 12, color: t.text),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          context.l10n.deeplinkExported(_formatDate(bundle.exportedAt)),
+          style: AppTheme.mono(size: 10, color: t.textMuted),
+        ),
+      ],
+      review: ref.read(configProvider.notifier).reviewBundle(bundle),
+      import: () async {
+        final result = await ref.read(configProvider.notifier).importBundle(bundle);
+        if (!context.mounted) return null;
+        return result.addedSubscriptions > 0
+            ? context.l10n.deeplinkAdded(
+                '${context.l10n.configsCount(result.addedConfigs)}, ${context.l10n.subscriptionsCount(result.addedSubscriptions)}',
+              )
+            : context.l10n.deeplinkAddedNew(result.addedConfigs);
+      },
+    );
+  }
 
-    showDialog<void>(
+  /// The import confirmation shared by profiles and connections: [lines] describe the bundle, [review] what the import
+  /// changes; Import closes it and runs [import], whose message (null — none) is shown as a snack bar.
+  Future<void> _showImportDialog({
+    required String title,
+    required List<Widget> lines,
+    required ImportReview review,
+    required Future<String?> Function() import,
+  }) {
+    final t = Theme.of(context).extension<TeapodTokens>()!;
+    return showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: t.bg,
         shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
         title: Text(
-          context.l10n.deeplinkConnectionsTitle,
+          title,
           style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500),
         ),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (bundle.label != null)
-                Text(context.l10n.deeplinkBundle(bundle.label!), style: AppTheme.mono(size: 12, color: t.text)),
-              const SizedBox(height: 6),
-              Text(
-                '${context.l10n.configsCount(bundle.configs.length)}, ${context.l10n.subscriptionsCount(bundle.subscriptions.length)}',
-                style: AppTheme.mono(size: 12, color: t.text),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                context.l10n.deeplinkExported(_formatDate(bundle.exportedAt)),
-                style: AppTheme.mono(size: 10, color: t.textMuted),
-              ),
-              ImportReviewDetails(review),
-            ],
+            children: [...lines, ImportReviewDetails(review)],
           ),
         ),
         actions: [
@@ -160,21 +147,15 @@ class DeeplinkHandler {
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              final result = await ref.read(configProvider.notifier).importBundle(bundle);
-              if (context.mounted) {
-                final msg = result.addedSubscriptions > 0
-                    ? context.l10n.deeplinkAdded(
-                        '${context.l10n.configsCount(result.addedConfigs)}, ${context.l10n.subscriptionsCount(result.addedSubscriptions)}',
-                      )
-                    : context.l10n.deeplinkAddedNew(result.addedConfigs);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(msg, style: AppTheme.mono(size: 12, color: t.bg)),
-                    backgroundColor: t.accent,
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
-              }
+              final message = await import();
+              if (message == null || !context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(message, style: AppTheme.mono(size: 12, color: t.bg)),
+                  backgroundColor: t.accent,
+                  duration: const Duration(seconds: 2),
+                ),
+              );
             },
             child: Text(context.l10n.commonImport, style: AppTheme.mono(size: 11, color: t.accent)),
           ),

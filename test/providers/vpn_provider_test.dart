@@ -81,7 +81,7 @@ VpnConfig _vision(String id) => VpnConfig(
 /// Native side state and a call log.
 class _Native {
   final calls = <MethodCall>[];
-  Map<String, Object?> state = {'state': 'disconnected'};
+  Map<String, Object?> state = {'value': 'disconnected'};
   List<String> logs = [];
 
   /// host → latency via `measureOutbound`; null — the server is dead.
@@ -216,7 +216,7 @@ void main() {
   group('startup', () {
     test('restores logs and adopts an already running tunnel', () async {
       native.state = {
-        'state': 'connected',
+        'value': 'connected',
         'socksPort': 5555,
         'socksUser': 'nu',
         'socksPassword': 'np',
@@ -820,7 +820,7 @@ void main() {
     });
 
     test('after a UI restart a native reconnect of the surviving session and its disconnect still apply', () async {
-      native.state = {'state': 'connected', 'socksPort': 2080, 'socksUser': 'su', 'socksPassword': 'sp', 'attempt': 5};
+      native.state = {'value': 'connected', 'socksPort': 2080, 'socksUser': 'su', 'socksPassword': 'sp', 'attempt': 5};
       await boot(configs: [_cfg('a')], activeId: 'a');
       expect(st().isConnected, isTrue);
       emit({'type': 'state', 'value': 'reconnecting', 'attempt': 5});
@@ -833,7 +833,7 @@ void main() {
 
     test('attempt numbers stay above the one the native session reports', () async {
       const nativeAttempt = 1 << 60; // far above the time seed, as after the clock went back
-      native.state = {'state': 'disconnected', 'attempt': nativeAttempt};
+      native.state = {'value': 'disconnected', 'attempt': nativeAttempt};
       await boot(configs: [_cfg('a')], activeId: 'a');
       await n().connect();
       expect(native.lastConnect()['attempt'] as int, greaterThan(nativeAttempt));
@@ -843,7 +843,7 @@ void main() {
       await boot(configs: [_cfg('a')], activeId: 'a');
       await n().connect();
       final attempt = native.lastConnect()['attempt'] as int;
-      native.state = {'state': 'error', 'attempt': attempt - 1}; // an older session failed meanwhile
+      native.state = {'value': 'error', 'attempt': attempt - 1}; // an older session failed meanwhile
       await n().syncNativeState();
       await _settle();
       expect(st().connectionState, VpnState.connecting);
@@ -871,7 +871,7 @@ void main() {
       final pending = n().connect();
       await _settle();
       // The notification-permission dialog closes: the app resumes, native still reports the idle service.
-      native.state = {'state': 'disconnected', 'attempt': 0};
+      native.state = {'value': 'disconnected', 'attempt': 0};
       await n().syncNativeState();
       await _settle();
       expect(st().connectionState, VpnState.connecting);
@@ -887,7 +887,7 @@ void main() {
       final pending = n().connect();
       await _settle();
       // A session started from the tile failed before the connect; its untagged state is still there.
-      native.state = {'state': 'error', 'attempt': 0};
+      native.state = {'value': 'error', 'attempt': 0};
       await n().syncNativeState();
       await _settle();
       expect(st().connectionState, VpnState.connecting);
@@ -906,12 +906,12 @@ void main() {
       // The startup sync waits for the logs; a connect starts meanwhile and native brings it up.
       await n().connect();
       final attempt = native.lastConnect()['attempt'] as int;
-      native.state = {'state': 'connected', 'socksPort': 2080, 'attempt': attempt};
+      native.state = {'value': 'connected', 'socksPort': 2080, 'attempt': attempt};
       logsGate.complete();
       await _settle();
       expect(st().isConnected, isTrue);
       // The service died: the idle snapshot of a resume applies.
-      native.state = {'state': 'disconnected', 'attempt': 0};
+      native.state = {'value': 'disconnected', 'attempt': 0};
       await n().syncNativeState();
       await _settle();
       expect(st().connectionState, VpnState.disconnected);
@@ -1313,10 +1313,18 @@ void main() {
 
     test('syncNativeState adopts native credentials', () async {
       await boot();
-      native.state = {'state': 'connected', 'socksPort': 7000, 'socksUser': 'x', 'socksPassword': 'y'};
+      native.state = {'value': 'connected', 'socksPort': 7000, 'socksUser': 'x', 'socksPassword': 'y'};
       await n().syncNativeState();
       expect(st().isConnected, isTrue);
       expect(st().activeSocksPort, 7000);
+    });
+
+    test('syncNativeState shows the native failure reason', () async {
+      await boot();
+      native.state = {'value': 'error', 'error': 'core failed'};
+      await n().syncNativeState();
+      expect(st().connectionState, VpnState.error);
+      expect(st().error, 'core failed');
     });
 
     test('stats poller updates traffic while connected', () async {
@@ -1389,11 +1397,11 @@ void main() {
         async.flushMicrotasks();
         final attempt = native.lastConnect()['attempt'] as int;
         // A resume sync sees the pending session connecting: treated as a reconnect, the timeout is cancelled.
-        native.state = {'state': 'connecting', 'attempt': attempt};
+        native.state = {'value': 'connecting', 'attempt': attempt};
         n().syncNativeState();
         async.flushMicrotasks();
         // The service died: an idle untagged snapshot is rejected, the connect still ends.
-        native.state = {'state': 'disconnected', 'attempt': 0};
+        native.state = {'value': 'disconnected', 'attempt': 0};
         n().syncNativeState();
         async.flushMicrotasks();
         expect(st().connectionState, VpnState.connecting);
@@ -1411,7 +1419,7 @@ void main() {
         n().connect();
         async.flushMicrotasks();
         // syncNativeState doesn't know whether the pending session is reconnecting, and clears the timeout.
-        native.state = {'state': 'connecting', 'attempt': native.lastConnect()['attempt']};
+        native.state = {'value': 'connecting', 'attempt': native.lastConnect()['attempt']};
         n().syncNativeState();
         async.flushMicrotasks();
         async.elapse(const Duration(seconds: 60));

@@ -106,7 +106,7 @@ void main() {
   setUp(() {
     // The binding replaces HttpClient with a stub (400) — a real one is needed.
     HttpOverrides.global = null;
-    nativeState = {'state': 'disconnected'};
+    nativeState = {'value': 'disconnected'};
     geoipAsked.clear();
     geoipCountry = null;
     messenger.setMockMethodCallHandler(const MethodChannel(AppConstants.methodChannel), (call) async {
@@ -144,7 +144,7 @@ void main() {
       jsonEncode({'status': 'success', 'query': '203.0.113.7', 'country': 'Netherlands', 'countryCode': 'NL'}),
     );
     addTearDown(socks.close);
-    nativeState = {'state': 'connected', 'socksPort': socks.port, 'socksUser': 'su', 'socksPassword': 'sp'};
+    nativeState = {'value': 'connected', 'socksPort': socks.port, 'socksUser': 'su', 'socksPassword': 'sp'};
     final info = await read();
     expect((info?.ip, info?.country, info?.countryCode), ('203.0.113.7', 'Netherlands', 'NL'));
     expect(geoipAsked, isEmpty); // the service gave the country
@@ -155,7 +155,7 @@ void main() {
   test('a service without the country: the country comes from geoip.dat', () async {
     final socks = await _Socks5.start(jsonEncode({'status': 'success', 'query': '203.0.113.7'}));
     addTearDown(socks.close);
-    nativeState = {'state': 'connected', 'socksPort': socks.port, 'socksUser': 'su', 'socksPassword': 'sp'};
+    nativeState = {'value': 'connected', 'socksPort': socks.port, 'socksUser': 'su', 'socksPassword': 'sp'};
     geoipCountry = 'NL';
     final info = await read();
     expect((info?.ip, info?.countryCode), ('203.0.113.7', 'NL'));
@@ -165,7 +165,7 @@ void main() {
   test('geoip.dat without the IP leaves the country empty', () async {
     final socks = await _Socks5.start(jsonEncode({'status': 'success', 'query': '203.0.113.7'}));
     addTearDown(socks.close);
-    nativeState = {'state': 'connected', 'socksPort': socks.port, 'socksUser': 'su', 'socksPassword': 'sp'};
+    nativeState = {'value': 'connected', 'socksPort': socks.port, 'socksUser': 'su', 'socksPassword': 'sp'};
     final info = await read();
     expect((info?.ip, info?.countryCode), ('203.0.113.7', null));
   });
@@ -173,7 +173,7 @@ void main() {
   test('failed lookup tries the next services, then gives null', () async {
     final socks = await _Socks5.start(jsonEncode({'status': 'fail'}));
     addTearDown(socks.close);
-    nativeState = {'state': 'connected', 'socksPort': socks.port, 'socksUser': 'su', 'socksPassword': 'sp'};
+    nativeState = {'value': 'connected', 'socksPort': socks.port, 'socksUser': 'su', 'socksPassword': 'sp'};
     expect(await read(), isNull);
     expect(socks.targets, ['ip-api.com:80', 'ipinfo.io:443', 'api.ipify.org:443']);
   });
@@ -182,7 +182,7 @@ void main() {
     final socks = await _Socks5.start('');
     final port = socks.port;
     await socks.close();
-    nativeState = {'state': 'connected', 'socksPort': port, 'socksUser': 'su', 'socksPassword': 'sp'};
+    nativeState = {'value': 'connected', 'socksPort': port, 'socksUser': 'su', 'socksPassword': 'sp'};
     expect(await read(), isNull);
   });
 }

@@ -154,14 +154,19 @@ void main() {
   group('state and stats', () {
     test('getVpnState parses the native map', () async {
       reply = (_) => {
-        'state': 'reconnecting',
+        'value': 'reconnecting',
         'socksPort': 5000,
         'socksUser': 'su',
         'socksPassword': 'sp',
         'connectedAtMs': 1700000000000,
+        'attempt': 7,
+        'error': 'boom',
       };
       final s = await XrayEngine().getVpnState();
       expect(s.state, VpnState.connecting);
+      expect(s.reconnecting, isTrue);
+      expect(s.attempt, 7);
+      expect(s.error, 'boom');
       expect(s.socksPort, 5000);
       expect(s.socksUser, 'su');
       expect(s.socksPassword, 'sp');
@@ -179,7 +184,7 @@ void main() {
         'weird': VpnState.disconnected,
       };
       for (final e in names.entries) {
-        reply = (_) => {'state': e.key};
+        reply = (_) => {'value': e.key};
         expect((await XrayEngine().getVpnState()).state, e.value, reason: e.key);
       }
     });
@@ -189,6 +194,7 @@ void main() {
       final s = await XrayEngine().getVpnState();
       expect(s.state, VpnState.disconnected);
       expect(s.socksPort, 0);
+      expect(s.attempt, 0);
     });
 
     test('getStats reads nums and defaults', () async {

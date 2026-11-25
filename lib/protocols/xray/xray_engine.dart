@@ -112,25 +112,13 @@ class XrayEngine {
     return (user: 'u${randomString(8)}', password: randomString(AppConstants.socksAuthPasswordLength));
   }
 
-  /// Get current VPN state with SOCKS credentials (for sync on app start). `attempt` — the connect attempt that
-  /// started the native session (0 — started natively).
-  Future<({VpnState state, int socksPort, String socksUser, String socksPassword, int connectedAtMs, int attempt})>
-  getVpnState() async {
+  /// The native session (for sync on app start and resume); [NativeSession.disconnected] when the call fails.
+  Future<NativeSession> getVpnState() async {
     try {
       final result = await _channel.invokeMethod<Map<Object?, Object?>>('getState');
-      if (result != null) {
-        final stateStr = result['state'] as String? ?? 'disconnected';
-        return (
-          state: _parseState(stateStr),
-          socksPort: result['socksPort'] as int? ?? 0,
-          socksUser: result['socksUser'] as String? ?? '',
-          socksPassword: result['socksPassword'] as String? ?? '',
-          connectedAtMs: (result['connectedAtMs'] as num?)?.toInt() ?? 0,
-          attempt: (result['attempt'] as num?)?.toInt() ?? 0,
-        );
-      }
+      if (result != null) return NativeSession.parse(result);
     } catch (_) {}
-    return (state: VpnState.disconnected, socksPort: 0, socksUser: '', socksPassword: '', connectedAtMs: 0, attempt: 0);
+    return NativeSession.disconnected;
   }
 
   /// JSON snapshot of tun2socks state (counters, per-connection activity).
@@ -221,17 +209,56 @@ class XrayEngine {
       return null;
     }
   }
+}
 
-  VpnState _parseState(String s) => switch (s) {
-    'connecting' => VpnState.connecting,
-    'reconnecting' => VpnState.connecting,
-    'connected' => VpnState.connected,
-    'disconnecting' => VpnState.disconnecting,
-    'disconnected' => VpnState.disconnected,
-    'error' => VpnState.error,
-    'blocked' => VpnState.blocked,
-    _ => VpnState.disconnected,
-  };
+/// The native session as the `state` event and `getState` carry it (`SessionSnapshot.toMap` in Kotlin): one parser
+/// for both. [attempt] — the Flutter connect attempt that started the session (0 — started natively); the SOCKS login
+/// and [connectedAtMs] only while connected; [error] — why the session failed (error, blocked).
+class NativeSession {
+  const NativeSession({
+    required this.state,
+    this.reconnecting = false,
+    this.attempt = 0,
+    this.socksPort = 0,
+    this.socksUser = '',
+    this.socksPassword = '',
+    this.connectedAtMs = 0,
+    this.error,
+  });
+
+  static const disconnected = NativeSession(state: VpnState.disconnected);
+
+  factory NativeSession.parse(Map<Object?, Object?> m) {
+    final value = m['value'] as String?;
+    return NativeSession(
+      state: switch (value) {
+        'connecting' || 'reconnecting' => VpnState.connecting,
+        'connected' => VpnState.connected,
+        'disconnecting' => VpnState.disconnecting,
+        'error' => VpnState.error,
+        'blocked' => VpnState.blocked,
+        _ => VpnState.disconnected,
+      },
+      reconnecting: value == 'reconnecting',
+      attempt: (m['attempt'] as num?)?.toInt() ?? 0,
+      socksPort: (m['socksPort'] as num?)?.toInt() ?? 0,
+      socksUser: m['socksUser'] as String? ?? '',
+      socksPassword: m['socksPassword'] as String? ?? '',
+      connectedAtMs: (m['connectedAtMs'] as num?)?.toInt() ?? 0,
+      error: m['error'] as String?,
+    );
+  }
+
+  final VpnState state;
+
+  /// A native restart of the session (`reconnecting`): [state] is [VpnState.connecting].
+  final bool reconnecting;
+  final int attempt;
+  final int socksPort;
+  final String socksUser;
+  final String socksPassword;
+  final int connectedAtMs;
+  final String? error;
 }
 
 /// The engine [VpnNotifier] and the other providers talk to; tests override it.

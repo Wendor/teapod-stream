@@ -127,5 +127,7 @@ void main() {
     final noAds = buildEngineOptions(settings, _config(), const XrayGoBackend(), geosite: const GeositeIndex({}));
     expect(noAds.routing.adBlockEnabled, isFalse);
     expect(noAds.routing.geositeCodes, isEmpty);
+    // No geosite rule left: no FakeDNS or forced sniffing for it on xray-rust.
+    expect(noAds.routing.geositeEnabled, isFalse);
   });
 }

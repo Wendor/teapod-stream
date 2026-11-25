@@ -22,8 +22,11 @@ VpnEngineOptions buildEngineOptions(
 }) {
   bool present(String code) => geosite?.has(code) ?? true;
   final adBlockCodes = XrayDefaults.adBlockCodes.where(present).toList();
+  final geositeCodes = settings.routing.geositeCodes.where(present).toList();
   final routing = settings.routing.copyWith(
-    geositeCodes: settings.routing.geositeCodes.where(present).toList(),
+    // No code left: no domain rule, so no sniffing or FakeDNS for it either.
+    geositeEnabled: settings.routing.geositeEnabled && geositeCodes.isNotEmpty,
+    geositeCodes: geositeCodes,
     adBlockEnabled: settings.routing.adBlockEnabled && adBlockCodes.isNotEmpty,
   );
   return VpnEngineOptions(

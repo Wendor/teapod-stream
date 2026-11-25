@@ -79,9 +79,7 @@ class XrayRustBackend implements CoreBackend {
         warning: L10n.current.rustSniffingForced,
         fix: (v) => v.copyWith(sniffingEnabled: true),
       );
-    // Entries over xray-rust's limits come trimmed; ad blocking goes first when the rest is over the budget.
-    final trimmed = RustConfigBuilder.trimmedGeosite(o);
-    s.warn(when: trimmed.isNotEmpty, warning: L10n.current.rustGeositeTrimmed(trimmed.join(', ')));
+    // Over the matcher budget ad blocking goes first; entries over xray-rust's limits come trimmed.
     s.drop(
       when:
           s.result.options.routing.adBlockEnabled &&
@@ -89,6 +87,8 @@ class XrayRustBackend implements CoreBackend {
       warning: L10n.current.rustAdBlockDropped,
       fix: (v) => v.copyWith(routing: v.routing.copyWith(adBlockEnabled: false)),
     );
+    final trimmed = RustConfigBuilder.trimmedGeosite(s.result.options);
+    s.warn(when: trimmed.isNotEmpty, warning: L10n.current.rustGeositeTrimmed(trimmed.join(', ')));
     final fragmentError = _maskError(() => RustConfigBuilder.fragmentMask(config, o.fragment));
     s.drop(
       when: fragmentError != null,

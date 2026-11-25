@@ -233,10 +233,10 @@ class RustConfigBuilder {
       geositeCodes(o).fold(0, (sum, code) => sum + (o.geosite?[code]?.rustDomains ?? 0));
 
   /// The referenced codes xray-rust gets trimmed to its per-entry limits ([GeositeIndex.rustFile]).
-  static List<String> trimmedGeosite(VpnEngineOptions o) => [
+  static List<String> trimmedGeosite(VpnEngineOptions o) => {
     for (final code in geositeCodes(o))
-      if (o.geosite?[code] case final e? when e.rustDomains < e.domains) code,
-  ];
+      if (o.geosite?[code] case final e? when e.rustDomains < e.domains) GeositeIndex.baseCode(code),
+  }.toList();
 
   static String get _insecureReason => L10n.current.rustInsecure;
 

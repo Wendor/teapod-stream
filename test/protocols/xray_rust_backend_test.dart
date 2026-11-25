@@ -111,11 +111,24 @@ void main() {
     // 200k + 200k ads is over the 250k budget: ad blocking is dropped.
     final ads = rust.checkOptions(_vless(), with_(blocked.copyWith(adBlockEnabled: true)));
     expect(ads.blocking, isNull);
-    expect(ads.warnings, [
-      allOf(contains('ru-blocked-all'), contains('category-ads-all')),
-      contains('ad blocking is not applied'),
-    ]);
-    expect(rules(with_(blocked.copyWith(adBlockEnabled: true))), isNot(contains('category-ads-all')));
+    // category-ads-all isn't used then, so it isn't reported as trimmed.
+    expect(ads.warnings, [contains('ad blocking is not applied'), isNot(contains('category-ads-all'))]);
+    // A code both in the rule and in ad blocking is reported once.
+    const small = GeositeIndex({
+      'category-ads-all': (domains: 203624, rustDomains: 100000),
+      'win-spy': (domains: 327, rustDomains: 327),
+    }, rustFile: GeositeIndex.rustFileName);
+    final both = rust.checkOptions(
+      _vless(),
+      VpnEngineOptions(
+        socksPort: 1,
+        socksUser: 'u',
+        socksPassword: 'p',
+        routing: blocked.copyWith(geositeCodes: ['category-ads-all'], adBlockEnabled: true),
+        geosite: small,
+      ),
+    );
+    expect(both.warnings.single, startsWith('GeoSite category-ads-all:'));
 
     // Ad blocking alone fits, trimmed; the user's codes alone over the budget block the start.
     const adsOnly = RoutingSettings(adBlockEnabled: true);

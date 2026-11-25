@@ -5,7 +5,8 @@ import org.json.JSONObject
 
 /**
  * A session start: the core config, its parameters and the SOCKS login; [attempt] — the Flutter connect it answers
- * (0 — a native start), [reconnect] — a native restart; [configName] — what the tile shows for a Flutter connect.
+ * (0 — a native start), [reconnect] — a native restart; [configName] — what the tile shows for it (a quick start's is
+ * the stored one, read with its config).
  */
 internal data class StartRequest(
     val config: String,
@@ -124,11 +125,14 @@ internal class QuickConnectStore(private val dir: File) {
      * stored one, else from the config ([socksFromConfig] reads it in the format of the session's core).
      */
     fun quickStart(socksFromConfig: (config: String, engine: String) -> Pair<String, String>): StartRequest? {
-        val (params, config, login) = synchronized(LOCK) {
-            Triple(params() ?: return null, config() ?: return null, credentials())
+        val stored = synchronized(LOCK) {
+            val params = params() ?: return null
+            val config = config() ?: return null
+            StartRequest(config, params, "", "", attempt = 0, reconnect = true, configName = tileName()) to credentials()
         }
-        val (user, password) = login ?: socksFromConfig(config, params.engine)
-        return StartRequest(config, params, user, password, attempt = 0, reconnect = true)
+        val (request, login) = stored
+        val (user, password) = login ?: socksFromConfig(request.config, request.params.engine)
+        return request.copy(socksUser = user, socksPassword = password)
     }
 
     /** Null when missing or unreadable (also removed between the check and the read). */

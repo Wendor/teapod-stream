@@ -142,6 +142,9 @@ class QuickConnectStoreTest {
     fun quickStartPrefersTheStoredLogin() {
         store.save("{config}", params, "u", "p")
         assertEquals(StartRequest("{config}", params, "u", "p", attempt = 0, reconnect = true), store.quickStart(fromConfig))
+        // The tile's name comes with the config it names, so the session's save writes it back unchanged.
+        store.save("{config}", params, "u", "p", tileName = "Oslo")
+        assertEquals("Oslo", store.quickStart(fromConfig)!!.configName)
     }
 
     @Test

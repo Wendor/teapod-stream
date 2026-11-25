@@ -576,13 +576,13 @@ class XrayVpnService : VpnService() {
                 xrayConfig
             }
 
-            // For a quick start (tile, boot, reconnect): the params, the config, its SOCKS login and (a Flutter
-            // connect) the tile's name together. A failed save costs the quick start, not this session. Saved on a
-            // reconnect too: the config it runs may differ from the stored one (a new prefix proxy port).
+            // For a quick start (tile, boot, reconnect): the params, the config, its SOCKS login and the tile's name
+            // together (a quick start's name was read with its config). A failed save costs the quick start, not this
+            // session. Saved on a reconnect too: the config it runs may differ from the stored one (a new prefix
+            // proxy port).
             try {
-                val tileName = if (request.reconnect) null else request.configName ?: ""
-                store.save(finalConfig, request.params, socksUser, socksPassword, tileName)
-                if (tileName != null) VpnTileService.configNameChanged(this)
+                store.save(finalConfig, request.params, socksUser, socksPassword, tileName = request.configName ?: "")
+                VpnTileService.configNameChanged(this)
             } catch (e: Exception) {
                 log("warning", "Quick-connect data not saved: ${e.message}")
             }

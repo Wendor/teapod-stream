@@ -325,6 +325,8 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
           ? s.subscriptions.where((sub) => sub.id == subId).firstOrNull
           : s.subscriptions.where((sub) => sub.url == url).firstOrNull;
       if (target != null && existing == null) return null;
+      // A subscription that registered the raw id got this URL meanwhile: it is fetched with that id, not this one.
+      if (target == null && existing != null && existing.rawHwid != rawHwid) return null;
       final id = existing?.id ?? subId;
       final now = DateTime.now();
       final sub = Subscription(

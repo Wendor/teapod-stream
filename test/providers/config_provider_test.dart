@@ -915,6 +915,33 @@ void main() {
         expect(server.requests, isEmpty);
       });
 
+      test('a new URL taken meanwhile by a subscription with the raw id keeps it and its configs', () async {
+        final legacy = Subscription.fromJson(_sub('s', url: server.url('/old')).toJson()..remove('rawHwid'));
+        await boot(
+          configs: [_cfg('1', subId: 's')],
+          subs: [legacy],
+        );
+        var first = true;
+        hold(_trojan('a.example', 'A'));
+        final held = server.handler;
+        server.handler = (r) async {
+          if (!first) {
+            r.response.write(_trojan('b.example', 'B'));
+            return r.response.close();
+          }
+          first = false;
+          await held(r);
+        };
+        final add = n().addSubscriptionFromUrl(server.url('/sub'));
+        await arrived.future;
+        await n().addSubscriptionFromUrl(server.url('/sub'), replaceId: 's');
+        release.complete();
+        await add;
+        final sub = s().subscriptions.single;
+        expect(sub.rawHwid, isTrue);
+        expect(s().configs.single.address, 'b.example');
+      });
+
       test('the same new URL added twice is one subscription', () async {
         await boot();
         hold(_trojan('a.example', 'A'));

@@ -44,7 +44,7 @@ class VpnTileService : TileService() {
                 try {
                     if (store.tileName() == null && store.config() != null) store.saveTileName(legacy)
                 } catch (_: Exception) {
-                    return@locked // kept for the next try
+                    // Only the label: no retry, which could attach the old name to a config saved later.
                 }
                 prefs.edit().remove(LEGACY_PREF_CONFIG_NAME).commit()
             }

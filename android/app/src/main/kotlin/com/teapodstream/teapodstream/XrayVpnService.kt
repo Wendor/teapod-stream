@@ -114,26 +114,7 @@ class XrayVpnService : VpnService() {
         private const val NOTIFICATION_ID = 1
 
         private const val CONNECTIVITY_CHECK_HOST = "8.8.8.8"
-        private const val HEARTBEAT_INTERVAL_MS = 15_000L
-        // Screen off: nobody is watching, the radio should be allowed to idle between
-        // probes. Dead-tunnel detection grows to ~3 min while asleep — acceptable,
-        // checkTunStallOnWake() probes immediately on SCREEN_ON.
-        private const val HEARTBEAT_INTERVAL_SCREEN_OFF_MS = 60_000L
         private const val NOTIFICATION_MIN_INTERVAL_MS = 5_000L
-        // If tun2socks has more than this many active proxy goroutines the gVisor TCP
-        // state machine is leaking connections. Trigger a reconnect to reset it.
-        private const val TUN_CONN_LEAK_THRESHOLD = 200L
-        // If no data has reached the TUN interface for this long while ≥2 connections
-        // are active, tun2socks goroutines are stuck (proxy connections held alive by
-        // keepalives but real data not flowing). SOCKS5 heartbeat won't catch this.
-        private const val TUN_STALL_TIMEOUT_MS = 120_000L
-        // After a reconnect xray establishes its outbound connection lazily. Probes run every
-        // 15 s but failures are not counted until the first probe succeeds (warmup mode). This
-        // self-adjusts to actual network speed instead of relying on a fixed timer. Hard ceiling:
-        // if no probe succeeds within HEARTBEAT_WARMUP_TIMEOUT_MS → something is genuinely broken.
-        private const val HEARTBEAT_WARMUP_TIMEOUT_MS = 30_000L
-        // How long to wait for Flutter's reaction to tunnel_dead before reconnecting ourselves.
-        private const val TUNNEL_DEAD_NOTIFY_COOLDOWN_MS = 45_000L
         private const val STATS_INTERVAL_MS = 1_000L
         private const val STATS_INTERVAL_SCREEN_OFF_MS = 10_000L
         private const val STOP_THREAD_TIMEOUT_MS = 5_000L
@@ -299,11 +280,10 @@ class XrayVpnService : VpnService() {
     private var lastStartId = 0
     /** Set in onDestroy (main thread): reports posted later belong to a stopped instance. */
     private var destroyed = false
-    // Among the deferred events there was a loss of VALIDATED — reconnect without checking the network.
-    @Volatile private var pendingForce = false
     private var pendingNetworkRunnable: Runnable? = null
     private var heartbeatThread: Thread? = null
-    private val heartbeatFailures = AtomicInteger(0)
+    @Volatile private var heartbeatPolicy: HeartbeatPolicy? = null
+    private val networkPolicy = NetworkChangePolicy()
     private val store by lazy { QuickConnectStore(filesDir) }
     /** The parameters [tunInterface] was built with: a reconnect reuses the fd only for the same ones. */
     @Volatile private var tunParams: ConnectionParams? = null
@@ -320,7 +300,6 @@ class XrayVpnService : VpnService() {
     private val heartbeatUrl get() = params?.heartbeatUrl ?: ConnectionParams.DEFAULT_HEARTBEAT_URL
     private val allowTethering get() = params?.allowTethering ?: false
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var lastTunnelDeadNotifyAt = 0L
     private val wakeProbeRunning = AtomicBoolean(false)
     private val reconnectAttempts = AtomicInteger(0)
 
@@ -834,7 +813,7 @@ class XrayVpnService : VpnService() {
         lastConnectedMs = 0L
         pendingNetworkRunnable?.let { networkChangeHandler.removeCallbacks(it) }
         pendingNetworkRunnable = null
-        pendingForce = false
+        networkPolicy.reset()
 
         var keptTunAsSink = false
         try {
@@ -969,7 +948,7 @@ class XrayVpnService : VpnService() {
         val lastRx = core.lastRxActivityMs()
         if (lastRx <= 0) return
         val idleSec = (System.currentTimeMillis() - lastRx) / 1000
-        if (idleSec < TUN_STALL_TIMEOUT_MS / 1000) return
+        if (idleSec < HeartbeatPolicy.TUN_STALL_TIMEOUT_MS / 1000) return
         // Don't require activeConns >= 2: after Doze, connections drain to 0 naturally
         // but the tunnel session (xray upstream) may be stale for new connections.
         // Idle alone isn't proof of death though — probe the upstream through xray
@@ -1188,36 +1167,24 @@ class XrayVpnService : VpnService() {
         // Only reconnect when fully connected — prevents spurious reconnects during the
         // initial startVpn() phase when onAvailable fires right after registration.
         if (snapshot.state != SessionState.CONNECTED) return
-        // On mobile data Android fires onAvailable/onCapabilitiesChanged right after VPN
-        // connects. In the first 5 s we don't reconnect right away: when the window ends we compare
-        // the physical network with the connection network — a real change isn't lost.
         val session = lastConnectedMs
-        val msSinceConnect = System.currentTimeMillis() - session
-        val settling = session > 0 && msSinceConnect < 5_000L
-        // A loss of VALIDATED outside the window — a reconnect is mandatory, even if a network
-        // change event follows and the network turns out to be the same.
-        if (!switched && !settling) pendingForce = true
-        val checkNetwork = (switched || settling) && !pendingForce
-        val delay = if (settling) 5_000L - msSinceConnect + RECONNECT_DEBOUNCE_MS else RECONNECT_DEBOUNCE_MS
-        log(if (settling) "debug" else "info",
-            "Network change: ${if (checkNetwork) "check" else "reconnect"} scheduled in ${delay}ms")
+        val plan = networkPolicy.schedule(switched, session, System.currentTimeMillis())
+        log(if (plan.settling) "debug" else "info",
+            "Network change: ${if (plan.check) "check" else "reconnect"} scheduled in ${plan.delayMs}ms")
         pendingNetworkRunnable?.let { networkChangeHandler.removeCallbacks(it) }
         val r = Runnable {
-            val force = pendingForce
-            pendingForce = false
+            var now: Network? = null
+            val reconnect = networkPolicy.onFire(plan, { findPhysicalNetwork().also { now = it } }, connectedNetwork)
             if (snapshot.state != SessionState.CONNECTED || lastConnectedMs != session) return@Runnable
-            if (checkNetwork && !force) {
-                val now = findPhysicalNetwork() ?: return@Runnable
-                if (now == connectedNetwork) {
-                    log("debug", "Network change: still on $now, no reconnect")
-                    return@Runnable
-                }
-                log("info", "Network change: ${connectedNetwork ?: "unknown"} → $now, reconnecting")
+            if (!reconnect) {
+                log("debug", "Network change: still on ${now ?: "no physical network"}, no reconnect")
+                return@Runnable
             }
+            if (now != null) log("info", "Network change: ${connectedNetwork ?: "unknown"} → $now, reconnecting")
             reconnectInternal(session)
         }
         pendingNetworkRunnable = r
-        networkChangeHandler.postDelayed(r, delay)
+        networkChangeHandler.postDelayed(r, plan.delayMs)
     }
 
     /// Restart from saved parameters (CONNECT_QUICK, system restart): the stored session becomes the desired one.
@@ -1292,96 +1259,24 @@ class XrayVpnService : VpnService() {
         }
     } catch (_: Exception) { false }
 
-    /// Failure limit reached. Returns true if the heartbeat loop continues
-    /// (false alarm or we wait for Flutter to pick another config), false — a reconnect
-    /// was started and the thread must finish.
-    private fun handleHeartbeatExhausted(failures: Int, reason: String): Boolean {
-        // Probe rides through the routing balancer and can land on a dead detour while
-        // real traffic flows fine — a false positive. If the TUN saw downstream data
-        // within the last probe interval, keep the session and just reset the counter.
-        if (isTunRxFresh()) {
-            log("warning", "Heartbeat failing but TUN traffic is alive, skipping reconnect")
-            heartbeatFailures.set(0)
-            return true
-        }
-        if (heartbeatAction == "switchConfig") {
-            val now = System.currentTimeMillis()
-            if (now - lastTunnelDeadNotifyAt >= TUNNEL_DEAD_NOTIFY_COOLDOWN_MS) {
-                lastTunnelDeadNotifyAt = now
-                log("warning", "$reason (failures: $failures) → picking another config")
-                VpnEventStreamHandler.sendTunnelDeadEvent(failures)
-                heartbeatFailures.set(0)
-                return true
-            }
-            // Flutter didn't react within the cooldown (app killed / no live
-            // candidates) — degrade to a plain reconnect of the current server.
-            log("warning", "switchConfig: no switch within cooldown, falling back to reconnect")
-        }
-        log("warning", "$reason (failures: $failures) → reconnect")
-        reconnectInternal()
-        return false
-    }
-
     private fun startHeartbeat(isReconnect: Boolean = false) {
         log("info", "startHeartbeat (isReconnect=$isReconnect)")
         heartbeatThread?.interrupt()
-        heartbeatFailures.set(0)
-        lastTunnelDeadNotifyAt = 0L
+        val policy = HeartbeatPolicy(heartbeatThreshold, heartbeatAction == "switchConfig", isReconnect)
+        heartbeatPolicy = policy
         heartbeatThread = Thread {
-            // In reconnect mode: probes run every 15 s but failures are ignored until the
-            // first probe succeeds (warmup). This self-adjusts to actual network conditions —
-            // no magic fixed delay. Hard ceiling: warmupDeadline prevents staying in warmup
-            // forever if the server is genuinely unreachable.
-            var warmupDone = !isReconnect
-            var warmupDeadline = 0L  // set on first probe iteration, not at thread start
-            // Counts consecutive skips due to no physical internet. When internet returns
-            // after a long absence the tunnel session is stale regardless of protocol, so
-            // the first probe failure should immediately trigger a reconnect.
-            var noInternetStreak = 0
-            var successCount = 0
-            var lastStallWarnAt = 0L
-
             while (!Thread.currentThread().isInterrupted && isRunning.get()) {
                 try {
-                    // Warmup keeps the fast cadence: after a reconnect the first success
-                    // must be detected promptly regardless of screen state.
-                    Thread.sleep(
-                        if (screenOn || !warmupDone) HEARTBEAT_INTERVAL_MS
-                        else HEARTBEAT_INTERVAL_SCREEN_OFF_MS
-                    )
+                    Thread.sleep(policy.interval(screenOn))
                     if (!isRunning.get()) break
                     // Deep Doze: don't wake the radio with probes — counters are untouched,
                     // on leaving idle (maintenance window) the receiver probes.
                     if (deviceIdle) continue
-                    // Start deadline from first actual probe — not from thread creation,
-                    // which may be long before xray is ready after a slow reconnect.
-                    if (!warmupDone && warmupDeadline == 0L) {
-                        warmupDeadline = System.currentTimeMillis() + HEARTBEAT_WARMUP_TIMEOUT_MS
-                    }
+                    policy.onIteration(System.currentTimeMillis())
                     val port = snapshot.socksPort
                     if (port <= 0) continue
-
-                    // Check tun2socks is alive before testing SOCKS5 connectivity.
-                    // The SOCKS5 probe bypasses TUN entirely, so it passes even if tun2socks
-                    // has crashed or its goroutines are deadlocked.
                     // Skip in proxy-only mode: tun2socks is intentionally not started.
-                    if (tunModeActive && !core.isTunRunning()) {
-                        log("warning", "tun2socks not running, reconnecting")
-                        reconnectInternal()
-                        break
-                    }
-
-                    // Detect gVisor connection table leak: if the number of active proxy
-                    // goroutines is abnormally high the TCP state machine is accumulating
-                    // stale entries (TIME_WAIT / CLOSE_WAIT). Reconnect to reset gVisor.
-                    if (tunModeActive) {
-                        val activeConns = core.activeConnections()
-                        if (activeConns > TUN_CONN_LEAK_THRESHOLD) {
-                            log("warning", "gVisor connection leak detected (activeConns=$activeConns), reconnecting")
-                            reconnectInternal()
-                            break
-                        }
-                    }
+                    if (tunModeActive && !applyHeartbeat(policy.onTun(core.isTunRunning(), core.activeConnections()))) break
 
                     // Data reached the TUN within the last interval — the tunnel is
                     // demonstrably alive, no need to burn a radio round-trip on an
@@ -1391,16 +1286,13 @@ class XrayVpnService : VpnService() {
                     if (heartbeatProbe != "passive" && !isTunRxFresh()) {
                         runProbe(port)
                     }
-                    warmupDone = true
-                    heartbeatFailures.set(0)
-                    noInternetStreak = 0
-                    successCount++
+                    policy.onSuccess()
+                    val successCount = policy.successes
                     if (successCount % 5 == 0) {
                         val activeConns = if (tunModeActive) core.activeConnections() else 0L
                         log("info", "Heartbeat alive (${successCount} ok, tun=${core.isTunRunning()}, conns=$activeConns)")
                     }
-                    // Log detailed tunnel stats every ~1 minute for diagnostics.
-                    // getTunStatsLine() returns a Go string → log() routes it to
+                    // Detailed tunnel stats every ~1 minute: log() routes them to
                     // vpn_log.txt + Flutter EventChannel (not only logcat).
                     if (tunModeActive && successCount % 4 == 0) {
                         val stats = core.statsLine()
@@ -1410,87 +1302,59 @@ class XrayVpnService : VpnService() {
                             log("debug", "tun stats: $stats lastRxSec=$lastRxSec")
                         }
                     }
-                    // Detect TUN-layer stall: SOCKS5 heartbeat bypasses tun2socks entirely,
-                    // so it passes even when proxy goroutines are alive but no data reaches
-                    // the TUN interface (e.g. xray connections half-open, held by keepalives).
-                    // getTunLastRxActivityMs() is updated on every TUN write in tun2socks.
                     if (tunModeActive) {
                         val lastRx = core.lastRxActivityMs()
                         if (lastRx > 0) {
                             val now = System.currentTimeMillis()
-                            val idleSec = (now - lastRx) / 1000
-                            val activeConns by lazy { core.activeConnections() }
-                            when {
-                                idleSec >= TUN_STALL_TIMEOUT_MS / 1000 && activeConns >= 2 -> {
-                                    if (handleHeartbeatExhausted(
-                                            heartbeatThreshold,
-                                            "TUN stall: no data for ${idleSec}s (conns=$activeConns)")
-                                    ) continue else break
-                                }
-                                idleSec >= 60 && activeConns >= 2 && now - lastStallWarnAt >= 60_000 -> {
-                                    log("warning", "TUN rx idle for ${idleSec}s (conns=$activeConns)")
-                                    lastStallWarnAt = now
-                                }
-                            }
+                            if (!applyHeartbeat(policy.onTunIdle(now - lastRx, { core.activeConnections() }, { isTunRxFresh() }, now))) break
                         }
                     }
                 } catch (_: InterruptedException) {
                     break
                 } catch (e: Exception) {
-                    // If the physical network is down it's not xray's fault — skip failure
-                    // count to prevent useless reconnect cycles during WiFi→LTE transitions.
-                    // network_changed will trigger a reconnect once the new network is ready.
-                    if (!hasDirectInternet()) {
-                        noInternetStreak++
-                        log("debug", "Heartbeat skipped: no direct internet (streak=$noInternetStreak)")
-                        continue
+                    val action = policy.onFailure(e.message, hasDirectInternet(), isTunRxFresh(), System.currentTimeMillis())
+                    if (action != HeartbeatPolicy.Action.Retry) {
+                        if (applyHeartbeat(action)) continue else break
                     }
-                    // Network just returned after a long absence — the tunnel session is
-                    // guaranteed stale (QUIC/TCP connection to the server was dead while we
-                    // had no route). Skip the normal 3-failure wait and reconnect immediately.
-                    if (noInternetStreak >= 3) {
-                        val absenceSec = noInternetStreak * (HEARTBEAT_INTERVAL_MS / 1000)
-                        noInternetStreak = 0
-                        log("warning", "Tunnel stale after ${absenceSec}s network absence, reconnecting")
-                        reconnectInternal()
-                        break
-                    }
-                    noInternetStreak = 0
-                    if (!warmupDone) {
-                        if (warmupDeadline == 0L || System.currentTimeMillis() < warmupDeadline) {
-                            log("debug", "Heartbeat warmup probe failed: ${e.message}")
-                            continue
-                        }
-                        log("warning", "Heartbeat warmup timed out (30 s), reconnecting")
-                        reconnectInternal()
-                        break
-                    }
-                    val failures = heartbeatFailures.incrementAndGet()
-                    log("warning", "Heartbeat failed ($failures): ${e.message}")
-                    if (failures >= heartbeatThreshold) {
-                        if (handleHeartbeatExhausted(failures, "Heartbeat failed")) continue else break
-                    }
-                    var immediateRetries = 0
-                    while (immediateRetries < 2 && !Thread.currentThread().isInterrupted) {
+                    log("warning", "Heartbeat failed (${policy.failures()}): ${e.message}")
+                    var recovered = false
+                    var retries = 0
+                    while (retries < HeartbeatPolicy.IMMEDIATE_RETRIES && !Thread.currentThread().isInterrupted) {
                         try {
-                            Thread.sleep(3000)
+                            Thread.sleep(HeartbeatPolicy.RETRY_DELAY_MS)
                             runProbe(snapshot.socksPort)
-                            warmupDone = true
-                            heartbeatFailures.set(0)
+                            recovered = true
                             break
                         } catch (_: InterruptedException) {
                             break
                         } catch (_: Exception) {
-                            immediateRetries++
+                            retries++
                         }
                     }
-                    if (heartbeatFailures.get() >= heartbeatThreshold) {
-                        val n = heartbeatFailures.get()
-                        if (handleHeartbeatExhausted(n, "Heartbeat retries exhausted")) continue else break
-                    }
+                    if (!applyHeartbeat(policy.afterRetries(recovered, isTunRxFresh(), System.currentTimeMillis()))) break
                 }
             }
         }.also { it.isDaemon = true; it.start() }
+    }
+
+    /// Applies a heartbeat decision. Returns false when a reconnect was started and the
+    /// heartbeat thread must finish.
+    private fun applyHeartbeat(action: HeartbeatPolicy.Action): Boolean {
+        when (action) {
+            HeartbeatPolicy.Action.None, HeartbeatPolicy.Action.Retry -> {}
+            is HeartbeatPolicy.Action.Note -> log("debug", action.message)
+            is HeartbeatPolicy.Action.Warn -> log("warning", action.message)
+            is HeartbeatPolicy.Action.SwitchConfig -> {
+                log("warning", action.reason)
+                VpnEventStreamHandler.sendTunnelDeadEvent(action.failures)
+            }
+            is HeartbeatPolicy.Action.Reconnect -> {
+                log("warning", "${action.reason} → reconnect")
+                reconnectInternal()
+                return false
+            }
+        }
+        return true
     }
 
     // True when tun2socks wrote data to the TUN within the last heartbeat interval —
@@ -1498,14 +1362,14 @@ class XrayVpnService : VpnService() {
     private fun isTunRxFresh(): Boolean {
         if (!tunModeActive) return false
         val lastRx = core.lastRxActivityMs()
-        return lastRx > 0 && System.currentTimeMillis() - lastRx < HEARTBEAT_INTERVAL_MS
+        return lastRx > 0 && System.currentTimeMillis() - lastRx < HeartbeatPolicy.INTERVAL_MS
     }
 
     private fun stopHeartbeat() {
         if (heartbeatThread != null) log("info", "stopHeartbeat: interrupting heartbeat thread")
         heartbeatThread?.interrupt()
         heartbeatThread = null
-        heartbeatFailures.set(0)
+        heartbeatPolicy = null
     }
 
     /// Active probe of the selected type. Throws on failure —
@@ -1539,7 +1403,7 @@ class XrayVpnService : VpnService() {
             log("warning", "Heartbeat check failed at [${e.stage}]: ${e.message}")
             throw e
         }
-        heartbeatFailures.set(0)
+        heartbeatPolicy?.resetFailures()
         log("debug", "Heartbeat OK")
     }
 

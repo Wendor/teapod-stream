@@ -286,6 +286,9 @@ class XrayVpnService : VpnService() {
     private var heartbeatThread: Thread? = null
     private val heartbeatFailures = AtomicInteger(0)
     private val store by lazy { QuickConnectStore(filesDir) }
+    /** The parameters [tunInterface] was built with: a reconnect reuses the fd only for the same ones. */
+    @Volatile private var tunParams: ConnectionParams? = null
+
     /** The parameters of the session being started or run ([useParams]); null before the first start. */
     @Volatile private var params: ConnectionParams? = null
     // How we probe the tunnel: "socks" (HTTP via SOCKS5), "xrayDelay" (measured inside
@@ -539,6 +542,7 @@ class XrayVpnService : VpnService() {
         // new one is established: establish() atomically replaces the interface, so
         // app traffic is blackholed by the old TUN instead of leaking while xray starts.
         var previousTun = tunInterface
+        val previousTunParams = tunParams
         // A manual connect with the kill switch keeps the sink after a failure only if traffic
         // was already blocked (BLOCKED) — otherwise a broken config would lock the network.
         val keepSinkOnFailure = killSwitch && (isReconnect || previousTun != null)
@@ -587,9 +591,9 @@ class XrayVpnService : VpnService() {
                 startHeartbeat(isReconnect)
                 log("info", "Proxy-only mode active")
             } else {
-                if (isReconnect && previousTun != null) {
-                    // Auto-reconnect: Builder params come from the same ConnectionParams
-                    // that established this TUN, so the fd is reused as-is. Skipping
+                if (isReconnect && previousTun != null && previousTunParams == request.params) {
+                    // Auto-reconnect with the ConnectionParams that established this TUN (a failed manual
+                    // connect may have stored other ones — then it is rebuilt), so the fd is reused as-is. Skipping
                     // establish() keeps the VPN network agent alive — no system
                     // "VPN active" notification, no connectivity flap for apps (issue #81).
                     // tun2socks works on a dup'd fd, so the previous engine's shutdown
@@ -653,6 +657,7 @@ class XrayVpnService : VpnService() {
                     log("info", "nativeSetMaxFds result: $fdResult")
 
                     tunInterface = builder.establish() ?: throw IllegalStateException("Failed to establish TUN")
+                    tunParams = request.params
                     // The new interface replaced the old one atomically — the sink fd can go now.
                     try { previousTun?.close() } catch (_: Exception) {}
                     log("info", "TUN established with IP $dynamicTunIp")
@@ -681,6 +686,7 @@ class XrayVpnService : VpnService() {
             // Otherwise the old fd is obsolete.
             if (tunInterface == null && previousTun != null && (killSwitch || isReconnect) && !proxyOnly) {
                 tunInterface = previousTun
+                tunParams = previousTunParams
             } else {
                 try { previousTun?.close() } catch (_: Exception) {}
             }

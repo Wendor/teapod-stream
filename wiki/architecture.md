@@ -60,7 +60,7 @@ goes. Details: [vpn_provider](components/vpn_provider.md#choosing-the-core),
 
 | Channel | Direction | Content |
 |---|---|---|
-| `MethodChannel("com.teapodstream/vpn")` | Dart → native | `connect`, `disconnect`, `getState`, stats, ping, measure, logs ([XrayEngine](components/xray_engine.md)); versions, cores, apps, files, ABI, APK install, device info ([PlatformService](components/services.md#platformservice)) |
+| `MethodChannel("com.teapodstream/vpn")` | Dart → native | `connect`, `disconnect`, `getState`, stats, ping, measure, logs ([XrayEngine](components/xray_engine.md); native `VpnChannelHandler`); versions, cores, apps, files, ABI, APK install, device info ([PlatformService](components/services.md#platformservice); native `PlatformChannelHandler`) |
 | `EventChannel("com.teapodstream/vpn/events")` | native → Dart | `state` (+ SOCKS credentials and `connectedAtMs` on `connected`, `error` on `error`/`blocked`), `log`, `statsHistory`, `tunnel_dead`, `deeplink` |
 
 One broadcast stream (`XrayEngine.events`) serves all Dart listeners. On `onListen` native replays the current state,

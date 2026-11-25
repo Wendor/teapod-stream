@@ -10,7 +10,7 @@ that list: `appIconProvider` (`FutureProvider.family` by package) fetches each i
 `SplitTunnelScreen` combines it with `settingsProvider` (`excludedPackages` / `includedPackages`, `vpnMode`).
 `SettingsNotifier.cleanGhostPackages` removes packages that are no longer installed.
 
-Native side: `PackageManager` in `MainActivity`; the manifest declares `QUERY_ALL_PACKAGES` for Android 11+ package visibility.
+Native side: `PackageManager` in `PlatformChannelHandler` (off the main thread); the manifest declares `QUERY_ALL_PACKAGES` for Android 11+ package visibility.
 
 ## Related
 

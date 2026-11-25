@@ -1,7 +1,7 @@
 # Tests
 
 Dart tests cover models, services, providers, protocol builders and screens; JVM tests cover the Kotlin logic that
-doesn't need Android (`ConnectionParams`, `QuickConnectStore`, `PrefixTcpProxy`, `SocksHttpProbe`, `SessionCommands`, `TunOwnerPolicy`, `SpeedHistory`, utilities). The
+doesn't need Android (`ConnectionParams`, `QuickConnectStore`, `ChannelWork` / `ConnectArgs`, `PrefixTcpProxy`, `SocksHttpProbe`, `SessionCommands`, `TunOwnerPolicy`, `SpeedHistory`, utilities). The
 `VpnService`, the cores and TUN are verified on a device — by hand or with the integration tests below.
 
 ```bash
@@ -50,7 +50,7 @@ A fix comes with a test that fails without it; a logic change comes with tests o
 - **HTTP progress:** `dart:io` buffers small chunks until the response ends — use ~64 KB chunks to observe progress.
 - **Kotlin:** `unitTests.isReturnDefaultValues = true` — stubs like `android.util.Log` don't throw.
 
-Not covered by unit tests: `QrScanScreen` (camera), `main.dart`, `XrayVpnService`, `MainActivity`, and the cores running
+Not covered by unit tests: `QrScanScreen` (camera), `main.dart`, `XrayVpnService`, `MainActivity` and the channel handlers, and the cores running
 on Android with a real TUN (the Go engines have host unit tests; on-device behaviour needs the integration tests).
 
 ## Integration tests on a device (`tool/itest/`)

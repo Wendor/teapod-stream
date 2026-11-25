@@ -81,8 +81,8 @@ when its turn comes, against what runs then, so overlapping selections end on th
 `connecting`, or when `connected` and the effective config isn't the running one (`runsConfig`) or the settings
 fingerprint changed. A profile switch runs inside `duringProfileSwitch`: it changes settings and the server one
 after the other, and the core resolved in between belongs to neither profile, so core changes are ignored while it
-runs. Switches and selections go through one queue, each with its reconciliation, so a later one never starts while the earlier
-one's connect is in flight. After each switch the VPN follows the final state: a profile no core runs disconnects
+runs. Profile switches (body and reconciliation) and selections' reconciliations go through one queue, so a later one
+never starts while the earlier one's connect is in flight; a selection's save itself isn't queued. After each switch the VPN follows the final state: a profile no core runs disconnects
 with the error, as a core change does; otherwise a live tunnel goes through `reconnectIfStale`, an idle one through
 the core-change handling if the core differs ([profiles](profiles.md#selected-server)).
 

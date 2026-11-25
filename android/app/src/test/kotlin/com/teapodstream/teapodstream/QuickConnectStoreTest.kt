@@ -39,6 +39,16 @@ class QuickConnectStoreTest {
     }
 
     @Test
+    fun theTileNameIsReplacedWithTheSessionOrKept() {
+        store.save("{a}", params, "u", "p", tileName = "Oslo")
+        assertEquals("Oslo", store.tileName())
+        store.save("{b}", params, "u", "p")
+        assertEquals("a reconnect keeps the name", "Oslo", store.tileName())
+        store.save("{c}", params, "u", "p", tileName = "")
+        assertNull(store.tileName())
+    }
+
+    @Test
     fun aLoginThatCantBeRemovedFailsTheClear() {
         store.save("{config}", params, "u", "p")
         dir.setWritable(false)

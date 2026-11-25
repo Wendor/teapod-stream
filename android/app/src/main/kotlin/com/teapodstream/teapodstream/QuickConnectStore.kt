@@ -77,9 +77,17 @@ internal class QuickConnectStore(private val dir: File) {
      * Flutter's `saveQuickConnect` and every session start: the config, its params and its SOCKS login as one
      * replacement. The old login and config go first, so an interrupted replacement leaves no config (nothing to
      * quick-start) or the new config with the login read from it, never a config paired with another one's params or
-     * login. A failed login write is left to that fallback rather than thrown.
+     * login. A failed login write is left to that fallback rather than thrown. [tileName] — the name the tile shows
+     * for it, replaced in the same step (blank removes it; null keeps the stored one, as a reconnect does); a failed
+     * name write only costs the label.
      */
-    fun save(config: String, params: ConnectionParams, socksUser: String, socksPassword: String) = synchronized(LOCK) {
+    fun save(
+        config: String,
+        params: ConnectionParams,
+        socksUser: String,
+        socksPassword: String,
+        tileName: String? = null,
+    ) = synchronized(LOCK) {
         clearCredentials()
         val old = File(dir, CONFIG)
         if (!old.delete() && old.exists()) throw java.io.IOException("can't remove $CONFIG")
@@ -87,6 +95,10 @@ internal class QuickConnectStore(private val dir: File) {
         saveConfig(config)
         try {
             saveCredentials(params.socksPort, socksUser, socksPassword)
+        } catch (_: Exception) {
+        }
+        try {
+            if (tileName != null) saveTileName(tileName)
         } catch (_: Exception) {
         }
     }

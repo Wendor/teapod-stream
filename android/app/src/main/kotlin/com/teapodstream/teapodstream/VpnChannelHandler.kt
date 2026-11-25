@@ -23,7 +23,7 @@ internal class VpnChannelHandler(
     private val quickConnect = QuickConnectRequests(
         QuickConnectStore(activity.filesDir),
         XrayVpnService.sessionStarts::get,
-    ) { VpnTileService.saveConfigName(activity, it) }
+    ) { VpnTileService.configNameChanged(activity) }
     private val filesDir: File get() = activity.filesDir
 
     val methods: Map<String, ChannelMethod> = mapOf(
@@ -221,24 +221,22 @@ internal class VpnChannelHandler(
 /**
  * Flutter's quick-connect save and clear, checked while no session ran. [seen] is [sessionStarts] at that check: a
  * session started since then owns the stored data, so the write is dropped (false). The check and the write are one
- * step under the store's lock, which the session's own save also takes.
+ * step under the store's lock, which the session's own save also takes; the tile is told after the lock is released.
  */
 internal class QuickConnectRequests(
     private val store: QuickConnectStore,
     private val sessionStarts: () -> Long,
-    private val saveTileName: (String?) -> Unit,
+    private val tileNameChanged: () -> Unit,
 ) {
     fun save(args: ConnectArgs, seen: Long): Boolean = store.locked {
         if (sessionStarts() != seen) return@locked false
-        store.save(args.config, args.params, args.socksUser, args.socksPassword)
-        saveTileName(args.configName)
+        store.save(args.config, args.params, args.socksUser, args.socksPassword, tileName = args.configName ?: "")
         true
-    }
+    }.also { if (it) tileNameChanged() }
 
     fun clear(seen: Long): Boolean = store.locked {
         if (sessionStarts() != seen) return@locked false
         store.clear()
-        saveTileName(null)
         true
-    }
+    }.also { if (it) tileNameChanged() }
 }

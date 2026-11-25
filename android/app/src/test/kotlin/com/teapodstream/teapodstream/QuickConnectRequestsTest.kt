@@ -19,7 +19,8 @@ class QuickConnectRequestsTest {
     private val starts = AtomicLong()
     private val tileNames = mutableListOf<String?>()
     private val store by lazy { QuickConnectStore(tmp.root) }
-    private val requests by lazy { QuickConnectRequests(store, starts::get) { tileNames += it } }
+    // The tile is told after each committed change; it reads the name from the store.
+    private val requests by lazy { QuickConnectRequests(store, starts::get) { tileNames += store.tileName() } }
 
     private fun args(config: String) = ConnectArgs.from(mapOf("xrayConfig" to config, "configName" to "n-$config"))!!
 

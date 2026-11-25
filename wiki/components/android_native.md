@@ -57,9 +57,8 @@ after `onRevoke()` (which stops outside the queue) or a disconnect set `userRequ
 
 - **`ACTION_CONNECT`** (from Flutter): only the notification type is taken before the queue (when no session runs);
   `startVpn(StartRequest)` takes the parameters (`useParams`: the heartbeat, tethering and notification settings are
-  read from them) once it owns the session, and stores them, the config it runs and its SOCKS login together, then the
-  tile's config name
-  (`QuickConnectStore.save`: under a lock shared with the activity's save and the quick-start read; the old login and
+  read from them) once it owns the session, and stores them, the config it runs and its SOCKS login together with the
+  tile's config name, then refreshes the tile (`QuickConnectStore.save`: one step under a lock shared with the activity's save and the quick-start read; the old login and
   config are removed first, so an interrupted save leaves nothing to quick-start rather than a mix of two connections; a failed save is logged
   and costs only the quick start, not the session). Under `sessionLock`, before the old session
   stops, `sessionAttempt` takes Flutter's connect attempt (`EXTRA_ATTEMPT`), and every snapshot the session

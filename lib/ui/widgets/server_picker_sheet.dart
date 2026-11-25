@@ -26,12 +26,13 @@ class _ServerPickerSheet extends ConsumerWidget {
 
   Future<void> _select(BuildContext context, WidgetRef ref, VpnConfig c) async {
     final messenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
+    final route = ModalRoute.of(context);
     final reason = await ref.read(vpnProvider.notifier).selectConfig(c);
     if (reason != null) {
       messenger.showSnackBar(SnackBar(content: Text(reason)));
-    } else {
-      navigator.pop();
+    } else if (context.mounted && (route?.isCurrent ?? false)) {
+      // The sheet may be gone already (a second tap, Back during the save): never pop the route below it.
+      Navigator.of(context).pop();
     }
   }
 

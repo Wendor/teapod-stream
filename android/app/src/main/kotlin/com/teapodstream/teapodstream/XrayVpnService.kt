@@ -981,7 +981,7 @@ class XrayVpnService : VpnService() {
             try {
                 val session = lastConnectedMs // the session probed: a reconnect applies only to it
                 val port = snapshot.socksPort
-                if (port <= 0) return@Thread
+                if (session <= 0L || port <= 0) return@Thread
                 try {
                     runProbe(port)
                     log("info", "TUN idle ${idleSec}s on wake but tunnel alive, skipping reconnect")
@@ -1231,12 +1231,16 @@ class XrayVpnService : VpnService() {
      * waits for direct internet. [session] — `lastConnectedMs` it was scheduled for (0 — the current one); applies
      * only while that session's desired state is still the one wanted.
      */
-    private fun reconnectInternal(session: Long = 0L) {
+    /**
+     * [session] — the `lastConnectedMs` of the session seen dead: the reconnect applies only while it is still the
+     * connected one. Captured as 0 (a stop cleared it meanwhile) it never matches. Null — whatever is connected.
+     */
+    private fun reconnectInternal(session: Long? = null) {
         networkChangeHandler.post {
             // The desired state of the session that is connected, not whatever is wanted by now (a probe of a session
             // being replaced must not replace its successor).
             val current = connectedDesired ?: return@post
-            if (destroyed || !isRunning.get() || (session != 0L && lastConnectedMs != session)) return@post
+            if (destroyed || !isRunning.get() || (session != null && (session == 0L || lastConnectedMs != session))) return@post
             // The stored session, or the running one when the store has none (a failed save).
             val request = quickStartRequest() ?: current.request.copy(attempt = 0, reconnect = true)
             log("info", "reconnectInternal: starting reconnect cycle")

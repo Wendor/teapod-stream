@@ -140,7 +140,8 @@ excluded from TUN; otherwise VALIDATED first, then Wi-Fi) and sets it as the und
 - A change of the physical network (`onAvailable`/`onLost` compare the snapshot before and after
   `updateUnderlyingNetworks`, both event orders) → `scheduleNetworkChanged(switched=true)` → 2 s debounce →
   `reconnectInternal()`: a new `On` of the stored session with `waitForNetwork`, only while the connected session's
-  state is still wanted. Its run stops the session (`reconnecting`, TUN kept as a sink), waits up to 30 s for direct
+  state is still wanted and, for a check bound to a session (network change, dead tun2socks, wake probe), that session
+  is still the connected one — one captured after a stop cleared it never matches. Its run stops the session (`reconnecting`, TUN kept as a sink), waits up to 30 s for direct
   internet (`hasDirectInternet`: TCP to 8.8.8.8:53 bound to the physical network) while it is still wanted, then starts. A timed wakelock
   (40 s) covers the cycle. Takes ~3–5 s.
 - Back on the network the session was connected on → no reconnect (the core's sockets are still alive).

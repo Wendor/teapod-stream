@@ -11,7 +11,7 @@ TeapodStream is an Android VPN client: a Flutter UI, a Kotlin `VpnService`, and 
 │                        → XrayEngine, PlatformService (native)│
 ├──────────────────────────────────────────────────────────────┤
 │ Android (Kotlin)                                             │
-│  MainActivity → XrayVpnService → VpnCore (Go / Box / Rust)   │
+│  MainActivity → channel handlers → XrayVpnService → VpnCore  │
 ├──────────────────────────────────────────────────────────────┤
 │ teapod-core AAR (core/)                                      │
 │  xray-core (Go) · sing-box (Go) · teapod-tun2socks · xray-rust│
@@ -60,7 +60,7 @@ goes. Details: [vpn_provider](components/vpn_provider.md#choosing-the-core),
 
 | Channel | Direction | Content |
 |---|---|---|
-| `MethodChannel("com.teapodstream/vpn")` | Dart → native | `connect`, `disconnect`, `getState`, stats, ping, measure, logs ([XrayEngine](components/xray_engine.md)); versions, cores, apps, files, ABI, APK install, device info ([PlatformService](components/services.md#platformservice)) |
+| `MethodChannel("com.teapodstream/vpn")` | Dart → native | `connect`, `disconnect`, `getState`, stats, ping, measure, logs ([XrayEngine](components/xray_engine.md); native `VpnChannelHandler`); versions, cores, apps, files, ABI, APK install, device info ([PlatformService](components/services.md#platformservice); native `PlatformChannelHandler`) |
 | `EventChannel("com.teapodstream/vpn/events")` | native → Dart | `state` (+ SOCKS credentials and `connectedAtMs` on `connected`, `error` on `error`/`blocked`), `log`, `statsHistory`, `tunnel_dead`, `deeplink` |
 
 One broadcast stream (`XrayEngine.events`) serves all Dart listeners. On `onListen` native replays the current state,
@@ -72,7 +72,7 @@ so a restarted UI catches up with a running service.
 tap → VpnNotifier.connect()
     → effectiveConfigProvider → validate → CoreResolver → buildEngineOptions → checkOptions
     → XrayEngine.connect → backend.buildConfig → MethodChannel 'connect'
-    → MainActivity: VPN permission → XrayVpnService ACTION_CONNECT
+    → MainActivity → VpnChannelHandler: VPN permission → XrayVpnService ACTION_CONNECT
     → establish TUN → VpnCore.start → setConnected → event 'state: connected'
     → VpnNotifier: state, stats polling, appliedFingerprint
 ```

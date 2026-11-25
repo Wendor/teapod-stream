@@ -39,6 +39,48 @@ class QuickConnectStoreTest {
     }
 
     @Test
+    fun theTileNameIsReplacedWithTheSessionOrKept() {
+        store.save("{a}", params, "u", "p", tileName = "Oslo")
+        assertEquals("Oslo", store.tileName())
+        store.save("{b}", params, "u", "p")
+        assertEquals("a reconnect keeps the name", "Oslo", store.tileName())
+        store.save("{c}", params, "u", "p", tileName = "")
+        assertNull(store.tileName())
+    }
+
+    @Test
+    fun aLegacyNameIsTakenOnlyByAStoredConfigWithoutAName() {
+        store.adoptLegacyTileName("Old")
+        assertNull("no config to name", store.tileName())
+        store.save("{a}", params, "u", "p", tileName = "")
+        store.adoptLegacyTileName(" ")
+        assertNull("blank", store.tileName())
+        store.adoptLegacyTileName("Old")
+        assertEquals("Old", store.tileName())
+        store.adoptLegacyTileName("Older")
+        assertEquals("the store's own name stays", "Old", store.tileName())
+    }
+
+    @Test
+    fun aLegacyNameThatCantBeWrittenIsDropped() {
+        store.save("{a}", params, "u", "p", tileName = "")
+        File(dir, QuickConnectStore.TILE_NAME).mkdir()
+        File(dir, "${QuickConnectStore.TILE_NAME}/x").writeText("")
+        store.adoptLegacyTileName("Old") // doesn't throw
+        assertEquals("{a}", store.config())
+    }
+
+    @Test
+    fun anInterruptedSaveLeavesNoOldName() {
+        store.save("{a}", params, "u", "p", tileName = "Berlin")
+        File(dir, QuickConnectStore.PARAMS).delete()
+        File(dir, QuickConnectStore.PARAMS).mkdir()
+        File(dir, "${QuickConnectStore.PARAMS}/x").writeText("")
+        assertTrue(runCatching { store.save("{b}", params, "u", "p", tileName = "Oslo") }.isFailure)
+        assertNull(store.tileName())
+    }
+
+    @Test
     fun aLoginThatCantBeRemovedFailsTheClear() {
         store.save("{config}", params, "u", "p")
         dir.setWritable(false)
@@ -132,6 +174,9 @@ class QuickConnectStoreTest {
     fun quickStartPrefersTheStoredLogin() {
         store.save("{config}", params, "u", "p")
         assertEquals(StartRequest("{config}", params, "u", "p", attempt = 0, reconnect = true), store.quickStart(fromConfig))
+        // The tile's name comes with the config it names, so the session's save writes it back unchanged.
+        store.save("{config}", params, "u", "p", tileName = "Oslo")
+        assertEquals("Oslo", store.quickStart(fromConfig)!!.configName)
     }
 
     @Test

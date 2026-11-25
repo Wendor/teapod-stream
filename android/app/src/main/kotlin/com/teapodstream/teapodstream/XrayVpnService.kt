@@ -59,6 +59,10 @@ class XrayVpnService : VpnService() {
         const val EXTRA_ATTEMPT = "attempt"
         const val EXTRA_CONFIG_NAME = "config_name"              // config name for the tile
 
+        /** Counts session starts, each after its state is published and before its quick-connect save: Flutter's
+         *  quick-connect write checked before a start is stale ([QuickConnectRequests]). */
+        val sessionStarts = java.util.concurrent.atomic.AtomicLong()
+
         private val session = AtomicReference(SessionSnapshot())
         private val publishLock = Any()
 
@@ -87,7 +91,7 @@ class XrayVpnService : VpnService() {
         const val PREF_LOGS_ENABLED = "logs_enabled"
 
         // User toggle: when off, only warning/error are logged (file + UI) so a broken
-        // session still leaves diagnostics. Persisted in PREFS_NAME by MainActivity.
+        // session still leaves diagnostics. Persisted in PREFS_NAME by VpnChannelHandler.
         @Volatile var logsEnabled = true
 
         // Log lines are buffered and flushed in batches: a FileWriter open per line wakes
@@ -313,6 +317,7 @@ class XrayVpnService : VpnService() {
 
     override fun onCreate() {
         super.onCreate()
+        VpnTileService.migrateLegacyConfigName(this)
         logsEnabled = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean(PREF_LOGS_ENABLED, true)
         val pm = getSystemService(POWER_SERVICE) as PowerManager
         screenOn = pm.isInteractive
@@ -559,6 +564,9 @@ class XrayVpnService : VpnService() {
         tunMtu = core.tunMtu(mtu.coerceIn(576, 9000))
         if (!isReconnect) clearLogFile()
         setState(if (isReconnect) SessionState.RECONNECTING else SessionState.CONNECTING)
+        // After the state, before the save: a quick-connect write that read the count before this is dropped, one
+        // that read it after sees the running state and isn't queued.
+        sessionStarts.incrementAndGet()
         log("info", "Starting VPN (MTU: $tunMtu)")
 
         try {
@@ -569,14 +577,16 @@ class XrayVpnService : VpnService() {
                 xrayConfig
             }
 
-            // For a quick start (tile, boot, reconnect): the params, the config and its SOCKS login together, then
-            // the tile's name. A failed save costs the quick start, not this session. Saved on a reconnect too: the
-            // config it runs may differ from the stored one (a new prefix proxy port).
+            // For a quick start (tile, boot, reconnect): the params, the config, its SOCKS login and the tile's name
+            // together (a quick start's name was read with its config). A failed save costs the quick start, not this
+            // session. Saved on a reconnect too: the config it runs may differ from the stored one (a new prefix
+            // proxy port).
             try {
-                store.save(finalConfig, request.params, socksUser, socksPassword)
-                if (!request.reconnect) VpnTileService.saveConfigName(this, request.configName)
+                store.save(finalConfig, request.params, socksUser, socksPassword, tileName = request.configName ?: "")
             } catch (e: Exception) {
                 log("warning", "Quick-connect data not saved: ${e.message}")
+            } finally {
+                VpnTileService.configNameChanged(this) // a failed save may have removed the old name too
             }
             prepareBinaries(this)
 

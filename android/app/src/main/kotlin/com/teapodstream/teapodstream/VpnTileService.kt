@@ -26,20 +26,32 @@ class VpnTileService : TileService() {
     fun requestUpdate() = updateTile()
 
     companion object {
+        @Volatile
         private var tileService: VpnTileService? = null
-        /** Where the name was kept before [QuickConnectStore]: read while the store has none, removed on a save. */
+        private val main = android.os.Handler(android.os.Looper.getMainLooper())
+        /** Where the name was kept before [QuickConnectStore]. */
         private const val LEGACY_PREF_CONFIG_NAME = "tile_config_name"
 
-        /** Quick-reconnect config name — the one the tile will connect; null — reset to "TeapodStream". */
-        fun saveConfigName(context: Context, name: String?) {
-            try {
-                QuickConnectStore(context.filesDir).saveTileName(name)
-            } catch (_: Exception) {
-                // Only the tile's label: it shows "TeapodStream" until the next save.
+        /**
+         * Moves a name kept before [QuickConnectStore] into it (unless the store has one) and drops the old one, in
+         * one step under the store's lock: a save or quick start never sees both. Run before anything reads or writes
+         * the name (the activity, the service, the tile).
+         */
+        fun migrateLegacyConfigName(context: Context) {
+            val prefs = context.getSharedPreferences(XrayVpnService.PREFS_NAME, Context.MODE_PRIVATE)
+            if (!prefs.contains(LEGACY_PREF_CONFIG_NAME)) return
+            val store = QuickConnectStore(context.filesDir)
+            store.locked {
+                store.adoptLegacyTileName(prefs.getString(LEGACY_PREF_CONFIG_NAME, null))
+                prefs.edit().remove(LEGACY_PREF_CONFIG_NAME).commit()
             }
-            context.getSharedPreferences(XrayVpnService.PREFS_NAME, Context.MODE_PRIVATE).edit()
-                .remove(LEGACY_PREF_CONFIG_NAME).apply()
-            updateTile(context)
+        }
+
+        /** The name in [QuickConnectStore] changed (saved with the quick-connect data): the tile shows it. From any
+         *  thread: the tile is updated on the main one. */
+        fun configNameChanged(context: Context) {
+            val app = context.applicationContext
+            main.post { updateTile(app) }
         }
 
         fun registerTileService(service: VpnTileService) {
@@ -115,8 +127,10 @@ class VpnTileService : TileService() {
         tile.updateTile()
     }
 
-    private fun configName(): String? = QuickConnectStore(filesDir).tileName()
-        ?: getSharedPreferences(XrayVpnService.PREFS_NAME, MODE_PRIVATE).getString(LEGACY_PREF_CONFIG_NAME, null)
+    private fun configName(): String? {
+        migrateLegacyConfigName(this)
+        return QuickConnectStore(filesDir).tileName()
+    }
 
     /** [active] — VPN is on or transitioning: the title is the config name, otherwise "TeapodStream". */
     private fun setTileBase(tile: Tile, active: Boolean) {

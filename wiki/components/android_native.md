@@ -7,14 +7,17 @@ back. It keeps working when the Flutter UI is gone (tile, boot, Tasker, service 
 
 | File | Role |
 |---|---|
-| `MainActivity.kt` | MethodChannel handler (`com.teapodstream/vpn`), VPN permission, deep link intents |
+| `MainActivity.kt` | wires the channels (`com.teapodstream/vpn` to both handlers below, the event channel, itest), deep link intents, the VPN-permission result |
+| `VpnChannelHandler.kt` | the VPN methods of `com.teapodstream/vpn` (Dart `XrayEngine`): connect with the VPN permission, disconnect, quick-connect save / clear (`QuickConnectRequests`: in call order on one thread, dropped when a session started since the check — `XrayVpnService.sessionStarts`), state, stats, ping, `measureOutbound`, logs |
+| `PlatformChannelHandler.kt` | the platform methods (Dart `PlatformService`): available cores, versions, binaries, apps and icons, files dir, ABI, IP country, device id / info, APK install; `BatteryOptimization` — the exemption prompt (once, on connect) and its settings |
+| `ChannelWork.kt` | a channel method's blocking work runs on a pool (`io`; `ping` 8 and `measure` 4 threads bound the bursts; `quickConnect` — one thread, call order) and is answered on the main thread, a throw as `ERROR`; `ConnectArgs` — the parsed `connect` / `saveQuickConnect` arguments |
 | `PendingVpnStart.kt` | the connect waiting for the VPN-permission dialog: a newer connect replaces it (one dialog), `disconnect` cancels it; the dropped call is answered `SUPERSEDED` / `CANCELLED`. A dialog stays open until it answers, and its answer goes to the latest request |
 | `XrayVpnService.kt` | the `VpnService`: session lifecycle, TUN, kill switch, network-change reconnect, heartbeat, stats, notification, log file |
 | `SessionSnapshot.kt` | `SessionState` (the state names Flutter sees) and the immutable `SessionSnapshot`: its map for Flutter, the itest marker, the pure transition `moved` |
 | `core/` | `VpnCore` and its implementations (below), `TunOwnerPolicy`, `SocksCredentials`, `ProxyRedirect` |
 | `VpnEventStreamHandler.kt` | EventChannel (`com.teapodstream/vpn/events`) singleton |
 | `ConnectionParams.kt` | the session parameters (everything but the config and the SOCKS login): one JSON form for the `ACTION_CONNECT` Intent (`EXTRA_PARAMS`) and the stored parameters; `fromJson` holds every default and limit (MTU 576–9000, heartbeat threshold 1–10), `fromArgs` maps Flutter's `connect` / `saveQuickConnect` arguments through it |
-| `QuickConnectStore.kt` | the quick-reconnect data in `filesDir`, its only reader and writer: the core config (`xray_config.json`), `ConnectionParams` (`last_connection_meta.json`), the SOCKS login (`socks_creds.json`), the tile's config name (`tile_config_name.txt`) and the user-off flag (`user_disconnected.flag`); writes go through a temp file and a rename. `quickStart()` builds the `StartRequest` (config, params, SOCKS login — the stored one, else read from the config — the Flutter `attempt` it answers, 0 for a native start, `reconnect` and, for a Flutter connect, the tile's config name) that `startVpn(request)` takes |
+| `QuickConnectStore.kt` | the quick-reconnect data in `filesDir`, its only reader and writer: the core config (`xray_config.json`), `ConnectionParams` (`last_connection_meta.json`), the SOCKS login (`socks_creds.json`), the tile's config name (`tile_config_name.txt`) and the user-off flag (`user_disconnected.flag`); writes go through a temp file and a rename. `quickStart()` builds the `StartRequest` (config, params, SOCKS login — the stored one, else read from the config — the Flutter `attempt` it answers, 0 for a native start, `reconnect` and the tile's config name — Flutter's, or the stored one read with the config — which the session's save writes back with it) that `startVpn(request)` takes |
 | `VpnTileService.kt` | Quick Settings tile |
 | `BootReceiver.kt` | auto-start after boot (`autoStartOnBoot`, a saved config, not after an explicit disconnect) |
 | `VpnCommandReceiver.kt` | Tasker/automation broadcasts `com.teapodstream.CONNECT` / `DISCONNECT`; ignored unless `automationEnabled` |
@@ -54,9 +57,8 @@ after `onRevoke()` (which stops outside the queue) or a disconnect set `userRequ
 
 - **`ACTION_CONNECT`** (from Flutter): only the notification type is taken before the queue (when no session runs);
   `startVpn(StartRequest)` takes the parameters (`useParams`: the heartbeat, tethering and notification settings are
-  read from them) once it owns the session, and stores them, the config it runs and its SOCKS login together, then the
-  tile's config name
-  (`QuickConnectStore.save`: under a lock shared with the activity's save and the quick-start read; the old login and
+  read from them) once it owns the session, and stores them, the config it runs and its SOCKS login together with the
+  tile's config name, then refreshes the tile (`QuickConnectStore.save`: one step under a lock shared with the activity's save and the quick-start read; the old login and
   config are removed first, so an interrupted save leaves nothing to quick-start rather than a mix of two connections; a failed save is logged
   and costs only the quick start, not the session). Under `sessionLock`, before the old session
   stops, `sessionAttempt` takes Flutter's connect attempt (`EXTRA_ATTEMPT`), and every snapshot the session
@@ -199,7 +201,7 @@ UI catches up. It only sends: the tile and the notification follow the service's
 ## Tile
 
 Disconnected: label "TeapodStream", subtitle = the config the tile will connect (`tile_config_name.txt` in
-`QuickConnectStore`, saved with the quick-connect parameters). Active / transition / kill switch: label = config name, subtitle = status.
+`QuickConnectStore`, saved with the quick-connect parameters; a name from the older `tile_config_name` preference is moved into the store once, under its lock, when the activity, the service or the tile starts). Active / transition / kill switch: label = config name, subtitle = status.
 Tap: disconnect when connected or connecting, otherwise `CONNECT_QUICK`; `unlockAndRun` on the lock screen.
 
 ## PrefixTcpProxy

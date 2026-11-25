@@ -5,7 +5,8 @@ import org.json.JSONObject
 
 /**
  * A session start: the core config, its parameters and the SOCKS login; [attempt] — the Flutter connect it answers
- * (0 — a native start), [reconnect] — a native restart; [configName] — what the tile shows for a Flutter connect.
+ * (0 — a native start), [reconnect] — a native restart; [configName] — what the tile shows for it (a quick start's is
+ * the stored one, read with its config).
  */
 internal data class StartRequest(
     val config: String,
@@ -29,13 +30,13 @@ internal data class StartRequest(
  */
 internal class QuickConnectStore(private val dir: File) {
 
-    fun config(): String? = read(CONFIG)
+    fun config(): String? = synchronized(LOCK) { read(CONFIG) }
 
     /** The config the session runs (with the prefix proxy injected, if any); only with its params and login ([save]). */
     private fun saveConfig(config: String) = write(CONFIG, config)
 
     fun params(): ConnectionParams? = try {
-        read(PARAMS)?.let { ConnectionParams.fromJson(JSONObject(it)) }
+        synchronized(LOCK) { read(PARAMS) }?.let { ConnectionParams.fromJson(JSONObject(it)) }
     } catch (_: Exception) {
         null
     }
@@ -45,7 +46,7 @@ internal class QuickConnectStore(private val dir: File) {
     /** The SOCKS login of the last session; null when none is stored or the file is broken (both fields must be
      *  strings; empty ones are kept). */
     fun credentials(): Pair<String, String>? = try {
-        read(CREDENTIALS)?.let { JSONObject(it) }?.let { json ->
+        synchronized(LOCK) { read(CREDENTIALS) }?.let { JSONObject(it) }?.let { json ->
             val user = json.opt("user") as? String
             val pass = json.opt("pass") as? String
             if (user != null && pass != null) user to pass else null
@@ -66,30 +67,59 @@ internal class QuickConnectStore(private val dir: File) {
     }
 
     /** The name of the config a quick start connects (the tile shows it); null — none. */
-    fun tileName(): String? = read(TILE_NAME)
+    fun tileName(): String? = synchronized(LOCK) { read(TILE_NAME) }
 
     /** A blank or null [name] removes it. */
-    fun saveTileName(name: String?) {
+    fun saveTileName(name: String?) = synchronized(LOCK) {
         if (name.isNullOrBlank()) File(dir, TILE_NAME).delete() else write(TILE_NAME, name)
+    }
+
+    /**
+     * A name kept before this store: taken only for a stored config without a name of its own. A failed write only
+     * costs the label (the caller drops the old name either way, so it can't attach to a config saved later).
+     */
+    fun adoptLegacyTileName(legacy: String?) = synchronized(LOCK) {
+        if (legacy.isNullOrBlank() || tileName() != null || config() == null) return@synchronized
+        try {
+            saveTileName(legacy)
+        } catch (_: Exception) {
+        }
     }
 
     /**
      * Flutter's `saveQuickConnect` and every session start: the config, its params and its SOCKS login as one
      * replacement. The old login and config go first, so an interrupted replacement leaves no config (nothing to
      * quick-start) or the new config with the login read from it, never a config paired with another one's params or
-     * login. A failed login write is left to that fallback rather than thrown.
+     * login. A failed login write is left to that fallback rather than thrown. [tileName] — the name the tile shows
+     * for it, replaced in the same step (blank removes it; null keeps the stored one, as a reconnect does); a failed
+     * name write only costs the label.
      */
-    fun save(config: String, params: ConnectionParams, socksUser: String, socksPassword: String) = synchronized(LOCK) {
+    fun save(
+        config: String,
+        params: ConnectionParams,
+        socksUser: String,
+        socksPassword: String,
+        tileName: String? = null,
+    ) = synchronized(LOCK) {
         clearCredentials()
         val old = File(dir, CONFIG)
         if (!old.delete() && old.exists()) throw java.io.IOException("can't remove $CONFIG")
+        // The old name goes with the old config: an interrupted save leaves no label for a config it didn't store.
+        if (tileName != null) File(dir, TILE_NAME).delete()
         saveParams(params)
         saveConfig(config)
         try {
             saveCredentials(params.socksPort, socksUser, socksPassword)
         } catch (_: Exception) {
         }
+        try {
+            if (tileName != null) saveTileName(tileName)
+        } catch (_: Exception) {
+        }
     }
+
+    /** [block] under the lock of every read and write: a check and the write it allows, as one step. */
+    fun <T> locked(block: () -> T): T = synchronized(LOCK, block)
 
     /** Flutter's `clearQuickConnect`: nothing left to quick-start. The off flag stays. */
     fun clear() = synchronized(LOCK) {
@@ -109,11 +139,14 @@ internal class QuickConnectStore(private val dir: File) {
      * stored one, else from the config ([socksFromConfig] reads it in the format of the session's core).
      */
     fun quickStart(socksFromConfig: (config: String, engine: String) -> Pair<String, String>): StartRequest? {
-        val (params, config, login) = synchronized(LOCK) {
-            Triple(params() ?: return null, config() ?: return null, credentials())
+        val stored = synchronized(LOCK) {
+            val params = params() ?: return null
+            val config = config() ?: return null
+            StartRequest(config, params, "", "", attempt = 0, reconnect = true, configName = tileName()) to credentials()
         }
-        val (user, password) = login ?: socksFromConfig(config, params.engine)
-        return StartRequest(config, params, user, password, attempt = 0, reconnect = true)
+        val (request, login) = stored
+        val (user, password) = login ?: socksFromConfig(request.config, request.params.engine)
+        return request.copy(socksUser = user, socksPassword = password)
     }
 
     /** Null when missing or unreadable (also removed between the check and the read). */

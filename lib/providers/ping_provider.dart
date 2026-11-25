@@ -31,7 +31,7 @@ class PingNotifier extends Notifier<bool> {
     try {
       await _pingEndpoints(configs);
     } finally {
-      state = false;
+      if (ref.mounted) state = false;
     }
   }
 

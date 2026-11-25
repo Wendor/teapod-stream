@@ -27,7 +27,8 @@ class VpnStatsNotifier extends Notifier<VpnStats> {
   /// timeout) — nothing to append to, the whole buffer is needed.
   List<SpeedPoint> _history = const [];
 
-  bool get _connected => ref.read(vpnProvider).isConnected;
+  /// False after disposal too: a queued [resume] or a channel answer may complete after it.
+  bool get _connected => ref.mounted && ref.read(vpnProvider).isConnected;
 
   @override
   VpnStats build() {

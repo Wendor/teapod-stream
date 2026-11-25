@@ -82,7 +82,7 @@ class VpnTileService : TileService() {
             setOf(SessionState.CONNECTED, SessionState.CONNECTING, SessionState.RECONNECTING)
         val toggle = {
             setIntermediateState(isDisconnect)
-            XrayVpnService.onStateNotification(this, if (isDisconnect) SessionState.DISCONNECTING else SessionState.CONNECTING)
+            ServiceNotifications.onState(this, if (isDisconnect) SessionState.DISCONNECTING else SessionState.CONNECTING)
             startService(Intent(this, XrayVpnService::class.java).apply {
                 action = if (isDisconnect) XrayVpnService.ACTION_DISCONNECT else XrayVpnService.ACTION_CONNECT_QUICK
             })

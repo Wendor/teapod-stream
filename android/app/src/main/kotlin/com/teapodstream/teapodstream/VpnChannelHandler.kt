@@ -42,10 +42,10 @@ internal class VpnChannelHandler(
         },
         // The same map as the `state` event: Flutter parses both with one parser
         "getState" to { _, result -> result.success(XrayVpnService.snapshot.toMap()) },
-        "getStats" to { _, result -> result.success(XrayVpnService.getStats()) },
+        "getStats" to { _, result -> result.success(SessionStats.get()) },
         "getStatsHistory" to { call, result ->
             result.success(
-                XrayVpnService.getStatsHistory(
+                SessionStats.history(
                     call.argument<Int>("epoch") ?: -1,
                     (call.argument<Number>("since") ?: 0).toLong(),
                 )
@@ -73,20 +73,20 @@ internal class VpnChannelHandler(
             }
         },
         "getLogFilePath" to { _, result ->
-            result.success("${filesDir.absolutePath}/${XrayVpnService.LOG_FILE_NAME}")
+            result.success("${filesDir.absolutePath}/${ServiceLog.FILE_NAME}")
         },
         "setLogsEnabled" to { call, result ->
             val enabled = call.argument<Boolean>("enabled") ?: true
             activity.getSharedPreferences(XrayVpnService.PREFS_NAME, Activity.MODE_PRIVATE)
-                .edit().putBoolean(XrayVpnService.PREF_LOGS_ENABLED, enabled).apply()
-            XrayVpnService.logsEnabled = enabled
+                .edit().putBoolean(ServiceLog.PREF_ENABLED, enabled).apply()
+            ServiceLog.enabled = enabled
             result.success(null)
         },
         "getLogs" to { _, result ->
             work.answer(result) {
-                synchronized(XrayVpnService.LOG_FILE_LOCK) {
-                    XrayVpnService.flushLogBuffer(filesDir)
-                    listOf(XrayVpnService.LOG_PREV_FILE_NAME, XrayVpnService.LOG_FILE_NAME)
+                synchronized(ServiceLog.LOCK) {
+                    ServiceLog.flush(filesDir)
+                    listOf(ServiceLog.PREV_FILE_NAME, ServiceLog.FILE_NAME)
                         .map { File(filesDir, it) }
                         .filter { it.exists() }
                         .flatMap { it.readLines() }
@@ -98,10 +98,10 @@ internal class VpnChannelHandler(
         "clearLogs" to { _, result ->
             work.answer(result) {
                 try {
-                    synchronized(XrayVpnService.LOG_FILE_LOCK) {
-                        XrayVpnService.flushLogBuffer(filesDir)
-                        File(filesDir, XrayVpnService.LOG_FILE_NAME).writeText("")
-                        File(filesDir, XrayVpnService.LOG_PREV_FILE_NAME).delete()
+                    synchronized(ServiceLog.LOCK) {
+                        ServiceLog.flush(filesDir)
+                        File(filesDir, ServiceLog.FILE_NAME).writeText("")
+                        File(filesDir, ServiceLog.PREV_FILE_NAME).delete()
                     }
                 } catch (_: Exception) {
                 }

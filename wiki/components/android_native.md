@@ -12,7 +12,13 @@ back. It keeps working when the Flutter UI is gone (tile, boot, Tasker, service 
 | `PlatformChannelHandler.kt` | the platform methods (Dart `PlatformService`): available cores, versions, binaries, apps and icons, files dir, ABI, IP country, device id / info, APK install; `BatteryOptimization` — the exemption prompt (once, on connect) and its settings |
 | `ChannelWork.kt` | a channel method's blocking work runs on a pool (`io`; `ping` 8 and `measure` 4 threads bound the bursts; `quickConnect` — one thread, call order) and is answered on the main thread, a throw as `ERROR`; `ConnectArgs` — the parsed `connect` / `saveQuickConnect` arguments |
 | `PendingVpnStart.kt` | the connect waiting for the VPN-permission dialog: a newer connect replaces it (one dialog), `disconnect` cancels it; the dropped call is answered `SUPERSEDED` / `CANCELLED`. A dialog stays open until it answers, and its answer goes to the latest request |
-| `XrayVpnService.kt` | the `VpnService`: session lifecycle, TUN, kill switch, network-change reconnect, heartbeat, stats, notification, log file |
+| `XrayVpnService.kt` | the `VpnService`: session lifecycle, TUN, kill switch, the stats thread; wires the classes below |
+| `Heartbeat.kt` | the heartbeat thread and the probe on wake: probes the tunnel and applies `HeartbeatPolicy`'s actions |
+| `NetworkWatcher.kt` | the physical network under the session: the `NetworkCallback`, the underlying network, reconnect plans of `NetworkChangePolicy` |
+| `ScreenWatcher.kt` | screen and Doze state (the heartbeat and stats cadence), the wake callbacks |
+| `ServiceNotifications.kt` | the notification: intermediate on a state change (also from the tile), foreground, speeds, the kill switch's block |
+| `ServiceLog.kt` | the log file, its buffer and rotation, logcat and the Flutter log events |
+| `SessionStats.kt` | the session's traffic totals, speeds and the chart history (`getStats`, `getStatsHistory`) |
 | `SessionSnapshot.kt` | `SessionState` (the state names Flutter sees) and the immutable `SessionSnapshot`: its map for Flutter, the itest marker, the pure transition `moved` |
 | `core/` | `VpnCore` and its implementations (below), `TunOwnerPolicy`, `SocksCredentials`, `ProxyRedirect` |
 | `VpnEventStreamHandler.kt` | EventChannel (`com.teapodstream/vpn/events`) singleton |
@@ -81,7 +87,7 @@ desired state its session was started for (`connectedDesired`), and a start repl
   connect or quick start received after it replaces it, and its session owns the state. If the stop hasn't finished in
   5 s while this `Off` is still wanted, the main thread closes the sink and reports anyway. Its states carry the attempt
   of the last `ACTION_CONNECT` received (`SessionReconciler.lastAttempt`): a connect Flutter still waits
-  for, cancelled from the notification or the tile, gets its answer. Calls `ensureForeground()` first —
+  for, cancelled from the notification or the tile, gets its answer. Calls `ServiceNotifications.foreground()` first —
   it may arrive via `startForegroundService` into a fresh process.
 
 **Starting.** `Builder.establish()` → TUN (random `10.x.x.x/32`, IPv4 default route; IPv6 only with `ipv6Enabled`;
@@ -137,7 +143,7 @@ phantom connection, and the heartbeat's own tun2socks check stays as a fallback.
 ## Network changes
 
 The decisions below are `NetworkChangePolicy`'s; the service tracks the networks and runs the plan on its handler.
-A `NetworkCallback` tracks the physical network (`findPhysicalNetwork`: the process's own network, since the app is
+`NetworkWatcher`'s `NetworkCallback` tracks the physical network (`physical()`: the process's own network, since the app is
 excluded from TUN; otherwise VALIDATED first, then Wi-Fi) and sets it as the underlying network.
 
 - A change of the physical network (`onAvailable`/`onLost` compare the snapshot before and after
@@ -161,7 +167,7 @@ A background thread probes every 15 s (60 s with the screen off; skipped in deep
 `heartbeatThreshold` failures in a row. The counters, warm-up and cooldown are `HeartbeatPolicy`'s; the thread probes
 and applies its actions. A failure below the threshold is retried twice, 3 s apart; a passed retry clears the count.
 
-- **Probe** (`runProbe`): `socks` — HTTP through the local SOCKS to `heartbeatUrl`, any 2xx (`SocksHttpProbe`; the
+- **Probe** (`Heartbeat.probe`): `socks` — HTTP through the local SOCKS to `heartbeatUrl`, any 2xx (`SocksHttpProbe`; the
   request line carries the URL's raw, still-encoded path; it offers user/password only when the session has SOCKS credentials, and fails at once if the inbound demands them
   without any); `xrayDelay` — measured
   inside the core (also used for a custom `https://` URL); `passive` — none.
@@ -195,7 +201,7 @@ the first one and every power of two after it go to the log as a warning. [secur
 - **Notification** is present while the service lives (a foreground service; the service lives only while the VPN
   is on or `blocked`); `showNotification`
   chooses full (`vpn_service`) or minimal (`vpn_service_minimal`). Updates are deduplicated, at most every 5 s, not with
-  the screen off. All notifications come from `baseNotification()` (`setOnlyAlertOnce`, fixed `when`,
+  the screen off. All notifications come from `ServiceNotifications.base()` (`setOnlyAlertOnce`, fixed `when`,
   `FOREGROUND_SERVICE_IMMEDIATE`). Intermediate "Connecting…/Disconnecting…" only once per state.
 - **Log file** `filesDir/vpn_log.txt`, lines `epochMs|level|message`, buffered (flush at 8 KB, every 5 s, immediately
   for warnings/errors, before reads); cleared on a user connect, kept across reconnects (previous one in

@@ -109,8 +109,9 @@ phantom connection, and the heartbeat's own tun2socks check stays as a fallback.
   reconnect establishes a new TUN, which replaces the old fd as the sink. A user `ACTION_CONNECT` always establishes
   anew.
 - **Retries.** A failed reconnect retries `CONNECT_QUICK` up to `MAX_RECONNECT_ATTEMPTS` (3) with linear backoff
-  (5 s × attempt); the TUN held at the failure (the reused one, or the one the failed attempt established) survives
-  the retries. Final failure with kill switch → sink stays, state `blocked`.
+  (5 s × attempt). A retry keeps the TUN held at the failure only while the stored params equal `tunParams`;
+  otherwise it establishes a new TUN and closes the held one. Final failure with kill switch → sink stays, state
+  `blocked`.
   A failed manual connect keeps a sink only if there already was one — a broken config must not lock the network.
 - **`blocked`.** The kill switch keeps TUN with `setUnderlyingNetworks(emptyArray())` after an unexpected drop: traffic
   enters TUN and nobody reads it. Notification and tile show it; tapping the tile or the notification's Connect

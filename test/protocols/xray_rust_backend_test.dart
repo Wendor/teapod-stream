@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:teapodstream/core/cores/core_backend.dart';
 import 'package:teapodstream/core/interfaces/vpn_engine.dart';
 import 'package:teapodstream/core/models/heartbeat_settings.dart';
+import 'package:teapodstream/core/models/routing_settings.dart';
+import 'package:teapodstream/core/services/geosite_index.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/core/models/xray_tuning.dart';
 import 'package:teapodstream/protocols/xray/xray_rust_backend.dart';
@@ -79,5 +81,54 @@ void main() {
     expect(r.effectiveQuicBlock(requested: false, flow: 'xtls-rprx-vision-udp443'), isTrue);
     expect(r.effectiveQuicBlock(requested: true, flow: null), isTrue);
     expect(rust.effectiveHeartbeatProbe(HeartbeatProbe.passive), HeartbeatProbe.passive);
+  });
+
+  test('geosite over xray-rust limits is left out, ad blocking goes first over the budget', () {
+    // Loyalsoldier's category-ads-all is over 200k domains; runetfreedom's ru-blocked-all is over 32 MB.
+    const geosite = GeositeIndex({
+      'category-ads-all': (bytes: 5290196, domains: 203624),
+      'win-spy': (bytes: 10482, domains: 327),
+      'ru-blocked-all': (bytes: 39659498, domains: 1644170),
+      'ru-blocked': (bytes: 1525392, domains: 73607),
+      'cn': (bytes: 1948703, domains: 110258),
+      'china-list': (bytes: 1931563, domains: 109486),
+    });
+    VpnEngineOptions with_(RoutingSettings routing) =>
+        VpnEngineOptions(socksPort: 1, socksUser: 'u', socksPassword: 'p', routing: routing, geosite: geosite);
+    String rules(VpnEngineOptions o) => rust.buildConfig(_vless(), o);
+
+    final oversized = with_(
+      const RoutingSettings(
+        direction: RoutingDirection.bypass,
+        geositeEnabled: true,
+        geositeCodes: ['ru-blocked-all', 'ru-blocked'],
+        adBlockEnabled: true,
+      ),
+    );
+    final check = rust.checkOptions(_vless(), oversized);
+    expect(check.blocking, isNull);
+    expect(check.warnings.single, allOf(contains('ru-blocked-all'), contains('category-ads-all')));
+    final json = rules(oversized);
+    expect(json, allOf(contains('geosite:ru-blocked"'), contains('geosite:win-spy')));
+    expect(json, isNot(anyOf(contains('ru-blocked-all'), contains('category-ads-all'))));
+
+    // Over xray-rust's 250k budget: ad blocking is dropped first; codes alone over it block the start.
+    const cn = RoutingSettings(direction: RoutingDirection.bypass, geositeEnabled: true, geositeCodes: ['cn']);
+    const fitting = GeositeIndex({
+      'category-ads-all': (bytes: 4888150, domains: 187598),
+      'win-spy': (bytes: 10482, domains: 327),
+      'cn': (bytes: 1948703, domains: 110258),
+      'china-list': (bytes: 1931563, domains: 109486),
+      'ru-blocked': (bytes: 1525392, domains: 73607),
+    });
+    VpnEngineOptions fit(RoutingSettings routing) =>
+        VpnEngineOptions(socksPort: 1, socksUser: 'u', socksPassword: 'p', routing: routing, geosite: fitting);
+    final adsAndCn = rust.checkOptions(_vless(), fit(cn.copyWith(adBlockEnabled: true)));
+    expect(adsAndCn.blocking, isNull);
+    expect(adsAndCn.warnings.single, contains('ad blocking is not applied'));
+    expect(rules(fit(cn.copyWith(adBlockEnabled: true))), isNot(contains('category-ads-all')));
+    expect(rust.checkOptions(_vless(), fit(cn)).warnings, isEmpty);
+    final tooMany = cn.copyWith(geositeCodes: ['cn', 'china-list', 'ru-blocked']);
+    expect(rust.checkOptions(_vless(), fit(tooMany)).blocking, contains('250k'));
   });
 }

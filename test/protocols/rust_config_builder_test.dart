@@ -5,6 +5,7 @@ import 'package:teapodstream/core/interfaces/vpn_engine.dart';
 import 'package:teapodstream/core/models/dns_config.dart';
 import 'package:teapodstream/core/models/routing_settings.dart';
 import 'package:teapodstream/core/models/xray_tuning.dart';
+import 'package:teapodstream/core/services/geosite_index.dart';
 import 'package:teapodstream/protocols/xray/rust_config_builder.dart';
 import 'package:teapodstream/protocols/xray/vless_parser.dart';
 import 'package:teapodstream/protocols/xray/xray_config_builder.dart';
@@ -305,23 +306,39 @@ void main() {
     expect(dnsOutSettings(plain), isNull);
   });
 
-  test('ad blocking with a large GeoSite category is rejected before start', () {
+  test('geosite over xray-rust limits is rejected before start, rules read the trimmed copy', () {
     final config = VlessParser.parseUri(profile())!;
-    for (final code in ['cn', 'CN', 'china-list', 'category-ads-all']) {
-      final routing = domainRouting.copyWith(adBlockEnabled: true, geositeCodes: ['youtube', code]);
-      expect(
-        () => RustConfigBuilder.build(config, options(routing: routing)),
-        throwsA(isA<FormatException>().having((e) => e.message, 'message', contains('250k'))),
-      );
-      // Each of the two alone stays within xray-rust's 250k matcher budget.
-      for (final alone in [
-        routing.copyWith(adBlockEnabled: false),
-        domainRouting.copyWith(adBlockEnabled: true),
-        routing.copyWith(direction: RoutingDirection.global),
-      ]) {
-        expect(() => RustConfigBuilder.build(config, options(routing: alone)), returnsNormally);
-      }
+    const geosite = GeositeIndex({
+      'youtube': (bytes: 100, domains: 1000),
+      'category-ads-all': (bytes: 1000, domains: 187000),
+      'win-spy': (bytes: 10, domains: 327),
+      'cn': (bytes: 1000, domains: 111000),
+      'ru-blocked-all': (bytes: 39000000, domains: 1600000),
+    }, rustFile: GeositeIndex.rustFileName);
+    VpnEngineOptions with_(RoutingSettings routing) =>
+        VpnEngineOptions(socksPort: 1, socksUser: 'u', socksPassword: 'p', routing: routing, geosite: geosite);
+    final adsAndCn = domainRouting.copyWith(adBlockEnabled: true, geositeCodes: ['youtube', 'CN']);
+    expect(
+      () => RustConfigBuilder.build(config, with_(adsAndCn)),
+      throwsA(isA<FormatException>().having((e) => e.message, 'message', contains('250k'))),
+    );
+    expect(
+      () => RustConfigBuilder.build(config, with_(domainRouting.copyWith(geositeCodes: ['ru-blocked-all']))),
+      throwsA(isA<FormatException>().having((e) => e.message, 'message', contains('ru-blocked-all'))),
+    );
+    // Each of the two alone stays within xray-rust's 250k matcher budget.
+    for (final alone in [
+      adsAndCn.copyWith(adBlockEnabled: false),
+      domainRouting.copyWith(adBlockEnabled: true),
+      adsAndCn.copyWith(direction: RoutingDirection.global),
+    ]) {
+      expect(() => RustConfigBuilder.build(config, with_(alone)), returnsNormally);
     }
+    final json = jsonDecode(RustConfigBuilder.buildJson(config, with_(domainRouting.copyWith(adBlockEnabled: true))));
+    final text = jsonEncode(json);
+    expect(text, contains('ext:geosite-rust.dat:youtube'));
+    expect(text, contains('ext:geosite-rust.dat:category-ads-all'));
+    expect(text, isNot(contains('"geosite:')));
   });
 
   test('custom DoT keeps its port inside the tls:// URL read by xray-rust', () {

@@ -14,7 +14,6 @@ abstract final class SingBoxRoute {
   static const inboundTag = 'socks-in';
   static const directTag = 'direct';
   static const _localDns = 'dns-local';
-  static const _adBlockTags = ['geosite-category-ads-all', 'geosite-win-spy'];
 
   static String _geoipTag(String code) => 'geoip-${code.trim().toLowerCase()}';
   static String _geositeTag(String code) => 'geosite-${code.trim().toLowerCase()}';
@@ -62,7 +61,7 @@ abstract final class SingBoxRoute {
       ],
       if (o.routing.adBlockEnabled)
         'rules': [
-          {'rule_set': _adBlockTags, 'action': 'predefined', 'rcode': 'NOERROR'},
+          {'rule_set': o.adBlockCodes.map(_geositeTag).toList(), 'action': 'predefined', 'rcode': 'NOERROR'},
         ],
       'final': 'dns-main',
       'strategy': switch (o.dnsQueryStrategy) {
@@ -93,7 +92,7 @@ abstract final class SingBoxRoute {
     final ruleSets = <String>[
       if (routing.isActive && routing.geositeEnabled) ...routing.geositeCodes.map(_geositeTag),
       if (routing.isActive && routing.geoEnabled) ...routing.geoCodes.map(_geoipTag),
-      if (routing.adBlockEnabled) ..._adBlockTags,
+      if (routing.adBlockEnabled) ...o.adBlockCodes.map(_geositeTag),
     ];
     return {
       'rules': [

@@ -39,7 +39,9 @@ class XrayRustBackend implements CoreBackend {
     if (options.proxyOnly) {
       return (blocking: _unsupported[CoreFeature.proxyOnly], warnings: const <String>[]);
     }
-    return (blocking: null, warnings: _sanitize(config, options).warnings);
+    final sanitized = _sanitize(config, options);
+    final overBudget = RustConfigBuilder.geositeDomains(sanitized.options) > RustConfigBuilder.maxDomainMatchers;
+    return (blocking: overBudget ? L10n.current.rustGeositeLimit : null, warnings: sanitized.warnings);
   }
 
   /// Vision rejects UDP/443. For plain Vision the core answers with ICMP itself,
@@ -76,16 +78,30 @@ class XrayRustBackend implements CoreBackend {
         when: routing.isActive && !o.sniffingEnabled && domainRules,
         warning: L10n.current.rustSniffingForced,
         fix: (v) => v.copyWith(sniffingEnabled: true),
-      )
-      ..drop(
-        when:
-            routing.adBlockEnabled &&
-            routing.isActive &&
-            routing.geositeEnabled &&
-            routing.geositeCodes.any((c) => RustConfigBuilder.largeGeositeCodes.contains(c.trim().toLowerCase())),
-        warning: L10n.current.rustAdBlockDropped,
-        fix: (v) => v.copyWith(routing: v.routing.copyWith(adBlockEnabled: false)),
       );
+    // Entries over xray-rust's limits are left out; ad blocking goes first when the rest is over the budget.
+    final oversized = RustConfigBuilder.oversizedGeosite(o);
+    s.drop(
+      when: oversized.isNotEmpty,
+      warning: L10n.current.rustGeositeTooLarge(oversized.join(', ')),
+      fix: (v) {
+        final adBlockCodes = v.adBlockCodes.where((c) => !oversized.contains(c)).toList();
+        return v.copyWith(
+          adBlockCodes: adBlockCodes,
+          routing: v.routing.copyWith(
+            geositeCodes: v.routing.geositeCodes.where((c) => !oversized.contains(c)).toList(),
+            adBlockEnabled: v.routing.adBlockEnabled && adBlockCodes.isNotEmpty,
+          ),
+        );
+      },
+    );
+    s.drop(
+      when:
+          s.result.options.routing.adBlockEnabled &&
+          RustConfigBuilder.geositeDomains(s.result.options) > RustConfigBuilder.maxDomainMatchers,
+      warning: L10n.current.rustAdBlockDropped,
+      fix: (v) => v.copyWith(routing: v.routing.copyWith(adBlockEnabled: false)),
+    );
     final fragmentError = _maskError(() => RustConfigBuilder.fragmentMask(config, o.fragment));
     s.drop(
       when: fragmentError != null,

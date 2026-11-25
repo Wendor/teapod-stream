@@ -1309,8 +1309,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get rustSniffing => 'Enable domain sniffing for GeoSite and domain rules.';
 
   @override
-  String get rustAdBlockLimit =>
-      'Ad blocking (~187k domains) together with a large GeoSite category (cn, china-list, category-ads-all) exceeds the Rust core\'s limit of 250k domain rules. Turn off one of the two.';
+  String get rustGeositeLimit =>
+      'The selected GeoSite categories exceed the xray-rust core\'s limit of 250k domain rules. Remove some of them or use another core.';
 
   @override
   String get rustFragmentPackets =>
@@ -1493,7 +1493,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get rustAdBlockDropped =>
-      'Ad blocking together with a large GeoSite category exceeds the xray-rust core\'s limit of 250k domain rules — ad blocking is not applied.';
+      'Ad blocking together with the selected GeoSite categories exceeds the xray-rust core\'s limit of 250k domain rules — ad blocking is not applied.';
+
+  @override
+  String rustGeositeTooLarge(String codes) {
+    return 'GeoSite $codes: over the xray-rust core\'s limit for one category (32 MB or 200k domains) — not applied.';
+  }
+
+  @override
+  String geositeMissing(String codes) {
+    return 'geosite.dat has no $codes — these rules are not applied.';
+  }
 
   @override
   String rustFragmentDropped(String reason) {

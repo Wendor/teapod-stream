@@ -1,7 +1,9 @@
 import 'dart:io';
+import 'dart:isolate';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/services/app_http.dart';
+import '../core/services/geosite_index.dart';
 import '../core/services/tunnel_socks.dart';
 import 'settings_provider.dart';
 import 'vpn_provider.dart';
@@ -51,6 +53,7 @@ class GeoNotifier extends Notifier<GeoState> {
       if (geoip.existsSync() && geosite.existsSync()) {
         final prefs = await SharedPreferences.getInstance();
         final ts = prefs.getInt(_kLastUpdated);
+        ref.invalidate(geositeIndexProvider);
         state = GeoReady(lastUpdated: ts != null ? DateTime.fromMillisecondsSinceEpoch(ts) : null);
       } else {
         state = GeoMissing();
@@ -104,6 +107,7 @@ class GeoNotifier extends Notifier<GeoState> {
       final now = DateTime.now();
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt(_kLastUpdated, now.millisecondsSinceEpoch);
+      ref.invalidate(geositeIndexProvider);
       state = GeoReady(lastUpdated: now);
     } catch (e) {
       state = GeoError(e.toString().replaceFirst('Exception: ', ''));
@@ -158,3 +162,11 @@ class GeoNotifier extends Notifier<GeoState> {
 }
 
 final geoProvider = NotifierProvider<GeoNotifier, GeoState>(GeoNotifier.new);
+
+/// The index of `filesDir/geosite.dat` (null without the file), built off the UI isolate; [GeoNotifier]
+/// refreshes it when the files change.
+final geositeIndexProvider = FutureProvider<GeositeIndex?>((ref) async {
+  final dir = await ref.read(platformServiceProvider).filesDir();
+  if (dir.isEmpty) return null;
+  return Isolate.run(() => GeositeIndex.load(dir));
+});

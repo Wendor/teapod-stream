@@ -264,7 +264,7 @@ class XrayConfigBuilder {
     if (routing.adBlockEnabled) {
       servers.add({
         'address': 'rcode://success',
-        'domains': [XrayDefaults.adBlockGeosite, 'geosite:win-spy'],
+        'domains': [for (final code in options.adBlockCodes) 'geosite:$code'],
       });
     }
 
@@ -652,7 +652,7 @@ class XrayConfigBuilder {
       if (options.routing.adBlockEnabled) {
         appRules.add({
           'type': 'field',
-          'domain': [XrayDefaults.adBlockGeosite, 'geosite:win-spy'],
+          'domain': [for (final code in options.adBlockCodes) 'geosite:$code'],
           'outboundTag': _ensureBlackholeOutbound(cfg),
         });
       }

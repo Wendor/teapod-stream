@@ -753,7 +753,7 @@
   "rustMux": "Mux isn't available in the xray-rust core: turn it off in network settings.",
   "rustMtu": "The xray-rust core works with MTU 1500: restore that value in network settings.",
   "rustSniffing": "Enable domain sniffing for GeoSite and domain rules.",
-  "rustAdBlockLimit": "Ad blocking (~187k domains) together with a large GeoSite category (cn, china-list, category-ads-all) exceeds the Rust core's limit of 250k domain rules. Turn off one of the two.",
+  "rustGeositeLimit": "The selected GeoSite categories exceed the xray-rust core's limit of 250k domain rules. Remove some of them or use another core.",
   "rustFragmentPackets": "The Rust core splits only the TLS ClientHello: set tlshello in the fragmentation \"Packets\" field.",
   "rustFragmentLength": "Fragment chunk length in the Rust core is 1 to 16384 bytes.",
   "rustFragmentDelay": "Fragmentation pause in the Rust core is at most 1000 ms.",
@@ -868,7 +868,23 @@
   "rustNoObservatory": "Observatory and managed JSON configs aren't available in the xray-rust core.",
   "rustNoRawConfig": "A full JSON config isn't available in the xray-rust core.",
   "rustSniffingForced": "Domain rules in the xray-rust core require domain sniffing — it is enabled for this connection.",
-  "rustAdBlockDropped": "Ad blocking together with a large GeoSite category exceeds the xray-rust core's limit of 250k domain rules — ad blocking is not applied.",
+  "rustAdBlockDropped": "Ad blocking together with the selected GeoSite categories exceeds the xray-rust core's limit of 250k domain rules — ad blocking is not applied.",
+  "rustGeositeTooLarge": "GeoSite {codes}: over the xray-rust core's limit for one category (32 MB or 200k domains) — not applied.",
+  "@rustGeositeTooLarge": {
+    "placeholders": {
+      "codes": {
+        "type": "String"
+      }
+    }
+  },
+  "geositeMissing": "geosite.dat has no {codes} — these rules are not applied.",
+  "@geositeMissing": {
+    "placeholders": {
+      "codes": {
+        "type": "String"
+      }
+    }
+  },
   "rustFragmentDropped": "Fragmentation is not applied: {reason}",
   "@rustFragmentDropped": {
     "placeholders": {

@@ -387,7 +387,7 @@
   "rustMux": "Mux недоступен в ядре xray-rust: выключи его в настройках сети.",
   "rustMtu": "Ядро xray-rust работает с MTU 1500: верни это значение в настройках сети.",
   "rustSniffing": "Включи определение доменов для GeoSite и доменных правил.",
-  "rustAdBlockLimit": "Блокировка рекламы (~187 тыс. доменов) вместе с большой категорией GeoSite (cn, china-list, category-ads-all) превышает лимит Rust-ядра в 250 тыс. доменных правил. Отключи одно из двух.",
+  "rustGeositeLimit": "Выбранные категории GeoSite превышают лимит ядра xray-rust в 250 тыс. доменных правил. Убери часть из них или выбери другое ядро.",
   "rustFragmentPackets": "Rust-ядро режет только TLS ClientHello: в поле «Пакеты» фрагментации укажи tlshello.",
   "rustFragmentLength": "Длина куска фрагментации в Rust-ядре — от 1 до 16384 байт.",
   "rustFragmentDelay": "Пауза фрагментации в Rust-ядре — не больше 1000 мс.",
@@ -439,7 +439,23 @@
   "rustNoObservatory": "Observatory и управляемые JSON-конфиги недоступны в ядре xray-rust.",
   "rustNoRawConfig": "Полный JSON-конфиг недоступен в ядре xray-rust.",
   "rustSniffingForced": "Доменные правила в ядре xray-rust требуют определения доменов — оно включено для этого подключения.",
-  "rustAdBlockDropped": "Блокировка рекламы вместе с большой категорией GeoSite превышает лимит ядра xray-rust в 250 тыс. доменных правил — блокировка рекламы не применяется.",
+  "rustAdBlockDropped": "Блокировка рекламы вместе с выбранными категориями GeoSite превышает лимит ядра xray-rust в 250 тыс. доменных правил — блокировка рекламы не применяется.",
+  "rustGeositeTooLarge": "GeoSite {codes}: больше лимита ядра xray-rust на одну категорию (32 МБ или 200 тыс. доменов) — не применяется.",
+  "@rustGeositeTooLarge": {
+    "placeholders": {
+      "codes": {
+        "type": "String"
+      }
+    }
+  },
+  "geositeMissing": "В geosite.dat нет {codes} — эти правила не применяются.",
+  "@geositeMissing": {
+    "placeholders": {
+      "codes": {
+        "type": "String"
+      }
+    }
+  },
   "rustFragmentDropped": "Фрагментация не применяется: {reason}",
   "rustNoiseDropped": "Шумы не применяются: {reason}",
   "xrayNoH2Quic": "Транспорты HTTP/2 и QUIC удалены из Xray-core: сервер нужно перевести на xHTTP.",

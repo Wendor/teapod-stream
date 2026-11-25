@@ -57,13 +57,15 @@ class GeositeIndex {
     }
     final index = _build(source, rust);
     try {
-      cache.writeAsStringSync(
+      final tmp = File('${cache.path}.tmp');
+      tmp.writeAsStringSync(
         jsonEncode({
           'version': version,
           'rustFile': index.rustFile,
           'entries': index.entries.map((code, e) => MapEntry(code, [e.domains, e.rustDomains])),
         }),
       );
+      tmp.renameSync(cache.path);
     } catch (_) {
       // Rebuilt on the next load.
     }
@@ -88,29 +90,34 @@ class GeositeIndex {
       if (rust.existsSync()) rust.deleteSync();
       return GeositeIndex(entries);
     }
+    // A failed write leaves no copy behind: the previous one stays until the rename.
     final tmp = File('${rust.path}.tmp');
-    final out = tmp.openSync(mode: FileMode.write);
-    final input = source.openSync();
     try {
-      for (final record in _records(input)) {
-        final entry = _scan(record.body);
-        if (entry.rustDomains == entry.domains) {
+      final out = tmp.openSync(mode: FileMode.write);
+      final input = source.openSync();
+      try {
+        for (final record in _records(input)) {
+          final entry = _scan(record.body);
+          if (entry.rustDomains == entry.domains) {
+            out
+              ..writeFromSync(record.header)
+              ..writeFromSync(record.body);
+            continue;
+          }
+          final body = _trim(record.body, entry.rustDomains);
           out
-            ..writeFromSync(record.header)
-            ..writeFromSync(record.body);
-          continue;
+            ..writeFromSync(_varint(1 << 3 | 2))
+            ..writeFromSync(_varint(body.length))
+            ..writeFromSync(body);
         }
-        final body = _trim(record.body, entry.rustDomains);
-        out
-          ..writeFromSync(_varint(1 << 3 | 2))
-          ..writeFromSync(_varint(body.length))
-          ..writeFromSync(body);
+      } finally {
+        input.closeSync();
+        out.closeSync();
       }
+      tmp.renameSync(rust.path);
     } finally {
-      input.closeSync();
-      out.closeSync();
+      if (tmp.existsSync()) tmp.deleteSync();
     }
-    tmp.renameSync(rust.path);
     return GeositeIndex(entries, rustFile: rustFileName);
   }
 

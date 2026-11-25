@@ -27,8 +27,10 @@ blocking toggles are disabled while `GeoMissing`.
 ## Geosite index
 
 `GeositeIndex` (`lib/core/services/geosite_index.dart`): every code of `geosite.dat` with its domain count and the
-count xray-rust gets. `geositeIndexProvider` builds it in an isolate; `GeoNotifier` refreshes it after `check()` and a download. It
-is cached in `filesDir/geosite.index.json` per file version (size and mtime), so it's read once per file.
+count xray-rust gets. `geositeIndexProvider` builds it in an isolate, one build at a time; `GeoNotifier` refreshes it
+after a download and after `check()` extracted the bundled files. It is cached in `filesDir/geosite.index.json` per
+file version (size and mtime), so it's built once per file; the cache and the xray-rust copy are written through a
+temporary file and a rename.
 
 - Every core refuses a config referencing a code the file lacks (v2fly has no `win-spy`, a custom source may lack
   user codes): `buildEngineOptions` leaves such codes out of the user's geosite rule and ad blocking

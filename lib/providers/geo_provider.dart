@@ -46,14 +46,15 @@ class GeoNotifier extends Notifier<GeoState> {
       if (dir.isEmpty) return;
       final geoip = File('$dir/geoip.dat');
       final geosite = File('$dir/geosite.dat');
-      if (!geoip.existsSync() || !geosite.existsSync()) {
+      final missing = !geoip.existsSync() || !geosite.existsSync();
+      if (missing) {
         // Try to extract bundled fallback from assets
         await ref.read(platformServiceProvider).prepareBinaries();
       }
       if (geoip.existsSync() && geosite.existsSync()) {
         final prefs = await SharedPreferences.getInstance();
         final ts = prefs.getInt(_kLastUpdated);
-        ref.invalidate(geositeIndexProvider);
+        if (missing) ref.invalidate(geositeIndexProvider);
         state = GeoReady(lastUpdated: ts != null ? DateTime.fromMillisecondsSinceEpoch(ts) : null);
       } else {
         state = GeoMissing();
@@ -168,5 +169,10 @@ final geoProvider = NotifierProvider<GeoNotifier, GeoState>(GeoNotifier.new);
 final geositeIndexProvider = FutureProvider<GeositeIndex?>((ref) async {
   final dir = await ref.read(platformServiceProvider).filesDir();
   if (dir.isEmpty) return null;
-  return Isolate.run(() => GeositeIndex.load(dir));
+  // One build at a time: a refresh while a build is running waits for it, then reads its cache.
+  final run = _geositeLoads.then((_) => Isolate.run(() => GeositeIndex.load(dir)));
+  _geositeLoads = run.then((_) {}, onError: (_) {});
+  return run;
 });
+
+Future<void> _geositeLoads = Future.value();

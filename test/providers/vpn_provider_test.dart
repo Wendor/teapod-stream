@@ -30,6 +30,11 @@ import 'package:teapodstream/providers/config_provider.dart';
 import 'package:teapodstream/providers/profile_provider.dart';
 import 'package:teapodstream/providers/settings_provider.dart';
 import 'package:teapodstream/providers/vpn_provider.dart';
+import 'package:teapodstream/providers/vpn_stats_provider.dart';
+import 'package:teapodstream/core/models/vpn_stats.dart';
+import 'package:teapodstream/providers/ping_provider.dart';
+import 'package:teapodstream/providers/native_logs_provider.dart';
+import 'package:teapodstream/providers/auto_switch_provider.dart';
 
 const _method = MethodChannel(AppConstants.methodChannel);
 const _events = EventChannel('${AppConstants.methodChannel}/events');
@@ -148,6 +153,7 @@ void main() {
   late ProviderContainer c;
 
   VpnNotifier n() => c.read(vpnProvider.notifier);
+  VpnStats stats() => c.read(vpnStatsProvider);
   VpnState2 st() => c.read(vpnProvider);
   List<VpnLogEntry> logs() => c.read(logServiceProvider);
   void emit(Map<String, Object?> event) => native.sink!.success(event);
@@ -184,6 +190,9 @@ void main() {
     await c.read(configProvider.future);
     await c.read(settingsProvider.future);
     c.listen(vpnProvider, (_, _) {});
+    // What the app shell keeps alive.
+    c.listen(vpnStatsProvider, (_, _) {});
+    c.read(autoSwitchProvider);
     await _settle();
   }
 
@@ -224,6 +233,7 @@ void main() {
       };
       native.logs = ['1700000000000|warning|from last session'];
       await boot();
+      await c.read(nativeLogsProvider).restore();
       expect(st().isConnected, isTrue);
       expect((st().activeSocksPort, st().activeSocksUser, st().activeSocksPassword), (5555, 'nu', 'np'));
       expect(st().appliedFingerprint, connectionFingerprint(_settings));
@@ -490,9 +500,9 @@ void main() {
       // A stats tick keeps the reason.
       await Future<void>.delayed(const Duration(milliseconds: 1100));
       await _settle();
-      expect(st().stats.uploadBytes, 10);
+      expect(stats().uploadBytes, 10);
       expect(st().error, 'Empty password');
-      n().pauseStatsPolling();
+      c.read(vpnStatsProvider.notifier).pause();
     });
 
     test('profile switch reconnects only when the server or settings change', () async {
@@ -900,17 +910,21 @@ void main() {
     });
 
     test('a connect settled by the startup sync follows a later idle snapshot', () async {
-      final logsGate = Completer<void>();
+      final syncGate = Completer<void>();
+      var first = true;
       messenger.setMockMethodCallHandler(_method, (call) async {
-        if (call.method == 'getLogs') await logsGate.future;
+        if (call.method == 'getState' && first) {
+          first = false;
+          await syncGate.future;
+        }
         return native.handle(call);
       });
       await boot(configs: [_cfg('a')], activeId: 'a');
-      // The startup sync waits for the logs; a connect starts meanwhile and native brings it up.
+      // The startup sync's answer is slow; a connect starts meanwhile and native brings it up.
       await n().connect();
       final attempt = native.lastConnect()['attempt'] as int;
       native.state = {'value': 'connected', 'socksPort': 2080, 'attempt': attempt};
-      logsGate.complete();
+      syncGate.complete();
       await _settle();
       expect(st().isConnected, isTrue);
       // The service died: the idle snapshot of a resume applies.
@@ -1009,7 +1023,7 @@ void main() {
       await _settle();
       expect(st().connectionState, VpnState.disconnected);
       expect(st().activeSocksPort, 0);
-      expect(st().stats.uploadBytes, 0);
+      expect(stats().uploadBytes, 0);
     });
 
     test('native error forces disconnected', () async {
@@ -1076,7 +1090,7 @@ void main() {
       });
       await _settle();
       expect(st().error, 'bad config');
-      expect(st().stats.speedHistory, isEmpty);
+      expect(stats().speedHistory, isEmpty);
       expect(n().runsConfig(a), isFalse);
     });
 
@@ -1113,7 +1127,7 @@ void main() {
         'history': [pts(1), pts(2), pts(3)],
       });
       await _settle();
-      expect(st().stats.speedHistory.map((p) => p.uploadSpeed), [1, 2, 3]);
+      expect(stats().speedHistory.map((p) => p.uploadSpeed), [1, 2, 3]);
 
       emit({
         'type': 'statsHistory',
@@ -1123,7 +1137,7 @@ void main() {
         'history': [pts(4)],
       });
       await _settle();
-      expect(st().stats.speedHistory.map((p) => p.uploadSpeed), [1, 2, 3, 4]);
+      expect(stats().speedHistory.map((p) => p.uploadSpeed), [1, 2, 3, 4]);
 
       // A late response doesn't duplicate points and resets the epoch.
       emit({
@@ -1141,7 +1155,7 @@ void main() {
         'history': [pts(5)],
       });
       await _settle();
-      expect(st().stats.speedHistory, hasLength(4));
+      expect(stats().speedHistory, hasLength(4));
 
       emit({
         'type': 'statsHistory',
@@ -1151,8 +1165,8 @@ void main() {
         'history': [for (var i = 0; i < 400; i++) pts(i)],
       });
       await _settle();
-      expect(st().stats.speedHistory, hasLength(300));
-      expect(st().stats.speedHistory.last.uploadSpeed, 399);
+      expect(stats().speedHistory, hasLength(300));
+      expect(stats().speedHistory.last.uploadSpeed, 399);
     });
   });
 
@@ -1230,7 +1244,7 @@ void main() {
           _cfg('plain', host: 'shared.example'),
         ],
       );
-      await n().pingAllConfigs();
+      await c.read(pingProvider.notifier).pingAll();
       final pinged = native.named('ping').map((m) => (m.arguments as Map)['address']).toList();
       expect(pinged, unorderedEquals(['ha.example', 'hb.example', 'shared.example']));
       final byId = {for (final c in c.read(configProvider).value!.configs) c.id: c};
@@ -1248,11 +1262,11 @@ void main() {
           _cfg('old'),
         ],
       );
-      await n().pingStaleConfigs();
+      await c.read(pingProvider.notifier).pingStale();
       expect(native.named('ping').map((m) => (m.arguments as Map)['address']), ['hold.example']);
       native.calls.clear();
       await boot(configs: [_cfg('fresh', pingedAt: DateTime.now())]);
-      await n().pingStaleConfigs();
+      await c.read(pingProvider.notifier).pingStale();
       expect(native.named('ping'), isEmpty);
     });
   });
@@ -1376,18 +1390,33 @@ void main() {
       await connected();
       await Future<void>.delayed(const Duration(milliseconds: 1100));
       await _settle();
-      expect(st().stats.uploadBytes, 10);
-      expect(st().stats.downloadSpeedBps, 2);
-      n().pauseStatsPolling();
+      expect(stats().uploadBytes, 10);
+      expect(stats().downloadSpeedBps, 2);
+      c.read(vpnStatsProvider.notifier).pause();
+    });
+
+    test("a session connecting in the background doesn't start the stats polling", () async {
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      c.read(vpnStatsProvider.notifier).pause();
+      await n().connect();
+      emit({'type': 'state', 'value': 'connected', 'socksPort': 2080, 'socksUser': 'su', 'socksPassword': 'sp'});
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+      await _settle();
+      expect(native.named('getStats'), isEmpty);
+      c.read(vpnStatsProvider.notifier).resume();
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+      await _settle();
+      expect(stats().uploadBytes, 10);
+      c.read(vpnStatsProvider.notifier).pause();
     });
 
     test('tunnel diag and log helpers', () async {
       await boot();
-      await n().dumpTunnelDiag();
+      await c.read(nativeLogsProvider).dumpTunnelDiag();
       expect(logs().last.message, 'tunnel diag: not running');
-      await n().setLogsEnabled(false);
-      await n().clearNativeLogs();
-      expect(await n().getLogFilePath(), isNull);
+      await c.read(nativeLogsProvider).setLogsEnabled(false);
+      await c.read(nativeLogsProvider).clear();
+      expect(await c.read(nativeLogsProvider).getLogFilePath(), isNull);
       expect(native.named('clearLogs'), hasLength(1));
       expect(n().connectionState, VpnState.disconnected);
     });

@@ -62,7 +62,7 @@ refreshes an otherwise untrusted certificate passes only if it is that one ([ser
 
 `refreshStaleSubscriptions(intervalHours)` refreshes subscriptions never fetched or older than the interval; one
 failure is logged and backed off for 1 h in memory (`_subFailedAt`) without stopping the others; `_refreshingSubs`
-prevents parallel runs. It is triggered from `VpnNotifier.refreshStaleSubscriptionsIfDue()` on start and resume when
+prevents parallel runs. It is triggered from `refreshStaleIfDue()` on start and resume when
 `subAutoRefresh` is on — there is no background timer.
 
 `removeSubscription` (`withoutSubscription`) removes its configs and pins, and clears the selection and auto mode if

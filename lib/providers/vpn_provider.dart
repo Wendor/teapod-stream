@@ -5,11 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../core/interfaces/vpn_engine.dart';
 import '../core/models/vpn_config.dart';
-import '../core/constants/app_constants.dart';
-import '../core/models/vpn_stats.dart';
 import '../core/models/connection_fingerprint.dart';
 import '../core/models/core_kind.dart';
-import '../core/models/heartbeat_settings.dart';
 import '../core/models/vpn_log_entry.dart';
 import '../core/services/log_service.dart';
 import '../core/models/app_settings.dart';
@@ -28,8 +25,10 @@ import '../l10n/l10n.dart';
 
 class VpnState2 {
   final VpnState connectionState;
-  final VpnStats stats;
   final String? error;
+
+  /// When the running session connected (native's `connectedAtMs`; reconnects keep it); null — not connected.
+  final DateTime? connectedAt;
   final int activeSocksPort;
   final String activeSocksUser;
   final String activeSocksPassword;
@@ -40,8 +39,8 @@ class VpnState2 {
 
   const VpnState2({
     this.connectionState = VpnState.disconnected,
-    this.stats = const VpnStats(),
     this.error,
+    this.connectedAt,
     this.activeSocksPort = 0,
     this.activeSocksUser = '',
     this.activeSocksPassword = '',
@@ -59,12 +58,12 @@ class VpnState2 {
   TunnelSocks? get tunnelSocks =>
       isConnected && activeSocksPort > 0 ? TunnelSocks(activeSocksPort, activeSocksUser, activeSocksPassword) : null;
 
-  /// The stats and the fingerprint; the connection state and its reason come only from [VpnSession.view].
-  VpnState2 copyWith({VpnStats? stats, String? appliedFingerprint}) {
+  /// The fingerprint; the connection state and its reason come only from [VpnSession.view].
+  VpnState2 copyWith({String? appliedFingerprint}) {
     return VpnState2(
       connectionState: connectionState,
-      stats: stats ?? this.stats,
       error: error,
+      connectedAt: connectedAt,
       activeSocksPort: activeSocksPort,
       activeSocksUser: activeSocksUser,
       activeSocksPassword: activeSocksPassword,
@@ -95,25 +94,11 @@ class VpnNotifier extends Notifier<VpnState2> {
   late final XrayEngine _engine;
 
   StreamSubscription<dynamic>? _eventSub;
-  Timer? _statsPoller;
-  bool _isPinging = false;
-  bool _urltestRunning = false;
   DateTime? _connectedAt;
 
-  /// true — the home tab is on screen; chart history is pulled only then.
-  bool _chartVisible = true;
-
-  /// Chart history: native returns only points after `_historySeq` of epoch
-  /// `_historyEpoch`; any lag (background, hidden tab longer than the buffer, a new
-  /// session) arrives in one response — the chart catches up immediately.
-  static const _maxHistory = 300;
-  int _historyEpoch = -1;
-  int _historySeq = 0;
-  bool _historyFetching = false;
-
-  /// The last list set: if state holds a different one, it was reset (disconnect,
-  /// timeout) — nothing to append to, the whole buffer is needed.
-  List<SpeedPoint> _history = const [];
+  /// The startup sync with native is done (also when it failed).
+  Future<void> get synced => _synced.future;
+  final _synced = Completer<void>();
 
   /// The config the app started the tunnel with; null — unknown (VPN brought up
   /// by the tile/autostart or disconnected). The subscription's effective config may change
@@ -148,83 +133,18 @@ class VpnNotifier extends Notifier<VpnState2> {
     ref.onDispose(() {
       _eventSub?.cancel();
       _deadline?.cancel();
-      _statsPoller?.cancel();
     });
-
-    // Subscription auto-refresh: at startup (below in a microtask) and on every
-    // resume (app.dart → refreshStaleSubscriptionsIfDue) — the hourly background
-    // timer is gone, the staleness check decides itself whether it's time to refresh.
 
     // Sync state on init (for case when VPN is already running from tile/notification)
     Future.microtask(() async {
       try {
-        await _syncOnStartup();
+        await syncNativeState();
       } finally {
-        // Only after syncing with native: otherwise tunnelSocks is still empty and the subscription
-        // would bypass the tunnel when the VPN is already up (from the tile).
-        if (ref.mounted) await refreshStaleSubscriptionsIfDue();
+        _synced.complete();
       }
     });
 
     return const VpnState2();
-  }
-
-  Future<void> _syncOnStartup() async {
-    // Native persists logsEnabled in its own prefs — resync in case they
-    // diverged (fresh install with restored Flutter prefs, etc.).
-    final s0 = await ref.read(settingsProvider.future);
-    await _engine.setLogsEnabled(s0.logsEnabled);
-
-    // Restore log history (previous + current session files) even when
-    // disconnected — needed to diagnose failures that ended the last session.
-    final logEntries = await _engine.getLogs();
-    if (logEntries.isNotEmpty) {
-      ref.read(logServiceProvider.notifier).loadFromEntries(logEntries);
-    }
-
-    await syncNativeState();
-  }
-
-  void _startStatsPolling() {
-    // Prevent duplicate polling
-    if (_statsPoller?.isActive == true) return;
-
-    _statsPoller = Timer.periodic(const Duration(seconds: 1), (_) async {
-      if (state.connectionState != VpnState.connected) {
-        return;
-      }
-      try {
-        final stats = await _engine.getStats();
-        _handleStats(
-          Map<String, dynamic>.from({
-            'upload': stats.upload,
-            'download': stats.download,
-            'uploadSpeed': stats.uploadSpeed,
-            'downloadSpeed': stats.downloadSpeed,
-          }),
-        );
-
-        // History is needed only for the chart
-        if (_chartVisible) await _pullHistory();
-      } catch (_) {}
-    });
-    // Back from background / connected: history right away, not on the next tick.
-    if (_chartVisible && state.isConnected) _pullHistory().ignore();
-  }
-
-  /// Called from app.dart on tab change: chart history is pulled
-  /// only while home is visible; on return — an immediate catch-up.
-  void setChartVisible(bool visible) {
-    if (_chartVisible == visible) return;
-    _chartVisible = visible;
-    if (visible && state.isConnected) _pullHistory().ignore();
-  }
-
-  /// Subscription staleness check — called at startup and on resume.
-  Future<void> refreshStaleSubscriptionsIfDue() async {
-    final settings = ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
-    if (settings?.subAutoRefresh != true) return;
-    await ref.read(configProvider.notifier).refreshStaleSubscriptions(intervalHours: settings!.subAutoRefreshHours);
   }
 
   void _handleEvent(Map<String, dynamic> event) {
@@ -250,86 +170,7 @@ class VpnNotifier extends Notifier<VpnState2> {
                 source: 'xray',
               ),
             );
-      case 'stats':
-        break; // Ignore stats from EventChannel - we use poller instead
-      case 'statsHistory':
-        _applyHistory(event);
-      case 'tunnel_dead':
-        _runConfigSwitch((event['failures'] as num?)?.toInt() ?? 0);
     }
-  }
-
-  /// Native heartbeat ran out of attempts and the action is switching configs: measure
-  /// candidates and reconnect to the fastest live one. If none is alive —
-  /// do nothing, the service reconnects itself on its cooldown.
-  Future<void> _runConfigSwitch(int failures) async {
-    if (_urltestRunning) return;
-    _urltestRunning = true;
-    final log = ref.read(logServiceProvider.notifier);
-    try {
-      final settings = ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null) ?? const AppSettings();
-      if (settings.heartbeat.failAction != HeartbeatFailAction.switchConfig) return;
-
-      final configState = ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
-      if (configState == null) return;
-      final current = _resolveEffectiveConfig(configState);
-      await ref.read(availableCoresProvider.future);
-      final candidates = supportedCandidates(
-        _switchCandidates(configState, settings.heartbeat.switchSource, current),
-        ref.read(coreResolverProvider),
-      );
-      if (candidates.isEmpty) {
-        log.addError('urltest: no candidates to switch to (failures: $failures)');
-        return;
-      }
-
-      log.addInfo('urltest: tunnel not responding, checking ${candidates.length} config(s)', source: 'urltest');
-      // The measurement goes through a temporary xray instance with the candidate's config: a TCP ping
-      // would say "alive" even for a server whose port is open while the protocol is silent.
-      // The instance is temporary and Go strips inbounds itself — only fields
-      // affecting the outbound matter.
-      final options = VpnEngineOptions(
-        socksPort: AppConstants.defaultSocksPort,
-        socksUser: '',
-        socksPassword: '',
-        tlsFingerprint: settings.tlsFingerprint,
-        fragment: settings.fragment,
-        noise: settings.noise,
-        mux: settings.mux,
-      );
-      final probed = await Future.wait(
-        candidates.map((c) async {
-          final ms = await _engine.measureOutbound(c.config, c.backend, options, settings.heartbeat.url);
-          return (config: c.config, latency: ms);
-        }),
-      );
-      final alive = probed.where((r) => r.latency != null).toList()..sort((a, b) => a.latency!.compareTo(b.latency!));
-      if (alive.isEmpty) {
-        log.addError('urltest: no live configs found, staying on the current one');
-        return;
-      }
-
-      final best = alive.first;
-      log.addInfo('urltest: switching to "${best.config.name}" (${best.latency} ms)', source: 'urltest');
-      await ref.read(configProvider.notifier).setActiveConfig(best.config.id);
-      // disconnect()+connect() didn't work here: connect() bailed on isBusy
-      // (the state was still disconnecting), and the VPN stayed off.
-      await reconnectWithNewConfig();
-    } catch (e) {
-      log.addError('urltest: switch error: $e');
-    } finally {
-      _urltestRunning = false;
-    }
-  }
-
-  /// Switch candidates: the active config is excluded — it just failed the probe.
-  List<VpnConfig> _switchCandidates(ConfigState configState, SwitchSource source, VpnConfig? current) {
-    final all = configState.configs.where((c) => c.id != current?.id);
-    return switch (source) {
-      SwitchSource.subscription => all.where((c) => c.subscriptionId == current?.subscriptionId).toList(),
-      SwitchSource.pinned => all.where(configState.isPinned).toList(),
-      SwitchSource.all => all.toList(),
-    };
   }
 
   /// The session: the last native snapshot, what Flutter waits for, a failure it found itself. The state the UI sees
@@ -354,19 +195,16 @@ class VpnNotifier extends Notifier<VpnState2> {
     } else if (off) {
       _connectedAt = null;
       _connectedConfig = null;
-      _statsPoller?.cancel();
     }
     state = VpnState2(
       connectionState: v.state,
       error: v.error,
-      stats: off ? const VpnStats() : state.stats,
+      connectedAt: connected ? _connectedAt : null,
       activeSocksPort: connected ? n.socksPort : 0,
       activeSocksUser: connected ? n.socksUser : '',
       activeSocksPassword: connected ? n.socksPassword : '',
       appliedFingerprint: off ? null : state.appliedFingerprint,
     );
-    // Polling is the backup for when the EventChannel doesn't deliver (app in background).
-    if (connected) _startStatsPolling();
   }
 
   /// Applies a native snapshot ([poll] — from `getState`); false — not about the pending connect
@@ -389,62 +227,6 @@ class VpnNotifier extends Notifier<VpnState2> {
     }
     _setSession(next);
     return !foreign;
-  }
-
-  void _handleStats(Map<String, dynamic> event) {
-    // A late response after a drop: copyWith would reset the error/blocked reason.
-    if (!state.isConnected) return;
-    // Handle both int and Long (from Kotlin)
-    final upload = (event['upload'] as num?)?.toInt() ?? 0;
-    final download = (event['download'] as num?)?.toInt() ?? 0;
-    final uploadSpeed = (event['uploadSpeed'] as num?)?.toInt() ?? 0;
-    final downloadSpeed = (event['downloadSpeed'] as num?)?.toInt() ?? 0;
-
-    // Always update speed, even if bytes haven't changed (for re-connect)
-    state = state.copyWith(
-      stats: state.stats.copyWith(
-        uploadBytes: upload,
-        downloadBytes: download,
-        uploadSpeedBps: uploadSpeed,
-        downloadSpeedBps: downloadSpeed,
-        connectedDuration: _connectedAt != null ? DateTime.now().difference(_connectedAt!) : Duration.zero,
-      ),
-    );
-  }
-
-  Future<void> _pullHistory() async {
-    if (_historyFetching) return;
-    _historyFetching = true;
-    try {
-      final r = await _engine.getStatsHistory(_historyEpoch, _historySeq);
-      if (r != null) _applyHistory(r);
-    } finally {
-      _historyFetching = false;
-    }
-  }
-
-  /// Native response: `full` replaces the history, otherwise points are appended — only if
-  /// they continue the current one (`from == _historySeq`), so a late response doesn't duplicate them.
-  /// Any mismatch — the next request asks for the whole buffer.
-  void _applyHistory(Map<Object?, Object?> r) {
-    if (!state.isConnected) return;
-    final full = r['full'] == true;
-    final epoch = (r['epoch'] as num?)?.toInt() ?? -1;
-    final from = (r['from'] as num?)?.toInt() ?? 0;
-    if (!full && (epoch != _historyEpoch || from != _historySeq || !identical(state.stats.speedHistory, _history))) {
-      _historyEpoch = -1;
-      return;
-    }
-    final points = (r['history'] as List? ?? const [])
-        .whereType<Map<Object?, Object?>>()
-        .map((m) => SpeedPoint.fromMap(Map<String, dynamic>.from(m)))
-        .toList();
-    _historyEpoch = epoch;
-    _historySeq = (r['seq'] as num?)?.toInt() ?? 0;
-    if (!full && points.isEmpty) return;
-    final merged = full ? points : [..._history, ...points];
-    _history = merged.length > _maxHistory ? merged.sublist(merged.length - _maxHistory) : merged;
-    state = state.copyWith(stats: state.stats.copyWith(speedHistory: _history));
   }
 
   /// The latest connect attempt's id; a newer attempt or a disconnect replaces it. An attempt that is no longer the
@@ -657,7 +439,7 @@ class VpnNotifier extends Notifier<VpnState2> {
     _setSession(VpnSession(failure: _session.failure));
   }
 
-  /// Takes native's state at startup and on resume; restarts the stats polling paused in the background. A session
+  /// Takes native's state at startup and on resume. A session
   /// running without a Flutter connect (tile, boot, a UI restart) is taken as started with the current settings (the
   /// exact ones aren't known): they become `appliedFingerprint`, so the reconnect banner doesn't show falsely.
   Future<void> syncNativeState() async {
@@ -764,84 +546,6 @@ class VpnNotifier extends Notifier<VpnState2> {
 
   VpnConfig? _resolveEffectiveConfig(ConfigState? cs) => cs == null ? null : ref.read(effectiveConfigProvider);
 
-  Future<void> pingAllConfigs() async {
-    if (_isPinging) return;
-    final configState = ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
-    if (configState == null) return;
-    _isPinging = true;
-    try {
-      await _pingEndpoints(configState.configs);
-    } finally {
-      _isPinging = false;
-    }
-  }
-
-  Future<void> pingStaleConfigs() async {
-    if (_isPinging) return;
-    final configState = ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
-    if (configState == null) return;
-    final now = DateTime.now();
-    final stale = configState.configs.where((c) {
-      if (c.lastPingedAt == null) return true;
-      return now.difference(c.lastPingedAt!) > const Duration(hours: 1);
-    }).toList();
-    if (stale.isEmpty) return;
-    _isPinging = true;
-    try {
-      await _pingEndpoints(stale);
-    } finally {
-      _isPinging = false;
-    }
-  }
-
-  Future<void> _pingEndpoints(List<VpnConfig> configs) async {
-    final now = DateTime.now();
-    // Prefer non-raw configs per endpoint so TCP probe works for shared servers
-    final endpoints = <String, VpnConfig>{};
-    for (final c in configs) {
-      if (c.rawXrayConfig == null) {
-        endpoints['${c.address}:${c.port}'] = c;
-      }
-    }
-    for (final c in configs) {
-      if (c.rawXrayConfig != null) {
-        endpoints.putIfAbsent('${c.address}:${c.port}', () => c);
-      }
-    }
-
-    final results = await Future.wait(
-      endpoints.entries.map((e) async {
-        final ms = await _engine.pingConfig(e.value);
-        return MapEntry(e.key, ms);
-      }),
-    );
-    final latencyMap = Map.fromEntries(results);
-
-    // Single batch update — one storage write, one state update
-    await ref.read(configProvider.notifier).batchUpdatePingResults(latencyMap, now);
-  }
-
-  /// Stops the per-second stats polling while the app is in the background —
-  /// on return syncNativeState() restarts it.
-  void pauseStatsPolling() {
-    _statsPoller?.cancel();
-    _statsPoller = null;
-  }
-
-  Future<void> setLogsEnabled(bool enabled) => _engine.setLogsEnabled(enabled);
-
-  Future<String?> getLogFilePath() => _engine.getLogFilePath();
-
-  /// Dumps a tun2socks diagnostics snapshot into the app log.
-  Future<void> dumpTunnelDiag() async {
-    final diag = await _engine.getTunnelDiag();
-    ref
-        .read(logServiceProvider.notifier)
-        .addInfo(diag.isEmpty ? 'tunnel diag: not running' : 'tunnel diag: $diag', source: 'diag');
-  }
-
-  Future<void> clearNativeLogs() => _engine.clearLogs();
-
   VpnState get connectionState => state.connectionState;
 }
 
@@ -850,11 +554,6 @@ final vpnProvider = NotifierProvider<VpnNotifier, VpnState2>(VpnNotifier.new);
 // Convenience selector for connection state
 final vpnConnectionStateProvider = Provider<VpnState>((ref) {
   return ref.watch(vpnProvider).connectionState;
-});
-
-// Convenience selector for stats
-final vpnStatsProvider = Provider<VpnStats>((ref) {
-  return ref.watch(vpnProvider).stats;
 });
 
 /// true — connection settings changed after connecting,

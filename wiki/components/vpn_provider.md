@@ -1,9 +1,13 @@
 # VpnProvider — connection lifecycle
 
-**Files:** `lib/providers/vpn_provider.dart`, `lib/providers/core_provider.dart`, `lib/core/cores/`
+**Files:** `lib/providers/vpn_provider.dart`, `lib/providers/vpn_session.dart`, `lib/providers/core_provider.dart`,
+`lib/core/cores/`; around the connection: `vpn_stats_provider.dart`, `auto_switch_provider.dart`, `ping_provider.dart`,
+`native_logs_provider.dart`
 
 `VpnNotifier` orchestrates the connection on the Flutter side: picks the config and the core, builds the options,
-calls the native service through [XrayEngine](xray_engine.md), and turns native events into state. Reconnects on
+calls the native service through [XrayEngine](xray_engine.md), and turns native events into state; it only connects,
+disconnects and mirrors the session (stats, the config switch, pings and native logs live in their own providers,
+below). Reconnects on
 network change and heartbeat failure happen **natively** ([android_native](android_native.md)); Flutter only mirrors
 them.
 
@@ -12,7 +16,7 @@ them.
 | Field | Meaning |
 |---|---|
 | `connectionState` | `VpnState`: `disconnected`, `connecting`, `connected`, `disconnecting`, `error`, `blocked` |
-| `stats` | `VpnStats`: traffic, speed, duration, history for the chart |
+| `connectedAt` | when the running session connected (native's `connectedAtMs`, else the first `connected` seen); reconnects keep it, an explicit disconnect or a switch resets it |
 | `error` | reason for `error`/`blocked` (or a refused switch over a running session): a Flutter failure or native's `error` (below); shown on Home |
 | `activeSocksPort/User/Password` | the tunnel's local SOCKS from the `connected` snapshot; `tunnelSocks` exposes it for the app's own downloads ([services](services.md#tunnelsocks)) |
 | `appliedFingerprint` | `connectionFingerprint(settings, core:)` the session was started with |
@@ -26,7 +30,7 @@ allowed, `disconnect()` closes the sink. Native `reconnecting` maps to `connecti
 (`NativeSession`, [xray_engine](xray_engine.md)), what Flutter waits for (`PendingConnect(attempt)` or
 `PendingDisconnect`) and a `SessionFailure(reason, attempt)` Flutter found itself (a connect refused before native,
 rejected by it or timed out; a session stopped because no core runs its config). `connectionState` and `error` are
-its pure `view`; `_setSession` is the only writer, and derives the rest (SOCKS login, stats reset, polling, duration).
+its pure `view`; `_setSession` is the only writer, and derives the rest (SOCKS login, `connectedAt`).
 A refusal (before native, or rejected by it) leaves native as it is; a *stopping* failure (the connect timeout, a
 session no core runs) asks native to stop that session.
 
@@ -45,7 +49,7 @@ session no core runs) asks native to stop that session.
   pending connect drops the deadline (a native restart can outlast it; the service ends it itself); its `connecting`
   (the start after a switch's stop) and a foreign poll arm it again.
 
-Derived providers: `vpnConnectionStateProvider`, `vpnStatsProvider`, `pendingReconnectProvider` — `connected` and the
+Derived providers: `vpnConnectionStateProvider`, `pendingReconnectProvider` — `connected` and the
 fingerprint of the current settings differs from `appliedFingerprint` → `ReconnectBanner`. Only connection-relevant
 settings are fingerprinted (ports, credentials, proxy-only, UDP/ICMP/QUIC, MTU, IPv6, TLS fingerprint, logging,
 sniffing, DNS, routing, split tunneling, kill switch, notification, core) — not theme, auto-connect, subscription or
@@ -118,13 +122,13 @@ channel would replace the first one's handler.
 |---|---|
 | `state` | `NativeSession.parse` → `onNative` (above); `connected` carries `socksPort/socksUser/socksPassword/connectedAtMs`, `error`/`blocked` carry `error` |
 | `log` | `LogService` |
-| `stats`, `statsHistory` | `VpnStats`; ignored outside `connected` so a late answer doesn't clear an error |
-| `tunnel_dead` | `_runConfigSwitch` (only with `heartbeat.failAction = switchConfig`) |
+| `statsHistory` | `vpnStatsProvider` (below) |
+| `tunnel_dead` | `autoSwitchProvider` (below; only with `heartbeat.failAction = switchConfig`) |
 
 A repeated `error`/`blocked` with a reason updates `state.error`: Flutter's timeout may fire before the native reason
 arrives.
 
-## Switching config on a dead tunnel (`_runConfigSwitch`)
+## Switching config on a dead tunnel (`autoSwitchProvider`)
 
 The native heartbeat ran out of `failureThreshold` and sent `tunnel_dead`. Candidates come from
 `heartbeat.switchSource` (`subscription` / `pinned` / `all`) without the current config, filtered to those some core
@@ -132,7 +136,7 @@ can run (`supportedCandidates`). Each is measured in parallel on its own core wi
 core instance makes a real request to `heartbeat.url`. That is much stronger than the TCP ping, which reports
 "alive" for a server whose port is open but whose protocol is blocked. No live candidate → only a log entry; the
 service keeps reconnecting on its own cooldown. Otherwise → `setActiveConfig(best)` + `reconnectWithNewConfig()`.
-Guarded by `_urltestRunning`; logged with `source: urltest`.
+One run at a time; logged with `source: urltest`. The app shell creates it at start; it listens to the events itself.
 
 ## Lifecycle
 
@@ -141,19 +145,31 @@ Guarded by `_urltestRunning`; logged with `source: urltest`.
   `appliedFingerprint` once profiles and cores are loaded (otherwise the banner would show falsely). The SOCKS login
   and `connectedAtMs` (the duration timer keeps the real start) come with the snapshot; `ipInfoProvider` reads them
   from the notifier.
-- **Start (`build`)** — the log file (`getLogs`), the sync, then `refreshStaleSubscriptionsIfDue()`.
-- **Resume** (`app.dart`) — the sync (restarts the stats poller), then `refreshStaleSubscriptionsIfDue()` (only now
-  `tunnelSocksProvider` knows a VPN started from the tile, so subscriptions go through the tunnel).
-- **Pause** — `pauseStatsPolling()`: no per-second channel calls in the background.
-- **Stats** — `getStats` every second while connected; `getStatsHistory` only while the Home tab is visible
-  (`setChartVisible`), incrementally by `(epoch, seq)`: a continuation is appended, anything else reloads the buffer.
-- **Duration** — `_connectedAt ??= connectedAtMs`; reconnects keep it, an explicit disconnect resets it.
+- **Start** — `build` runs the sync (`synced` completes after it, also on failure); the app shell restores the log
+  file (`nativeLogsProvider.restore`: resyncs `logsEnabled`, `getLogs`) and, after `synced`, runs
+  `ConfigNotifier.refreshStaleIfDue()`.
+- **Resume** (`app.dart`) — the sync, then `refreshStaleIfDue()` (only now `tunnelSocksProvider` knows a VPN started
+  from the tile, so subscriptions go through the tunnel); the stats polling resumes.
+
+## Stats (`vpnStatsProvider`)
+
+`VpnStatsNotifier` follows `connected`: `getStats` every second while connected, the duration from `connectedAt`;
+reset when the session ends; a late answer after a drop is ignored. `pause()` / `resume()` from the app's lifecycle
+(no per-second channel calls in the background). The chart's `getStatsHistory` is pulled only while the Home tab is
+visible (`setChartVisible`), incrementally by `(epoch, seq)`: a continuation is appended, anything else reloads the
+buffer (at most 300 points); `statsHistory` events go the same way.
 
 ## Ping
 
-`pingAllConfigs()` (button) and `pingStaleConfigs()` (on start; never pinged or older than 1 h) ping each
-`address:port` once (`XrayEngine.pingConfig`: ICMP, then TCP) and store the results in one batch
-(`batchUpdatePingResults`). Pings go directly, not through the tunnel.
+`pingProvider` (its state: a ping is running; one at a time): `pingAll()` (the configs screen's button) and
+`pingStale()` (on start and after configs are added; never pinged or older than 1 h) ping each `address:port` once
+(`XrayEngine.pingConfig`: ICMP, then TCP) and store the results in one batch (`batchUpdatePingResults`). Pings go
+directly, not through the tunnel.
+
+## Native logs
+
+`nativeLogsProvider` (`NativeLogs`): the native log file — `restore()` at start, `setLogsEnabled`, `getLogFilePath`
+(export), `clear`, `dumpTunnelDiag` (a tun2socks snapshot into the app log) for the logs screen.
 
 ## Related
 

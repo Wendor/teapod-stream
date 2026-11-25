@@ -24,6 +24,10 @@ import 'ui/deeplink_handler.dart';
 import 'protocols/xray/xray_engine.dart';
 import 'itest/itest_agent.dart';
 import 'itest/itest_protocol.dart';
+import 'providers/auto_switch_provider.dart';
+import 'providers/native_logs_provider.dart';
+import 'providers/ping_provider.dart';
+import 'providers/vpn_stats_provider.dart';
 
 /// Active tab index. A separate provider so screens
 /// (e.g. Home with an empty config list) can switch tabs.
@@ -104,7 +108,17 @@ class _AppShellState extends ConsumerState<_AppShell> with WidgetsBindingObserve
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (kItest) ItestAgent.start(ProviderScope.containerOf(context, listen: false));
-      ref.read(vpnProvider.notifier).pingStaleConfigs();
+      // A failed restore still lets the refresh run.
+      final restored = ref.read(nativeLogsProvider).restore().then((_) {}, onError: (Object _) {});
+      ref.read(autoSwitchProvider);
+      ref.read(pingProvider.notifier).pingStale();
+      // Only after the VPN state sync: otherwise tunnelSocks is still empty and a subscription would bypass the
+      // tunnel when the VPN is already up (from the tile). And after the log restore, which replaces the in-app log:
+      // the refresh's errors must stay in it.
+      final configs = ref.read(configProvider.notifier);
+      Future.wait([restored, ref.read(vpnProvider.notifier).synced]).then((_) {
+        if (mounted) configs.refreshStaleIfDue();
+      });
       ref.read(geoProvider.notifier).check();
       if (_autoConnectAttempted) return;
       _autoConnectAttempted = true;
@@ -127,12 +141,15 @@ class _AppShellState extends ConsumerState<_AppShell> with WidgetsBindingObserve
     if (state == AppLifecycleState.resumed) {
       // The hourly background timer is gone — subscription staleness is checked here,
       // after the sync: the refresh must see the tunnel's current SOCKS.
-      final vpn = ref.read(vpnProvider.notifier);
-      vpn.syncNativeState().then((_) => vpn.refreshStaleSubscriptionsIfDue());
+      final configs = ref.read(configProvider.notifier);
+      ref.read(vpnProvider.notifier).syncNativeState().then((_) {
+        if (mounted) configs.refreshStaleIfDue();
+      });
+      ref.read(vpnStatsProvider.notifier).resume();
     } else if (state == AppLifecycleState.paused) {
       // Don't run the per-second MethodChannel stats polling in the background —
-      // syncNativeState() restarts it on resume.
-      ref.read(vpnProvider.notifier).pauseStatsPolling();
+      // resumed on return.
+      ref.read(vpnStatsProvider.notifier).pause();
     }
   }
 
@@ -172,7 +189,7 @@ class _AppShellState extends ConsumerState<_AppShell> with WidgetsBindingObserve
       final nextIds = next.maybeWhen(data: (d) => d.configs.map((c) => c.id).toSet(), orElse: () => null);
       if (prevIds == null || nextIds == null) return;
       if (nextIds.difference(prevIds).isNotEmpty) {
-        ref.read(vpnProvider.notifier).pingStaleConfigs();
+        ref.read(pingProvider.notifier).pingStale();
       }
     });
 
@@ -183,7 +200,7 @@ class _AppShellState extends ConsumerState<_AppShell> with WidgetsBindingObserve
     final currentIndex = ref.watch(tabIndexProvider);
     // Chart history is pulled only while the home tab is visible
     ref.listen(tabIndexProvider, (_, next) {
-      ref.read(vpnProvider.notifier).setChartVisible(next == 0);
+      ref.read(vpnStatsProvider.notifier).setChartVisible(next == 0);
     });
     // The system bars follow the theme: the framework applies the region's style when it changes, not on every build.
     final theme = Theme.of(context);

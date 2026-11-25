@@ -20,6 +20,7 @@ import '../widgets/core_sheet.dart';
 import '../../core/cores/core_resolver.dart';
 import 'logs_screen.dart';
 import '../../l10n/l10n.dart';
+import '../../providers/vpn_stats_provider.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -27,6 +28,7 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final vpnState = ref.watch(vpnProvider);
+    final stats = ref.watch(vpnStatsProvider);
     final effectiveConfig = ref.watch(effectiveConfigProvider);
     final version = ref.watch(appVersionProvider).maybeWhen(data: (v) => v, orElse: () => 'v?');
     final t = Theme.of(context).extension<TeapodTokens>()!;
@@ -43,7 +45,7 @@ class HomeScreen extends ConsumerWidget {
     final protoLabel = effectiveConfig != null ? effectiveConfig.protoTag : '—';
     final serverHint = effectiveConfig != null ? '${effectiveConfig.address}:${effectiveConfig.port}' : '—';
 
-    final history = vpnState.stats.speedHistory;
+    final history = stats.speedHistory;
 
     final isManaged = effectiveConfig?.rawXrayConfig != null;
     final routingDirection = ref.watch(
@@ -80,7 +82,7 @@ class HomeScreen extends ConsumerWidget {
               ),
               _MetricsGrid(
                 t: t,
-                stats: vpnState.stats,
+                stats: stats,
                 serverName: effectiveConfig?.name ?? '—',
                 serverHint: effectiveConfig != null ? '$protoLabel · $serverHint' : context.l10n.homeNoConfig,
                 isConnected: isConn,

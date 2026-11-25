@@ -74,7 +74,7 @@ tap → VpnNotifier.connect()
     → XrayEngine.connect → backend.buildConfig → MethodChannel 'connect'
     → MainActivity → VpnChannelHandler: VPN permission → XrayVpnService ACTION_CONNECT
     → establish TUN → VpnCore.start → setConnected → event 'state: connected'
-    → VpnNotifier: state, stats polling, appliedFingerprint
+    → VpnNotifier: state, appliedFingerprint → vpnStatsProvider: stats polling
 ```
 
 Safety timeouts in Flutter: 45 s for connecting, 10 s for disconnecting.

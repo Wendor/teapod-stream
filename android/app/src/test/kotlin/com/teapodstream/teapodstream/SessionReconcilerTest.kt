@@ -5,6 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.lang.management.ManagementFactory
 import java.util.Collections
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -51,6 +52,8 @@ class SessionReconcilerTest {
         /** Held starts the test never released: checked on the test's thread. */
         val timeouts: MutableList<String> = Collections.synchronizedList(mutableListOf())
         @Volatile var running: String? = null
+        /** The thread the last start ran on: the worker. */
+        @Volatile var worker: Thread? = null
         @Volatile var sink = false
         var runs = 0
 
@@ -70,6 +73,7 @@ class SessionReconcilerTest {
         }
         override fun start(on: Desired.On): Boolean {
             val config = on.request.config
+            worker = Thread.currentThread()
             started[config]?.countDown()
             if (hold[config]?.await(5, TimeUnit.SECONDS) == false) timeouts += config
             if (config in fail) {
@@ -194,10 +198,22 @@ class SessionReconcilerTest {
         }
         off.start()
         assertTrue(announcing.await(5, TimeUnit.SECONDS))
-        // The worker finishes its start while the announcement is held: it must wait for it to read the off.
+        // The worker finishes its start while the announcement is held: it must block on the reconciler's lock
+        // (a monitor other than the events list's) before it can read the off, never report it first.
         release.countDown()
-        Thread.sleep(300)
-        assertFalse("reported before the announcement: ${driver.events}", driver.events.any { it == "settled off" })
+        val threads = ManagementFactory.getThreadMXBean()
+        val worker = driver.worker!!
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+        while (true) {
+            val events = synchronized(driver.events) { driver.events.toList() }
+            assertFalse("reported before the announcement: $events", "settled off" in events)
+            val lock = threads.getThreadInfo(worker.id)?.lockInfo
+            if (worker.state == Thread.State.BLOCKED && lock != null &&
+                lock.identityHashCode != System.identityHashCode(driver.events)
+            ) break
+            assertTrue("the worker never blocked on the reconciler: $events", System.nanoTime() < deadline)
+            Thread.sleep(5)
+        }
         announced.countDown()
         off.join(5_000)
         idle()

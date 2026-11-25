@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -855,6 +856,123 @@ void main() {
       expect(sub.id, 's');
       expect(sub.url, server.url('/new'));
       expect(sub.name, 'Named');
+    });
+
+    group('state changed during the download', () {
+      late Completer<void> arrived;
+      late Completer<void> release;
+
+      /// The server answers [body] only after [release]; [arrived] completes when a request comes in.
+      void hold(String body) {
+        arrived = Completer<void>();
+        release = Completer<void>();
+        server.handler = (r) async {
+          if (!arrived.isCompleted) arrived.complete();
+          await release.future;
+          r.response.write(body);
+          await r.response.close();
+        };
+      }
+
+      test('a refresh of a subscription removed meanwhile does not bring it back', () async {
+        await boot(
+          configs: [_cfg('1', subId: 's')],
+          subs: [_sub('s', url: server.url('/sub'))],
+        );
+        hold(_trojan('a.example', 'A'));
+        final refresh = n().addSubscriptionFromUrl(server.url('/sub'));
+        await arrived.future;
+        await n().removeSubscription('s');
+        release.complete();
+        await refresh;
+        expect(s().subscriptions, isEmpty);
+        expect(s().configs, isEmpty);
+        expect(await storage.loadSubscriptions(), isEmpty);
+        expect(await storage.loadConfigs(), isEmpty);
+      });
+
+      test('a replaceId update of a subscription removed meanwhile adds nothing', () async {
+        await boot(subs: [_sub('s', url: 'https://old')]);
+        hold(_trojan('a.example', 'A'));
+        final update = n().addSubscriptionFromUrl(server.url('/new'), replaceId: 's');
+        await arrived.future;
+        await n().removeSubscription('s');
+        release.complete();
+        await update;
+        expect(s().subscriptions, isEmpty);
+        expect(s().configs, isEmpty);
+      });
+
+      test('a replaceId of a subscription removed before the call touches nothing', () async {
+        await boot(
+          configs: [_cfg('1', subId: 'other')],
+          subs: [_sub('other', url: server.url('/sub'))],
+        );
+        server.serve(_trojan('a.example', 'A'));
+        await n().addSubscriptionFromUrl(server.url('/sub'), replaceId: 'gone');
+        expect(s().subscriptions.single.id, 'other');
+        expect(s().configs.single.id, '1');
+        expect(server.requests, isEmpty);
+      });
+
+      test('a new URL taken meanwhile by a subscription with the raw id keeps it and its configs', () async {
+        final legacy = Subscription.fromJson(_sub('s', url: server.url('/old')).toJson()..remove('rawHwid'));
+        await boot(
+          configs: [_cfg('1', subId: 's')],
+          subs: [legacy],
+        );
+        var first = true;
+        hold(_trojan('a.example', 'A'));
+        final held = server.handler;
+        server.handler = (r) async {
+          if (!first) {
+            r.response.write(_trojan('b.example', 'B'));
+            return r.response.close();
+          }
+          first = false;
+          await held(r);
+        };
+        final add = n().addSubscriptionFromUrl(server.url('/sub'));
+        await arrived.future;
+        await n().addSubscriptionFromUrl(server.url('/sub'), replaceId: 's');
+        release.complete();
+        await add;
+        final sub = s().subscriptions.single;
+        expect(sub.rawHwid, isTrue);
+        expect(s().configs.single.address, 'b.example');
+      });
+
+      test('the same new URL added twice is one subscription', () async {
+        await boot();
+        hold(_trojan('a.example', 'A'));
+        final first = n().addSubscriptionFromUrl(server.url('/sub'));
+        await arrived.future;
+        final second = n().addSubscriptionFromUrl(server.url('/sub'));
+        release.complete();
+        await Future.wait([first, second]);
+        final sub = s().subscriptions.single;
+        expect(s().configs.single.subscriptionId, sub.id);
+        expect((await storage.loadSubscriptions()).single.id, sub.id);
+        expect((await storage.loadConfigs()).single.subscriptionId, sub.id);
+      });
+
+      test('a new URL imported meanwhile keeps the imported id', () async {
+        await boot();
+        hold(_trojan('a.example', 'A'));
+        final add = n().addSubscriptionFromUrl(server.url('/sub'));
+        await arrived.future;
+        await n().importBundle(
+          ConnectionsBundle(
+            exportedAt: DateTime(2026),
+            subscriptions: [_sub('remote', url: server.url('/sub'))],
+          ),
+        );
+        final imported = s().subscriptions.single.id;
+        release.complete();
+        await add;
+        expect(s().subscriptions.single.id, imported);
+        expect(s().configs.single.subscriptionId, imported);
+      });
     });
 
     test('empty or failed fetch throws and leaves state untouched', () async {

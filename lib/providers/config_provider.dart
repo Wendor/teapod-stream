@@ -291,6 +291,8 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     bool isTarget(Subscription s) => replaceId != null ? s.id == replaceId : s.url == url;
     final before = await _loaded();
     final target = before.subscriptions.where(isTarget).firstOrNull;
+    // The subscription to replace is gone already: nothing to update, and the URL must not match another one.
+    if (replaceId != null && target == null) return;
     final subId = target?.id ?? 'sub_${DateTime.now().millisecondsSinceEpoch}';
 
     final settings = ref.read(settingsProvider).value;
@@ -316,12 +318,19 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
       );
     }
 
-    // The state is read again in the queue: it could have changed during the download.
+    // The state is read again in the queue: it could have changed during the download. A subscription removed
+    // meanwhile stays removed; a new URL added meanwhile (another add, an import) is updated, not duplicated.
     await _mutate((s) {
-      final existing = s.subscriptions.where((sub) => sub.id == subId).firstOrNull;
+      final existing = target != null
+          ? s.subscriptions.where((sub) => sub.id == subId).firstOrNull
+          : s.subscriptions.where((sub) => sub.url == url).firstOrNull;
+      if (target != null && existing == null) return null;
+      // A subscription that registered the raw id got this URL meanwhile: it is fetched with that id, not this one.
+      if (target == null && existing != null && existing.rawHwid != rawHwid) return null;
+      final id = existing?.id ?? subId;
       final now = DateTime.now();
       final sub = Subscription(
-        id: subId,
+        id: id,
         // A user-given name isn't overwritten by profile-title on refresh
         name: name ?? existing?.name ?? fetchResult.profileTitle ?? host,
         url: url,
@@ -336,7 +345,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
         pinnedCertDer: fetchResult.acceptedCertDer ?? existing?.pinnedCertDer,
         rawHwid: rawHwid,
       );
-      return s.withSubscription(sub, tagged);
+      return s.withSubscription(sub, id == subId ? tagged : [for (final c in tagged) c.copyWith(subscriptionId: id)]);
     });
   }
 

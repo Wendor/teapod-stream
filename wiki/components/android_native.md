@@ -68,8 +68,9 @@ desired state its session was started for (`connectedDesired`), and a start repl
   switch** — `stopVpn(reconnecting=true)` keeps TUN as a sink until the new session is up, no leak window.
 - **`ACTION_CONNECT_QUICK`** (tile, the `blocked` notification, boot) and the START_STICKY restart
   start from one request, `QuickConnectStore.quickStart()` (so do reconnects and retries; without a stored one they
-  reuse the session's own request). Ignored while a session is wanted and running or being started; the restart also
-  not after the user turned the VPN off. Without a config or VPN permission
+  reuse the session's own request). `ACTION_CONNECT_QUICK` is ignored while a session is wanted and running or being
+  started (a wanted one that failed or ended can be started again). The restart starts nothing while any session is
+  wanted (also a failed one) or after the user turned the VPN off. Without a config or VPN permission
   (`abortQuickConnect`) the state is finished properly: the kill switch of the session holding the sink (not the
   stored params, which a failed save may have removed) → `blocked`, otherwise TUN is closed →
   `disconnected`, and the app opens.

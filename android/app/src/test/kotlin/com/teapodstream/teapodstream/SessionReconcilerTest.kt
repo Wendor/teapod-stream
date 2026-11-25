@@ -48,6 +48,8 @@ class SessionReconcilerTest {
         val hold = mutableMapOf<String, CountDownLatch>()
         val started = mutableMapOf<String, CountDownLatch>()
         val fail = mutableSetOf<String>()
+        /** Held starts the test never released: checked on the test's thread. */
+        val timeouts: MutableList<String> = Collections.synchronizedList(mutableListOf())
         @Volatile var running: String? = null
         @Volatile var sink = false
         var runs = 0
@@ -69,7 +71,7 @@ class SessionReconcilerTest {
         override fun start(on: Desired.On): Boolean {
             val config = on.request.config
             started[config]?.countDown()
-            hold[config]?.await(5, TimeUnit.SECONDS)
+            if (hold[config]?.await(5, TimeUnit.SECONDS) == false) timeouts += config
             if (config in fail) {
                 events += "start $config failed"
                 return false
@@ -98,7 +100,8 @@ class SessionReconcilerTest {
 
     private fun idle() {
         // Runs are queued on the executor: a no-op task after them marks the end.
-        executor.submit {}.get(5, TimeUnit.SECONDS)
+        executor.submit {}.get(15, TimeUnit.SECONDS)
+        assertTrue("held starts timed out: ${driver.timeouts}", driver.timeouts.isEmpty())
         assertFalse(reconciler.busy())
     }
 
@@ -164,6 +167,16 @@ class SessionReconcilerTest {
         release.countDown()
         idle()
         assertEquals(listOf("own 1", "start a", "own 0", "stop a for next", "own 0", "start q", "settled q"), driver.events)
+    }
+
+    @Test
+    fun `turnOff tags the off with the last connect and announces it before the worker reports`() {
+        reconciler.set(Desired.On(request("a", attempt = 7), reconciler.newId()))
+        idle()
+        val off = reconciler.turnOff { driver.events += "announce ${it.attempt}" }
+        idle()
+        assertEquals(7, off.attempt)
+        assertEquals(listOf("announce 7", "own 7", "stop a", "settled off"), driver.events.drop(3))
     }
 
     @Test

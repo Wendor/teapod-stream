@@ -122,6 +122,23 @@ internal class SessionReconciler(
         return true
     }
 
+    /**
+     * Off, tagged with the last connect received: the read and the change are one step, so a connect accepted
+     * before it is answered under its own attempt and one accepted after it replaces the off. [announce] runs in the
+     * same step (a run already queued can't report the off before it); it must not call back into the reconciler.
+     */
+    fun turnOff(announce: (Desired.Off) -> Unit): Desired.Off {
+        val off = synchronized(lock) {
+            Desired.Off(lastAttempt).also {
+                desired = it
+                pending++
+                announce(it)
+            }
+        }
+        executor.execute(::run)
+        return off
+    }
+
     /** A change was asked for and its run hasn't finished: the service is still busy. */
     fun busy(): Boolean = synchronized(lock) { pending > 0 }
 

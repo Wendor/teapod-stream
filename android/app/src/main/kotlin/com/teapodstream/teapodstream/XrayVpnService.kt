@@ -273,11 +273,15 @@ class XrayVpnService : VpnService() {
     // The one desired session state: commands, revoke, reconnects and retries replace it, one thread brings the
     // session to it. A start that ends off (failed, cancelled) is checked once its run has finished: while it runs it
     // holds the service.
-    private val reconciler = SessionReconciler(object : SessionDriver {
+    private val reconciler: SessionReconciler = SessionReconciler(object : SessionDriver {
         override fun running() = isRunning.get()
         override fun sinkHeld() = tunInterface != null
         override fun own(desired: Desired) { sessionAttempt = desired.tag }
-        override fun stop(forNext: Boolean) = stopVpn(explicit = !forNext, reconnecting = forNext)
+        override fun stop(forNext: Boolean) {
+            // Decided by what is wanted as the stop begins: an off replaced by a connect meanwhile keeps the sink.
+            val next = forNext || reconciler.desired is Desired.On
+            stopVpn(explicit = !next, reconnecting = next)
+        }
         override fun closeSink() = closeTunSink()
         override fun start(on: Desired.On): Boolean = startSession(on)
         override fun settled(desired: Desired) {
@@ -455,9 +459,8 @@ class XrayVpnService : VpnService() {
      * wanted; the stop reports again when done.
      */
     private fun turnOff() {
-        val off = Desired.Off(reconciler.lastAttempt)
-        setState(SessionState.DISCONNECTING, attempt = off.attempt)
-        reconciler.set(off)
+        // The attempt and the off state in one step; `disconnecting` before the worker can report `disconnected`.
+        val off = reconciler.turnOff { setState(SessionState.DISCONNECTING, attempt = it.attempt) }
         mainHandler.postDelayed({
             if (reconciler.desired === off && reconciler.busy() && !destroyed) {
                 log("warning", "disconnect didn't finish in 5s, forcing disconnected state")
@@ -976,6 +979,7 @@ class XrayVpnService : VpnService() {
         if (!wakeProbeRunning.compareAndSet(false, true)) return
         Thread {
             try {
+                val session = lastConnectedMs // the session probed: a reconnect applies only to it
                 val port = snapshot.socksPort
                 if (port <= 0) return@Thread
                 try {
@@ -983,7 +987,7 @@ class XrayVpnService : VpnService() {
                     log("info", "TUN idle ${idleSec}s on wake but tunnel alive, skipping reconnect")
                 } catch (e: Exception) {
                     log("warning", "TUN stall on wake: no data for ${idleSec}s, probe failed (${e.message}), reconnecting")
-                    reconnectInternal()
+                    reconnectInternal(session)
                 }
             } finally {
                 wakeProbeRunning.set(false)

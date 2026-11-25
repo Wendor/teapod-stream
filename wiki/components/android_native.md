@@ -101,13 +101,16 @@ phantom connection, and the heartbeat's own tun2socks check stays as a fallback.
 
 ## Kill switch and reconnect
 
-- **TUN fd reuse.** `stopVpn(reconnecting=true)` keeps TUN open, and `startVpn` of a request with `reconnect = true` passes the **same fd**
-  (only if the request's `ConnectionParams` are the ones the TUN was built with — `tunParams`; otherwise it is
-  rebuilt) to the core instead of a new `establish()` (tun2socks works on its own `dup`). No new VPN network agent, so no
-  system "VPN active" notification on Android 15/16 and no connectivity flap for apps; traffic during the reconnect
-  goes into the sink — no leak even without the kill switch. A user `ACTION_CONNECT` always establishes anew.
+- **TUN fd reuse.** `stopVpn(reconnecting=true)` keeps TUN open, and `startVpn` of a request with `reconnect = true`
+  whose `ConnectionParams` are the ones the TUN was built with (`tunParams`) passes the **same fd** to the core
+  instead of a new `establish()` (tun2socks works on its own `dup`). No new VPN network agent, so no system "VPN
+  active" notification on Android 15/16 and no connectivity flap for apps; traffic during the reconnect goes into the
+  sink — no leak even without the kill switch. With other params (a failed manual connect stored new ones) the
+  reconnect establishes a new TUN, which replaces the old fd as the sink. A user `ACTION_CONNECT` always establishes
+  anew.
 - **Retries.** A failed reconnect retries `CONNECT_QUICK` up to `MAX_RECONNECT_ATTEMPTS` (3) with linear backoff
-  (5 s × attempt); the old fd survives the retries. Final failure with kill switch → sink stays, state `blocked`.
+  (5 s × attempt); the TUN held at the failure (the reused one, or the one the failed attempt established) survives
+  the retries. Final failure with kill switch → sink stays, state `blocked`.
   A failed manual connect keeps a sink only if there already was one — a broken config must not lock the network.
 - **`blocked`.** The kill switch keeps TUN with `setUnderlyingNetworks(emptyArray())` after an unexpected drop: traffic
   enters TUN and nobody reads it. Notification and tile show it; tapping the tile or the notification's Connect

@@ -40,7 +40,7 @@ class QuickConnectStoreTest {
 
     @Test
     fun aLoginThatCantBeRemovedFailsTheClear() {
-        store.saveSession("{config}", 2080, "u", "p")
+        store.save("{config}", params, "u", "p")
         dir.setWritable(false)
         try {
             assertTrue(runCatching { store.clearCredentials() }.isFailure)
@@ -70,7 +70,7 @@ class QuickConnectStoreTest {
             Thread {
                 // A store of its own per writer, as the activity and the service have.
                 val own = QuickConnectStore(dir)
-                repeat(300) { i -> own.saveSession("c-$w-$i", 2080, "u-$w-$i", "p") }
+                repeat(300) { i -> own.save("c-$w-$i", params, "u-$w-$i", "p") }
             }
         }
         val mismatches = mutableListOf<String>()
@@ -94,7 +94,7 @@ class QuickConnectStoreTest {
         // A non-empty directory under the target name: the rename fails.
         File(dir, QuickConnectStore.CONFIG).mkdir()
         File(dir, "${QuickConnectStore.CONFIG}/x").writeText("")
-        assertTrue(runCatching { store.saveSession("{config}", 2080, "u", "p") }.isFailure)
+        assertTrue(runCatching { store.save("{config}", params, "u", "p") }.isFailure)
         assertTrue(dir.listFiles()!!.none { it.name.endsWith(".tmp") })
     }
 
@@ -137,7 +137,8 @@ class QuickConnectStoreTest {
         store.saveParams(params)
         assertNull("no config", store.quickStart(fromConfig))
         store.clear()
-        store.saveSession("{config}", 2080, "u", "p")
+        store.save("{config}", params, "u", "p")
+        File(dir, QuickConnectStore.PARAMS).delete()
         assertNull("no params", store.quickStart(fromConfig))
     }
 

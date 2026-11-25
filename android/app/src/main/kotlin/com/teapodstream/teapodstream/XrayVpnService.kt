@@ -398,11 +398,9 @@ class XrayVpnService : VpnService() {
                     return START_NOT_STICKY
                 }
                 requestedAttempt = attempt
-                useParams(params)
-                // For a quick start (tile, boot, reconnect); the config and the login are stored once the session
-                // runs with them.
-                try { store.saveParams(params) } catch (e: Exception) { log("warning", "saving params failed: ${e.message}") }
-                // Together with the quick-reconnect parameters — the tile shows what it will connect.
+                showNotificationFor(params)
+                // The tile shows what it will connect; the params, config and login for a quick start are stored
+                // once the session runs with them (startVpn).
                 VpnTileService.saveConfigName(this, intent.getStringExtra(EXTRA_CONFIG_NAME))
                 setUserOff(false)
                 reconnectAttempts.set(0)
@@ -432,7 +430,7 @@ class XrayVpnService : VpnService() {
                 // The parameters before ensureForeground, so the right notification type (full or minimal) shows
                 // from the start.
                 val request = quickStartRequest()
-                (request?.params ?: store.params())?.let(::useParams)
+                (request?.params ?: store.params())?.let(::showNotificationFor)
                 if (isRunning.get()) {
                     // startVpn would bail on its CAS anyway — bail here instead so the
                     // state isn't left stuck at "reconnecting" over a live tunnel.
@@ -461,7 +459,7 @@ class XrayVpnService : VpnService() {
         // Service restarted by Android after being killed, or started by always-on VPN.
         // The parameters before ensureForeground (as in CONNECT_QUICK).
         val request = quickStartRequest()
-        (request?.params ?: store.params())?.let(::useParams)
+        (request?.params ?: store.params())?.let(::showNotificationFor)
         ensureForeground()
         // Auto-connect unless the user turned the VPN off: the flag file covers process restarts (the static
         // userRequestedDisconnect is false in a fresh process, but the user's choice must survive).
@@ -481,6 +479,14 @@ class XrayVpnService : VpnService() {
     private fun useParams(p: ConnectionParams) {
         params = p
         showNotification = p.showNotification
+    }
+
+    /**
+     * Before ensureForeground: the notification type (full or minimal) of the session about to start, so the right one
+     * shows from the start. A running session keeps its own until [startVpn] replaces it.
+     */
+    private fun showNotificationFor(p: ConnectionParams) {
+        if (!isRunning.get()) showNotification = p.showNotification
     }
 
     /** "Turned off by the user", in memory and on disk (boot and a system restart read the file). */
@@ -523,6 +529,7 @@ class XrayVpnService : VpnService() {
         val mtu = params.mtu
         val engine = params.engine
         if (!isRunning.compareAndSet(false, true)) return
+        useParams(request.params)
         sessionCore = VpnCores.get(CoreKind.fromId(engine))
         VpnCores.active = sessionCore
         // Keep the previous TUN (kill-switch sink left by a reconnect) open until the
@@ -551,8 +558,8 @@ class XrayVpnService : VpnService() {
                 xrayConfig
             }
 
-            // The config and its SOCKS login together, for a quick start.
-            store.saveSession(finalConfig, socksPort, socksUser, socksPassword)
+            // For a quick start (tile, boot, reconnect): the params, the config and its SOCKS login together.
+            store.save(finalConfig, request.params, socksUser, socksPassword)
             prepareBinaries(this)
 
             core.init(this) { level, message -> log(level, message) }

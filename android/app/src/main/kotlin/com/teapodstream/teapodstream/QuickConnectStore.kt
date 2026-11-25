@@ -90,7 +90,7 @@ internal class QuickConnectStore(private val dir: File) {
      * write leaves the login read from the config, never one that doesn't match it. A failed login write is left to
      * that fallback rather than thrown.
      */
-    fun saveSession(config: String, socksPort: Int, socksUser: String, socksPassword: String) = synchronized(LOCK) {
+    private fun saveSession(config: String, socksPort: Int, socksUser: String, socksPassword: String) = synchronized(LOCK) {
         clearCredentials()
         saveConfig(config)
         try {
@@ -100,7 +100,7 @@ internal class QuickConnectStore(private val dir: File) {
     }
 
     /** Flutter's `clearQuickConnect`: nothing left to quick-start. The off flag stays. */
-    fun clear() {
+    fun clear() = synchronized(LOCK) {
         for (name in listOf(CONFIG, PARAMS, CREDENTIALS, TILE_NAME)) File(dir, name).delete()
     }
 

@@ -114,7 +114,9 @@ class _AppShellState extends ConsumerState<_AppShell> with WidgetsBindingObserve
       // Only after the VPN state sync: otherwise tunnelSocks is still empty and a subscription would bypass the
       // tunnel when the VPN is already up (from the tile).
       final configs = ref.read(configProvider.notifier);
-      ref.read(vpnProvider.notifier).synced.then((_) => configs.refreshStaleIfDue());
+      ref.read(vpnProvider.notifier).synced.then((_) {
+        if (mounted) configs.refreshStaleIfDue();
+      });
       ref.read(geoProvider.notifier).check();
       if (_autoConnectAttempted) return;
       _autoConnectAttempted = true;
@@ -138,7 +140,9 @@ class _AppShellState extends ConsumerState<_AppShell> with WidgetsBindingObserve
       // The hourly background timer is gone — subscription staleness is checked here,
       // after the sync: the refresh must see the tunnel's current SOCKS.
       final configs = ref.read(configProvider.notifier);
-      ref.read(vpnProvider.notifier).syncNativeState().then((_) => configs.refreshStaleIfDue());
+      ref.read(vpnProvider.notifier).syncNativeState().then((_) {
+        if (mounted) configs.refreshStaleIfDue();
+      });
       ref.read(vpnStatsProvider.notifier).resume();
     } else if (state == AppLifecycleState.paused) {
       // Don't run the per-second MethodChannel stats polling in the background —

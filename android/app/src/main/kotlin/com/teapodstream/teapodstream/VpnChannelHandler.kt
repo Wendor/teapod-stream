@@ -20,6 +20,10 @@ internal class VpnChannelHandler(
     private val battery: BatteryOptimization,
 ) {
     private val pendingVpnStart = PendingVpnStart()
+    private val quickConnect = QuickConnectRequests(
+        QuickConnectStore(activity.filesDir),
+        XrayVpnService.sessionStarts::get,
+    ) { VpnTileService.saveConfigName(activity, it) }
     private val filesDir: File get() = activity.filesDir
 
     val methods: Map<String, ChannelMethod> = mapOf(
@@ -32,15 +36,9 @@ internal class VpnChannelHandler(
         },
         "saveQuickConnect" to ::saveQuickConnect,
         "clearQuickConnect" to { _, result ->
-            if (sessionRunning()) {
-                result.success(false)
-            } else {
-                work.answer(result) {
-                    QuickConnectStore(filesDir).clear()
-                    VpnTileService.saveConfigName(activity, null)
-                    true
-                }
-            }
+            val seen = XrayVpnService.sessionStarts.get()
+            if (sessionRunning()) result.success(false)
+            else work.answer(result, ChannelWork.quickConnect) { quickConnect.clear(seen) }
         },
         "getState" to { _, result ->
             // The SOCKS login and connectedAtMs are set only while connected (SessionSnapshot)
@@ -171,6 +169,7 @@ internal class VpnChannelHandler(
     // Re-saves the quick-reconnect data (tile, autostart) without connecting: on a core change while disconnected.
     // During a session — a no-op.
     private fun saveQuickConnect(call: MethodCall, result: MethodChannel.Result) {
+        val seen = XrayVpnService.sessionStarts.get()
         if (sessionRunning()) {
             result.success(false)
             return
@@ -179,11 +178,7 @@ internal class VpnChannelHandler(
             result.error("INVALID_ARGS", "xrayConfig required", null)
             return
         }
-        work.answer(result) {
-            QuickConnectStore(filesDir).save(args.config, args.params, args.socksUser, args.socksPassword)
-            VpnTileService.saveConfigName(activity, args.configName)
-            true
-        }
+        work.answer(result, ChannelWork.quickConnect) { quickConnect.save(args, seen) }
     }
 
     private fun sessionRunning() =
@@ -220,5 +215,30 @@ internal class VpnChannelHandler(
 
     companion object {
         const val VPN_PERMISSION_REQUEST = 1001
+    }
+}
+
+/**
+ * Flutter's quick-connect save and clear, checked while no session ran. [seen] is [sessionStarts] at that check: a
+ * session started since then owns the stored data, so the write is dropped (false). The check and the write are one
+ * step under the store's lock, which the session's own save also takes.
+ */
+internal class QuickConnectRequests(
+    private val store: QuickConnectStore,
+    private val sessionStarts: () -> Long,
+    private val saveTileName: (String?) -> Unit,
+) {
+    fun save(args: ConnectArgs, seen: Long): Boolean = store.locked {
+        if (sessionStarts() != seen) return@locked false
+        store.save(args.config, args.params, args.socksUser, args.socksPassword)
+        saveTileName(args.configName)
+        true
+    }
+
+    fun clear(seen: Long): Boolean = store.locked {
+        if (sessionStarts() != seen) return@locked false
+        store.clear()
+        saveTileName(null)
+        true
     }
 }

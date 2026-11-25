@@ -8,9 +8,9 @@ back. It keeps working when the Flutter UI is gone (tile, boot, Tasker, service 
 | File | Role |
 |---|---|
 | `MainActivity.kt` | wires the channels (`com.teapodstream/vpn` to both handlers below, the event channel, itest), deep link intents, the VPN-permission result |
-| `VpnChannelHandler.kt` | the VPN methods of `com.teapodstream/vpn` (Dart `XrayEngine`): connect with the VPN permission, disconnect, quick-connect save / clear, state, stats, ping, `measureOutbound`, logs |
+| `VpnChannelHandler.kt` | the VPN methods of `com.teapodstream/vpn` (Dart `XrayEngine`): connect with the VPN permission, disconnect, quick-connect save / clear (`QuickConnectRequests`: in call order on one thread, dropped when a session started since the check — `XrayVpnService.sessionStarts`), state, stats, ping, `measureOutbound`, logs |
 | `PlatformChannelHandler.kt` | the platform methods (Dart `PlatformService`): available cores, versions, binaries, apps and icons, files dir, ABI, IP country, device id / info, APK install; `BatteryOptimization` — the exemption prompt (once, on connect) and its settings |
-| `ChannelWork.kt` | a channel method's blocking work runs on a pool (`io`; `ping` 8 and `measure` 4 threads bound the bursts) and is answered on the main thread, a throw as `ERROR`; `ConnectArgs` — the parsed `connect` / `saveQuickConnect` arguments |
+| `ChannelWork.kt` | a channel method's blocking work runs on a pool (`io`; `ping` 8 and `measure` 4 threads bound the bursts; `quickConnect` — one thread, call order) and is answered on the main thread, a throw as `ERROR`; `ConnectArgs` — the parsed `connect` / `saveQuickConnect` arguments |
 | `PendingVpnStart.kt` | the connect waiting for the VPN-permission dialog: a newer connect replaces it (one dialog), `disconnect` cancels it; the dropped call is answered `SUPERSEDED` / `CANCELLED`. A dialog stays open until it answers, and its answer goes to the latest request |
 | `XrayVpnService.kt` | the `VpnService`: session lifecycle, TUN, kill switch, network-change reconnect, heartbeat, stats, notification, log file |
 | `SessionSnapshot.kt` | `SessionState` (the state names Flutter sees) and the immutable `SessionSnapshot`: its map for Flutter, the itest marker, the pure transition `moved` |

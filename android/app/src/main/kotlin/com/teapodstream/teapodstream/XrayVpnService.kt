@@ -59,6 +59,10 @@ class XrayVpnService : VpnService() {
         const val EXTRA_ATTEMPT = "attempt"
         const val EXTRA_CONFIG_NAME = "config_name"              // config name for the tile
 
+        /** Counts session starts, each before its quick-connect save: Flutter's quick-connect write checked before
+         *  a start is stale ([QuickConnectRequests]). */
+        val sessionStarts = java.util.concurrent.atomic.AtomicLong()
+
         private val session = AtomicReference(SessionSnapshot())
         private val publishLock = Any()
 
@@ -536,6 +540,7 @@ class XrayVpnService : VpnService() {
         val mtu = params.mtu
         val engine = params.engine
         if (!isRunning.compareAndSet(false, true)) return
+        sessionStarts.incrementAndGet()
         val notificationTypeChanged = showNotification != request.params.showNotification
         useParams(request.params)
         // The previous session's notification type stayed until here: switch the foreground one to this session's.

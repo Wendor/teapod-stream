@@ -91,6 +91,9 @@ internal class QuickConnectStore(private val dir: File) {
         }
     }
 
+    /** [block] under the lock of every read and write: a check and the write it allows, as one step. */
+    fun <T> locked(block: () -> T): T = synchronized(LOCK, block)
+
     /** Flutter's `clearQuickConnect`: nothing left to quick-start. The off flag stays. */
     fun clear() = synchronized(LOCK) {
         for (name in listOf(CONFIG, PARAMS, CREDENTIALS, TILE_NAME)) File(dir, name).delete()

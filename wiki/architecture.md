@@ -11,7 +11,7 @@ TeapodStream is an Android VPN client: a Flutter UI, a Kotlin `VpnService`, and 
 │                        → XrayEngine, PlatformService (native)│
 ├──────────────────────────────────────────────────────────────┤
 │ Android (Kotlin)                                             │
-│  MainActivity → XrayVpnService → VpnCore (Go / Box / Rust)   │
+│  MainActivity → channel handlers → XrayVpnService → VpnCore  │
 ├──────────────────────────────────────────────────────────────┤
 │ teapod-core AAR (core/)                                      │
 │  xray-core (Go) · sing-box (Go) · teapod-tun2socks · xray-rust│
@@ -72,7 +72,7 @@ so a restarted UI catches up with a running service.
 tap → VpnNotifier.connect()
     → effectiveConfigProvider → validate → CoreResolver → buildEngineOptions → checkOptions
     → XrayEngine.connect → backend.buildConfig → MethodChannel 'connect'
-    → MainActivity: VPN permission → XrayVpnService ACTION_CONNECT
+    → MainActivity → VpnChannelHandler: VPN permission → XrayVpnService ACTION_CONNECT
     → establish TUN → VpnCore.start → setConnected → event 'state: connected'
     → VpnNotifier: state, stats polling, appliedFingerprint
 ```

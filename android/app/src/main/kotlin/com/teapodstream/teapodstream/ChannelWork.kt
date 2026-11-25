@@ -31,6 +31,9 @@ internal class ChannelWork(private val main: Executor) {
         // a `ping` process / temporary core instance per config at once.
         val ping: Executor = Executors.newFixedThreadPool(8)
         val measure: Executor = Executors.newFixedThreadPool(4)
+
+        /** Flutter's quick-connect saves and clears, one at a time in call order. */
+        val quickConnect: Executor = Executors.newSingleThreadExecutor()
     }
 }
 

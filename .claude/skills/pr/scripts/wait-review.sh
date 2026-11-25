@@ -11,6 +11,13 @@ deadline=$(( $(date +%s) + ${2:-40} * 60 ))
 repo=Wendor/teapod-stream
 bot='coderabbitai[bot]'
 idle=$(( ${WAIT_REVIEW_IDLE:-10} * 60 ))
+# Every CodeRabbit review and rate limit this script sees, one line each, shared by all PRs and sessions on this
+# machine: the hourly limit is per repository, so the log tells how many reviews the last hour spent.
+log=${CODERABBIT_LOG:-${XDG_STATE_HOME:-$HOME/.local/state}/teapod-stream/coderabbit.log}
+mkdir -p "$(dirname "$log")"
+note() {  # note <ISO time> <key> [detail]: appends "<time> <key> [detail]" once per key
+  grep -qF -- " $2" "$log" 2>/dev/null || echo "$1 $2${3:+ $3}" >> "$log"
+}
 
 threads() {  # unresolved threads, tab-separated: id, who started it, who spoke last, path, seconds since then,
              # whether CodeRabbit accepted the last comment with a reaction (1/0)
@@ -69,11 +76,30 @@ while :; do
   if [ -n "$head" ] && [ "$covered" != unknown ] && [ "$running" = 0 ] && [ -n "$coderabbit" ]; then
     if [ "$covered" != "$head" ]; then
       echo "SKIPPED: CodeRabbit finished without reviewing ${head:0:7} (rate limit, paused reviews, or nothing to review)."
-      echo "Next: read its latest comment on the PR. Rate limit or \"Reviews paused\" → post '@coderabbitai review'"
-      echo "(with your Co-Authored-By line) and run this script again — it waits for that review to start; a rate"
-      echo "limit can take until the hourly limit resets."
+      # A rate limit names its wait ("Please wait **12 minutes and 5 seconds** ...") in the comment it last updated:
+      # the time it accepts a request again is that update plus the wait.
+      retry=$(gh api --paginate "repos/$repo/issues/$n/comments" --jq '.[]
+        | select(.user.login == "coderabbitai[bot]" and (.body | test("rate limit"; "i")))
+        | (.body | capture("wait \\*\\*(?<w>[^*]+)\\*\\*").w) as $w
+        | (.updated_at | fromdate) + ([$w | scan("([0-9]+) *(hour|minute|second)")
+          | (.[0] | tonumber) * {"hour": 3600, "minute": 60, "second": 1}[.[1]]] | add // 0)' 2>/dev/null \
+        | sort -n | tail -1)
+      spent=$(awk -v s="$(jq -rn 'now - 3600 | todate')" '$1 >= s && $3 == "reviewed"' "$log" | wc -l | tr -d ' ')
+      if [ -n "$retry" ] && [ "$retry" -gt "$(date +%s)" ]; then
+        note "$(jq -rn 'now | todate')" "pr=$n rate-limited $head" "retry=$(jq -rn "$retry | todate")"
+        echo "Rate limited: CodeRabbit takes '@coderabbitai review' again at $(jq -rn "$retry | strflocaltime(\"%H:%M:%S\")")" \
+          "(in $(( (retry - $(date +%s) + 59) / 60 )) min); reviews logged in the last hour: $spent ($log)."
+        echo "Next: sleep $(( retry - $(date +%s) + 30 )), then post '@coderabbitai review' (with your Co-Authored-By"
+        echo "line) and run this script again — it waits for that review to start."
+      else
+        [ -n "$retry" ] && echo "Its last rate limit ended at $(jq -rn "$retry | strflocaltime(\"%H:%M:%S\")")."
+        echo "Next: read its latest comment on the PR. Rate limit or \"Reviews paused\" → post '@coderabbitai review'"
+        echo "(with your Co-Authored-By line) and run this script again — it waits for that review to start."
+      fi
       exit 2
     fi
+    reviewed_at=$(jq -r '.[] | select(.name == "CodeRabbit") | .completedAt // empty' <<< "$checks" | head -1)
+    note "${reviewed_at:-$(jq -rn 'now | todate')}" "pr=$n reviewed $head"
     # CodeRabbit posts a reply only when it is complete (the "Analysis chain" block is part of the final reply),
     # so a thread is answered when its last comment is CodeRabbit's.
     # A thread waits for CodeRabbit when CodeRabbit started it and someone else spoke last; threads people started

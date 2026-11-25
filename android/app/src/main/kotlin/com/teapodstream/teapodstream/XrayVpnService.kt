@@ -59,8 +59,8 @@ class XrayVpnService : VpnService() {
         const val EXTRA_ATTEMPT = "attempt"
         const val EXTRA_CONFIG_NAME = "config_name"              // config name for the tile
 
-        /** Counts session starts, each before its quick-connect save: Flutter's quick-connect write checked before
-         *  a start is stale ([QuickConnectRequests]). */
+        /** Counts session starts, each after its state is published and before its quick-connect save: Flutter's
+         *  quick-connect write checked before a start is stale ([QuickConnectRequests]). */
         val sessionStarts = java.util.concurrent.atomic.AtomicLong()
 
         private val session = AtomicReference(SessionSnapshot())
@@ -540,7 +540,6 @@ class XrayVpnService : VpnService() {
         val mtu = params.mtu
         val engine = params.engine
         if (!isRunning.compareAndSet(false, true)) return
-        sessionStarts.incrementAndGet()
         val notificationTypeChanged = showNotification != request.params.showNotification
         useParams(request.params)
         // The previous session's notification type stayed until here: switch the foreground one to this session's.
@@ -564,6 +563,9 @@ class XrayVpnService : VpnService() {
         tunMtu = core.tunMtu(mtu.coerceIn(576, 9000))
         if (!isReconnect) clearLogFile()
         setState(if (isReconnect) SessionState.RECONNECTING else SessionState.CONNECTING)
+        // After the state, before the save: a quick-connect write that read the count before this is dropped, one
+        // that read it after sees the running state and isn't queued.
+        sessionStarts.incrementAndGet()
         log("info", "Starting VPN (MTU: $tunMtu)")
 
         try {

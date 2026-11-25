@@ -446,14 +446,14 @@ void main() {
       final bId = c.read(profileProvider).value!.profiles.last.id;
 
       // same server, same settings — the tunnel stays
-      await profiles.switchProfile(bId);
+      await c.read(vpnProvider.notifier).switchProfile(bId);
       await c.read(configProvider.notifier).setActiveConfig('b');
-      await profiles.switchProfile(defaultId);
+      await c.read(vpnProvider.notifier).switchProfile(defaultId);
       await _settle();
       expect(native.named('connect'), hasLength(1));
 
       // B remembered server b
-      await profiles.switchProfile(bId);
+      await c.read(vpnProvider.notifier).switchProfile(bId);
       await _settle();
       expect(native.named('connect'), hasLength(2));
       expect(native.lastConnect()['xrayConfig'], contains('hb.example'));
@@ -466,15 +466,15 @@ void main() {
       await profiles.createProfile('B');
       final defaultId = c.read(profileProvider).value!.activeProfileId;
       final bId = c.read(profileProvider).value!.profiles.last.id;
-      await profiles.switchProfile(bId); // B remembers the current server
+      await c.read(vpnProvider.notifier).switchProfile(bId); // B remembers the current server
       await c.read(settingsProvider.notifier).save(_settings.copyWith(mtu: 1400));
-      await profiles.switchProfile(defaultId);
+      await c.read(vpnProvider.notifier).switchProfile(defaultId);
       await _settle();
       final before = native.named('connect').length;
 
       _FailingSelection.fail = true;
       addTearDown(() => _FailingSelection.fail = false);
-      await expectLater(profiles.switchProfile(bId), throwsA(isA<StateError>()));
+      await expectLater(c.read(vpnProvider.notifier).switchProfile(bId), throwsA(isA<StateError>()));
       await _settle();
       expect(native.named('connect'), hasLength(before + 1));
       expect(native.lastConnect()['mtu'], 1400);
@@ -496,16 +496,16 @@ void main() {
       final boxId = c.read(profileProvider).value!.activeProfileId;
       final bId = c.read(profileProvider).value!.profiles.last.id;
       // B: Go enabled, raw xray server
-      await profiles.switchProfile(bId);
+      await c.read(vpnProvider.notifier).switchProfile(bId);
       await c.read(settingsProvider.notifier).save(_settings);
       await c.read(configProvider.notifier).setActiveConfig('r');
       await _settle();
 
       // in between, sing-box settings with the raw config (or the reverse) can't run
-      await profiles.switchProfile(boxId);
+      await c.read(vpnProvider.notifier).switchProfile(boxId);
       await _settle();
       expect(native.lastConnect()['engine'], 'box');
-      await profiles.switchProfile(bId);
+      await c.read(vpnProvider.notifier).switchProfile(bId);
       await _settle();
       expect(native.named('disconnect'), isEmpty);
       expect(st().error, isNull);
@@ -532,11 +532,14 @@ void main() {
         Profile(id: 'Y', name: 'Y', settings: boxOnly, createdAt: DateTime(2026), selection: sel(_cfg('a'))),
       ]);
       await ProfileStorageService().saveActiveProfileId('X');
-      final profiles = c.read(profileProvider.notifier);
+      c.invalidate(profileProvider);
       await c.read(profileProvider.future);
       confirmConnects();
 
-      await Future.wait([profiles.switchProfile('W'), profiles.switchProfile('Y')]);
+      await Future.wait([
+        c.read(vpnProvider.notifier).switchProfile('W'),
+        c.read(vpnProvider.notifier).switchProfile('Y'),
+      ]);
       await _settle();
       expect(native.named('disconnect'), isEmpty);
       expect(st().error, isNull);
@@ -567,9 +570,10 @@ void main() {
         ),
       ]);
       await ProfileStorageService().saveActiveProfileId('A');
+      c.invalidate(profileProvider);
       await c.read(profileProvider.future);
 
-      await c.read(profileProvider.notifier).switchProfile('B');
+      await c.read(vpnProvider.notifier).switchProfile('B');
       await _settle();
       expect(native.named('disconnect'), hasLength(1));
       expect(st().error, isNotNull);
@@ -591,13 +595,16 @@ void main() {
         Profile(id: 'Y', name: 'Y', settings: _settings, createdAt: DateTime(2026), selection: sel(_cfg('a'))),
       ]);
       await ProfileStorageService().saveActiveProfileId('X');
-      final profiles = c.read(profileProvider.notifier);
+      c.invalidate(profileProvider);
       await c.read(profileProvider.future);
       final before = native.named('connect').length;
       final gate = Completer<void>();
       confirmConnects(gate.future);
 
-      final switches = Future.wait([profiles.switchProfile('W'), profiles.switchProfile('Y')]);
+      final switches = Future.wait([
+        c.read(vpnProvider.notifier).switchProfile('W'),
+        c.read(vpnProvider.notifier).switchProfile('Y'),
+      ]);
       await _settle();
       expect(native.named('connect'), hasLength(before + 1)); // W's connect is still in flight
       gate.complete();

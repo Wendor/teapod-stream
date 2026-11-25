@@ -6,7 +6,6 @@ import 'package:teapodstream/core/models/core_kind.dart';
 import 'package:teapodstream/core/models/profile.dart';
 import 'package:teapodstream/core/models/routing_settings.dart';
 import 'package:teapodstream/core/services/profile_storage_service.dart';
-import 'package:teapodstream/core/services/settings_service.dart';
 import 'package:teapodstream/core/models/app_settings.dart';
 import 'package:teapodstream/core/services/update_service.dart';
 import 'package:teapodstream/providers/profile_provider.dart';
@@ -18,6 +17,7 @@ import 'package:teapodstream/ui/screens/settings_screen.dart';
 import 'package:teapodstream/ui/screens/whats_new_screen.dart';
 import 'package:teapodstream/ui/widgets/settings_shared.dart';
 
+import '../helpers/stored_settings.dart';
 import '../helpers/ui_harness.dart';
 
 Future<void> _tapRow(WidgetTester tester, String title) async {
@@ -151,7 +151,7 @@ void main() {
       expect(_settings(c).blockQuic, isTrue);
       await _tapRow(tester, 'Fragmentation');
       expect(_settings(c).fragment.enabled, isTrue);
-      expect((await SettingsService().load()).fragment.enabled, isTrue);
+      expect((await storedSettings()).fragment.enabled, isTrue);
       await unmount(tester, c);
     });
 

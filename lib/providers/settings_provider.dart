@@ -1,54 +1,46 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../core/services/settings_service.dart';
 import '../core/models/app_settings.dart';
 import 'profile_provider.dart';
 
+/// The settings in force: the active profile's. Every write goes through [ProfileNotifier.updateActiveSettings],
+/// which queues it after the other profile writes and refuses a readonly profile.
 class SettingsNotifier extends AsyncNotifier<AppSettings> {
-  final _service = SettingsService();
-
   @override
-  Future<AppSettings> build() => _service.load();
-
-  Future<void> save(AppSettings settings) async {
-    // Wait for the profile to load: otherwise readonly isn't checked and the profile snapshot won't update.
-    final profileState = await ref
-        .read(profileProvider.future)
-        .then<ProfileState?>((p) => p, onError: (Object _) => null);
-    if (profileState?.isReadonly == true) return;
-    // Captured before the write: a profile switch may finish while it runs.
-    final profileId = profileState?.activeProfileId;
-
-    await _service.save(settings);
-    state = AsyncData(settings);
-
-    // Keep profile snapshot in sync
-    ref.read(profileProvider.notifier).syncActiveSettings(settings, profileId: profileId);
+  FutureOr<AppSettings> build() {
+    // One subscription (to the future): a second one would rebuild this provider while it still loads.
+    final next = ref.watch(profileProvider.future);
+    final profiles = ref.read(profileProvider);
+    // Loaded: synchronously, so a reader right after a save sees the saved settings.
+    if (profiles.hasValue && !profiles.isLoading) return profiles.requireValue.activeSettings;
+    return next.then((s) => s.activeSettings);
   }
 
-  Future<void> cleanGhostPackages(Set<String> installedPackages) async {
-    final current = state.maybeWhen(data: (d) => d, orElse: () => null);
-    if (current == null) return;
+  /// [settings] were built from the ones shown: they go to the profile active now, even if a switch runs first.
+  Future<void> save(AppSettings settings) => ref
+      .read(profileProvider.notifier)
+      .updateActiveSettings((_) => settings, profileId: ref.read(profileProvider).value?.activeProfileId);
+
+  Future<void> cleanGhostPackages(Set<String> installedPackages) => _update((current) {
     final newIncluded = current.includedPackages.intersection(installedPackages);
     final newExcluded = current.excludedPackages.intersection(installedPackages);
     if (newIncluded.length == current.includedPackages.length &&
         newExcluded.length == current.excludedPackages.length) {
-      return;
+      return null;
     }
-    await save(current.copyWith(includedPackages: newIncluded, excludedPackages: newExcluded));
-  }
+    return current.copyWith(includedPackages: newIncluded, excludedPackages: newExcluded);
+  });
 
-  Future<void> toggleExcludedPackage(String package) async {
-    final current = state.maybeWhen(data: (d) => d, orElse: () => null);
-    if (current == null) return;
+  Future<void> toggleExcludedPackage(String package) => _update((current) {
     final excluded = Set<String>.from(current.excludedPackages);
-    if (excluded.contains(package)) {
-      excluded.remove(package);
-    } else {
-      excluded.add(package);
-    }
-    await save(current.copyWith(excludedPackages: excluded));
-  }
+    if (!excluded.remove(package)) excluded.add(package);
+    return current.copyWith(excludedPackages: excluded);
+  });
+
+  Future<void> _update(AppSettings? Function(AppSettings current) change) =>
+      ref.read(profileProvider.notifier).updateActiveSettings(change);
 }
 
 final settingsProvider = AsyncNotifierProvider<SettingsNotifier, AppSettings>(SettingsNotifier.new);

@@ -91,8 +91,8 @@ except `switchConfig`, where native asks Flutter (`tunnel_dead`) to pick another
 
 | Data | Where |
 |---|---|
-| Configs, subscriptions, profiles, pins, SOCKS credentials | flutter_secure_storage (`StorageSecureService`) |
-| Other settings | SharedPreferences (`SettingsService`) |
+| Configs, subscriptions, profiles (the settings in force are the active profile's), pins | flutter_secure_storage (`StorageSecureService`) |
+| Flags native reads (`auto_start_on_boot`, `automation_enabled`), app locale, active profile id | SharedPreferences |
 | Core config, quick-reconnect parameters, logs | native `filesDir` |
 | Geodata | `filesDir/geoip.dat`, `geosite.dat` (+ `.srs` for sing-box) |
 

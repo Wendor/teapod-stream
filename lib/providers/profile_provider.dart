@@ -10,7 +10,6 @@ import '../core/services/deeplink_router.dart';
 import '../core/services/profile_storage_service.dart';
 import '../core/services/settings_service.dart';
 import '../core/models/app_settings.dart';
-import 'settings_provider.dart';
 import 'config_provider.dart';
 import 'vpn_provider.dart';
 import '../l10n/l10n.dart';
@@ -25,12 +24,16 @@ class ProfileState {
 
   bool get isReadonly => activeProfile?.readonly ?? false;
 
+  /// The settings in force (`settingsProvider` exposes them; this provider can't read it — it depends on this one).
+  AppSettings get activeSettings => activeProfile?.settings ?? const AppSettings();
+
   ProfileState copyWith({List<Profile>? profiles, String? activeProfileId}) =>
       ProfileState(profiles: profiles ?? this.profiles, activeProfileId: activeProfileId ?? this.activeProfileId);
 }
 
 class ProfileNotifier extends AsyncNotifier<ProfileState> {
   final _storage = ProfileStorageService();
+  final _legacy = SettingsService();
 
   ProfileState? get _current => state.maybeWhen(data: (d) => d, orElse: () => null);
 
@@ -55,18 +58,22 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
     state = AsyncData(current.copyWith(profiles: profiles));
   });
 
+  /// The state once loaded: a mutation queued before [build] finished waits for it.
+  Future<ProfileState> _loaded() async => _current ?? await future;
+
   @override
   Future<ProfileState> build() async {
     var profiles = await _storage.loadProfiles();
     var activeId = await _storage.loadActiveProfileId();
+    // Until the migration the per-key settings are the ones in force: they become the active profile's.
+    final legacy = await _legacy.migrated() ? null : await _legacy.load();
 
     if (profiles.isEmpty) {
-      final settings = await SettingsService().load();
       final defaultProfile = Profile(
         id: 'default',
         name: L10n.current.profileDefaultName,
         isDefault: true,
-        settings: settings,
+        settings: legacy ?? const AppSettings(),
         createdAt: DateTime.now(),
       );
       profiles = [defaultProfile];
@@ -80,28 +87,40 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
       await _storage.saveActiveProfileId(activeId);
     }
 
+    if (legacy != null) {
+      profiles = [for (final p in profiles) p.id == activeId ? p.copyWith(settings: legacy) : p];
+      await _storage.saveProfiles(profiles);
+      await _legacy.markMigrated();
+    }
+
     return ProfileState(profiles: profiles, activeProfileId: activeId);
   }
 
-  /// Applies the profile's settings and its remembered server. The VPN follows once both are in
-  /// place (`VpnNotifier.duringProfileSwitch`), also when restoring the server failed: the profile
-  /// is already switched, and a retry can't — it is active.
-  Future<void> switchProfile(String id) async {
-    // No VPN notifier — nothing is connected (it lives as long as the app UI).
-    if (!ref.read(vpnProvider.exists)) {
-      await _switchAndRestore(id);
-      return;
-    }
-    await ref.read(vpnProvider.notifier).duringProfileSwitch(() => _switchAndRestore(id));
-  }
+  /// The only writer of the settings in force: [change] maps the settings of profile [profileId] (by default the one
+  /// active when this runs) to new ones (null — nothing to save). A caller that built the settings from what it saw
+  /// passes the profile active then: a switch queued before the write doesn't give them to the next profile. A
+  /// readonly profile keeps its settings.
+  Future<void> updateActiveSettings(AppSettings? Function(AppSettings current) change, {String? profileId}) =>
+      _serial(() async {
+        final current = await _loaded();
+        final id = profileId ?? current.activeProfileId;
+        final target = current.profiles.where((p) => p.id == id).firstOrNull;
+        if (target == null || target.readonly) return;
+        final next = change(target.settings);
+        if (next == null) return;
+        final profiles = [for (final p in current.profiles) p.id == id ? p.copyWith(settings: next) : p];
+        await _storage.saveProfiles(profiles);
+        state = AsyncData(current.copyWith(profiles: profiles));
+        if (id == current.activeProfileId) await _legacy.mirrorNative(next);
+      });
 
-  /// false — nothing to switch. The selection is restored inside the queue: the next switch must
-  /// see this profile's server, not the previous one's.
-  Future<bool> _switchAndRestore(String id) => _serial(() async {
+  /// Applies the profile's settings and its remembered server; false — nothing to switch. The selection is restored
+  /// inside the queue: the next switch must see this profile's server, not the previous one's. With the VPN following
+  /// — `VpnNotifier.switchProfile` (this provider can't read the VPN one: that one depends on the settings, which
+  /// derive from this one).
+  Future<bool> switchProfile(String id) => _serial(() async {
     final target = await _switch(id);
     if (target == null) return false;
-    ref.invalidate(settingsProvider);
-    await ref.read(settingsProvider.future);
     final selection = target.selection;
     if (selection != null) await ref.read(configProvider.notifier).applySelection(selection);
     return true;
@@ -123,16 +142,14 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
           p,
     ];
     await _storage.saveProfiles(profiles);
-    await SettingsService().save(target.settings);
     await _storage.saveActiveProfileId(id);
     state = AsyncData(current.copyWith(profiles: profiles, activeProfileId: id));
+    await _legacy.mirrorNative(target.settings);
     return target;
   }
 
   Future<void> createProfile(String name, {bool copyFromCurrent = true}) {
-    final settings = copyFromCurrent
-        ? (ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null) ?? const AppSettings())
-        : const AppSettings();
+    final settings = copyFromCurrent ? (_current?.activeSettings ?? const AppSettings()) : const AppSettings();
 
     final id = 'profile_${DateTime.now().millisecondsSinceEpoch}';
     final profile = Profile(id: id, name: name, settings: settings, createdAt: DateTime.now());
@@ -150,14 +167,6 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
 
   Future<void> toggleReadonly(String id) =>
       _update((current) => current.profiles.map((p) => p.id == id ? p.copyWith(readonly: !p.readonly) : p).toList());
-
-  /// Settings go to the profile active when they were saved, even if a switch runs first.
-  /// [profileId] — the profile active when the caller started saving; by default the active one now.
-  Future<void> syncActiveSettings(AppSettings settings, {String? profileId}) {
-    final id = profileId ?? _current?.activeProfileId;
-    if (id == null) return Future.value();
-    return _update((current) => current.profiles.map((p) => p.id == id ? p.copyWith(settings: settings) : p).toList());
-  }
 
   ProfileBundle exportBundle(String profileId, {bool includeConnections = false}) {
     final current = _current!;
@@ -187,7 +196,7 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
   /// What importing [bundle] changes, shown before [importBundle]: traffic settings against the ones in force now
   /// (local fields already kept) and the hosts of the subscriptions it adds.
   Future<ImportReview> reviewImport(ProfileBundle bundle) async {
-    final local = await ref.read(settingsProvider.future);
+    final local = (await _loaded()).activeSettings;
     return _review(bundle, local);
   }
 
@@ -198,15 +207,12 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
         .newSubscriptionHosts((bundle.subscriptions ?? const []).map((s) => s.url)),
   );
 
-  Future<String?> importBundle(
-    ProfileBundle bundle, {
-    bool switchToProfile = true,
-    bool makeReadonly = false,
-    String? sourceUrl,
-  }) async {
+  /// Adds [bundle]'s profile (and its connections); returns its id. Switching to it is the caller's
+  /// (`VpnNotifier.switchProfile`).
+  Future<String?> importBundle(ProfileBundle bundle, {bool makeReadonly = false, String? sourceUrl}) async {
     if (_current == null) return null;
 
-    final local = await ref.read(settingsProvider.future);
+    final local = (await _loaded()).activeSettings;
     final newId = 'profile_${DateTime.now().millisecondsSinceEpoch}';
     final profile = Profile(
       id: newId,
@@ -233,7 +239,6 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
           );
     }
 
-    if (switchToProfile) await switchProfile(newId);
     return newId;
   }
 
@@ -293,12 +298,10 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
       final profiles = current.profiles.map((p) => p.id == profileId ? updated : p).toList();
       await _storage.saveProfiles(profiles);
       state = AsyncData(current.copyWith(profiles: profiles));
-      if (profileId == current.activeProfileId) await SettingsService().save(updated.settings);
+      if (profileId == current.activeProfileId) await _legacy.mirrorNative(updated.settings);
       return updated;
     });
     if (updated == null) return null;
-    // The active profile's settings were saved above; reload them before the import, which may fail.
-    if (profileId == _current?.activeProfileId) ref.invalidate(settingsProvider);
 
     if (bundle.hasConnections) {
       await ref

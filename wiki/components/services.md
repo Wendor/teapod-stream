@@ -1,6 +1,9 @@
 # Services
 
-Business logic and persistence without UI, in `lib/core/services/`. Providers create and call them.
+Business logic and persistence without UI, in `lib/core/services/`. Each service has a provider next to it
+(`settingsServiceProvider`, `profileStorageServiceProvider`, `configStorageServiceProvider`,
+`subscriptionServiceProvider`, `updateServiceProvider`, `deviceServiceProvider`, `platformServiceProvider`); notifiers
+read a service through it and never construct one, so a test swaps a service with an override.
 
 ## SubscriptionService
 
@@ -124,12 +127,12 @@ cancel — hung forever). Both go through [AppHttp](#apphttp) and the tunnel whe
 Typed wrappers for the native calls on `com.teapodstream/vpn` that aren't about the tunnel: `binaryVersions`,
 `availableEngines`, `installedApps`, `appIcon`, `filesDir`, `prepareBinaries`, `countryForIp`, `abi`, `installApk`, `openBatteryOptimizationSettings`, `deviceId`,
 `deviceInfo`. Channel errors reach the caller, which keeps its own fallback. Providers read it through
-`platformServiceProvider`, so tests override the service instead of mocking the channel; `main.dart` and the static
-`DeviceService` use a `const PlatformService()`.
+`platformServiceProvider`, so tests override the service instead of mocking the channel; `main.dart` uses a
+`const PlatformService()`.
 
 ## Other
 
-`DeviceService` — ANDROID_ID, model and OS version for HWID. `third_party_licenses.dart` — license texts for About.
+`DeviceService` — ANDROID_ID, model and OS version for HWID, cached in memory per instance (one per container). `third_party_licenses.dart` — license texts for About.
 
 ## Related
 

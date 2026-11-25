@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/profile.dart';
 import '../models/app_settings.dart';
 import 'storage_secure_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ProfileStorageService {
   static const _activeProfileIdKey = 'active_profile_id';
@@ -38,3 +39,5 @@ class ProfileStorageService {
     }
   }
 }
+
+final profileStorageServiceProvider = Provider<ProfileStorageService>((ref) => ProfileStorageService());

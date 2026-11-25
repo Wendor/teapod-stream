@@ -11,6 +11,7 @@ import '../models/routing_settings.dart';
 import '../models/xray_tuning.dart';
 import '../constants/app_constants.dart';
 import 'storage_secure_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// The settings as they were stored before the active profile held them: one SharedPreferences key per field (and the
 /// SOCKS login in secure storage). Read once, by the migration into the active profile ([migrated]); written only for
@@ -255,3 +256,5 @@ class SettingsService {
     await _secure.writeSocksCredentials(settings.socksUser, settings.socksPassword);
   }
 }
+
+final settingsServiceProvider = Provider<SettingsService>((ref) => SettingsService());

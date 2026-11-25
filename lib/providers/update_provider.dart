@@ -49,7 +49,7 @@ class UpdateError extends UpdateState {
 }
 
 class UpdateNotifier extends Notifier<UpdateState> {
-  final _service = UpdateService();
+  UpdateService get _service => ref.read(updateServiceProvider);
   StreamSubscription<DownloadProgress>? _dlSub;
   String? _currentApkPath;
 

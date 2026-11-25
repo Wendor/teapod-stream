@@ -3,6 +3,7 @@ import '../models/vpn_config.dart';
 import '../models/pinned_ref.dart';
 import '../models/subscription.dart';
 import 'storage_secure_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Whole-list load / save of the stored configs, subscriptions, pins and the selection; `ConfigNotifier._commit`
 /// is its only writer.
@@ -64,3 +65,5 @@ class ConfigStorageService {
     await _secure.writePinsRaw(jsonEncode(pins.map((p) => p.toJson()).toList()));
   }
 }
+
+final configStorageServiceProvider = Provider<ConfigStorageService>((ref) => ConfigStorageService());

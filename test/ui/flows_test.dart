@@ -200,7 +200,7 @@ void main() {
 
   testWidgets('home says the IP is unknown when no lookup service answers', (tester) async {
     final native = await setUpScreenTest(configs: [testConfig('1')], activeId: '1');
-    native.state = {'state': 'connected', 'socksPort': 2000, 'socksUser': 'u', 'socksPassword': 'p'};
+    native.state = {'value': 'connected', 'socksPort': 2000, 'socksUser': 'u', 'socksPassword': 'p'};
     // The test binding's HttpClient answers 400 to everything: every service in the chain fails.
     final c = await pumpScreen(tester, const HomeScreen());
     expect(find.textContaining('IP not detected'), findsOneWidget);
@@ -210,7 +210,7 @@ void main() {
 
   testWidgets('home shows the IP alone when the service gave no country', (tester) async {
     final native = await setUpScreenTest(configs: [testConfig('1')], activeId: '1');
-    native.state = {'state': 'connected', 'socksPort': 2000, 'socksUser': 'u', 'socksPassword': 'p'};
+    native.state = {'value': 'connected', 'socksPort': 2000, 'socksUser': 'u', 'socksPassword': 'p'};
     final c = await pumpScreen(
       tester,
       const HomeScreen(),
@@ -222,7 +222,7 @@ void main() {
 
   testWidgets('reconnect banner appears after a setting change and reconnects', (tester) async {
     final native = await setUpScreenTest(configs: [testConfig('1')], activeId: '1');
-    native.state = {'state': 'connected', 'socksPort': 2000, 'socksUser': 'u', 'socksPassword': 'p'};
+    native.state = {'value': 'connected', 'socksPort': 2000, 'socksUser': 'u', 'socksPassword': 'p'};
     final c = await pumpScreen(tester, const HomeScreen());
     expect(c.read(vpnProvider).isConnected, isTrue);
     expect(find.text('RECONNECT'), findsNothing);

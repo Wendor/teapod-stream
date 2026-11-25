@@ -20,7 +20,7 @@ import 'package:teapodstream/l10n/app_localizations.dart';
 /// Native side for widget tests: a call log and simple answers.
 class FakeNative {
   final calls = <MethodCall>[];
-  Map<String, Object?> state = {'state': 'disconnected'};
+  Map<String, Object?> state = {'value': 'disconnected'};
   List<Map<String, Object?>> apps = [];
   List<String> logs = [];
 

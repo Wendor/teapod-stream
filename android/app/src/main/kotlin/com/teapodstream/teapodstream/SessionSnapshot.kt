@@ -49,7 +49,7 @@ data class SessionSnapshot(
         SessionSnapshot(state = state, attempt = attempt, error = error.takeIf { state.carriesError })
 
     /**
-     * The `state` event of the EventChannel (and its `onListen` replay). `attempt` only when Flutter started
+     * The `state` event of the EventChannel, its `onListen` replay and the `getState` answer. `attempt` only when Flutter started
      * the session, the SOCKS login and `connectedAtMs` only for `connected`, `error` for every other state.
      */
     fun toMap(): Map<String, Any?> = buildMap {

@@ -266,30 +266,27 @@ class VpnNotifier extends Notifier<VpnState2> {
     final type = event['type'] as String?;
     switch (type) {
       case 'state':
+        final session = NativeSession.parse(event);
         // A late event of a session a newer connect replaced (its start failing after the user moved on): while
         // a Flutter connect waits for its outcome, it owns the state. Untagged events — sessions started natively —
         // and events outside a pending connect (native reconnects, a session surviving a UI restart) apply as before.
-        final tagged = (event['attempt'] as num?)?.toInt();
-        if (tagged != null && _awaiting != null && tagged != _awaiting) {
-          ref.read(logServiceProvider.notifier).addDebug('Ignored ${event['value']} of connect attempt $tagged');
+        if (session.attempt > 0 && _awaiting != null && session.attempt != _awaiting) {
+          ref
+              .read(logServiceProvider.notifier)
+              .addDebug('Ignored ${event['value']} of connect attempt ${session.attempt}');
           return;
         }
-        final rawValue = event['value'] as String?;
-        final isReconnect = rawValue == 'reconnecting';
-        final newState = _parseState(rawValue);
-        if (newState == VpnState.connected) {
-          final port = event['socksPort'] as int?;
-          if (port != null && port > 0) {
-            final user = event['socksUser'] as String? ?? '';
-            final pass = event['socksPassword'] as String? ?? '';
-            final connectedAtMs = (event['connectedAtMs'] as num?)?.toInt() ?? 0;
-            if (connectedAtMs > 0) {
-              _connectedAt ??= DateTime.fromMillisecondsSinceEpoch(connectedAtMs);
-            }
-            state = state.copyWith(activeSocksPort: port, activeSocksUser: user, activeSocksPassword: pass);
+        if (session.state == VpnState.connected && session.socksPort > 0) {
+          if (session.connectedAtMs > 0) {
+            _connectedAt ??= DateTime.fromMillisecondsSinceEpoch(session.connectedAtMs);
           }
+          state = state.copyWith(
+            activeSocksPort: session.socksPort,
+            activeSocksUser: session.socksUser,
+            activeSocksPassword: session.socksPassword,
+          );
         }
-        _onNativeState(newState, isReconnect: isReconnect, error: event['error'] as String?);
+        _onNativeState(session.state, isReconnect: session.reconnecting, error: session.error);
       case 'log':
         final level = event['level'] as String? ?? 'info';
         final msg = event['message'] as String? ?? '';
@@ -384,17 +381,6 @@ class VpnNotifier extends Notifier<VpnState2> {
       SwitchSource.all => all.toList(),
     };
   }
-
-  VpnState _parseState(String? s) => switch (s) {
-    'connecting' => VpnState.connecting,
-    'reconnecting' => VpnState.connecting,
-    'connected' => VpnState.connected,
-    'disconnecting' => VpnState.disconnecting,
-    'disconnected' => VpnState.disconnected,
-    'error' => VpnState.error,
-    'blocked' => VpnState.blocked,
-    _ => VpnState.disconnected,
-  };
 
   /// [error] — the native reason for a failed start (for error/blocked).
   void _onNativeState(VpnState nativeState, {bool isReconnect = false, String? error}) {
@@ -749,8 +735,6 @@ class VpnNotifier extends Notifier<VpnState2> {
 
   /// Syncs Flutter state from native when the app resumes from background.
   /// Critical: restarts _statsPoller after pauseStatsPolling().
-  /// Historical bug: getState returns a Map but a String was read here —
-  /// the TypeError was swallowed by catch and the whole method was a silent no-op.
   Future<void> syncNativeState() async {
     try {
       final native = await _engine.getVpnState();
@@ -769,7 +753,7 @@ class VpnNotifier extends Notifier<VpnState2> {
       // We don't know whether this is a user connecting or a native reconnect — don't set
       // the 45-second timeout that could force error on top of a live
       // reconnect cycle.
-      _onNativeState(native.state, isReconnect: native.state == VpnState.connecting);
+      _onNativeState(native.state, isReconnect: native.state == VpnState.connecting, error: native.error);
     } catch (_) {}
   }
 

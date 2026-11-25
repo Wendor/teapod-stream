@@ -40,20 +40,8 @@ internal class VpnChannelHandler(
             if (sessionRunning()) result.success(false)
             else work.answer(result, ChannelWork.quickConnect) { quickConnect.clear(seen) }
         },
-        "getState" to { _, result ->
-            // The SOCKS login and connectedAtMs are set only while connected (SessionSnapshot)
-            val s = XrayVpnService.snapshot
-            result.success(
-                mapOf(
-                    "state" to s.state.wire,
-                    "socksPort" to s.socksPort,
-                    "socksUser" to s.socksUser,
-                    "socksPassword" to s.socksPassword,
-                    "connectedAtMs" to s.connectedAtMs,
-                    "attempt" to s.attempt,
-                )
-            )
-        },
+        // The same map as the `state` event: Flutter parses both with one parser
+        "getState" to { _, result -> result.success(XrayVpnService.snapshot.toMap()) },
         "getStats" to { _, result -> result.success(XrayVpnService.getStats()) },
         "getStatsHistory" to { call, result ->
             result.success(

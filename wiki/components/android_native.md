@@ -101,8 +101,8 @@ the tile and the `saveQuickConnect` / `clearQuickConnect` guards read the same s
 
 The `state` event (`toMap`): `type: state`, `value` (the wire name), `attempt` only when Flutter started the session,
 `socksPort` / `socksUser` / `socksPassword` / `connectedAtMs` only for `connected`, `error` for every other state.
-`getState` reports the same snapshot as `state`, the SOCKS login, `connectedAtMs` (zeros outside `connected`) and
-`attempt`.
+`getState` answers with the same map, so Dart parses both with one parser (`NativeSession.parse`,
+[xray_engine](xray_engine.md)).
 
 **Dead TUN.** `connected` in TUN mode while tun2socks no longer runs (the fd closed externally, e.g. during a phone
 call, without `onRevoke()`): the stats thread calls `reconnectInternal()`, which publishes `reconnecting` — no

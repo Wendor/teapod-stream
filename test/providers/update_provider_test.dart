@@ -56,7 +56,7 @@ void main() {
       (call) async => switch (call.method) {
         'getAbi' => abi,
         'installApk' => onInstall?.call(call),
-        'getState' => {'state': 'disconnected'},
+        'getState' => {'value': 'disconnected'},
         _ => null,
       },
     );

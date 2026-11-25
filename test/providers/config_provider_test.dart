@@ -903,6 +903,18 @@ void main() {
         expect(s().configs, isEmpty);
       });
 
+      test('a replaceId of a subscription removed before the call touches nothing', () async {
+        await boot(
+          configs: [_cfg('1', subId: 'other')],
+          subs: [_sub('other', url: server.url('/sub'))],
+        );
+        server.serve(_trojan('a.example', 'A'));
+        await n().addSubscriptionFromUrl(server.url('/sub'), replaceId: 'gone');
+        expect(s().subscriptions.single.id, 'other');
+        expect(s().configs.single.id, '1');
+        expect(server.requests, isEmpty);
+      });
+
       test('the same new URL added twice is one subscription', () async {
         await boot();
         hold(_trojan('a.example', 'A'));

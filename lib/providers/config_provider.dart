@@ -291,6 +291,8 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     bool isTarget(Subscription s) => replaceId != null ? s.id == replaceId : s.url == url;
     final before = await _loaded();
     final target = before.subscriptions.where(isTarget).firstOrNull;
+    // The subscription to replace is gone already: nothing to update, and the URL must not match another one.
+    if (replaceId != null && target == null) return;
     final subId = target?.id ?? 'sub_${DateTime.now().millisecondsSinceEpoch}';
 
     final settings = ref.read(settingsProvider).value;

@@ -166,13 +166,17 @@ final geoProvider = NotifierProvider<GeoNotifier, GeoState>(GeoNotifier.new);
 
 /// The index of `filesDir/geosite.dat` (null without the file), built off the UI isolate; [GeoNotifier]
 /// refreshes it when the files change.
-final geositeIndexProvider = FutureProvider<GeositeIndex?>((ref) async {
-  final dir = await ref.read(platformServiceProvider).filesDir();
-  if (dir.isEmpty) return null;
-  // One build at a time: a refresh while a build is running waits for it, then reads its cache.
-  final run = _geositeLoads.then((_) => Isolate.run(() => GeositeIndex.load(dir)));
-  _geositeLoads = run.then((_) {}, onError: (_) {});
-  return run;
-});
+final geositeIndexProvider = FutureProvider<GeositeIndex?>(
+  (ref) async {
+    final dir = await ref.read(platformServiceProvider).filesDir();
+    if (dir.isEmpty) return null;
+    // One build at a time: a refresh while a build is running waits for it, then reads its cache.
+    final run = _geositeLoads.then((_) => Isolate.run(() => GeositeIndex.load(dir)));
+    _geositeLoads = run.then((_) {}, onError: (_) {});
+    return run;
+  },
+  // A file that fails to parse fails again: no retries, the connect goes on without the index.
+  retry: (_, _) => null,
+);
 
 Future<void> _geositeLoads = Future.value();

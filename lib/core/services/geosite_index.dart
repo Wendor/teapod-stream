@@ -72,29 +72,36 @@ class GeositeIndex {
     return index;
   }
 
+  /// Both passes read one open handle: a download renaming a new file in between can't mix two versions.
   static GeositeIndex _build(File source, File rust) {
-    final entries = <String, GeositeEntry>{};
-    var trimmed = false;
     final raf = source.openSync();
     try {
+      final entries = <String, GeositeEntry>{};
+      var trimmed = false;
       for (final record in _records(raf)) {
         final entry = _scan(record.body);
         if (entry.code == null) continue;
         entries[entry.code!.toLowerCase()] = (domains: entry.domains, rustDomains: entry.rustDomains);
         if (entry.rustDomains < entry.domains) trimmed = true;
       }
+      if (!trimmed) {
+        if (rust.existsSync()) rust.deleteSync();
+        return GeositeIndex(entries);
+      }
+      raf.setPositionSync(0);
+      _writeRustCopy(raf, rust);
+      return GeositeIndex(entries, rustFile: rustFileName);
     } finally {
       raf.closeSync();
     }
-    if (!trimmed) {
-      if (rust.existsSync()) rust.deleteSync();
-      return GeositeIndex(entries);
-    }
-    // A failed write leaves no copy behind: the previous one stays until the rename.
+  }
+
+  /// [rust] with the entries over xray-rust's limits trimmed. A failed write leaves no temporary file, and the
+  /// previous copy stays until the rename.
+  static void _writeRustCopy(RandomAccessFile input, File rust) {
     final tmp = File('${rust.path}.tmp');
     try {
       final out = tmp.openSync(mode: FileMode.write);
-      final input = source.openSync();
       try {
         for (final record in _records(input)) {
           final entry = _scan(record.body);
@@ -111,14 +118,12 @@ class GeositeIndex {
             ..writeFromSync(body);
         }
       } finally {
-        input.closeSync();
         out.closeSync();
       }
       tmp.renameSync(rust.path);
     } finally {
       if (tmp.existsSync()) tmp.deleteSync();
     }
-    return GeositeIndex(entries, rustFile: rustFileName);
   }
 
   /// The top-level `repeated GeoSite entry = 1` records: the raw key+length header and the body.

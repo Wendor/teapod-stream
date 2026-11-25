@@ -333,6 +333,21 @@ void main() {
     expect(text, contains('ext:geosite-rust.dat:youtube'));
     expect(text, contains('ext:geosite-rust.dat:category-ads-all'));
     expect(text, isNot(contains('"geosite:')));
+    // Only domain matchers are rewritten: a credential that looks like one stays as it is.
+    final secret = RustConfigBuilder.buildJson(
+      config,
+      VpnEngineOptions(
+        socksPort: 1,
+        socksUser: 'geosite:user',
+        socksPassword: 'geosite:secret',
+        routing: domainRouting,
+        geosite: geosite,
+      ),
+    );
+    expect(
+      secret,
+      allOf(contains('"geosite:user"'), contains('"geosite:secret"'), contains('ext:geosite-rust.dat:youtube')),
+    );
   });
 
   test('custom DoT keeps its port inside the tls:// URL read by xray-rust', () {

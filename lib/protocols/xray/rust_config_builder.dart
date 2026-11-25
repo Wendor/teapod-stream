@@ -608,13 +608,16 @@ class RustConfigBuilder {
       jsonEncode(_rustGeosite(build(config, options), options.geosite?.rustFile));
 
   /// xray-rust refuses all of geosite.dat for one entry over its limits: rules then read the copy with
-  /// such entries trimmed ([GeositeIndex.rustFile]) as `ext:<file>:<code>`.
-  static Object? _rustGeosite(Object? node, String? file) => file == null
+  /// such entries trimmed ([GeositeIndex.rustFile]) as `ext:<file>:<code>`. Only domain matcher lists
+  /// (`domain` / `domains`) are rewritten; credentials and other strings stay as they are.
+  static Object? _rustGeosite(Object? node, String? file, {bool domains = false}) => file == null
       ? node
       : switch (node) {
-          final String s when s.startsWith('geosite:') => 'ext:$file:${s.substring('geosite:'.length)}',
-          final Map<String, dynamic> m => m.map((k, v) => MapEntry(k, _rustGeosite(v, file))),
-          final List<dynamic> l => [for (final v in l) _rustGeosite(v, file)],
+          final String s when domains && s.startsWith('geosite:') => 'ext:$file:${s.substring('geosite:'.length)}',
+          final Map<String, dynamic> m => m.map(
+            (k, v) => MapEntry(k, _rustGeosite(v, file, domains: k == 'domain' || k == 'domains')),
+          ),
+          final List<dynamic> l => [for (final v in l) _rustGeosite(v, file, domains: domains)],
           _ => node,
         };
 

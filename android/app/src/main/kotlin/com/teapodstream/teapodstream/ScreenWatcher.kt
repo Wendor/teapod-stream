@@ -8,7 +8,7 @@ import android.os.Build
 import android.os.PowerManager
 
 /// Screen and Doze state for the service's threads: the heartbeat and the stats poll slow down
-/// with the screen off and skip deep Doze. [onScreenOn] runs on the main thread when the screen
+/// with the screen off; only the heartbeat skips its iterations in deep Doze. [onScreenOn] runs on the main thread when the screen
 /// turns on, [onWake] on screen on and on leaving Doze.
 internal class ScreenWatcher(
     private val context: Context,

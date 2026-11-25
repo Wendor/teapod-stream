@@ -142,7 +142,7 @@ phantom connection, and the heartbeat's own tun2socks check stays as a fallback.
 
 ## Network changes
 
-The decisions below are `NetworkChangePolicy`'s; the service tracks the networks and runs the plan on its handler.
+The decisions below are `NetworkChangePolicy`'s; `NetworkWatcher` tracks the networks and runs the plan on its handler, and `XrayVpnService` applies the reconnect it asks for to the session.
 `NetworkWatcher`'s `NetworkCallback` tracks the physical network (`physical()`: the process's own network, since the app is
 excluded from TUN; otherwise VALIDATED first, then Wi-Fi) and sets it as the underlying network.
 

@@ -180,6 +180,31 @@ class SessionReconcilerTest {
     }
 
     @Test
+    fun `a running worker can't report the off while its announcement is held`() {
+        val release = CountDownLatch(1)
+        longStart("a", release)
+        val announcing = CountDownLatch(1)
+        val announced = CountDownLatch(1)
+        val off = Thread {
+            reconciler.turnOff {
+                announcing.countDown()
+                announced.await(5, TimeUnit.SECONDS)
+                driver.events += "announce ${it.attempt}"
+            }
+        }
+        off.start()
+        assertTrue(announcing.await(5, TimeUnit.SECONDS))
+        // The worker finishes its start while the announcement is held: it must wait for it to read the off.
+        release.countDown()
+        Thread.sleep(300)
+        assertFalse("reported before the announcement: ${driver.events}", driver.events.any { it == "settled off" })
+        announced.countDown()
+        off.join(5_000)
+        idle()
+        assertEquals(listOf("own 1", "start a", "announce 1", "own 1", "stop a", "settled off"), driver.events)
+    }
+
+    @Test
     fun `a disconnect from the kill switch's block closes the sink and reports off`() {
         driver.sink = true
         reconciler.set(Desired.Off(4))

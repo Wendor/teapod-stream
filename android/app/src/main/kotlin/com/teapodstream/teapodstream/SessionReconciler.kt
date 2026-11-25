@@ -152,14 +152,15 @@ internal class SessionReconciler(
     private fun run() {
         try {
             while (true) {
-                val wanted = desired
+                // Under the lock: a turnOff's off is seen only once its announcement is out.
+                val wanted = synchronized(lock) { desired }
                 when (val action = nextAction(wanted, actual())) {
                     Action.Settled -> {
                         // Once per desired state: later runs that find it reached have nothing to report.
                         if (reported !== wanted) driver.settled(wanted)
                         reported = wanted
                         // Replaced meanwhile: the next queued run brings the session to it.
-                        if (desired === wanted) break else continue
+                        if (synchronized(lock) { desired } === wanted) break else continue
                     }
                     is Action.Stop -> {
                         driver.own(wanted)

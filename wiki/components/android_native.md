@@ -23,6 +23,8 @@ back. It keeps working when the Flutter UI is gone (tile, boot, Tasker, service 
 | `VpnCommandReceiver.kt` | Tasker/automation broadcasts `com.teapodstream.CONNECT` / `DISCONNECT`; ignored unless `automationEnabled` |
 | `PrefixTcpProxy.kt` | local TCP proxy for Shadowsocks `?prefix=` (Outline) |
 | `SessionReconciler.kt` | the one desired session state (`Desired.Off(attempt)` / `Desired.On(request, id)`) and the thread that brings the session to it: commands, `onRevoke`, reconnects and retries only replace it (`set`, or `replace` while an expected state is still wanted); a run loops the pure `nextAction(desired, actual)` (stop / close the sink / start / settled) through `SessionDriver` |
+| `HeartbeatPolicy.kt` | the heartbeat's decisions, pure and JVM-tested: observations (probe ok / failed, no direct internet, dead or leaking tun2socks, TUN idle, warm-up deadline) → an action (none, log, retry now, reconnect, ask Flutter to switch); the thread in `XrayVpnService` only probes and applies it |
+| `NetworkChangePolicy.kt` | network-change scheduling, pure and JVM-tested: an event and the time since connect → a plan (delay, check the network or reconnect); when the plan fires → reconnect or not |
 | `SocksHttpProbe.kt` | the heartbeat's `socks` probe: SOCKS5 handshake and an HTTP GET over raw sockets, probe-URL parsing |
 | `SpeedHistory.kt` | ring buffer for the speed chart (`(epoch, seq)` increments) |
 | `AppLocale.kt` | `Context.appString()` — native strings in the app's chosen language ([localization](localization.md)) |
@@ -134,6 +136,7 @@ phantom connection, and the heartbeat's own tun2socks check stays as a fallback.
 
 ## Network changes
 
+The decisions below are `NetworkChangePolicy`'s; the service tracks the networks and runs the plan on its handler.
 A `NetworkCallback` tracks the physical network (`findPhysicalNetwork`: the process's own network, since the app is
 excluded from TUN; otherwise VALIDATED first, then Wi-Fi) and sets it as the underlying network.
 
@@ -155,7 +158,8 @@ excluded from TUN; otherwise VALIDATED first, then Wi-Fi) and sets it as the und
 ## Heartbeat
 
 A background thread probes every 15 s (60 s with the screen off; skipped in deep Doze) and acts after
-`heartbeatThreshold` failures in a row.
+`heartbeatThreshold` failures in a row. The counters, warm-up and cooldown are `HeartbeatPolicy`'s; the thread probes
+and applies its actions. A failure below the threshold is retried twice, 3 s apart; a passed retry clears the count.
 
 - **Probe** (`runProbe`): `socks` — HTTP through the local SOCKS to `heartbeatUrl`, any 2xx (`SocksHttpProbe`; the
   request line carries the URL's raw, still-encoded path; it offers user/password only when the session has SOCKS credentials, and fails at once if the inbound demands them
@@ -164,10 +168,10 @@ A background thread probes every 15 s (60 s with the screen off; skipped in deep
 - **Passive success:** if TUN received data within the interval, the tunnel is alive and the radio isn't woken.
 - **Warm-up** after a reconnect: probes every 15 s, failures don't count until the first success, hard limit 30 s
   (outbounds connect lazily; DNS + TLS on fresh LTE can be slow).
-- **Exhausted** (`handleHeartbeatExhausted`): `reconnect` → `reconnectInternal()`; `switchConfig` → `tunnel_dead`
+- **Exhausted** (the threshold, or a TUN stall): TUN data within the last interval → keep the session (the probe can land on a dead balancer detour); otherwise: `reconnect` → `reconnectInternal()`; `switchConfig` → `tunnel_dead`
   event to Flutter ([vpn_provider](vpn_provider.md)); if nothing happens within 45 s (app killed, no live candidate) →
   plain reconnect.
-- **Watchdogs:** no TUN RX for 120 s with ≥ 2 active connections → reconnect; more than 200 active tun2socks
+- **Watchdogs:** no TUN RX for 120 s with ≥ 2 active connections → exhausted (a warning from 60 s, once a minute); more than 200 active tun2socks
   connections (a gVisor state leak) → reconnect; on screen-on / Doze exit a TUN idle ≥ 120 s triggers a probe, not a
   blind reconnect (idle ≠ dead); ≥ 3 skipped probes for lack of internet, then a failure → reconnect at once.
 - The SOCKS probe bypasses gVisor, so it can pass while app connections hang — that's what the watchdogs and the

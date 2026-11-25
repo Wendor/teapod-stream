@@ -52,6 +52,17 @@ class QuickConnectStoreTest {
     }
 
     @Test
+    fun aLoginThatCantBeRemovedKeepsTheOldConfig() {
+        store.save("{old}", params, "old-u", "old-p")
+        // A non-empty directory under the login's name: it can't be removed, so the config isn't replaced.
+        store.clearCredentials()
+        File(dir, QuickConnectStore.CREDENTIALS).mkdir()
+        File(dir, "${QuickConnectStore.CREDENTIALS}/x").writeText("")
+        assertTrue(runCatching { store.save("{new}", params, "u", "p") }.isFailure)
+        assertEquals("{old}", store.config())
+    }
+
+    @Test
     fun aFailedWriteLeavesNoTempFile() {
         // A non-empty directory under the target name: the rename fails.
         File(dir, QuickConnectStore.CONFIG).mkdir()

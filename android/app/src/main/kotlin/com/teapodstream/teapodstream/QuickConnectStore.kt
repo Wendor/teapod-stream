@@ -73,6 +73,7 @@ internal class QuickConnectStore(private val dir: File) {
     /** Flutter's `saveQuickConnect`: everything a quick start needs, before any session ran with it. */
     fun save(config: String, params: ConnectionParams, socksUser: String, socksPassword: String) {
         saveParams(params)
+        clearCredentials() // an interrupted save must not pair the new config with the old login
         saveConfig(config)
         saveCredentials(params.socksPort, socksUser, socksPassword)
     }

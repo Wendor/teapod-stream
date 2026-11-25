@@ -432,7 +432,7 @@ class XrayVpnService : VpnService() {
                 // The parameters before ensureForeground, so the right notification type (full or minimal) shows
                 // from the start.
                 val request = quickStartRequest()
-                request?.let { useParams(it.params) }
+                (request?.params ?: store.params())?.let(::useParams)
                 if (isRunning.get()) {
                     // startVpn would bail on its CAS anyway — bail here instead so the
                     // state isn't left stuck at "reconnecting" over a live tunnel.
@@ -461,7 +461,7 @@ class XrayVpnService : VpnService() {
         // Service restarted by Android after being killed, or started by always-on VPN.
         // The parameters before ensureForeground (as in CONNECT_QUICK).
         val request = quickStartRequest()
-        request?.let { useParams(it.params) }
+        (request?.params ?: store.params())?.let(::useParams)
         ensureForeground()
         // Auto-connect unless the user turned the VPN off: the flag file covers process restarts (the static
         // userRequestedDisconnect is false in a fresh process, but the user's choice must survive).

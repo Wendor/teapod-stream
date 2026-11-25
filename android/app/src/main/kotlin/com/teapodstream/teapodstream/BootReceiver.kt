@@ -15,7 +15,7 @@ class BootReceiver : BroadcastReceiver() {
 
         // Not after the user turned the VPN off, and not without a saved connection.
         val store = QuickConnectStore(context.filesDir)
-        if (store.userOff() || store.config() == null) return
+        if (store.userOff() || store.params() == null || store.config() == null) return
 
         context.startForegroundService(
             Intent(context, XrayVpnService::class.java).apply {

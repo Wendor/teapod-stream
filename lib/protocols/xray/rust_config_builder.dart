@@ -228,14 +228,14 @@ class RustConfigBuilder {
     if (o.routing.adBlockEnabled) ...o.adBlockCodes,
   ];
 
-  /// The domains [geositeCodes] add to the matcher budget; 0 without the index.
+  /// The domains [geositeCodes] add to the matcher budget, trimmed ones counted as trimmed; 0 without the index.
   static int geositeDomains(VpnEngineOptions o) =>
-      geositeCodes(o).fold(0, (sum, code) => sum + (o.geosite?[code]?.domains ?? 0));
+      geositeCodes(o).fold(0, (sum, code) => sum + (o.geosite?[code]?.rustDomains ?? 0));
 
-  /// The referenced codes over xray-rust's per-entry limits.
-  static List<String> oversizedGeosite(VpnEngineOptions o) => [
+  /// The referenced codes xray-rust gets trimmed to its per-entry limits ([GeositeIndex.rustFile]).
+  static List<String> trimmedGeosite(VpnEngineOptions o) => [
     for (final code in geositeCodes(o))
-      if (o.geosite?[code] case final e? when !GeositeIndex.fitsRust(e)) code,
+      if (o.geosite?[code] case final e? when e.rustDomains < e.domains) code,
   ];
 
   static String get _insecureReason => L10n.current.rustInsecure;
@@ -313,8 +313,6 @@ class RustConfigBuilder {
             options.routing.ruServicesEnabled)) {
       throw FormatException(L10n.current.rustSniffing);
     }
-    final oversized = oversizedGeosite(options);
-    if (oversized.isNotEmpty) throw FormatException(L10n.current.rustGeositeTooLarge(oversized.join(', ')));
     if (geositeDomains(options) > maxDomainMatchers) throw FormatException(L10n.current.rustGeositeLimit);
 
     // Composed from the Go builder's parts by name; its policy, dialer-out, SOCKS UDP rule and catch-all
@@ -609,8 +607,8 @@ class RustConfigBuilder {
   static String buildJson(VpnConfig config, VpnEngineOptions options) =>
       jsonEncode(_rustGeosite(build(config, options), options.geosite?.rustFile));
 
-  /// xray-rust refuses all of geosite.dat for one entry over its size limit: rules then read the copy
-  /// without such entries ([GeositeIndex.rustFile]) as `ext:<file>:<code>`.
+  /// xray-rust refuses all of geosite.dat for one entry over its limits: rules then read the copy with
+  /// such entries trimmed ([GeositeIndex.rustFile]) as `ext:<file>:<code>`.
   static Object? _rustGeosite(Object? node, String? file) => file == null
       ? node
       : switch (node) {

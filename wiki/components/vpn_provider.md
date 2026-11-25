@@ -45,10 +45,11 @@ it can → reconnect banner; disconnected → refresh or clear the saved quick-c
 1. Sets `connecting` synchronously (the button reacts in the same frame) and starts a **45 s** timeout → `error`.
 2. Resolves the config: `effectiveConfigProvider` (the active config, or the best-latency config of the active
    subscription in auto mode — [config_provider](config_provider.md)); `config.validate()`.
-3. Resolves the core (above); no core → `_failConnect(reason)`, native is not called. The choice and the skipped
+3. Waits for the geosite index (`geositeIndexProvider`, which `coreResolverProvider` watches) and resolves the
+   core (above); no core → `_failConnect(reason)`, native is not called. The choice and the skipped
    cores are logged with `source: core`.
 4. `buildEngineOptions(settings, config, backend, …, geosite:)` (`lib/core/cores/engine_options.dart`, shared with
-   quick-connect) with `geositeIndexProvider`'s index ([geo_provider](geo_provider.md#geosite-index)): geosite codes
+   quick-connect) with the resolver's geosite index ([geo_provider](geo_provider.md#geosite-index)): geosite codes
    missing from the file are left out and logged as a warning → `checkOptions`: `blocking` fails the connect,
    `warnings` go to the log.
 5. `XrayEngine.connect(config, backend, options)`; stores the SOCKS credentials and `appliedFingerprint`.

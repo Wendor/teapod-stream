@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-/// One geosite.dat entry: its encoded size and the number of domains in it.
-typedef GeositeEntry = ({int bytes, int domains});
+/// One geosite.dat entry: its domains, and how many of them xray-rust gets ([GeositeIndex.rustFile]).
+typedef GeositeEntry = ({int domains, int rustDomains});
 
 /// The codes in geosite.dat with their sizes, so rules never reference a missing
 /// code and no core is handed an entry over its limits.
@@ -11,8 +11,9 @@ class GeositeIndex {
   /// Entries by lower-case code.
   final Map<String, GeositeEntry> entries;
 
-  /// A copy of geosite.dat in the same directory without the entries over xray-rust's limits, when the
-  /// original has any: xray-rust refuses the whole file for one oversized entry.
+  /// A copy of geosite.dat in the same directory with the entries over xray-rust's limits trimmed to them,
+  /// when the original has any: xray-rust refuses the whole file for one entry over 32 MiB, and a code
+  /// over 200k domains.
   final String? rustFile;
 
   const GeositeIndex(this.entries, {this.rustFile});
@@ -32,8 +33,6 @@ class GeositeIndex {
 
   static String baseCode(String code) => code.split('@').first.trim().toLowerCase();
 
-  static bool fitsRust(GeositeEntry e) => e.bytes <= rustMaxEntryBytes && e.domains <= rustMaxDomains;
-
   /// The index of `dir/geosite.dat`, null without the file. Built once per file version and cached in
   /// `dir`; the xray-rust copy is written along with it. Blocking IO — run it off the UI isolate.
   static GeositeIndex? load(String dir) {
@@ -49,7 +48,7 @@ class GeositeIndex {
       if (json['version'] == version && (rustFile == null || rust.existsSync())) {
         final entries = (json['entries'] as Map<String, dynamic>).map((code, value) {
           final e = (value as List<dynamic>).cast<int>();
-          return MapEntry(code, (bytes: e[0], domains: e[1]));
+          return MapEntry(code, (domains: e[0], rustDomains: e[1]));
         });
         return GeositeIndex(entries, rustFile: rustFile);
       }
@@ -62,7 +61,7 @@ class GeositeIndex {
         jsonEncode({
           'version': version,
           'rustFile': index.rustFile,
-          'entries': index.entries.map((code, e) => MapEntry(code, [e.bytes, e.domains])),
+          'entries': index.entries.map((code, e) => MapEntry(code, [e.domains, e.rustDomains])),
         }),
       );
     } catch (_) {
@@ -73,19 +72,19 @@ class GeositeIndex {
 
   static GeositeIndex _build(File source, File rust) {
     final entries = <String, GeositeEntry>{};
-    var oversized = false;
+    var trimmed = false;
     final raf = source.openSync();
     try {
       for (final record in _records(raf)) {
         final entry = _scan(record.body);
         if (entry.code == null) continue;
-        entries[entry.code!.toLowerCase()] = (bytes: record.body.length, domains: entry.domains);
-        if (record.body.length > rustMaxEntryBytes) oversized = true;
+        entries[entry.code!.toLowerCase()] = (domains: entry.domains, rustDomains: entry.rustDomains);
+        if (entry.rustDomains < entry.domains) trimmed = true;
       }
     } finally {
       raf.closeSync();
     }
-    if (!oversized) {
+    if (!trimmed) {
       if (rust.existsSync()) rust.deleteSync();
       return GeositeIndex(entries);
     }
@@ -94,10 +93,18 @@ class GeositeIndex {
     final input = source.openSync();
     try {
       for (final record in _records(input)) {
-        if (record.body.length > rustMaxEntryBytes) continue;
+        final entry = _scan(record.body);
+        if (entry.rustDomains == entry.domains) {
+          out
+            ..writeFromSync(record.header)
+            ..writeFromSync(record.body);
+          continue;
+        }
+        final body = _trim(record.body, entry.rustDomains);
         out
-          ..writeFromSync(record.header)
-          ..writeFromSync(record.body);
+          ..writeFromSync(_varint(1 << 3 | 2))
+          ..writeFromSync(_varint(body.length))
+          ..writeFromSync(body);
       }
     } finally {
       input.closeSync();
@@ -135,10 +142,16 @@ class GeositeIndex {
     throw const FormatException('geosite.dat: bad varint');
   }
 
-  /// `GeoSite { string country_code = 1; repeated Domain domain = 2; … }`.
-  static ({String? code, int domains}) _scan(Uint8List body) {
-    String? code;
-    var domains = 0;
+  static Uint8List _varint(int value) {
+    final bytes = <int>[];
+    for (var v = value; ; v >>= 7) {
+      if (v < 0x80) return Uint8List.fromList(bytes..add(v));
+      bytes.add((v & 0x7f) | 0x80);
+    }
+  }
+
+  /// The fields of a `GeoSite` body: number and byte range (key included).
+  static Iterable<({int number, int start, int end, int valueStart})> _fields(Uint8List body) sync* {
     var i = 0;
     int varint() {
       var result = 0;
@@ -152,7 +165,9 @@ class GeositeIndex {
     }
 
     while (i < body.length) {
+      final start = i;
       final key = varint();
+      var valueStart = i;
       switch (key & 7) {
         case 0:
           varint();
@@ -162,13 +177,53 @@ class GeositeIndex {
           i += 4;
         case 2:
           final size = varint();
-          if (key >> 3 == 1) code = utf8.decode(Uint8List.sublistView(body, i, i + size), allowMalformed: true);
-          if (key >> 3 == 2) domains++;
+          valueStart = i;
           i += size;
         default:
           throw const FormatException('geosite.dat: unsupported wire type');
       }
+      if (i > body.length) throw const FormatException('geosite.dat: truncated entry');
+      yield (number: key >> 3, start: start, end: i, valueStart: valueStart);
     }
-    return (code: code, domains: domains);
+  }
+
+  /// `GeoSite { string country_code = 1; repeated Domain domain = 2; … }`: the code, the domains, and how
+  /// many of the first domains fit xray-rust's limits along with the other fields.
+  static ({String? code, int domains, int rustDomains}) _scan(Uint8List body) {
+    String? code;
+    var domains = 0;
+    var otherBytes = 0;
+    for (final f in _fields(body)) {
+      if (f.number == 2) {
+        domains++;
+      } else {
+        otherBytes += f.end - f.start;
+        if (f.number == 1) code = utf8.decode(Uint8List.sublistView(body, f.valueStart, f.end), allowMalformed: true);
+      }
+    }
+    if (domains <= rustMaxDomains && body.length <= rustMaxEntryBytes) {
+      return (code: code, domains: domains, rustDomains: domains);
+    }
+    // The trimmed body keeps the other fields and the first domains that fit.
+    var size = otherBytes;
+    var kept = 0;
+    for (final f in _fields(body)) {
+      if (f.number != 2) continue;
+      if (kept == rustMaxDomains || size + f.end - f.start > rustMaxEntryBytes) break;
+      size += f.end - f.start;
+      kept++;
+    }
+    return (code: code, domains: domains, rustDomains: kept);
+  }
+
+  /// [body] with only its first [keep] domains.
+  static Uint8List _trim(Uint8List body, int keep) {
+    final out = BytesBuilder(copy: false);
+    var kept = 0;
+    for (final f in _fields(body)) {
+      if (f.number == 2 && kept++ >= keep) continue;
+      out.add(Uint8List.sublistView(body, f.start, f.end));
+    }
+    return out.takeBytes();
   }
 }

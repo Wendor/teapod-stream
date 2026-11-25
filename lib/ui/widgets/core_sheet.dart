@@ -7,7 +7,6 @@ import '../../core/models/core_kind.dart';
 import '../../core/models/vpn_config.dart';
 import '../../providers/config_provider.dart';
 import '../../providers/core_provider.dart';
-import '../../providers/geo_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import 'settings_shared.dart';
@@ -37,7 +36,7 @@ class _CoreSheet extends ConsumerWidget {
     final resolver = ref.watch(coreResolverProvider);
     final r = resolver.resolve(config);
     final chosen = r.backend;
-    final geosite = ref.watch(geositeIndexProvider).value;
+    final geosite = resolver.geosite;
     final missing = missingGeositeCodes(resolver.settings.routing, geosite);
     final warnings = chosen == null
         ? const <String>[]

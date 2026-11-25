@@ -79,22 +79,9 @@ class XrayRustBackend implements CoreBackend {
         warning: L10n.current.rustSniffingForced,
         fix: (v) => v.copyWith(sniffingEnabled: true),
       );
-    // Entries over xray-rust's limits are left out; ad blocking goes first when the rest is over the budget.
-    final oversized = RustConfigBuilder.oversizedGeosite(o);
-    s.drop(
-      when: oversized.isNotEmpty,
-      warning: L10n.current.rustGeositeTooLarge(oversized.join(', ')),
-      fix: (v) {
-        final adBlockCodes = v.adBlockCodes.where((c) => !oversized.contains(c)).toList();
-        return v.copyWith(
-          adBlockCodes: adBlockCodes,
-          routing: v.routing.copyWith(
-            geositeCodes: v.routing.geositeCodes.where((c) => !oversized.contains(c)).toList(),
-            adBlockEnabled: v.routing.adBlockEnabled && adBlockCodes.isNotEmpty,
-          ),
-        );
-      },
-    );
+    // Entries over xray-rust's limits come trimmed; ad blocking goes first when the rest is over the budget.
+    final trimmed = RustConfigBuilder.trimmedGeosite(o);
+    s.warn(when: trimmed.isNotEmpty, warning: L10n.current.rustGeositeTrimmed(trimmed.join(', ')));
     s.drop(
       when:
           s.result.options.routing.adBlockEnabled &&

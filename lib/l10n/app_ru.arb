@@ -440,8 +440,8 @@
   "rustNoRawConfig": "Полный JSON-конфиг недоступен в ядре xray-rust.",
   "rustSniffingForced": "Доменные правила в ядре xray-rust требуют определения доменов — оно включено для этого подключения.",
   "rustAdBlockDropped": "Блокировка рекламы вместе с выбранными категориями GeoSite превышает лимит ядра xray-rust в 250 тыс. доменных правил — блокировка рекламы не применяется.",
-  "rustGeositeTooLarge": "GeoSite {codes}: больше лимита ядра xray-rust на одну категорию (32 МБ или 200 тыс. доменов) — не применяется.",
-  "@rustGeositeTooLarge": {
+  "rustGeositeTrimmed": "GeoSite {codes}: больше лимита ядра xray-rust на одну категорию (32 МБ или 200 тыс. доменов) — применяются только первые домены в пределах лимита.",
+  "@rustGeositeTrimmed": {
     "placeholders": {
       "codes": {
         "type": "String"

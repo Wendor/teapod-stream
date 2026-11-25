@@ -26,8 +26,8 @@ blocking toggles are disabled while `GeoMissing`.
 
 ## Geosite index
 
-`GeositeIndex` (`lib/core/services/geosite_index.dart`): every code of `geosite.dat` with its encoded size and domain
-count. `geositeIndexProvider` builds it in an isolate; `GeoNotifier` refreshes it after `check()` and a download. It
+`GeositeIndex` (`lib/core/services/geosite_index.dart`): every code of `geosite.dat` with its domain count and the
+count xray-rust gets. `geositeIndexProvider` builds it in an isolate; `GeoNotifier` refreshes it after `check()` and a download. It
 is cached in `filesDir/geosite.index.json` per file version (size and mtime), so it's read once per file.
 
 - Every core refuses a config referencing a code the file lacks (v2fly has no `win-spy`, a custom source may lack
@@ -35,9 +35,10 @@ is cached in `filesDir/geosite.index.json` per file version (size and mtime), so
   (`VpnEngineOptions.adBlockCodes`; none left → ad blocking off), and the connect logs them. The core sheet shows the
   same warning.
 - xray-rust refuses the whole file when one entry is over 32 MiB (runetfreedom's `ru-blocked-all`,
-  `antifilter-download`). The index then writes `filesDir/geosite-rust.dat` without such entries, and
+  `antifilter-download`) and a code over 200,000 domains (Loyalsoldier's `category-ads-all`). The index then writes
+  `filesDir/geosite-rust.dat` with such entries trimmed to their first domains within both limits, and
   `RustConfigBuilder` points the rules at it (`ext:geosite-rust.dat:<code>`); the copy is deleted when the file no
-  longer needs it. Per-code and per-config limits: [xray_config_builder](xray_config_builder.md#core-compatibility).
+  longer needs it. The config-wide limit: [xray_config_builder](xray_config_builder.md#core-compatibility).
 
 ## Related
 

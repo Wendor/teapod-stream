@@ -1520,8 +1520,8 @@ class AppLocalizationsRu extends AppLocalizations {
       'Блокировка рекламы вместе с выбранными категориями GeoSite превышает лимит ядра xray-rust в 250 тыс. доменных правил — блокировка рекламы не применяется.';
 
   @override
-  String rustGeositeTooLarge(String codes) {
-    return 'GeoSite $codes: больше лимита ядра xray-rust на одну категорию (32 МБ или 200 тыс. доменов) — не применяется.';
+  String rustGeositeTrimmed(String codes) {
+    return 'GeoSite $codes: больше лимита ядра xray-rust на одну категорию (32 МБ или 200 тыс. доменов) — применяются только первые домены в пределах лимита.';
   }
 
   @override

@@ -306,14 +306,13 @@ void main() {
     expect(dnsOutSettings(plain), isNull);
   });
 
-  test('geosite over xray-rust limits is rejected before start, rules read the trimmed copy', () {
+  test('geosite over the xray-rust budget is rejected before start, rules read the trimmed copy', () {
     final config = VlessParser.parseUri(profile())!;
     const geosite = GeositeIndex({
-      'youtube': (bytes: 100, domains: 1000),
-      'category-ads-all': (bytes: 1000, domains: 187000),
-      'win-spy': (bytes: 10, domains: 327),
-      'cn': (bytes: 1000, domains: 111000),
-      'ru-blocked-all': (bytes: 39000000, domains: 1600000),
+      'youtube': (domains: 1000, rustDomains: 1000),
+      'category-ads-all': (domains: 203624, rustDomains: 200000),
+      'win-spy': (domains: 327, rustDomains: 327),
+      'cn': (domains: 110258, rustDomains: 110258),
     }, rustFile: GeositeIndex.rustFileName);
     VpnEngineOptions with_(RoutingSettings routing) =>
         VpnEngineOptions(socksPort: 1, socksUser: 'u', socksPassword: 'p', routing: routing, geosite: geosite);
@@ -321,10 +320,6 @@ void main() {
     expect(
       () => RustConfigBuilder.build(config, with_(adsAndCn)),
       throwsA(isA<FormatException>().having((e) => e.message, 'message', contains('250k'))),
-    );
-    expect(
-      () => RustConfigBuilder.build(config, with_(domainRouting.copyWith(geositeCodes: ['ru-blocked-all']))),
-      throwsA(isA<FormatException>().having((e) => e.message, 'message', contains('ru-blocked-all'))),
     );
     // Each of the two alone stays within xray-rust's 250k matcher budget.
     for (final alone in [
@@ -334,8 +329,7 @@ void main() {
     ]) {
       expect(() => RustConfigBuilder.build(config, with_(alone)), returnsNormally);
     }
-    final json = jsonDecode(RustConfigBuilder.buildJson(config, with_(domainRouting.copyWith(adBlockEnabled: true))));
-    final text = jsonEncode(json);
+    final text = RustConfigBuilder.buildJson(config, with_(domainRouting.copyWith(adBlockEnabled: true)));
     expect(text, contains('ext:geosite-rust.dat:youtube'));
     expect(text, contains('ext:geosite-rust.dat:category-ads-all'));
     expect(text, isNot(contains('"geosite:')));

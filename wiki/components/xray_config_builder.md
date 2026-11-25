@@ -132,11 +132,11 @@ Shown to the user on Home: their DNS settings and ad block via DNS don't apply; 
   first outbound: `direct` for `onlySelected`, else `proxy`), strips `sockopt` from the proxy outbound, and converts
   `udphop` back to `quicParams.udpHop`. `buildProbe` makes a password-protected probe inbound for latency
   measurement.
-- **Rust geosite limits** (xray-rust 0.10, read from the [geosite index](geo_provider.md#geosite-index)): one code
-  over 32 MiB or 200,000 domains is left out with a warning (Loyalsoldier's `category-ads-all` has over 200k);
-  a config holds at most 250,000 domain matchers, one per geosite domain — over it ad blocking is dropped first
-  with a warning, and the user's codes alone over it block the start (`rustGeositeLimit`). Without the index
-  (no `geosite.dat`) nothing is checked.
+- **Rust geosite limits** (xray-rust 0.10, read from the [geosite index](geo_provider.md#geosite-index)): a code
+  over 32 MiB or 200,000 domains comes trimmed from `geosite-rust.dat`, with a warning; a config holds at most
+  250,000 domain matchers, one per geosite domain (trimmed codes count as trimmed) — over it ad blocking is dropped
+  first with a warning, and the user's codes alone over it block xray-rust: `CoreResolver` (which holds the index)
+  picks the next core. Without the index (no `geosite.dat`) nothing is checked.
 
 ## Related
 

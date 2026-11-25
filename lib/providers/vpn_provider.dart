@@ -11,7 +11,6 @@ import '../core/models/connection_fingerprint.dart';
 import '../core/models/core_kind.dart';
 import '../core/models/heartbeat_settings.dart';
 import '../core/models/vpn_log_entry.dart';
-import '../core/services/geosite_index.dart';
 import '../core/services/log_service.dart';
 import '../core/models/app_settings.dart';
 import '../core/services/tunnel_socks.dart';
@@ -591,13 +590,15 @@ class VpnNotifier extends Notifier<VpnState2> {
     final settings = ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null) ?? const AppSettings();
 
     await ref.read(availableCoresProvider.future);
+    // The resolver weighs a core's limits on the geosite rules.
+    await _loadGeosite();
     if (superseded()) return;
-    final resolution = ref.read(coreResolverProvider).resolve(config);
+    final resolver = ref.read(coreResolverProvider);
+    final geosite = resolver.geosite;
+    final resolution = resolver.resolve(config);
     final backend = resolution.backend;
     if (backend == null) return fail(resolution.reason!);
     _logCoreChoice(resolution);
-    final geosite = await _geositeIndex();
-    if (superseded()) return;
 
     final credentials = _socksCredentials(settings);
     final options = buildEngineOptions(
@@ -632,13 +633,13 @@ class VpnNotifier extends Notifier<VpnState2> {
     }
   }
 
-  /// geosite.dat's index; null without the file or when it can't be read — the rules then go unchecked.
-  Future<GeositeIndex?> _geositeIndex() async {
+  /// Waits for geosite.dat's index ([CoreResolver.geosite]); an unreadable file is logged and the rules
+  /// go unchecked.
+  Future<void> _loadGeosite() async {
     try {
-      return await ref.read(geositeIndexProvider.future);
+      await ref.read(geositeIndexProvider.future);
     } catch (e) {
       ref.read(logServiceProvider.notifier).addError('geosite.dat: $e');
-      return null;
     }
   }
 
@@ -703,7 +704,7 @@ class VpnNotifier extends Notifier<VpnState2> {
               backend,
               socksPort: _socksPort(settings),
               credentials: _socksCredentials(settings),
-              geosite: await _geositeIndex(),
+              geosite: ref.read(coreResolverProvider).geosite,
             ),
           );
         case CoreSwitchAction.clearQuickConnect:

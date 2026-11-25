@@ -1496,8 +1496,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'Ad blocking together with the selected GeoSite categories exceeds the xray-rust core\'s limit of 250k domain rules — ad blocking is not applied.';
 
   @override
-  String rustGeositeTooLarge(String codes) {
-    return 'GeoSite $codes: over the xray-rust core\'s limit for one category (32 MB or 200k domains) — not applied.';
+  String rustGeositeTrimmed(String codes) {
+    return 'GeoSite $codes: over the xray-rust core\'s limit for one category (32 MB or 200k domains) — only its first domains within the limit are applied.';
   }
 
   @override

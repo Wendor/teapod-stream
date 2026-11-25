@@ -869,8 +869,8 @@
   "rustNoRawConfig": "A full JSON config isn't available in the xray-rust core.",
   "rustSniffingForced": "Domain rules in the xray-rust core require domain sniffing — it is enabled for this connection.",
   "rustAdBlockDropped": "Ad blocking together with the selected GeoSite categories exceeds the xray-rust core's limit of 250k domain rules — ad blocking is not applied.",
-  "rustGeositeTooLarge": "GeoSite {codes}: over the xray-rust core's limit for one category (32 MB or 200k domains) — not applied.",
-  "@rustGeositeTooLarge": {
+  "rustGeositeTrimmed": "GeoSite {codes}: over the xray-rust core's limit for one category (32 MB or 200k domains) — only its first domains within the limit are applied.",
+  "@rustGeositeTrimmed": {
     "placeholders": {
       "codes": {
         "type": "String"

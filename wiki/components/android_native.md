@@ -201,7 +201,7 @@ UI catches up. It only sends: the tile and the notification follow the service's
 ## Tile
 
 Disconnected: label "TeapodStream", subtitle = the config the tile will connect (`tile_config_name.txt` in
-`QuickConnectStore`, saved with the quick-connect parameters). Active / transition / kill switch: label = config name, subtitle = status.
+`QuickConnectStore`, saved with the quick-connect parameters; a name from the older `tile_config_name` preference is moved into the store once, under its lock, when the activity, the service or the tile starts). Active / transition / kill switch: label = config name, subtitle = status.
 Tap: disconnect when connected or connecting, otherwise `CONNECT_QUICK`; `unlockAndRun` on the lock screen.
 
 ## PrefixTcpProxy

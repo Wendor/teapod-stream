@@ -27,21 +27,31 @@ class VpnTileService : TileService() {
 
     companion object {
         private var tileService: VpnTileService? = null
-        /** Where the name was kept before [QuickConnectStore]: read while the store has none, removed on a save. */
+        /** Where the name was kept before [QuickConnectStore]. */
         private const val LEGACY_PREF_CONFIG_NAME = "tile_config_name"
 
-        /** The name kept before [QuickConnectStore], if any: a quick start without a stored name carries it into the
-         *  store. */
-        fun legacyConfigName(context: Context): String? =
-            context.getSharedPreferences(XrayVpnService.PREFS_NAME, Context.MODE_PRIVATE)
-                .getString(LEGACY_PREF_CONFIG_NAME, null)
+        /**
+         * Moves a name kept before [QuickConnectStore] into it (unless the store has one) and drops the old one, in
+         * one step under the store's lock: a save or quick start never sees both. Run before anything reads or writes
+         * the name (the activity, the service, the tile).
+         */
+        fun migrateLegacyConfigName(context: Context) {
+            val prefs = context.getSharedPreferences(XrayVpnService.PREFS_NAME, Context.MODE_PRIVATE)
+            if (!prefs.contains(LEGACY_PREF_CONFIG_NAME)) return
+            val store = QuickConnectStore(context.filesDir)
+            store.locked {
+                val legacy = prefs.getString(LEGACY_PREF_CONFIG_NAME, null)
+                try {
+                    if (store.tileName() == null && store.config() != null) store.saveTileName(legacy)
+                } catch (_: Exception) {
+                    return@locked // kept for the next try
+                }
+                prefs.edit().remove(LEGACY_PREF_CONFIG_NAME).commit()
+            }
+        }
 
         /** The name in [QuickConnectStore] changed (saved with the quick-connect data): the tile shows it. */
-        fun configNameChanged(context: Context) {
-            context.getSharedPreferences(XrayVpnService.PREFS_NAME, Context.MODE_PRIVATE).edit()
-                .remove(LEGACY_PREF_CONFIG_NAME).apply()
-            updateTile(context)
-        }
+        fun configNameChanged(context: Context) = updateTile(context)
 
         fun registerTileService(service: VpnTileService) {
             tileService = service
@@ -116,7 +126,10 @@ class VpnTileService : TileService() {
         tile.updateTile()
     }
 
-    private fun configName(): String? = QuickConnectStore(filesDir).tileName() ?: legacyConfigName(this)
+    private fun configName(): String? {
+        migrateLegacyConfigName(this)
+        return QuickConnectStore(filesDir).tileName()
+    }
 
     /** [active] — VPN is on or transitioning: the title is the config name, otherwise "TeapodStream". */
     private fun setTileBase(tile: Tile, active: Boolean) {

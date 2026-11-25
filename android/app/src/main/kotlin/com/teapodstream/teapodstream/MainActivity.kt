@@ -52,6 +52,8 @@ class MainActivity : FlutterActivity() {
             pendingDeeplink = null
         }
 
+        // Before the channel can save a name.
+        VpnTileService.migrateLegacyConfigName(this)
         // Method channel for Flutter → native calls: one channel, two handlers (Dart: XrayEngine, PlatformService).
         val work = ChannelWork(Handler(Looper.getMainLooper())::post)
         val battery = BatteryOptimization(this)

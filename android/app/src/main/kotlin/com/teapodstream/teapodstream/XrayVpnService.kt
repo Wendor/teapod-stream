@@ -317,6 +317,7 @@ class XrayVpnService : VpnService() {
 
     override fun onCreate() {
         super.onCreate()
+        VpnTileService.migrateLegacyConfigName(this)
         logsEnabled = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean(PREF_LOGS_ENABLED, true)
         val pm = getSystemService(POWER_SERVICE) as PowerManager
         screenOn = pm.isInteractive
@@ -508,9 +509,7 @@ class XrayVpnService : VpnService() {
 
     /** The quick start from the store (tile, notification, boot, reconnect, system restart); null — nothing stored. */
     private fun quickStartRequest(): StartRequest? = try {
-        // A name only in the pre-store preference moves into the store with the session's save.
         store.quickStart(::extractSocksFromConfig)
-            ?.let { if (it.configName == null) it.copy(configName = VpnTileService.legacyConfigName(this)) else it }
     } catch (e: Exception) {
         log("warning", "quick start: stored connection unreadable: ${e.message}")
         null

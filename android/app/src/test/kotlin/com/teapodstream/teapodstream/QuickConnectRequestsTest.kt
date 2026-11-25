@@ -7,7 +7,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
-import java.util.concurrent.Executors
+import io.flutter.plugin.common.MethodChannel
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 
@@ -22,12 +23,28 @@ class QuickConnectRequestsTest {
 
     private fun args(config: String) = ConnectArgs.from(mapOf("xrayConfig" to config, "configName" to "n-$config"))!!
 
-    /** Runs [calls] the way the channel does: on ChannelWork's single quick-connect thread, in call order. */
-    private fun inOrder(vararg calls: () -> Unit) {
-        val pool = Executors.newSingleThreadExecutor()
-        calls.forEach { pool.execute(it) }
-        pool.shutdown()
-        assertTrue(pool.awaitTermination(5, TimeUnit.SECONDS))
+    /**
+     * Runs [calls] the way the channel does: [ChannelWork.answer] on [ChannelWork.quickConnect]. The first call waits
+     * until every call is queued, so a pool that runs them side by side would let a later one pass it.
+     */
+    private fun inOrder(vararg calls: () -> Boolean) {
+        val queued = CountDownLatch(1)
+        val answered = CountDownLatch(calls.size)
+        val work = ChannelWork { it.run() }
+        calls.forEachIndexed { i, call ->
+            work.answer(Answered(answered), ChannelWork.quickConnect) {
+                if (i == 0) queued.await(5, TimeUnit.SECONDS)
+                call()
+            }
+        }
+        queued.countDown()
+        assertTrue(answered.await(5, TimeUnit.SECONDS))
+    }
+
+    private class Answered(private val latch: CountDownLatch) : MethodChannel.Result {
+        override fun success(result: Any?) = latch.countDown()
+        override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) = throw AssertionError(errorMessage)
+        override fun notImplemented() = throw AssertionError("notImplemented")
     }
 
     @Test

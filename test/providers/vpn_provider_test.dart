@@ -1395,6 +1395,21 @@ void main() {
       c.read(vpnStatsProvider.notifier).pause();
     });
 
+    test("a session connecting in the background doesn't start the stats polling", () async {
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      c.read(vpnStatsProvider.notifier).pause();
+      await n().connect();
+      emit({'type': 'state', 'value': 'connected', 'socksPort': 2080, 'socksUser': 'su', 'socksPassword': 'sp'});
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+      await _settle();
+      expect(native.named('getStats'), isEmpty);
+      c.read(vpnStatsProvider.notifier).resume();
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+      await _settle();
+      expect(stats().uploadBytes, 10);
+      c.read(vpnStatsProvider.notifier).pause();
+    });
+
     test('tunnel diag and log helpers', () async {
       await boot();
       await c.read(nativeLogsProvider).dumpTunnelDiag();

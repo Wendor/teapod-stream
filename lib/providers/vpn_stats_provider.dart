@@ -12,6 +12,9 @@ class VpnStatsNotifier extends Notifier<VpnStats> {
   late XrayEngine _engine;
   Timer? _poller;
 
+  /// false — the app is in the background ([pause]): no polling, also when a session connects meanwhile.
+  bool _foreground = true;
+
   /// true — the home tab is on screen; chart history is pulled only then.
   bool _chartVisible = true;
 
@@ -38,9 +41,9 @@ class VpnStatsNotifier extends Notifier<VpnStats> {
     });
     ref.listen(vpnProvider.select((s) => s.isConnected), (_, connected) {
       if (connected) {
-        resume();
+        _start();
       } else {
-        pause();
+        _stop();
         state = const VpnStats();
       }
     });
@@ -48,13 +51,25 @@ class VpnStatsNotifier extends Notifier<VpnStats> {
       sub.cancel();
       _poller?.cancel();
     });
-    if (_connected) Future.microtask(resume);
+    if (_connected) Future.microtask(_start);
     return const VpnStats();
   }
 
-  /// Polls while connected; back from the background or connected — history right away, not on the next tick.
+  /// Back from the background: polling again while connected.
   void resume() {
-    if (!_connected) return;
+    _foreground = true;
+    _start();
+  }
+
+  /// No per-second channel calls in the background; [resume] restarts them.
+  void pause() {
+    _foreground = false;
+    _stop();
+  }
+
+  /// Polls while connected in the foreground; history right away, not on the next tick.
+  void _start() {
+    if (!_foreground || !_connected) return;
     if (_poller?.isActive != true) {
       _poller = Timer.periodic(const Duration(seconds: 1), (_) async {
         if (!_connected) return;
@@ -68,8 +83,7 @@ class VpnStatsNotifier extends Notifier<VpnStats> {
     if (_chartVisible) _pullHistory().ignore();
   }
 
-  /// No per-second channel calls in the background; [resume] restarts them.
-  void pause() {
+  void _stop() {
     _poller?.cancel();
     _poller = null;
   }

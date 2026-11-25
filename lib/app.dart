@@ -108,13 +108,15 @@ class _AppShellState extends ConsumerState<_AppShell> with WidgetsBindingObserve
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (kItest) ItestAgent.start(ProviderScope.containerOf(context, listen: false));
-      ref.read(nativeLogsProvider).restore();
+      // A failed restore still lets the refresh run.
+      final restored = ref.read(nativeLogsProvider).restore().then((_) {}, onError: (Object _) {});
       ref.read(autoSwitchProvider);
       ref.read(pingProvider.notifier).pingStale();
       // Only after the VPN state sync: otherwise tunnelSocks is still empty and a subscription would bypass the
-      // tunnel when the VPN is already up (from the tile).
+      // tunnel when the VPN is already up (from the tile). And after the log restore, which replaces the in-app log:
+      // the refresh's errors must stay in it.
       final configs = ref.read(configProvider.notifier);
-      ref.read(vpnProvider.notifier).synced.then((_) {
+      Future.wait([restored, ref.read(vpnProvider.notifier).synced]).then((_) {
         if (mounted) configs.refreshStaleIfDue();
       });
       ref.read(geoProvider.notifier).check();

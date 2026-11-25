@@ -773,7 +773,7 @@ class XrayVpnService : VpnService() {
     }
 
     private fun startStatsMonitoring() {
-        SessionStats.reset(System.currentTimeMillis())
+        val generation = SessionStats.reset(System.currentTimeMillis())
         statsThread = Thread {
             while (isRunning.get()) {
                 try {
@@ -785,7 +785,7 @@ class XrayVpnService : VpnService() {
                         reconnectInternal(session)
                         break
                     }
-                    SessionStats.sample(core.uploadBytes(), core.downloadBytes(), System.currentTimeMillis(), screenOn)
+                    SessionStats.sample(generation, core.uploadBytes(), core.downloadBytes(), System.currentTimeMillis(), screenOn)
                     if (screenOn) notifications.speeds(SessionStats.uploadSpeed, SessionStats.downloadSpeed, screenOn = true)
                 } catch (_: InterruptedException) { break } catch (_: Exception) {}
             }

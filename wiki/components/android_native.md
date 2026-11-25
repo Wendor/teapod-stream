@@ -18,7 +18,7 @@ back. It keeps working when the Flutter UI is gone (tile, boot, Tasker, service 
 | `ScreenWatcher.kt` | screen and Doze state (the heartbeat and stats cadence), the wake callbacks |
 | `ServiceNotifications.kt` | the notification: intermediate on a state change (also from the tile), foreground, speeds, the kill switch's block |
 | `ServiceLog.kt` | the log file, its buffer and rotation, logcat and the Flutter log events |
-| `SessionStats.kt` | the session's traffic totals, speeds and the chart history (`getStats`, `getStatsHistory`) |
+| `SessionStats.kt` | the session's traffic totals, speeds and the chart history (`getStats`, `getStatsHistory`); a sample of a stopped session (its generation) is ignored |
 | `SessionSnapshot.kt` | `SessionState` (the state names Flutter sees) and the immutable `SessionSnapshot`: its map for Flutter, the itest marker, the pure transition `moved` |
 | `core/` | `VpnCore` and its implementations (below), `TunOwnerPolicy`, `SocksCredentials`, `ProxyRedirect` |
 | `VpnEventStreamHandler.kt` | EventChannel (`com.teapodstream/vpn/events`) singleton |
@@ -29,7 +29,7 @@ back. It keeps working when the Flutter UI is gone (tile, boot, Tasker, service 
 | `VpnCommandReceiver.kt` | Tasker/automation broadcasts `com.teapodstream.CONNECT` / `DISCONNECT`; ignored unless `automationEnabled` |
 | `PrefixTcpProxy.kt` | local TCP proxy for Shadowsocks `?prefix=` (Outline) |
 | `SessionReconciler.kt` | the one desired session state (`Desired.Off(attempt)` / `Desired.On(request, id)`) and the thread that brings the session to it: commands, `onRevoke`, reconnects and retries only replace it (`set`, or `replace` while an expected state is still wanted); a run loops the pure `nextAction(desired, actual)` (stop / close the sink / start / settled) through `SessionDriver` |
-| `HeartbeatPolicy.kt` | the heartbeat's decisions, pure and JVM-tested: observations (probe ok / failed, no direct internet, dead or leaking tun2socks, TUN idle, warm-up deadline) → an action (none, log, retry now, reconnect, ask Flutter to switch); the thread in `XrayVpnService` only probes and applies it |
+| `HeartbeatPolicy.kt` | the heartbeat's decisions, pure and JVM-tested: observations (probe ok / failed, no direct internet, dead or leaking tun2socks, TUN idle, warm-up deadline) → an action (none, log, retry now, reconnect, ask Flutter to switch); the thread in `Heartbeat` only probes and applies it |
 | `NetworkChangePolicy.kt` | network-change scheduling, pure and JVM-tested: an event and the time since connect → a plan (delay, check the network or reconnect); when the plan fires → reconnect or not |
 | `SocksHttpProbe.kt` | the heartbeat's `socks` probe: SOCKS5 handshake and an HTTP GET over raw sockets, probe-URL parsing |
 | `SpeedHistory.kt` | ring buffer for the speed chart (`(epoch, seq)` increments) |

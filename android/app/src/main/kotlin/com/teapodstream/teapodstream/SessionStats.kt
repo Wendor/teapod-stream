@@ -17,6 +17,9 @@ object SessionStats {
     @Volatile var downloadSpeed = 0L
         private set
     private var lastTime = 0L
+    // The session the baseline belongs to: a stopped session's worker, still finishing a sample
+    // after the next session reset it, must not overwrite the new baseline.
+    private var generation = 0
     private val history = SpeedHistory(MAX_HISTORY)
 
     fun get(): Map<String, Long> = mapOf(
@@ -29,18 +32,23 @@ object SessionStats {
     /** Chart history after point [since] of epoch [epoch] (see [SpeedHistory.since]). */
     fun history(epoch: Int, since: Long): Map<String, Any> = history.since(epoch, since)
 
-    /** A new session: zero totals and speeds, a new chart epoch. */
-    fun reset(now: Long) {
+    /** A new session: zero totals and speeds, a new chart epoch. Returns the session's generation for [sample]. */
+    @Synchronized fun reset(now: Long): Int {
         upload = 0
         download = 0
         uploadSpeed = 0
         downloadSpeed = 0
         lastTime = now
         history.reset()
+        return ++generation
     }
 
-    /** The core's cumulative counters [tx] / [rx] at [now]; [chart] — add the speeds to the chart. */
-    fun sample(tx: Long, rx: Long, now: Long, chart: Boolean) {
+    /**
+     * The core's cumulative counters [tx] / [rx] at [now] for the session of [generation] (from [reset]); ignored once a
+     * newer session reset the stats. [chart] — add the speeds to the chart.
+     */
+    @Synchronized fun sample(generation: Int, tx: Long, rx: Long, now: Long, chart: Boolean) {
+        if (generation != this.generation) return
         val elapsed = (now - lastTime) / 1000.0
         if (elapsed > 0) {
             uploadSpeed = ((tx - upload) / elapsed).toLong().coerceAtLeast(0)

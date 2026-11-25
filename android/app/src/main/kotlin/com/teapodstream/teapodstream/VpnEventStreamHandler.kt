@@ -27,7 +27,7 @@ object VpnEventStreamHandler : EventChannel.StreamHandler {
         sendEvent(snapshot.toMap())
         if (snapshot.state == SessionState.CONNECTED) {
             // Send current stats
-            val currentStats = XrayVpnService.getStats()
+            val currentStats = SessionStats.get()
             sendEvent(mapOf(
                 "type" to "stats",
                 "upload" to currentStats["upload"],
@@ -36,7 +36,7 @@ object VpnEventStreamHandler : EventChannel.StreamHandler {
                 "downloadSpeed" to currentStats["downloadSpeed"],
             ))
             // The whole chart history buffer (full) — the client syncs the epoch
-            sendEvent(XrayVpnService.getStatsHistory(-1, 0) + ("type" to "statsHistory"))
+            sendEvent(SessionStats.history(-1, 0) + ("type" to "statsHistory"))
         }
     }
 

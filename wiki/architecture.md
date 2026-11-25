@@ -19,7 +19,7 @@ TeapodStream is an Android VPN client: a Flutter UI, a Kotlin `VpnService`, and 
 ```
 
 Layering rule: widgets read providers and call notifiers; providers orchestrate; services do I/O and persistence;
-core backends build configs; only `XrayEngine` (the tunnel) and `PlatformService` (system calls) talk to native; only `XrayVpnService` talks to the cores.
+core backends build configs; only `XrayEngine` (the tunnel) and `PlatformService` (system calls) talk to native; only `XrayVpnService` and the classes it wires (`Heartbeat`, `NetworkWatcher`) talk to the cores.
 
 ## Traffic
 

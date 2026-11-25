@@ -54,7 +54,8 @@ the network-change reconnect and the start retries only replace it; one thread b
 settled. A command replaced before its turn never acts — only the latest state exists — and a long start isn't
 interrupted: the loop then stops it and starts what is wanted now. A reconnect or a retry applies only while the
 state it was made for is still the desired one (`replace`). Before a stop or a start, `sessionAttempt` takes the
-desired state's attempt (`own`); an `Off` that is reached reports `disconnected` under its attempt once (`settled`).
+desired state's attempt (`own`); an `Off` that is reached reports `disconnected` under its attempt (`settled`). A reconnect replaces only the
+desired state its session was started for (`connectedDesired`), and a start replaced before it began does nothing.
 
 - **`ACTION_CONNECT`** (from Flutter): only the notification type is taken before the state is set (when no session runs);
   `startVpn(StartRequest)` takes the parameters (`useParams`: the heartbeat, tethering and notification settings are

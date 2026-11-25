@@ -244,6 +244,8 @@ class XrayVpnService : VpnService() {
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     @Volatile private var lastUnderlyingNetwork: Network? = null
     @Volatile private var lastConnectedMs: Long = 0L
+    /** The desired state the running session was started for: a reconnect replaces only it. */
+    @Volatile private var connectedDesired: Desired.On? = null
     /**
      * Flutter's connect attempt the published states are tagged with ([SessionSnapshot.attempt]): set by a connect
      * or a disconnect before it stops or starts a session, 0 for a quick start.
@@ -488,8 +490,9 @@ class XrayVpnService : VpnService() {
             ?.let { startActivity(it) }
     }
 
-    /** Something other than [request]'s session is wanted now. */
-    private fun superseded(request: StartRequest) = (reconciler.desired as? Desired.On)?.request !== request
+    /** Something other than [request]'s session is wanted in [wanted]. */
+    private fun superseded(request: StartRequest, wanted: Desired = reconciler.desired) =
+        (wanted as? Desired.On)?.request !== request
 
     /** True when the session runs; false when the start failed (a reconnect may have asked for a retry). */
     private fun startVpn(request: StartRequest): Boolean {
@@ -507,6 +510,8 @@ class XrayVpnService : VpnService() {
         val ipv6Enabled = params.ipv6Enabled
         val mtu = params.mtu
         val engine = params.engine
+        // Replaced before it began (e.g. a disconnect after a reconnect's wait): nothing to undo.
+        if (superseded(request)) return false
         if (!isRunning.compareAndSet(false, true)) return false
         val notificationTypeChanged = showNotification != request.params.showNotification
         useParams(request.params)
@@ -677,17 +682,19 @@ class XrayVpnService : VpnService() {
             // If no new TUN was established, restore the old fd: as kill-switch sink
             // (keeps blocking traffic) and/or for reuse by the next reconnect attempt.
             // Otherwise the old fd is obsolete.
-            val wanted = reconciler.desired
-            val next = superseded(request) && wanted is Desired.On
+            val wanted = reconciler.desired // read once: the decisions below agree
+            val replaced = superseded(request, wanted)
+            val next = replaced && wanted is Desired.On
             if (tunInterface == null && previousTun != null && (killSwitch || isReconnect || next) && !proxyOnly) {
                 tunInterface = previousTun
                 tunParams = previousTunParams
             } else {
                 try { previousTun?.close() } catch (_: Exception) {}
             }
-            if (superseded(request)) {
+            if (replaced) {
                 // Replaced while starting: no error for it. A new session keeps the sink for its start; an off
-                // state stops as a user disconnect does.
+                // state stops as a user disconnect does. Its states belong to what is wanted now.
+                sessionAttempt = wanted.tag
                 stopVpn(explicit = !next, reconnecting = next)
                 return false
             }
@@ -703,7 +710,9 @@ class XrayVpnService : VpnService() {
                 log("warning", "Reconnect attempt $attempt/$MAX_RECONNECT_ATTEMPTS failed, retrying in ${delayMs}ms")
                 // A new start of the same stored session, unless something else is wanted by then.
                 mainHandler.postDelayed({
-                    if (destroyed) return@postDelayed
+                    // Still waiting for it: not after the service stopped or a quick start that couldn't start
+                    // finished the state (abortQuickConnect).
+                    if (destroyed || snapshot.state != SessionState.RECONNECTING) return@postDelayed
                     // The stored session, or the failed request itself when the store has none (a failed save).
                     val again = quickStartRequest() ?: request
                     reconciler.replace(retry!!, Desired.On(again, reconciler.newId()))
@@ -1220,7 +1229,9 @@ class XrayVpnService : VpnService() {
      */
     private fun reconnectInternal(session: Long = 0L) {
         networkChangeHandler.post {
-            val current = reconciler.desired as? Desired.On ?: return@post
+            // The desired state of the session that is connected, not whatever is wanted by now (a probe of a session
+            // being replaced must not replace its successor).
+            val current = connectedDesired ?: return@post
             if (destroyed || !isRunning.get() || (session != 0L && lastConnectedMs != session)) return@post
             // The stored session, or the running one when the store has none (a failed save).
             val request = quickStartRequest() ?: current.request.copy(attempt = 0, reconnect = true)
@@ -1234,7 +1245,8 @@ class XrayVpnService : VpnService() {
 
     /** [on]'s session: a reconnect first waits (up to 30 s, under a wakelock) for direct internet, while it is wanted. */
     private fun startSession(on: Desired.On): Boolean {
-        if (!on.waitForNetwork) return startVpn(on.request)
+        connectedDesired = null
+        if (!on.waitForNetwork) return startVpn(on.request).also { if (it) connectedDesired = on }
         val wakeLock = try {
             (getSystemService(POWER_SERVICE) as PowerManager)
                 .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TeapodStream:Reconnect")
@@ -1248,7 +1260,7 @@ class XrayVpnService : VpnService() {
             }
             // Replaced while waiting: the next step of the run handles what is wanted now.
             if (reconciler.desired !== on) return false
-            return startVpn(on.request)
+            return startVpn(on.request).also { if (it) connectedDesired = on }
         } finally {
             try { wakeLock?.release() } catch (_: Exception) {}
         }

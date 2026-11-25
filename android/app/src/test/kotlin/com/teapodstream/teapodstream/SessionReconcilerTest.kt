@@ -157,12 +157,13 @@ class SessionReconcilerTest {
 
     @Test
     fun `a quick start after a disconnect runs after the stop`() {
-        reconciler.set(Desired.On(request("a", attempt = 1), reconciler.newId()))
+        val release = CountDownLatch(1)
+        longStart("a", release)
         reconciler.set(Desired.Off(1))
         reconciler.set(on(reconciler.newId(), "q"))
+        release.countDown()
         idle()
-        assertEquals("q", driver.running)
-        assertFalse("a stop never follows the quick start", driver.events.last().startsWith("stop"))
+        assertEquals(listOf("own 1", "start a", "own 0", "stop a for next", "own 0", "start q", "settled q"), driver.events)
     }
 
     @Test

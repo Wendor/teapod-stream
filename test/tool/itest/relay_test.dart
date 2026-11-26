@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -47,5 +48,39 @@ void main() {
 
     await relay.stop();
     expect(shell.calls.last, 'reverse --remove tcp:$port');
+  });
+
+  test('a peer reset while the relay writes is no uncaught error', () async {
+    // A server that reads a little and then drops the connection while the client keeps sending.
+    final dropper = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(dropper.close);
+    dropper.listen((s) {
+      // SO_LINGER {on, 0 s}: destroy() sends RST, so the relay's next write to this side fails.
+      s.setRawOption(
+        RawSocketOption(
+          Platform.isMacOS ? 0xffff : 1,
+          Platform.isMacOS ? 0x80 : 13,
+          Uint8List.fromList([1, 0, 0, 0, 0, 0, 0, 0]),
+        ),
+      );
+      s.listen((_) => s.destroy(), onError: (Object _) {}, cancelOnError: true);
+    });
+    final errors = <Object>[];
+    await runZonedGuarded(() async {
+      final relay = Relay(FakeShell(), '127.0.0.1', dropper.port);
+      await relay.start();
+      final c = await Socket.connect(InternetAddress.loopbackIPv4, relay.port);
+      c.done.ignore();
+      c.listen((_) {}, onError: (Object _) {}, cancelOnError: true);
+      final chunk = List<int>.filled(64 * 1024, 7);
+      for (var i = 0; i < 200; i++) {
+        c.add(chunk);
+        await Future<void>.delayed(const Duration(milliseconds: 2));
+      }
+      c.destroy();
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      await relay.stop();
+    }, (e, _) => errors.add(e));
+    expect(errors, isEmpty);
   });
 }

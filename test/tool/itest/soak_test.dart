@@ -153,4 +153,15 @@ void main() {
       expect(check(e, '203.0.113.5'), isTrue);
     });
   });
+
+  test('server-down: an answer from another exit during the cut fails, though it is not the expected exit', () {
+    final exits = ExpectedExit('203.0.113.5', false)..tunnelIp = '203.0.113.5';
+    // The cut runs off Wi-Fi bookkeeping: an exit other than the expected one isn't a pass...
+    expect(exits.check(ip: '192.0.2.9', direct: '198.51.100.1', distinguishable: true, onWifi: false), isFalse);
+    // ...but it is traffic, and the session wasn't on the relay.
+    final answers = <String?>[null, '192.0.2.9', null];
+    final passed = FaultResult(Fault.serverDown, Verdict.pass, Duration.zero, 'recovered in 0s');
+    expect(cutChecked(passed, trafficDuringCut: trafficDuringCut(answers)).verdict, Verdict.fail);
+    expect(cutChecked(passed, trafficDuringCut: trafficDuringCut([null, null])), same(passed));
+  });
 }

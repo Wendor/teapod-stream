@@ -151,6 +151,9 @@ class ExpectedExit {
 FaultResult? relayMissing(Fault f, {required bool hasRelay}) =>
     hasRelay ? null : FaultResult(f, Verdict.skip, null, 'no TCP config for the relay');
 
+/// While the server is cut any answer counts — through another exit too, which the expected-exit check rejects.
+bool trafficDuringCut(Iterable<String?> answers) => answers.any((ip) => ip != null);
+
 /// `server-down`: traffic while the server was cut means the session wasn't on the relay — the recovery says nothing.
 FaultResult cutChecked(FaultResult r, {required bool trafficDuringCut}) => trafficDuringCut
     ? FaultResult(
@@ -226,8 +229,8 @@ class Soak {
   late final _exits = ExpectedExit(egress, strictEgress);
   var _cutLeak = false;
 
-  /// Probes that got any answer (an IP, whatever the exit) since the last reset.
-  var _answers = 0;
+  /// Every probe's answer (an IP or none, whatever the exit) since the last reset.
+  final _answers = <String?>[];
   List<String>? _faultLog;
 
   Soak({
@@ -273,7 +276,7 @@ class Soak {
     if (ip == null && urls.length > 1) (u, ip) = (urls[1], await get(urls[1]));
     // Off Wi-Fi the direct IP differs from the baseline — "not direct" doesn't yet mean "through VPN".
     // The expected exit is the one confirmed on Wi-Fi (the server's entry address may differ).
-    if (ip != null) _answers++;
+    _answers.add(ip);
     final ok = _exits.check(ip: ip, direct: baseline.direct[u], distinguishable: urls.isNotEmpty, onWifi: _onWifi);
     final s = (t: DateTime.now(), ok: ok, appState: agent.lastState);
     _event('probe', {'ip': ip, 'ok': ok, 'onWifi': _onWifi, 'state': agent.lastState});
@@ -431,9 +434,9 @@ class Soak {
         await relay!.down();
         // Any answer while the server is cut — through another exit or direct — means the session doesn't go
         // through the relay; `ok` alone would miss an exit other than the expected one.
-        _answers = 0;
+        _answers.clear();
         await _sample(const Duration(minutes: 2));
-        _cutLeak = _answers > 0;
+        _cutLeak = trafficDuringCut(_answers);
         await relay!.up();
       case Fault.serverSwitch:
         // The server stays dead: recovery is the switch, counted from the cut, to any other config.

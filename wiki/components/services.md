@@ -64,7 +64,7 @@ by design.
 | Caller | Tunnel | Limits |
 |---|---|---|
 | subscriptions (`SubscriptionService`) | `orDirect` | defaults |
-| geodata (`GeoNotifier`) | `orDirect` | 30 s, 200 MB per file |
+| geodata (`GeodataService`, from `GeoNotifier`) | `orDirect` | 30 s, 200 MB per file |
 | update check, APK (`UpdateService`) | when connected, no direct retry | defaults; APK: 30 s idle, 500 MB for the whole file, a resumed part included |
 | IP lookup (`IpLookup.lookupThrough`, from `IpInfoNotifier`) | always (it asks for the tunnel's exit) | 64 KB |
 | deep link and profile bundles (`DeeplinkRouter.fetchBundle`) | `orDirect` | https only, 1 MB |

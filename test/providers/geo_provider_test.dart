@@ -7,9 +7,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:teapodstream/core/models/app_message.dart';
 import 'package:teapodstream/core/constants/app_constants.dart';
+import 'package:teapodstream/core/services/geodata_service.dart';
 import 'package:teapodstream/core/services/settings_service.dart';
+import 'package:teapodstream/core/services/tunnel_socks.dart';
 import 'package:teapodstream/core/models/app_settings.dart';
 import 'package:teapodstream/providers/geo_provider.dart';
+import 'package:teapodstream/providers/vpn_provider.dart';
 
 import '../helpers/local_server.dart';
 
@@ -125,7 +128,7 @@ void main() {
       await download();
       final s = c.read(geoProvider);
       expect(s, isA<GeoError>());
-      expect((s as GeoError).message, const AppMessage.text('HTTP 404'));
+      expect('${(s as GeoError).message}', 'The geo database server answered HTTP 404');
       expect(File('${dir.path}/geoip.dat').readAsStringSync(), 'old');
     });
 
@@ -162,4 +165,70 @@ void main() {
       expect(c.read(geoProvider), isA<GeoError>());
     });
   });
+
+  group('with a fake service', () {
+    late _FakeGeodata fake;
+    setUp(() {
+      fake = _FakeGeodata();
+      c.dispose();
+      c = ProviderContainer(overrides: [geodataServiceProvider.overrideWithValue(fake)]);
+    });
+
+    test('the notifier publishes the service progress and the time it finished', () async {
+      await start();
+      final states = <GeoState>[];
+      c.listen(geoProvider, (_, s) => states.add(s));
+      c.read(tunnelSocksProvider.notifier).set(const TunnelSocks(1080, 'u', 'p'));
+      await c.read(geoProvider.notifier).download();
+      expect(fake.calls.single, (dir.path, 'https://g/ip.dat', 'https://g/site.dat', 1080));
+      expect(
+        [for (final s in states.whereType<GeoDownloading>()) (s.downloaded, s.total)],
+        [(0, -1), (0, -1), (5, 10), (10, 10)],
+      );
+      expect((c.read(geoProvider) as GeoReady).lastUpdated, _FakeGeodata.finished);
+    });
+
+    test('a failed download is the error and no ready state', () async {
+      await start();
+      fake.error = Exception('HTTP 503');
+      await c.read(geoProvider.notifier).download();
+      expect((c.read(geoProvider) as GeoError).message, const AppMessage.text('HTTP 503'));
+    });
+
+    test('files the service finds are ready with its time; missing ones ask native for the bundled copy', () async {
+      fake.filesThere = true;
+      final s = await start();
+      expect((s as GeoReady).lastUpdated, _FakeGeodata.finished);
+      expect(calls, ['getFilesDir']);
+    });
+  });
+}
+
+class _FakeGeodata extends GeodataService {
+  static final finished = DateTime(2026, 11, 27);
+  final calls = <(String, String, String, int?)>[];
+  Exception? error;
+  bool filesThere = false;
+
+  @override
+  bool present(String dir) => filesThere;
+
+  @override
+  Future<DateTime?> lastUpdated() async => finished;
+
+  @override
+  Future<DateTime> download({
+    required String dir,
+    required String geoipUrl,
+    required String geositeUrl,
+    required TunnelSocks? socks,
+    required void Function(int downloaded, int total) onProgress,
+  }) async {
+    calls.add((dir, geoipUrl, geositeUrl, socks?.port));
+    onProgress(0, -1);
+    if (error case final e?) throw e;
+    onProgress(5, 10);
+    onProgress(10, 10);
+    return finished;
+  }
 }

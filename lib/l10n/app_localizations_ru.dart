@@ -525,6 +525,11 @@ class AppLocalizationsRu extends AppLocalizations {
   String get geoNotLoaded => 'Geo-базы не загружены';
 
   @override
+  String geoHttpStatus(int status) {
+    return 'Сервер геобаз ответил HTTP $status';
+  }
+
+  @override
   String get geoDownload => 'ЗАГРУЗИТЬ';
 
   @override

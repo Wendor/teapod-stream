@@ -150,6 +150,7 @@
   "routingModeMatch": "только match",
   "commonDone": "ГОТОВО",
   "geoNotLoaded": "Geo-базы не загружены",
+  "geoHttpStatus": "Сервер геобаз ответил HTTP {status}",
   "geoDownload": "ЗАГРУЗИТЬ",
   "geoLoaded": "Geo-базы загружены",
   "geoUpdate": "ОБНОВИТЬ",

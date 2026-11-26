@@ -504,6 +504,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get geoNotLoaded => 'Geo databases not downloaded';
 
   @override
+  String geoHttpStatus(int status) {
+    return 'The geo database server answered HTTP $status';
+  }
+
+  @override
   String get geoDownload => 'DOWNLOAD';
 
   @override

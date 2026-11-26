@@ -19,7 +19,7 @@ One server. Fields by purpose:
 | Endpoint | `protocol`, `address`, `port`, `hopPorts` (Hysteria2 port hopping) |
 | Credentials | `uuid` (VLESS/VMess), `password` (Trojan/SS/Hy2), `method` (SS), `encryption`, `alterId`, `flow` |
 | Security | `security` (`none`/`tls`/`reality`), `sni`, `fingerprint`, `alpn`, `allowInsecure`, `ech`, Reality `publicKey`/`shortId`/`spiderX`/`postQuantumKey` |
-| Transport | `transport`, `wsPath`, `wsHost`, `grpcServiceName`, `xhttpMode`, `xhttpExtra`, `finalmask`, `obfsPassword` (Hy2 salamander), `ssPrefix` (Outline prefix, hex) |
+| Transport | `transport`, `wsPath`, `wsHost`, `grpcServiceName`, `xhttpMode`, `xhttpExtra`, `finalmask`, `obfsPassword` (Hy2 salamander / gecko), `ssPrefix` (Outline prefix, hex) |
 | Managed | `rawXrayConfig` — a ready xray JSON from a managed subscription, merged instead of generated |
 | sing-box only | `protocolSettings` (below) |
 | Core | `core` — the pinned core, null = by priority ([vpn_provider](vpn_provider.md#choosing-the-core)) |

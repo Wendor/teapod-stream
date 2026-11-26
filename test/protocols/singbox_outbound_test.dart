@@ -5,6 +5,7 @@ import 'package:teapodstream/core/models/xray_tuning.dart';
 import 'package:teapodstream/core/models/app_settings.dart';
 import 'package:teapodstream/protocols/singbox/singbox_config_builder.dart';
 import 'package:teapodstream/protocols/singbox/singbox_outbound.dart';
+import 'package:teapodstream/protocols/xray/vless_parser.dart';
 
 VpnConfig _cfg(
   VpnProtocol protocol, {
@@ -178,6 +179,25 @@ void main() {
       expect(out.containsKey('server_port'), isFalse);
       expect(out['obfs'], {'type': 'salamander', 'password': 'ob'});
       expect(_tls(out)['enabled'], isTrue);
+    });
+
+    test('Hysteria2 with Gecko carries its packet sizes', () {
+      Map<String, dynamic> obfs(String query) =>
+          SingBoxOutbound.build(VlessParser.parseUri('hy2://pw@h.example:443?$query')!, _opts)['obfs']
+              as Map<String, dynamic>;
+      expect(obfs('obfs=gecko&obfs-password=ob'), {
+        'type': 'gecko',
+        'password': 'ob',
+        'min_packet_size': 512,
+        'max_packet_size': 1200,
+      });
+      expect(obfs('obfs=gecko&obfs-password=ob&minPacketSize=600&maxPacketSize=1400'), {
+        'type': 'gecko',
+        'password': 'ob',
+        'min_packet_size': 600,
+        'max_packet_size': 1400,
+      });
+      expect(obfs('obfs=salamander&obfs-password=ob'), {'type': 'salamander', 'password': 'ob'});
     });
 
     test('Hysteria2 never gets uTLS (QUIC needs the standard TLS stack)', () {

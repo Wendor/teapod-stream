@@ -313,6 +313,7 @@ class VlessParser {
   }
 
   // hy2://password@host:port?sni=...&obfs=salamander&obfs-password=...#name
+  // Gecko: obfs=gecko&obfs-password=...[&minPacketSize=512&maxPacketSize=1200] (v2rayN names)
   // also handles hysteria2:// scheme
   static VpnConfig? _parseHysteria2(String uri) {
     try {
@@ -353,8 +354,11 @@ class VlessParser {
         }
       }
 
-      final obfs = params['obfs'];
-      final obfsPassword = obfs == 'salamander' ? params['obfs-password'] : null;
+      // Salamander and Gecko (Salamander plus packet fragmentation) share obfs-password; a Gecko link without a
+      // password or with invalid packet sizes is an import error: the server drops unobfuscated packets.
+      final obfs = params['obfs']?.trim() ?? '';
+      final obfsPassword = obfs == 'salamander' || obfs == 'gecko' ? params['obfs-password'] : null;
+      if (obfs == 'gecko' && ((obfsPassword?.isEmpty ?? true) || geckoSizes(params) == null)) return null;
       final allowInsecure = _parseInsecure(params);
       final pinSHA256 = params['pinSHA256'];
 
@@ -483,6 +487,27 @@ class VlessParser {
   /// Query parameters of the profile's original link, including the base64 body of SIP002
   /// `ss://BASE64#name`. Empty if there's no link or it's unreadable. Needed by
   /// builders for fields [VpnConfig] doesn't have (headerType, obfs, plugin).
+  /// Gecko packet sizes `(min, max)` of a Hysteria2 profile imported with `obfs=gecko`; null for Salamander
+  /// or no obfuscation.
+  static (int, int)? geckoPacketSize(VpnConfig config) {
+    final params = linkParams(config);
+    return params['obfs']?.trim() == 'gecko' ? geckoSizes(params) : null;
+  }
+
+  /// `minPacketSize` / `maxPacketSize` of a Gecko link, 512 / 1200 when absent (the Hysteria defaults); null when
+  /// not numbers or outside `0 < min <= max <= 2048` (both cores refuse such a config).
+  static (int, int)? geckoSizes(Map<String, String> params) {
+    int? size(String key, int fallback) {
+      final value = params[key]?.trim() ?? '';
+      return value.isEmpty ? fallback : int.tryParse(value);
+    }
+
+    final min = size('minPacketSize', 512);
+    final max = size('maxPacketSize', 1200);
+    if (min == null || max == null || min <= 0 || min > max || max > 2048) return null;
+    return (min, max);
+  }
+
   static Map<String, String> linkParams(VpnConfig config) {
     final raw = config.rawUri;
     if (raw == null) return const {};

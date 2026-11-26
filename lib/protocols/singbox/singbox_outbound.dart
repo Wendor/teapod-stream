@@ -1,6 +1,7 @@
 import '../../core/interfaces/vpn_engine.dart';
 import '../../core/models/protocol_settings.dart';
 import '../../core/models/vpn_config.dart';
+import '../xray/vless_parser.dart';
 
 /// Proxy outbound (or endpoint) in sing-box 1.14 format; the tag is always `proxy`.
 abstract final class SingBoxOutbound {
@@ -102,13 +103,19 @@ abstract final class SingBoxOutbound {
 
   static Map<String, dynamic> _hysteria2(VpnConfig config, VpnEngineOptions options) {
     final hop = config.hopPorts?.trim() ?? '';
+    final gecko = VlessParser.geckoPacketSize(config);
     return {
       'type': 'hysteria2',
       'tag': tag,
       'server': config.address,
       if (hop.isEmpty) 'server_port': config.port else 'server_ports': hopRanges(hop),
       'password': config.password ?? '',
-      if (config.obfsPassword?.isNotEmpty ?? false) 'obfs': {'type': 'salamander', 'password': config.obfsPassword},
+      if (config.obfsPassword?.isNotEmpty ?? false)
+        'obfs': {
+          'type': gecko == null ? 'salamander' : 'gecko',
+          'password': config.obfsPassword,
+          if (gecko != null) ...{'min_packet_size': gecko.$1, 'max_packet_size': gecko.$2},
+        },
       // QUIC requires the standard TLS stack: uTLS is not enabled for Hysteria2.
       'tls': _tls(config, options, reality: false, utls: false),
     };

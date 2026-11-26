@@ -14,7 +14,7 @@ Multi-line subscription bodies are split and decoded in `SubscriptionService` ([
 | `vmess://` | base64 JSON: `ps`, `add`, `port`, `id`, `aid`, `scy`, `net`, `type`, `host`, `path`, `tls`, `sni`, `alpn`, `fp`, … |
 | `trojan://` | `password@host:port`; `security` (tls/reality/none), Reality params, `pinSHA256`, `alpn`, `ech`; the password is percent-decoded. `allowInsecure` is deliberately not read |
 | `ss://` | `base64(method:password)@host:port` or legacy `base64(method:password@host:port)`; Outline `prefix` → `ssPrefix` |
-| `hysteria2://`, `hy2://` | `password@host:port?sni&insecure&obfs-password&pinSHA256`; port hopping: a range/list in the authority (`20000-30000`, `443,5000-6000`) or `mport` → `hopPorts`, the first port → `port`; an unparsable port rejects the link, an unparsable `mport` is ignored |
+| `hysteria2://`, `hy2://` | `password@host:port?sni&insecure&obfs&obfs-password&pinSHA256`; `obfs-password` is kept for `obfs=salamander` and `obfs=gecko`; Gecko's `minPacketSize` / `maxPacketSize` (default 512 / 1200, `0 < min ≤ max ≤ 2048`) stay in `rawUri` and are read by `geckoPacketSize()` — a Gecko link without a password or with invalid sizes is rejected; port hopping: a range/list in the authority (`20000-30000`, `443,5000-6000`) or `mport` → `hopPorts`, the first port → `port`; an unparsable port rejects the link, an unparsable `mport` is ignored |
 
 `VlessParser.linkParams` / `vmessJson` re-read details that aren't model fields (e.g. TCP `headerType=http`) from
 `rawUri` at build time. `linkMux` reads `mux=on|off` (also `true`/`false`, `1`/`0`) — Mux for this server regardless

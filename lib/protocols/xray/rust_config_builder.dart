@@ -259,8 +259,8 @@ class RustConfigBuilder {
   /// v26.7.28's spelling (the Go builder's `udphop` mask is converted back). Brutal,
   /// bandwidth and other QUIC overrides and sockopt stay rejected by the core.
   static String? _hysteria2UnsupportedReason(VpnConfig config) {
-    // The parser takes the password only for obfs=salamander: another type or an empty
-    // password Go silently drops and connects without obfuscation.
+    // xray-rust has Salamander only: Gecko and unknown types are refused here, and an empty
+    // Salamander password Go would silently drop and connect without obfuscation.
     final obfs = VlessParser.linkParams(config)['obfs']?.trim() ?? '';
     if (obfs.isNotEmpty && obfs != 'none' && obfs != 'salamander') {
       return L10n.current.rustHy2Obfs(obfs);

@@ -7,7 +7,7 @@
 |---|---|
 | `singbox_backend.dart` | `SingBoxBackend implements CoreBackend`. Unsupported: `noise`, `mux` (sing-mux isn't compatible with xray servers), `observatory`, `rawConfig`. Fragmentation only `tlshello` (other values are reset with a warning). QUIC is blocked by tun2socks, as for Go |
 | `singbox_config_builder.dart` | `build` / `buildJson` / `buildProbeJson` (no inbounds, logging off), `unsupportedReason` |
-| `singbox_outbound.dart` | the `proxy` outbound: VLESS/VMess (`packet_encoding: xudp`), Trojan, Shadowsocks, Hysteria2 (`server_ports` `a:b`, salamander), WireGuard/AmneziaWG (in `endpoints`), SSH, Naive; TLS/Reality/uTLS/ECH/ALPN, `tls.fragment`; transports ws (`?ed=` → `max_early_data`), grpc, http, httpupgrade, quic |
+| `singbox_outbound.dart` | the `proxy` outbound: VLESS/VMess (`packet_encoding: xudp`), Trojan, Shadowsocks, Hysteria2 (`server_ports` `a:b`, salamander or gecko with `min_packet_size` / `max_packet_size`), WireGuard/AmneziaWG (in `endpoints`), SSH, Naive; TLS/Reality/uTLS/ECH/ALPN, `tls.fragment`; transports ws (`?ed=` → `max_early_data`), grpc, http, httpupgrade, quic |
 | `singbox_route.dart` | DNS and route |
 
 ## Config

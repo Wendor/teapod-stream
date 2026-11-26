@@ -454,6 +454,8 @@ class XrayConfigBuilder {
     final pin = config.pinSHA256?.trim() ?? '';
     if (config.protocol == VpnProtocol.hysteria2) {
       final salamander = config.obfsPassword?.isNotEmpty ?? false;
+      // Gecko is Xray's salamander mask with a packetSize range.
+      final gecko = VlessParser.geckoPacketSize(config);
       final hopping = config.hopPorts?.isNotEmpty ?? false;
       return {
         'network': 'hysteria',
@@ -480,7 +482,10 @@ class XrayConfigBuilder {
               if (salamander)
                 {
                   'type': 'salamander',
-                  'settings': {'password': config.obfsPassword},
+                  'settings': {
+                    'password': config.obfsPassword,
+                    if (gecko != null) 'packetSize': '${gecko.$1}-${gecko.$2}',
+                  },
                 },
             ],
           },

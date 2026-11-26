@@ -574,6 +574,24 @@ void main() {
     });
   });
 
+  test('setLatencies sets and clears latency by config, also for configs sharing an endpoint', () async {
+    await boot(
+      configs: [
+        _cfg('a', address: 'h', port: 1, latency: 10),
+        _cfg('b', address: 'h', port: 1, latency: 10),
+        _cfg('c', address: 'other', port: 3, latency: 30),
+      ],
+    );
+    final at = DateTime(2026, 7);
+    await n().setLatencies({'a': null, 'b': 77}, at);
+    final byId = {for (final c in s().configs) c.id: c};
+    expect(byId['a']!.latencyMs, isNull);
+    expect(byId['a']!.lastPingedAt, at);
+    expect(byId['b']!.latencyMs, 77);
+    expect(byId['c']!.latencyMs, 30);
+    expect(byId['c']!.lastPingedAt, isNull);
+  });
+
   test('batchUpdatePingResults sets and clears latency by endpoint', () async {
     await boot(
       configs: [

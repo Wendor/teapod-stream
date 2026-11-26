@@ -521,6 +521,43 @@ class VpnNotifier extends Notifier<VpnState2> {
     return null;
   }
 
+  /// The config the running session was started with by the app; else (none yet, or a session started by the tile,
+  /// boot or automation) the effective config.
+  VpnConfig? get runningConfig => _connectedConfig ?? ref.read(effectiveConfigProvider);
+
+  /// A dead-tunnel switch (`autoSwitchProvider`) from [dead] — the [runningConfig] that stopped answering — to [to],
+  /// the fastest live candidate, queued like a selection and dropped when by its turn the session runs another config
+  /// (a selection or a profile switch came first). [measured] — urltest's latency by config id (null — no answer).
+  /// In auto mode with [to] in the auto subscription, auto mode stays: the subscription's ping results become this
+  /// measurement — a config it didn't answer or didn't probe (the dead one, another switch source) has none — so its
+  /// best is [to] (or a candidate as fast). Otherwise [to] becomes the active config, as a selection makes it. A live
+  /// session is then rebuilt.
+  Future<void> switchDeadTunnel({
+    required VpnConfig dead,
+    required VpnConfig to,
+    required Map<String, int?> measured,
+  }) => _queued(() async {
+    if (runningConfig?.id != dead.id) {
+      ref
+          .read(logServiceProvider.notifier)
+          .addInfo('urltest: the server changed meanwhile, no switch', source: 'urltest');
+      return;
+    }
+    final configs = ref.read(configProvider.notifier);
+    final cs = ref.read(configProvider).value;
+    final auto = cs?.activeSubscriptionId;
+    if (cs != null && auto != null && to.subscriptionId == auto) {
+      await configs.setLatencies({
+        for (final c in cs.configs)
+          if (c.subscriptionId == auto) c.id: measured[c.id],
+      }, DateTime.now());
+    } else {
+      await configs.setActiveConfig(to.id);
+    }
+    // Off meanwhile: the selection reaches quick connect through the source listener.
+    if (state.isConnected || state.isConnecting) await reconnectWithNewConfig();
+  });
+
   /// Makes the tunnel run the active config: a connect in flight is redone, a live tunnel on another config switches,
   /// one on this config stays. An idle VPN saves it for quick connect through the source listener.
   Future<void> _followSelection() async {

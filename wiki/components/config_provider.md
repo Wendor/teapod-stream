@@ -16,7 +16,8 @@ removing, ordering, the active selection, pins, subscription refresh and import 
 | `activeSubscriptionId` | auto mode: connect to the best config of this subscription |
 | `pins` | `List<PinnedRef>` — pinned connections |
 
-`activeConfigId` and `activeSubscriptionId` are not exclusive. A manual `setActiveConfig()` turns auto mode off.
+`activeConfigId` and `activeSubscriptionId` are not exclusive. `setActiveConfig()` (a selection) turns auto mode
+off; a dead-tunnel switch inside the auto subscription keeps it ([vpn_provider](vpn_provider.md#switching-config-on-a-dead-tunnel-autoswitchprovider)).
 
 **`effectiveConfigProvider`** — the config the next `connect()` uses: in auto mode the subscription's config with
 the lowest `latencyMs` (never-pinged last), otherwise the active config. Used by `VpnNotifier` and Home.
@@ -80,7 +81,8 @@ they pointed there.
 `addConfig(s)`, `updateConfig`, `removeConfig` (clears the selection if it was active), `renameSubscription`,
 `reorderSubscriptions` / `reorderGroupConfigs(subId, …)` (indices from `ReorderableListView.onReorderItem`:
 `newIndex` is the position after the move),
-`batchUpdatePingResults` (one write for all pings), `importBundle` (connections from a profile or deep link,
+`batchUpdatePingResults` (one write for all pings, by `address:port`), `setLatencies` (by config id: urltest's
+measurement), `importBundle` (connections from a profile or deep link,
 [profiles](profiles.md); one commit for its subscriptions, configs and the selection; a compact bundle's share links
 are parsed into that commit, its new subscription URLs fetched after it — the deep link and the Add screen both use it), `reviewBundle` / `newSubscriptionHosts` (hosts of the subscriptions an import would add,
 shown before it), `applySelection` (a profile's remembered server, [profiles](profiles.md#selected-server)).

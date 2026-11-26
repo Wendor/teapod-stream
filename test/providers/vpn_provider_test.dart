@@ -106,6 +106,9 @@ class _Native {
   /// host → latency via `measureOutbound`; null — the server is dead.
   Map<String, int?> outboundMs = {};
 
+  /// Holds `measureOutbound` answers until it completes; null — they come at once.
+  Future<void>? outboundGate;
+
   /// host → TCP ping latency.
   Map<String, int?> pingMs = {};
   Object? Function()? onConnect;
@@ -132,7 +135,8 @@ class _Native {
         return pingMs[(call.arguments as Map)['address']];
       case 'measureOutbound':
         final cfg = (call.arguments as Map)['config'] as String;
-        return outboundMs.entries.where((e) => cfg.contains(e.key)).firstOrNull?.value;
+        final ms = outboundMs.entries.where((e) => cfg.contains(e.key)).firstOrNull?.value;
+        return outboundGate == null ? ms : outboundGate!.then((_) => ms);
       case 'getStats':
         return {'upload': 10, 'download': 20, 'uploadSpeed': 1, 'downloadSpeed': 2};
     }
@@ -1224,6 +1228,143 @@ void main() {
       expect(c.read(configProvider).value!.activeConfigId, 'c');
       expect(native.named('connect'), hasLength(2));
       expect(native.lastConnect()['xrayConfig'], contains('hc.example'));
+    });
+
+    test('auto mode stays on: the measured results make the live config its best', () async {
+      native.outboundMs = {'hb.example': 200, 'hc.example': 80};
+      await boot(
+        configs: subConfigs,
+        subs: [Subscription(id: 's', name: 'S', url: 'https://sub.example/s', createdAt: DateTime(2026))],
+        activeSubId: 's',
+        settings: switchOn,
+      );
+      await n().connect();
+      emit({'type': 'state', 'value': 'connected', 'socksPort': 1});
+      await _settle();
+      expect(native.lastConnect()['xrayConfig'], contains('ha.example'));
+      emit({'type': 'tunnel_dead', 'failures': 3});
+      await _settle();
+      final cs = c.read(configProvider).value!;
+      expect(cs.activeSubscriptionId, 's');
+      expect(c.read(effectiveConfigProvider)?.id, 'c');
+      expect(cs.configs.firstWhere((x) => x.id == 'a').latencyMs, isNull);
+      expect(native.lastConnect()['xrayConfig'], contains('hc.example'));
+    });
+
+    test('auto mode stays on when the failed config shares the endpoint of the live one', () async {
+      final shared = [
+        _cfg('a', subId: 's', host: 'same.example'),
+        _cfg('b', subId: 's', host: 'same.example', password: 'q'),
+      ];
+      native.outboundMs = {'same.example': 60};
+      await boot(
+        configs: shared,
+        subs: [Subscription(id: 's', name: 'S', url: 'https://sub.example/s', createdAt: DateTime(2026))],
+        activeSubId: 's',
+        settings: switchOn,
+      );
+      await n().connect();
+      emit({'type': 'state', 'value': 'connected', 'socksPort': 1});
+      await _settle();
+      emit({'type': 'tunnel_dead', 'failures': 3});
+      await _settle();
+      final byId = {for (final x in c.read(configProvider).value!.configs) x.id: x};
+      expect(c.read(configProvider).value!.activeSubscriptionId, 's');
+      expect(byId['a']!.latencyMs, isNull);
+      expect(byId['b']!.latencyMs, 60);
+      expect(c.read(effectiveConfigProvider)?.id, 'b');
+    });
+
+    test('auto mode stays on when configs of the subscription were not probed (pinned source)', () async {
+      native.outboundMs = {'hc.example': 50};
+      await boot(
+        configs: subConfigs,
+        pins: [PinnedRef.of(subConfigs[2])],
+        subs: [Subscription(id: 's', name: 'S', url: 'https://sub.example/s', createdAt: DateTime(2026))],
+        activeSubId: 's',
+        settings: switchOn.copyWith(
+          heartbeat: const HeartbeatSettings(
+            failAction: HeartbeatFailAction.switchConfig,
+            switchSource: SwitchSource.pinned,
+          ),
+        ),
+      );
+      await n().connect();
+      emit({'type': 'state', 'value': 'connected', 'socksPort': 1});
+      await _settle();
+      // b's TCP ping is better than c's urltest, but b wasn't probed.
+      await c.read(configProvider.notifier).batchUpdatePingResults({
+        'ha.example:443': 5,
+        'hb.example:443': 1,
+      }, DateTime(2026));
+      await _settle();
+      emit({'type': 'tunnel_dead', 'failures': 3});
+      await _settle();
+      expect(c.read(configProvider).value!.activeSubscriptionId, 's');
+      expect(c.read(effectiveConfigProvider)?.id, 'c');
+      expect(native.lastConnect()['xrayConfig'], contains('hc.example'));
+    });
+
+    test('a switch found during a profile switch runs after it', () async {
+      native.outboundMs = {'hc.example': 80};
+      await connected(configs: subConfigs, settings: switchOn);
+      await n().duringProfileSwitch(() async {
+        emit({'type': 'tunnel_dead', 'failures': 3});
+        await _settle();
+        expect(native.named('measureOutbound'), isNotEmpty);
+        expect(c.read(configProvider).value!.activeConfigId, 'a');
+        return false;
+      });
+      await _settle();
+      expect(c.read(configProvider).value!.activeConfigId, 'c');
+      expect(native.lastConnect()['xrayConfig'], contains('hc.example'));
+    });
+
+    test('a switch is dropped when a profile switch changed the server meanwhile', () async {
+      native.outboundMs = {'hc.example': 80};
+      final probe = Completer<void>();
+      native.outboundGate = probe.future;
+      await connected(configs: subConfigs, settings: switchOn);
+      await n().duringProfileSwitch(() async {
+        emit({'type': 'tunnel_dead', 'failures': 3});
+        await _settle();
+        expect(native.named('measureOutbound'), isNotEmpty); // the failed config is taken: the probes wait
+        await c.read(configProvider.notifier).setActiveConfig('d');
+        return true;
+      });
+      await _settle();
+      expect(native.lastConnect()['xrayConfig'], contains('hd.example'));
+      probe.complete();
+      await _settle();
+      expect(logs().map((l) => l.message), contains('urltest: the server changed meanwhile, no switch'));
+      expect(c.read(configProvider).value!.activeConfigId, 'd');
+      expect(native.lastConnect()['xrayConfig'], contains('hd.example'));
+    });
+
+    test('the config the session runs is the failed one, also when a ping moved the auto best', () async {
+      native.outboundMs = {'hb.example': 50};
+      await boot(
+        configs: subConfigs,
+        subs: [Subscription(id: 's', name: 'S', url: 'https://sub.example/s', createdAt: DateTime(2026))],
+        activeSubId: 's',
+        settings: switchOn,
+      );
+      await n().connect();
+      emit({'type': 'state', 'value': 'connected', 'socksPort': 1});
+      await _settle();
+      // A ping makes b the auto best; the tunnel keeps running a.
+      await c.read(configProvider.notifier).batchUpdatePingResults({
+        'ha.example:443': 90,
+        'hb.example:443': 10,
+      }, DateTime(2026));
+      await _settle();
+      expect(native.named('connect'), hasLength(1));
+      emit({'type': 'tunnel_dead', 'failures': 3});
+      await _settle();
+      final probed = native.named('measureOutbound').map((m) => (m.arguments as Map)['config'] as String);
+      expect(probed.where((cfg) => cfg.contains('ha.example')), isEmpty);
+      expect(native.named('connect'), hasLength(2));
+      expect(native.lastConnect()['xrayConfig'], contains('hb.example'));
     });
 
     test('pinned source probes only pinned configs', () async {

@@ -1,18 +1,14 @@
-import 'dart:io';
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 import '../../core/models/profile.dart';
-import '../../core/models/profile_bundle.dart';
 import '../../core/services/deeplink_router.dart';
 import '../../core/models/app_message.dart';
 import '../../core/services/bundle_loader.dart';
+import '../../core/services/share_service.dart';
 import '../../providers/profile_provider.dart';
 import '../../providers/vpn_provider.dart';
-import 'dart:convert';
 import '../theme/app_theme.dart';
 import '../theme/app_colors.dart';
 import '../widgets/import_review.dart';
@@ -468,7 +464,7 @@ void _showExportSheet(BuildContext context, WidgetRef ref, Profile profile, Teap
               hint: '${profile.name.toLowerCase().replaceAll(' ', '_')}.json',
               onTap: () async {
                 Navigator.pop(ctx);
-                await _shareAsFile(context, profile, bundle);
+                await ref.read(shareServiceProvider).shareProfile(profile.name, bundle);
               },
             ),
             const SizedBox(height: 8),
@@ -477,14 +473,6 @@ void _showExportSheet(BuildContext context, WidgetRef ref, Profile profile, Teap
       ),
     ),
   );
-}
-
-Future<void> _shareAsFile(BuildContext context, Profile profile, ProfileBundle bundle) async {
-  final dir = await getTemporaryDirectory();
-  final safeName = profile.name.replaceAll(RegExp(r'[^a-zA-Z0-9а-яА-Я_\- ]'), '_');
-  final file = File('${dir.path}/$safeName.json');
-  await file.writeAsString(const JsonEncoder.withIndent('  ').convert(bundle.toJson()));
-  await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: 'Teapod profile: ${profile.name}'));
 }
 
 void _confirmDelete(BuildContext context, WidgetRef ref, Profile profile, TeapodTokens t) {

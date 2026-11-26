@@ -2,7 +2,8 @@ package com.teapodstream.teapodstream
 
 /// Decisions of the heartbeat loop. The loop thread probes the tunnel and applies the returned
 /// [Action]; all counters, the warmup and the switchConfig cooldown live here. Time comes in as
-/// an argument, so the policy is tested on the JVM. One instance per heartbeat thread; methods
+/// an argument (`SystemClock.elapsedRealtime`: a wall-clock step can't stretch or cut the warm-up and the switch
+/// cooldown), so the policy is tested on the JVM. One instance per heartbeat thread; methods
 /// are synchronized because a wake probe on another thread may report a success.
 class HeartbeatPolicy(
     private val threshold: Int,

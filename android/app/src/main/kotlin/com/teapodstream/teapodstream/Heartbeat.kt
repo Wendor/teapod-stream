@@ -1,5 +1,6 @@
 package com.teapodstream.teapodstream
 
+import android.os.SystemClock
 import com.teapodstream.teapodstream.core.VpnCore
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -90,11 +91,11 @@ internal class Heartbeat(private val host: Host) {
                     // Deep Doze: don't wake the radio with probes — counters are untouched,
                     // on leaving idle (maintenance window) the receiver probes.
                     if (host.deviceIdle) continue
-                    policy.onIteration(System.currentTimeMillis())
+                    policy.onIteration(SystemClock.elapsedRealtime())
                     val port = XrayVpnService.snapshot.socksPort
                     if (port <= 0) continue
                     // Skip in proxy-only mode: tun2socks is intentionally not started.
-                    if (host.tunMode && !apply(policy.onTun(host.core.isTunRunning(), host.core.activeConnections(), { isTunRxFresh() }, System.currentTimeMillis()))) break
+                    if (host.tunMode && !apply(policy.onTun(host.core.isTunRunning(), host.core.activeConnections(), { isTunRxFresh() }, SystemClock.elapsedRealtime()))) break
 
                     // Data reached the TUN within the last interval — the tunnel is
                     // demonstrably alive, no need to burn a radio round-trip on an
@@ -123,14 +124,14 @@ internal class Heartbeat(private val host: Host) {
                     if (host.tunMode) {
                         val lastRx = lastRxOrStart()
                         if (lastRx > 0) {
-                            val now = System.currentTimeMillis()
-                            if (!apply(policy.onTunIdle(now - lastRx, { host.core.activeConnections() }, { isTunRxFresh() }, now))) break
+                            val idleMs = System.currentTimeMillis() - lastRx
+                            if (!apply(policy.onTunIdle(idleMs, { host.core.activeConnections() }, { isTunRxFresh() }, SystemClock.elapsedRealtime()))) break
                         }
                     }
                 } catch (_: InterruptedException) {
                     break
                 } catch (e: Exception) {
-                    val action = policy.onFailure(e.message, host.directInternet(), isTunRxFresh(), System.currentTimeMillis())
+                    val action = policy.onFailure(e.message, host.directInternet(), isTunRxFresh(), SystemClock.elapsedRealtime())
                     if (action != HeartbeatPolicy.Action.Retry) {
                         if (apply(action)) continue else break
                     }
@@ -149,7 +150,7 @@ internal class Heartbeat(private val host: Host) {
                             retries++
                         }
                     }
-                    if (!apply(policy.afterRetries(recovered, isTunRxFresh(), System.currentTimeMillis()))) break
+                    if (!apply(policy.afterRetries(recovered, isTunRxFresh(), SystemClock.elapsedRealtime()))) break
                 }
             }
         }.also { it.isDaemon = true; it.start() }

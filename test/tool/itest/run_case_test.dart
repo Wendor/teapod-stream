@@ -131,6 +131,7 @@ void main() {
       ]);
       expect(r.note, contains('sing-box'));
       expect(r.note, isNot(contains('switch to')));
+      expect(shell.ops.where((o) => o == 'disconnect'), hasLength(1), reason: 'no second disconnect when already off');
     });
 
     test('a session that still runs the old core fails', () async {

@@ -458,10 +458,14 @@ Future<CaseResult> runCase(MatrixCase mc, CaseCtx ctx, RunDir run, Shell shell, 
   step('verdict ${out.v.name}: ${out.note}');
   if (out.v != Verdict.pass) await dumpGoroutines(ctx.agent, dir, step);
   try {
-    // A late marker of this case must not leak into waiting for the next one.
+    // Already off (the check disconnected itself): a second disconnect gets no new state to wait for.
+    if (ctx.agent.lastState != 'disconnected') {
+      // A late marker of this case must not leak into waiting for the next one.
+      ctx.agent.lastState = null;
+      await ctx.agent.send('disconnect');
+      await ctx.agent.waitState({'disconnected', 'error'}, const Duration(seconds: 15));
+    }
     ctx.agent.lastState = null;
-    await ctx.agent.send('disconnect');
-    await ctx.agent.waitState({'disconnected', 'error'}, const Duration(seconds: 15));
   } catch (e) {
     step('disconnect: $e');
   }

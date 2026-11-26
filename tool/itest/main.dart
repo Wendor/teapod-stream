@@ -248,6 +248,8 @@ Future<void> _main(List<String> argv) async {
           },
           relay: relay,
           relayConfigId: relayConfigId,
+          relayEgress: relayed == null ? null : imported.egress[relayed.id],
+          relayStrictEgress: relayed != null && imported.strict.contains(relayed.id),
         );
         stdout.writeln('▶ soak ${coreNames[core]}');
         try {

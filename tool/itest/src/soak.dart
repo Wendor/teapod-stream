@@ -19,6 +19,10 @@ enum Fault {
   doze('doze'),
   killApp('kill'),
 
+  /// The activity is recreated over a running session (a new task, like a launch from recents after a swipe):
+  /// the fresh UI must adopt the session without dropping it.
+  uiRestart('ui-restart'),
+
   /// The server dies for 2 minutes and comes back (a relay copy of a TCP config): the heartbeat's reconnect.
   serverDown('server-down'),
 
@@ -138,6 +142,8 @@ class Soak {
   /// The relay to a TCP config and the phone's copy of that config ([Fault.needsRelay]); none — those faults are skipped.
   final Relay? relay;
   final String? relayConfigId;
+  final String? relayEgress;
+  final bool relayStrictEgress;
 
   late final IOSink _timeline = File('${dir.path}/timeline.jsonl').openWrite();
   final _recent = ListQueue<String>();
@@ -145,6 +151,11 @@ class Soak {
   var _onWifi = true;
   var _lteOk = true;
   String? _tunnelIp;
+
+  /// The exit the probes expect while the session isn't on [configId]: the relayed config's, or after
+  /// `server-switch` none (any config's exit, just not the direct path).
+  ({String? egress, bool strict})? _exit;
+  var _cutLeak = false;
   List<String>? _faultLog;
 
   Soak({
@@ -166,7 +177,15 @@ class Soak {
     required this.onResult,
     this.relay,
     this.relayConfigId,
+    this.relayEgress,
+    this.relayStrictEgress = false,
   });
+
+  /// Probes expect [exit] from now on (null — [configId]'s); the exit seen on Wi-Fi is forgotten.
+  void _expect(({String? egress, bool strict})? exit) {
+    _exit = exit;
+    _tunnelIp = null;
+  }
 
   void _event(String kind, [Map<String, Object?> extra = const {}]) =>
       _timeline.writeln(jsonEncode({'t': DateTime.now().toIso8601String(), 'kind': kind, ...extra}));
@@ -175,6 +194,7 @@ class Soak {
   /// so the recovery time doesn't include retries of failed attempts.
   Future<ProbeSample> _probe({bool fast = false}) async {
     // A distinguishable service: answer ≠ its direct IP; otherwise any answer is enough.
+    final (:egress, strict: strictEgress) = _exit ?? (egress: this.egress, strict: this.strictEgress);
     final urls = egress != null && egress == baseline.directRuIp
         ? const <String>[]
         : informative(baseline.direct, egress);
@@ -257,6 +277,7 @@ class Soak {
       return false;
     }
     await relay!.up();
+    _expect((egress: relayEgress, strict: relayStrictEgress));
     final settings = f == Fault.serverSwitch
         ? const {
             'heartbeat': {'failAction': 'switchConfig', 'switchSource': 'all'},
@@ -266,9 +287,17 @@ class Soak {
         (await _sample(const Duration(minutes: 1), untilOk: true)).any((s) => s.ok)) {
       return true;
     }
-    final r = FaultResult(f, Verdict.fail, null, 'no traffic through the relay before the fault');
+    // The relay dials from the computer's network, which may not reach the server (a firewall, the
+    // computer's own VPN): an environment limit, not the app's failure.
+    final r = FaultResult(
+      f,
+      Verdict.skip,
+      null,
+      'no traffic through the relay (the computer may not reach the server)',
+    );
     _report(r);
     await _diag(r);
+    _expect(null);
     _event('note', {'text': 'back to the config: ${await _connect()}'});
     return false;
   }
@@ -326,13 +355,21 @@ class Soak {
         await device.killApp(itestPackage);
         // A killed process sends no markers: the previous `connected` would give a false ZOMBIE.
         agent.lastState = null;
+      case Fault.uiRestart:
+        await shell.run([
+          'shell',
+          'am start -W -f 0x10008000 -a android.intent.action.MAIN -c android.intent.category.LAUNCHER '
+              '-n $itestPackage/com.teapodstream.teapodstream.MainActivity',
+        ]);
       case Fault.serverDown:
         await relay!.down();
-        await Future<void>.delayed(const Duration(minutes: 2));
+        // Traffic while the server is cut means the session doesn't go through the relay at all.
+        _cutLeak = (await _sample(const Duration(minutes: 2))).any((s) => s.ok);
         await relay!.up();
       case Fault.serverSwitch:
-        // The server stays dead: recovery is the switch, counted from the cut.
+        // The server stays dead: recovery is the switch, counted from the cut, to any other config.
         await relay!.down();
+        _expect((egress: null, strict: false));
       case Fault.idle:
         break;
     }
@@ -397,11 +434,22 @@ class Soak {
         if (f == Fault.wifiLte && !_lteOk && r.verdict == Verdict.pass) {
           r = FaultResult(f, Verdict.fail, null, 'no VPN traffic during the LTE minute', at: r.at);
         }
-        if (f == Fault.killApp && r.verdict == Verdict.pass) r = await _adopted(r);
+        if ((f == Fault.killApp || f == Fault.uiRestart) && r.verdict == Verdict.pass) r = await _adopted(r);
+        if (f == Fault.serverDown && _cutLeak) {
+          r = FaultResult(
+            f,
+            Verdict.fail,
+            null,
+            'traffic while the server was cut: the relay is not in the path',
+            at: r.at,
+          );
+        }
+        _cutLeak = false;
         _report(r);
         if (r.verdict != Verdict.pass) await _diag(r);
         if (f.needsRelay) {
           await relay!.up();
+          _expect(null);
           _event('note', {'text': 'back to the config: ${await _connect()}'});
         } else if (r.verdict != Verdict.pass) {
           await _reconnect();

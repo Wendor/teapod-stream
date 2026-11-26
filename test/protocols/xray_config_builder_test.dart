@@ -512,10 +512,19 @@ void main() {
         expect(tag.startsWith(prefix), isFalse, reason: prefix);
         expect((cfg['outbounds'] as List).last, {'tag': tag, 'protocol': 'freedom', 'settings': <String, dynamic>{}});
       }
-      // An empty selector matches every tag: it becomes the server's tags.
-      final all = merge(raw(['']));
-      expect(selector(all), ['node']);
+      // An empty selector matches every tag: it becomes all the server's tags, also ones like the app's.
+      final all = merge(
+        raw(
+          [''],
+          [
+            {'tag': 'teapod-direct-east', 'protocol': 'vless'},
+            {'tag': 'teapod-blackhole-west', 'protocol': 'vless'},
+          ],
+        ),
+      );
+      expect(selector(all), ['node', 'teapod-direct-east', 'teapod-blackhole-west']);
       expect(privateTag(all), XrayConfigBuilder.directTag);
+      expect(selector(all).whereType<String>().any(privateTag(all).startsWith), isFalse);
 
       // Xray reads `Tag` / `Protocol` as tag / protocol: a server direct freedom written so is used, and a tag taken
       // so isn't added a second time.

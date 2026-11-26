@@ -634,6 +634,7 @@ class XrayConfigBuilder {
       cfg['log'] = logBlock(options);
 
       _clampObservatoryInterval(cfg, options.obsProbeIntervalSec);
+      _expandEmptySelectors(cfg);
       _neutralizeDirectFallback(cfg);
 
       final appRules = <Map<String, dynamic>>[];
@@ -791,6 +792,27 @@ class XrayConfigBuilder {
     return null;
   }
 
+  /// A balancer selector `""` is a prefix of every tag, an outbound the app injects too: it becomes the server's own
+  /// tags, before anything is injected ([_ensureOutbound]).
+  static void _expandEmptySelectors(Map<String, dynamic> cfg) {
+    final balancers = switch (cfg['routing']) {
+      final Map<String, dynamic> routing => _field(routing, 'balancers'),
+      _ => null,
+    };
+    if (balancers is! List) return;
+    final serverTags = [
+      for (final o in (cfg['outbounds'] as List<dynamic>? ?? const []).whereType<Map<String, dynamic>>())
+        if (_field(o, 'tag') case final String t) t,
+    ];
+    for (final b in balancers.whereType<Map<String, dynamic>>()) {
+      if (_field(b, 'selector') case final List<dynamic> selector when selector.contains('')) {
+        selector
+          ..removeWhere((p) => p == '')
+          ..addAll(serverTags.where((t) => !selector.contains(t)));
+      }
+    }
+  }
+
   /// Tag of the blackhole outbound ([_ensureOutbound]).
   static String _ensureBlackholeOutbound(Map<String, dynamic> cfg) => _ensureOutbound(cfg, blackholeTag, 'blackhole');
 
@@ -807,7 +829,7 @@ class XrayConfigBuilder {
   /// balancer's selector — a tag prefix, whatever the protocol — would match it: a balancer must keep choosing among
   /// the server's outbounds only (an injected freedom would take traffic out of the VPN), or when the server config
   /// already names a tag that no outbound has (a balancer `fallbackTag`, a rule): the reference would start pointing to
-  /// ours. An empty selector matches every tag, so it is replaced by the server's tags first. Keys are read in any letter case, as xray does.
+  /// ours. Empty selectors are gone by then ([_expandEmptySelectors]). Keys are read in any letter case, as xray does.
   static String _ensureOutbound(Map<String, dynamic> cfg, String tag, String protocol) {
     final outbounds = cfg['outbounds'] as List<dynamic>? ?? (cfg['outbounds'] = <dynamic>[]);
     final byTag = {
@@ -820,18 +842,7 @@ class XrayConfigBuilder {
       _ => null,
     };
     for (final b in (balancers is List ? balancers : const <Object?>[]).whereType<Map<String, dynamic>>()) {
-      final selector = _field(b, 'selector');
-      if (selector is! List) continue;
-      if (selector.contains('')) {
-        final serverTags = [
-          for (final t in byTag.keys)
-            if (!t.startsWith(blackholeTag) && !t.startsWith(directTag)) t,
-        ];
-        selector
-          ..remove('')
-          ..addAll(serverTags.where((t) => !selector.contains(t)));
-      }
-      prefixes.addAll(selector.whereType<String>());
+      if (_field(b, 'selector') case final List<dynamic> selector) prefixes.addAll(selector.whereType<String>());
     }
     // A server reference to a tag no outbound has (a fallbackTag, a rule, a dialerProxy) would start pointing to ours.
     final referenced = <String>{};

@@ -64,7 +64,7 @@ and security (`tls` with `serverName`, `fingerprint`, `alpn`, `echConfigList`; `
 - **Certificate pin**: `certificatePins()` normalizes hex / colon-hex / base64 SHA-256 into
   `pinnedPeerCertSha256`; with a pin `allowInsecure` is false; garbage → `FormatException`.
 - **Hysteria2**: `finalmask.udp` — `udphop` first when `hopPorts` is set (masks that dial themselves must come
-  first), then `salamander` with `obfsPassword`. **SNI is mandatory**: the hysteria dialer doesn't pass the
+  first), then `salamander` with `obfsPassword` (for Gecko plus `packetSize: "min-max"`, Xray's Gecko form). **SNI is mandatory**: the hysteria dialer doesn't pass the
   destination to `GetTLSConfig()`, so an empty `serverName` became the literal `hysteria`; the builder uses the
   address when `sni` is empty.
 - **TCP HTTP header** (`headerType=http`) is read from `rawUri` into `tcpSettings.header`.

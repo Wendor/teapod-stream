@@ -535,6 +535,30 @@ void main() {
         });
       });
 
+      test('Gecko is the salamander mask with a packetSize range', () {
+        expect(stream('hy2://pass@hy.example:443?obfs=gecko&obfs-password=o')['finalmask'], {
+          'udp': [
+            {
+              'type': 'salamander',
+              'settings': {'password': 'o', 'packetSize': '512-1200'},
+            },
+          ],
+        });
+        expect(
+          stream(
+            'hy2://pass@hy.example:443?obfs=gecko&obfs-password=o&minPacketSize=700&maxPacketSize=900',
+          )['finalmask'],
+          {
+            'udp': [
+              {
+                'type': 'salamander',
+                'settings': {'password': 'o', 'packetSize': '700-900'},
+              },
+            ],
+          },
+        );
+      });
+
       test('port range becomes the udphop mask (first in udp) with the first port as settings.port', () {
         final json = XrayConfigBuilder.build(
           VlessParser.parseUri('hy2://pass@hy.example:20000-30000/?sni=s')!,

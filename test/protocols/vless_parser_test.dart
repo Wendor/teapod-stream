@@ -177,6 +177,33 @@ void main() {
         expect(config.port, 8443);
       });
 
+      test('Salamander and Gecko keep obfs-password; Gecko packet sizes default to 512-1200', () {
+        final salamander = VlessParser.parseUri('hy2://pass@h.example:443?obfs=salamander&obfs-password=ob')!;
+        expect(salamander.obfsPassword, 'ob');
+        expect(VlessParser.geckoPacketSize(salamander), isNull);
+        final gecko = VlessParser.parseUri('hy2://pass@h.example:443?obfs=gecko&obfs-password=ob')!;
+        expect(gecko.obfsPassword, 'ob');
+        expect(VlessParser.geckoPacketSize(gecko), (512, 1200));
+        final sized = VlessParser.parseUri(
+          'hy2://pass@h.example:443?obfs=gecko&obfs-password=ob&minPacketSize=300&maxPacketSize=2048',
+        )!;
+        expect(VlessParser.geckoPacketSize(sized), (300, 2048));
+        expect(VlessParser.parseUri('hy2://pass@h.example:443?obfs=other&obfs-password=ob')!.obfsPassword, isNull);
+      });
+
+      test('a Gecko link without a password or with invalid packet sizes is not imported', () {
+        for (final query in [
+          'obfs=gecko',
+          'obfs=gecko&obfs-password=',
+          'obfs=gecko&obfs-password=ob&minPacketSize=0',
+          'obfs=gecko&obfs-password=ob&minPacketSize=900&maxPacketSize=800',
+          'obfs=gecko&obfs-password=ob&maxPacketSize=2049',
+          'obfs=gecko&obfs-password=ob&minPacketSize=abc',
+        ]) {
+          expect(VlessParser.parseUri('hy2://pass@h.example:443?$query'), isNull, reason: query);
+        }
+      });
+
       test('hysteria2:// scheme also works', () {
         const uri = 'hysteria2://pass@host:443';
         expect(VlessParser.parseUri(uri)?.protocol, VpnProtocol.hysteria2);

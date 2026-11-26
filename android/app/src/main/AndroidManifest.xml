@@ -22,6 +22,10 @@
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:networkSecurityConfig="@xml/network_security_config">
+        <!-- Skia, not Impeller: Impeller's Vulkan backend crashes the process in the Adreno driver when the
+             activity is destroyed (vkDestroyFramebuffer on a binder thread), killing the VPN service with it.
+             Release builds ignore ImpellerBackend=opengles. -->
+        <meta-data android:name="io.flutter.embedding.android.EnableImpeller" android:value="false" />
 
         <activity
             android:name=".MainActivity"

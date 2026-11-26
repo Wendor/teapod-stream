@@ -51,7 +51,7 @@ split tunneling are shared.
 `Tun2SocksCore` is the shared base of `GoCore`/`BoxCore` (tun2socks start/stop with 5/3 s deadlines, validator,
 counters, log listener, `awaitStart` 30 s); subclasses only start/stop the engine. Per-core helpers: SOCKS credentials
 from the saved config (`SocksCredentials.xray` / `.singBox`), the `?prefix=` address rewrite (`ProxyRedirect`).
-`VpnCores.active` is the core of the current/last session. The core is picked by `ConnectionParams.engine` (`go`, `rust`, `box`; unknown → `go`). `getBinaryVersions` returns all core versions.
+The session's core rides in `SessionSnapshot.core` (kept through the stop until the next session): the service runs that session on it, tunnel diagnostics and the `xray` version read it; there is no global active core. The core is picked by `ConnectionParams.engine` (`go`, `rust`, `box`; unknown → `go`). `getBinaryVersions` returns all core versions.
 
 ## Session lifecycle
 

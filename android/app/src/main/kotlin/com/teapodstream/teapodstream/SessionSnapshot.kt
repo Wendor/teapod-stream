@@ -1,5 +1,7 @@
 package com.teapodstream.teapodstream
 
+import com.teapodstream.teapodstream.core.CoreKind
+
 /** The service's session state; [wire] is the name Flutter, the itest marker and the automation broadcast see. */
 enum class SessionState(val wire: String) {
     DISCONNECTED("disconnected"),
@@ -30,7 +32,8 @@ internal fun serviceIdle(state: SessionState, tunHeld: Boolean, queueBusy: Boole
  * The whole session state as Flutter and the rest of the app see it. Immutable: the service changes it only by
  * publishing a new one. [attempt] — Flutter's connect attempt that started the session (0 — started natively:
  * tile, boot, restart); [connectedAtMs] and the SOCKS login are set only while [SessionState.CONNECTED]; [error]
- * only with [SessionState.carriesError].
+ * only with [SessionState.carriesError]; [core] — the session's core, kept through its stop until the next session
+ * (tunnel diagnostics read the last session's).
  */
 data class SessionSnapshot(
     val state: SessionState = SessionState.DISCONNECTED,
@@ -40,13 +43,18 @@ data class SessionSnapshot(
     val socksPassword: String = "",
     val connectedAtMs: Long = 0,
     val error: String? = null,
+    val core: CoreKind = CoreKind.GO,
 ) {
     /**
      * The session in a state other than connected, tagged with [attempt]. The failure reason stays (or is replaced
      * by [error]) only in a state that carries one.
      */
-    fun moved(state: SessionState, attempt: Long = this.attempt, error: String? = this.error): SessionSnapshot =
-        SessionSnapshot(state = state, attempt = attempt, error = error.takeIf { state.carriesError })
+    fun moved(
+        state: SessionState,
+        attempt: Long = this.attempt,
+        error: String? = this.error,
+        core: CoreKind = this.core,
+    ): SessionSnapshot = SessionSnapshot(state = state, attempt = attempt, error = error.takeIf { state.carriesError }, core = core)
 
     /**
      * The `state` event of the EventChannel, its `onListen` replay and the `getState` answer. `attempt` only when Flutter started
@@ -79,7 +87,13 @@ data class SessionSnapshot(
     }
 
     companion object {
-        fun connected(attempt: Long, socksPort: Int, socksUser: String, socksPassword: String, atMs: Long) =
-            SessionSnapshot(SessionState.CONNECTED, attempt, socksPort, socksUser, socksPassword, atMs)
+        fun connected(
+            attempt: Long,
+            socksPort: Int,
+            socksUser: String,
+            socksPassword: String,
+            atMs: Long,
+            core: CoreKind = CoreKind.GO,
+        ) = SessionSnapshot(SessionState.CONNECTED, attempt, socksPort, socksUser, socksPassword, atMs, core = core)
     }
 }

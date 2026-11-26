@@ -74,9 +74,6 @@ interface VpnCore {
 }
 
 object VpnCores {
-    /** Core of the current (or last) session. */
-    @Volatile var active: VpnCore = GoCore
-
     fun get(kind: CoreKind): VpnCore = when (kind) {
         CoreKind.GO -> GoCore
         CoreKind.RUST -> RustCore

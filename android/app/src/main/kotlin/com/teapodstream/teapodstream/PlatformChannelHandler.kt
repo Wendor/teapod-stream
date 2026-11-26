@@ -130,7 +130,7 @@ internal class PlatformChannelHandler(
         val versions = mutableMapOf<String, String>()
         try {
             versions.putAll(VpnCores.versions())
-            versions["xray"] = VpnCores.active.version()
+            versions["xray"] = VpnCores.get(XrayVpnService.snapshot.core).version()
             versions["tun2socks"] = "teapod-core (AAR)"
         } catch (_: Exception) {
             versions["xray"] = "Error"

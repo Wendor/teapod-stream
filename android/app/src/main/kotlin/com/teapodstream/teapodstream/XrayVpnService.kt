@@ -188,7 +188,8 @@ class XrayVpnService : VpnService() {
     @Volatile private var tunMtu = 1500
     // Core of the current session: fixed in startVpn after the CAS so that a core change
     // by a new connect doesn't redirect stop/heartbeat/stats to another core.
-    @Volatile private var sessionCore: VpnCore = VpnCores.active
+    // Before the first start here: the last session's core in this process.
+    @Volatile private var sessionCore: VpnCore = VpnCores.get(snapshot.core)
     private val core: VpnCore get() = sessionCore
 
     override fun onCreate() {
@@ -377,7 +378,6 @@ class XrayVpnService : VpnService() {
         // The previous session's notification type stayed until here: switch the foreground one to this session's.
         if (notificationTypeChanged) notifications.foreground()
         sessionCore = VpnCores.get(CoreKind.fromId(engine))
-        VpnCores.active = sessionCore
         // Keep the previous TUN (kill-switch sink left by a reconnect) open until the
         // new one is established: establish() atomically replaces the interface, so
         // app traffic is blackholed by the old TUN instead of leaking while xray starts.
@@ -900,7 +900,7 @@ class XrayVpnService : VpnService() {
 
     /** A state other than connected, tagged with [sessionAttempt]; [error] replaces the failure reason. */
     private fun setState(state: SessionState, error: String? = null, attempt: Long = sessionAttempt) =
-        publish { it.moved(state, attempt, error ?: it.error) }
+        publish { it.moved(state, attempt, error ?: it.error, core.kind) }
 
     /**
      * The only writer of the session state: stores the snapshot [next] makes of the current one and reports it to
@@ -929,7 +929,7 @@ class XrayVpnService : VpnService() {
         val now = System.currentTimeMillis()
         lastConnectedMs = now
         network.markConnected()
-        publish { SessionSnapshot.connected(sessionAttempt, socksPort, socksUser, socksPassword, now) }
+        publish { SessionSnapshot.connected(sessionAttempt, socksPort, socksUser, socksPassword, now, core.kind) }
         // The "Disconnected"/intermediate notification bypasses the dedupe cache —
         // reset it so the connected layout is always posted.
         notifications.connected(screenOn)

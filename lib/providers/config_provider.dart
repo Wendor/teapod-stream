@@ -495,7 +495,8 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
           subscriptionId: subIdMap[c.subscriptionId] ?? c.subscriptionId,
         ),
     ];
-    final newConfigs = remapped.where((c) => !existingKeys.contains(key(c))).toList();
+    // add() also drops a second copy of the same link within the bundle.
+    final newConfigs = remapped.where((c) => existingKeys.add(key(c))).toList();
 
     var next = current;
     if (newSubscriptions.isNotEmpty) next = next.copyWith(subscriptions: [...next.subscriptions, ...newSubscriptions]);

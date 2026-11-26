@@ -487,12 +487,12 @@ void main() {
       final r = await n().importBundle(
         ConnectionsBundle(
           exportedAt: DateTime(2026),
-          rawUris: [_trojan('new.example', 'New'), dup, 'garbage://x'],
+          rawUris: [_trojan('new.example', 'New'), dup, 'garbage://x', _trojan('new.example', 'New')],
           subscriptionUrls: ['https://known.example/s', server.url('/sub')],
         ),
       );
       expect(r.addedConfigs, 1);
-      expect(r.skippedConfigs, 2);
+      expect(r.skippedConfigs, 3);
       expect(r.addedSubscriptions, 1);
       expect(s().configs.map((c) => c.address), ['hold', 'new.example', 's.example']);
       expect(s().subscriptions.map((x) => x.url), ['https://known.example/s', server.url('/sub')]);

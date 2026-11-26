@@ -20,7 +20,7 @@ read a service through it and never construct one, so a test swaps a service wit
   nothing is offered to accept. On "continue" the fetch is repeated with `pinnedCertDer: e.der`. The pin is returned
   as `acceptedCertDer` and stored in `Subscription.pinnedCertDer` (trust on first use); it lets through only that
   exact certificate, only from the subscription host, and only when normal verification fails — a certificate that
-  passes verification is accepted as usual. There is no "accept any certificate" mode. `sha256()` is a local FIPS 180-4 implementation (no hashing dependency).
+  passes verification is accepted as usual. There is no "accept any certificate" mode. `sha256()` is a local FIPS 180-4 implementation (`lib/core/crypto/sha256.dart`, no hashing dependency).
 - **Body formats**, tried in order: a JSON array (managed subscription: each element becomes a `VpnConfig` with
   `rawXrayConfig`), base64 of a URI list, a plain URI list. URIs go to [VlessParser](vless_parser.md).
 - **Response headers:** profile title, usage (`subscription-userinfo`), announce, HWID status (`x-hwid-active`,
@@ -36,7 +36,7 @@ forever.
 page, and the subscription would import zero configs. Headers: `X-Hwid`, `X-Device-Os: Android`,
 `X-Device-Model`, `X-Ver-Os`. `DeviceService` reads them over the channel once and caches them in secure storage.
 `X-Hwid` is per subscription host: `HwidDeviceInfo.forHost` — hex HMAC-SHA256 of the lower-cased host under
-ANDROID_ID (`hmacSha256`, on the local `sha256`), so providers can't match one device across services. A subscription
+ANDROID_ID (`hmacSha256` in `lib/core/crypto/sha256.dart`), so providers can't match one device across services. A subscription
 with `rawHwid` (stored before per-host ids) keeps sending ANDROID_ID while its URL keeps the same host.
 
 ## AppHttp

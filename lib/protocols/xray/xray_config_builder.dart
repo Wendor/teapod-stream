@@ -805,8 +805,9 @@ class XrayConfigBuilder {
   /// Tag of an outbound of [protocol] the app injected: [tag], or a variant of it. A variant is taken when a server
   /// outbound of another protocol has the tag (it stays as is: server rules may point to it), or when a server
   /// balancer's selector — a tag prefix, whatever the protocol — would match it: a balancer must keep choosing among
-  /// the server's outbounds only (an injected freedom would take traffic out of the VPN). An empty selector matches
-  /// every tag, so it is replaced by the server's tags first. Keys are read in any letter case, as xray does.
+  /// the server's outbounds only (an injected freedom would take traffic out of the VPN), or when the server config
+  /// already names a tag that no outbound has (a balancer `fallbackTag`, a rule): the reference would start pointing to
+  /// ours. An empty selector matches every tag, so it is replaced by the server's tags first. Keys are read in any letter case, as xray does.
   static String _ensureOutbound(Map<String, dynamic> cfg, String tag, String protocol) {
     final outbounds = cfg['outbounds'] as List<dynamic>? ?? (cfg['outbounds'] = <dynamic>[]);
     final byTag = {
@@ -832,11 +833,20 @@ class XrayConfigBuilder {
       }
       prefixes.addAll(selector.whereType<String>());
     }
+    // A server reference to a tag no outbound has (a fallbackTag, a rule, a dialerProxy) would start pointing to ours.
+    final referenced = <String>{};
+    void collect(Object? v) => switch (v) {
+      final String s => referenced.add(s),
+      final Map<String, dynamic> m => m.values.forEach(collect),
+      final List<dynamic> l => l.forEach(collect),
+      _ => null,
+    };
+    collect(cfg);
     for (final candidate in _tagVariants(tag)) {
       if (prefixes.any(candidate.startsWith)) continue;
       final taken = byTag[candidate];
       if (taken == protocol) return candidate;
-      if (taken != null) continue;
+      if (taken != null || referenced.contains(candidate)) continue;
       outbounds.add({'tag': candidate, 'protocol': protocol, 'settings': <String, dynamic>{}});
       return candidate;
     }

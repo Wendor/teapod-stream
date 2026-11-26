@@ -538,6 +538,17 @@ void main() {
         ),
       );
       expect(privateTag(taken), '${XrayConfigBuilder.directTag}-2');
+
+      // A tag the server already names without an outbound (a fallback, a rule) isn't taken: the reference would
+      // start pointing to an injected freedom.
+      final named = raw(['node']);
+      ((named['routing'] as Map)['balancers'] as List).first['fallbackTag'] = XrayConfigBuilder.directTag;
+      (named['routing'] as Map)['rules'] = [
+        {'type': 'field', 'network': 'udp', 'outboundTag': '${XrayConfigBuilder.directTag}-2'},
+      ];
+      final avoided = merge(named);
+      expect(privateTag(avoided), '${XrayConfigBuilder.directTag}-3');
+      expect(avoided['routing']['balancers'][0]['fallbackTag'], XrayConfigBuilder.directTag);
     });
 
     test('mergeWithRaw keeps a server outbound that took our tag and blocks UDP via a free tag', () {

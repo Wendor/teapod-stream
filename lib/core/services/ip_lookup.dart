@@ -1,5 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+
+import 'app_http.dart';
+import 'tunnel_socks.dart';
 
 /// The exit IP as a lookup service saw it; [countryCode] is null when the service doesn't report it.
 class IpLookupResult {
@@ -91,6 +95,30 @@ class IpLookup {
     final now = _now();
     bool penalized(IpLookupSource s) => failed[s.id] != null && now.difference(failed[s.id]!) < penalty;
     return [...order.where((s) => !penalized(s)), ...order.where(penalized)];
+  }
+
+  static const _maxBodyBytes = 64 * 1024;
+
+  /// [lookup] over HTTP through [socks]: the lookup is about the tunnel's exit IP. One client for the chain: closing
+  /// it ends the requests the lookup stopped waiting for.
+  Future<IpLookupResult?> lookupThrough(String configId, TunnelSocks socks) async {
+    final client = AppHttp.client(socks: socks);
+    Future<String> fetch(Uri url) async {
+      final resp = await AppHttp.get(
+        url,
+        client: client,
+        headers: const {HttpHeaders.userAgentHeader: 'TeapodStream'},
+        maxBytes: _maxBodyBytes,
+      );
+      if (resp.statusCode != HttpStatus.ok) throw HttpException('HTTP ${resp.statusCode}', uri: url);
+      return resp.body;
+    }
+
+    try {
+      return await lookup(configId, fetch);
+    } finally {
+      client.close(force: true);
+    }
   }
 
   /// The first answer with an IP, or null when every service failed or [total] ran out. [fetch] returns the body

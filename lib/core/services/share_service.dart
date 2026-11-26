@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../l10n/l10n.dart';
 import '../models/profile_bundle.dart';
 import 'log_service.dart';
 
@@ -26,7 +27,7 @@ class ShareService {
     final safeName = name.replaceAll(RegExp(r'[^a-zA-Z0-9а-яА-Я_\- ]'), '_');
     final file = File('${dir.path}/$safeName.json');
     await file.writeAsString(const JsonEncoder.withIndent('  ').convert(bundle.toJson()));
-    await _share(ShareParams(files: [XFile(file.path)], text: 'Teapod profile: $name'));
+    await _share(ShareParams(files: [XFile(file.path)], text: L10n.current.shareProfileText(name)));
   }
 
   /// Shares the log at [srcPath] with [secrets] masked, as one copy overwritten on every export. False — the log is
@@ -41,7 +42,7 @@ class ShareService {
     await _share(
       ShareParams(
         files: [XFile(tmp.path, mimeType: 'text/plain')],
-        subject: 'TeapodStream Log',
+        subject: L10n.current.shareLogSubject,
       ),
     );
     return true;

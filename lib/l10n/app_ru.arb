@@ -320,6 +320,8 @@
   "unitHours": "{count}ч",
   "subsHwidHint": "Отправлять ID устройства для привязки подписки",
   "commonDefaultLower": "по умолчанию",
+  "shareProfileText": "Профиль Teapod: {name}",
+  "shareLogSubject": "Лог TeapodStream",
   "logsEmpty": "Лог пуст",
   "logsTagline": "ЖУРНАЛ · XRAY · TUN2SOCKS",
   "qrCameraError": "Ошибка камеры: {error}",

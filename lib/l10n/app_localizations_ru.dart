@@ -1090,6 +1090,14 @@ class AppLocalizationsRu extends AppLocalizations {
   String get commonDefaultLower => 'по умолчанию';
 
   @override
+  String shareProfileText(String name) {
+    return 'Профиль Teapod: $name';
+  }
+
+  @override
+  String get shareLogSubject => 'Лог TeapodStream';
+
+  @override
   String get logsEmpty => 'Лог пуст';
 
   @override

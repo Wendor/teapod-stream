@@ -1,12 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:teapodstream/core/models/app_settings.dart';
 import 'package:teapodstream/core/models/profile.dart';
 import 'package:teapodstream/core/models/profile_bundle.dart';
 import 'package:teapodstream/core/services/share_service.dart';
+import 'package:teapodstream/l10n/l10n.dart';
 
 void main() {
   late Directory cache;
@@ -18,7 +20,17 @@ void main() {
     shared.clear();
     service = ShareService(cacheDir: () async => cache, share: (p) async => shared.add(p));
   });
-  tearDown(() => cache.deleteSync(recursive: true));
+  tearDown(() {
+    cache.deleteSync(recursive: true);
+    L10n.current = lookupAppLocalizations(const Locale('en'));
+  });
+
+  test('the share text and subject are in the app language', () async {
+    L10n.current = lookupAppLocalizations(const Locale('ru'));
+    File('${cache.path}/native.log').writeAsStringSync('x');
+    await service.shareLog('${cache.path}/native.log', const []);
+    expect(shared.single.subject, 'Лог TeapodStream');
+  });
 
   group('shareLog', () {
     late File log;
@@ -32,6 +44,7 @@ void main() {
       final copy = File('${cache.path}/${ShareService.logExportName}');
       expect(copy.readAsStringSync(), isNot(contains('secret-host')));
       expect(shared.single.files!.single.path, copy.path);
+      expect(shared.single.subject, 'TeapodStream log');
       expect(old.existsSync(), isFalse);
       expect(other.existsSync(), isTrue);
     });
@@ -52,6 +65,7 @@ void main() {
     await service.shareProfile('My/Профиль', bundle);
     final path = shared.single.files!.single.path;
     expect(path, '${cache.path}/My_Профиль.json');
+    expect(shared.single.text, 'Teapod profile: My/Профиль');
     final json = jsonDecode(File(path).readAsStringSync()) as Map<String, dynamic>;
     expect(ProfileBundle.fromJson(json).profile.name, 'My/Профиль');
   });

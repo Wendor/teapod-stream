@@ -1066,6 +1066,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commonDefaultLower => 'default';
 
   @override
+  String shareProfileText(String name) {
+    return 'Teapod profile: $name';
+  }
+
+  @override
+  String get shareLogSubject => 'TeapodStream log';
+
+  @override
   String get logsEmpty => 'Log is empty';
 
   @override

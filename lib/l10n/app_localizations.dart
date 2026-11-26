@@ -2012,6 +2012,18 @@ abstract class AppLocalizations {
   /// **'default'**
   String get commonDefaultLower;
 
+  /// No description provided for @shareProfileText.
+  ///
+  /// In en, this message translates to:
+  /// **'Teapod profile: {name}'**
+  String shareProfileText(String name);
+
+  /// No description provided for @shareLogSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'TeapodStream log'**
+  String get shareLogSubject;
+
   /// No description provided for @logsEmpty.
   ///
   /// In en, this message translates to:

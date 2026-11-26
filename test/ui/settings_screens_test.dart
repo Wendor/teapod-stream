@@ -13,7 +13,7 @@ import 'package:teapodstream/providers/settings_provider.dart';
 import 'package:teapodstream/providers/update_provider.dart';
 import 'package:teapodstream/ui/screens/network_settings_screen.dart';
 import 'package:teapodstream/ui/screens/routing/routing_screen.dart';
-import 'package:teapodstream/ui/screens/settings_screen.dart';
+import 'package:teapodstream/ui/screens/settings/settings_screen.dart';
 import 'package:teapodstream/ui/screens/whats_new_screen.dart';
 import 'package:teapodstream/ui/widgets/settings_shared.dart';
 

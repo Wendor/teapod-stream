@@ -11,7 +11,7 @@ import 'ui/theme/app_colors.dart';
 import 'ui/screens/home_screen.dart';
 import 'ui/screens/configs/configs_screen.dart';
 import 'ui/screens/routing/routing_screen.dart';
-import 'ui/screens/settings_screen.dart';
+import 'ui/screens/settings/settings_screen.dart';
 import 'providers/config_provider.dart';
 import 'providers/vpn_provider.dart';
 import 'core/models/app_settings.dart';

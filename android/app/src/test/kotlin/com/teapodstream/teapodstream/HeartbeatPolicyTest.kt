@@ -104,18 +104,53 @@ class HeartbeatPolicyTest {
         val first = p.fail(now = t0)
         assertEquals(Action.SwitchConfig(1, "Heartbeat failed (failures: 1) → picking another config"), first)
         assertEquals(0, p.failures())
-        // Flutter didn't switch: within the cooldown — a plain reconnect.
-        assertTrue(p.fail(now = t0 + 10_000) is Action.Reconnect)
-        // After the cooldown — asked again.
-        assertTrue(p.fail(now = t0 + 10_000 + HeartbeatPolicy.SWITCH_COOLDOWN_MS) is Action.SwitchConfig)
+        // Exhausted again within the cooldown: Flutter still has time, nothing is done.
+        assertTrue(p.fail(now = t0 + 10_000) is Action.Note)
+        // Flutter didn't switch within the cooldown — a plain reconnect...
+        assertTrue(p.fail(now = t0 + HeartbeatPolicy.SWITCH_COOLDOWN_MS) is Action.Reconnect)
+        // ...and the next exhaustion asks Flutter again.
+        assertTrue(p.fail(now = t0 + HeartbeatPolicy.SWITCH_COOLDOWN_MS + 10_000) is Action.SwitchConfig)
+    }
+
+    @Test
+    fun freshTrafficSettlesAPendingSwitch() {
+        val p = policy(threshold = 1, switchConfig = true)
+        assertTrue(p.fail(now = t0) is Action.SwitchConfig)
+        assertTrue(p.fail(now = t0 + 10_000, rxFresh = true) is Action.Warn)
+        // A later, separate exhaustion asks Flutter again instead of the fallback reconnect.
+        assertTrue(p.fail(now = t0 + HeartbeatPolicy.SWITCH_COOLDOWN_MS + 10_000) is Action.SwitchConfig)
+    }
+
+    @Test
+    fun warmupLimitWaitsForAPendingSwitch() {
+        val p = policy(switchConfig = true, isReconnect = true)
+        val conns = HeartbeatPolicy.TUN_CONN_LEAK_THRESHOLD + 1
+        assertTrue(p.onTun(running = true, activeConns = conns, rxFresh = { false }, now = t0) is Action.SwitchConfig)
+        // The warm-up limit (30 s) falls inside the switch cooldown (45 s): no reconnect under it.
+        assertTrue(p.fail(now = t0 + HeartbeatPolicy.WARMUP_TIMEOUT_MS) is Action.Note)
+        // After the cooldown the warm-up limit applies.
+        assertTrue(p.fail(now = t0 + HeartbeatPolicy.SWITCH_COOLDOWN_MS) is Action.Reconnect)
     }
 
     @Test
     fun deadOrLeakingTunReconnects() {
         val p = policy()
-        assertTrue(p.onTun(running = false, activeConns = 0) is Action.Reconnect)
-        assertTrue(p.onTun(running = true, activeConns = HeartbeatPolicy.TUN_CONN_LEAK_THRESHOLD + 1) is Action.Reconnect)
-        assertEquals(Action.None, p.onTun(running = true, activeConns = HeartbeatPolicy.TUN_CONN_LEAK_THRESHOLD))
+        val fresh = { true }
+        assertTrue(p.onTun(running = false, activeConns = 0, rxFresh = fresh, now = t0) is Action.Reconnect)
+        assertTrue(p.onTun(running = true, activeConns = HeartbeatPolicy.TUN_CONN_LEAK_THRESHOLD + 1, rxFresh = fresh, now = t0) is Action.Reconnect)
+        assertEquals(Action.None, p.onTun(running = true, activeConns = HeartbeatPolicy.TUN_CONN_LEAK_THRESHOLD, rxFresh = fresh, now = t0))
+    }
+
+    @Test
+    fun pileUpWithoutAnswersIsExhaustionSoSwitchConfigApplies() {
+        val conns = HeartbeatPolicy.TUN_CONN_LEAK_THRESHOLD + 1
+        val switching = policy(switchConfig = true)
+        assertTrue(switching.onTun(running = true, activeConns = conns, rxFresh = { false }, now = t0) is Action.SwitchConfig)
+        // The pile-up check runs every interval: within the cooldown it waits for the switch, no reconnect.
+        val next = switching.onTun(running = true, activeConns = conns, rxFresh = { false }, now = t0 + HeartbeatPolicy.INTERVAL_MS)
+        assertTrue(next is Action.Note)
+        // The reconnect mode reconnects, as before.
+        assertTrue(policy().onTun(running = true, activeConns = conns, rxFresh = { false }, now = t0) is Action.Reconnect)
     }
 
     @Test

@@ -2,7 +2,8 @@ package com.teapodstream.teapodstream
 
 /// Decisions of the heartbeat loop. The loop thread probes the tunnel and applies the returned
 /// [Action]; all counters, the warmup and the switchConfig cooldown live here. Time comes in as
-/// an argument, so the policy is tested on the JVM. One instance per heartbeat thread; methods
+/// an argument (`SystemClock.elapsedRealtime`: a wall-clock step can't stretch or cut the warm-up and the switch
+/// cooldown), so the policy is tested on the JVM. One instance per heartbeat thread; methods
 /// are synchronized because a wake probe on another thread may report a success.
 class HeartbeatPolicy(
     private val threshold: Int,
@@ -52,9 +53,14 @@ class HeartbeatPolicy(
 
     /// TUN mode only: tun2socks state before probing. The SOCKS probe bypasses the TUN, so it
     /// passes even when tun2socks crashed or leaks connections (stale TIME_WAIT / CLOSE_WAIT
-    /// entries in gVisor); a reconnect resets both.
-    @Synchronized fun onTun(running: Boolean, activeConns: Long): Action = when {
+    /// entries in gVisor); a reconnect resets both. Too many connections while apps get no
+    /// payload ([rxFresh] false) is a dead upstream piling up attempts, not a leak: it is
+    /// exhaustion, so `switchConfig` applies (a plain reconnect every interval would restart
+    /// the warm-up and keep the failures from ever counting).
+    @Synchronized fun onTun(running: Boolean, activeConns: Long, rxFresh: () -> Boolean, now: Long): Action = when {
         !running -> Action.Reconnect("tun2socks not running")
+        activeConns > TUN_CONN_LEAK_THRESHOLD && !rxFresh() ->
+            exhausted(threshold, "No answers with activeConns=$activeConns", rxFresh = false, now = now)
         activeConns > TUN_CONN_LEAK_THRESHOLD -> Action.Reconnect("gVisor connection leak detected (activeConns=$activeConns)")
         else -> Action.None
     }
@@ -109,7 +115,10 @@ class HeartbeatPolicy(
         }
         noInternetStreak = 0
         if (!warmupDone) {
-            if (warmupDeadline == 0L || now < warmupDeadline) return Action.Note("Heartbeat warmup probe failed: $error")
+            // A config switch asked for meanwhile (the pile-up check) has its cooldown: the warm-up limit doesn't cut it.
+            if (warmupDeadline == 0L || now < warmupDeadline || switchPending(now)) {
+                return Action.Note("Heartbeat warmup probe failed: $error")
+            }
             return Action.Reconnect("Heartbeat warmup timed out (${WARMUP_TIMEOUT_MS / 1000} s)")
         }
         failures++
@@ -135,20 +144,30 @@ class HeartbeatPolicy(
         // real traffic flows: if the TUN saw data within the last interval, keep the session.
         if (rxFresh) {
             failures = 0
+            lastSwitchAt = 0L // data flows: an earlier switch request is settled
             return Action.Warn("Heartbeat failing but TUN traffic is alive, skipping reconnect")
         }
         if (switchConfig) {
-            if (now - lastSwitchAt >= SWITCH_COOLDOWN_MS || lastSwitchAt == 0L) {
+            if (lastSwitchAt == 0L) {
                 lastSwitchAt = now
                 failures = 0
                 return Action.SwitchConfig(count, "$reason (failures: $count) → picking another config")
             }
-            // Flutter didn't switch within the cooldown (app killed / no live candidates):
-            // a plain reconnect of the current server.
+            // Flutter has the cooldown to switch: a check exhausted again meanwhile (the pile-up one runs every
+            // interval) waits instead of reconnecting under it.
+            if (switchPending(now)) {
+                return Action.Note("$reason (failures: $count), waiting for the config switch")
+            }
+            // No switch within the cooldown (app killed / no live candidate): a plain reconnect of the current
+            // server; the next exhaustion asks Flutter again.
+            lastSwitchAt = 0L
+            failures = 0
             return Action.Reconnect("$reason (failures: $count), no switch within the switchConfig cooldown")
         }
         return Action.Reconnect("$reason (failures: $count)")
     }
+
+    private fun switchPending(now: Long) = lastSwitchAt != 0L && now - lastSwitchAt < SWITCH_COOLDOWN_MS
 
     companion object {
         const val INTERVAL_MS = 15_000L

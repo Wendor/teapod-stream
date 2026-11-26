@@ -71,3 +71,46 @@ func TestPipeConnectionsKeepsResponseAfterAppHalfClose(t *testing.T) {
 		t.Fatal("pipeConnections did not finish after both directions closed")
 	}
 }
+
+// The engine's liveness stamp moves only with payload from the proxy: an app's request alone
+// (what a dead server leaves — the stack still acks the app) must not make the tunnel look alive.
+func TestPipeConnectionsStampsEngineRxOnlyOnProxyPayload(t *testing.T) {
+	app, appSide := tcpPair(t)
+	proxySide, upstream := tcpPair(t)
+	defer app.Close()
+	defer upstream.Close()
+
+	now := time.Now().UnixMilli()
+	tc := &trackedConn{app: appSide, proxy: proxySide, dst: "test", createdMs: now}
+	tc.lastTxMs.Store(now)
+	tc.lastRxMs.Store(now)
+	e := &Engine{}
+	go pipeConnections(tc, e)
+
+	if _, err := app.Write([]byte("request")); err != nil {
+		t.Fatal(err)
+	}
+	buf := make([]byte, 16)
+	upstream.SetDeadline(time.Now().Add(5 * time.Second))
+	if _, err := io.ReadAtLeast(upstream, buf, len("request")); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.LastRxMs(); got != 0 {
+		t.Fatalf("engine rx stamped by the app's request: %d", got)
+	}
+
+	if _, err := upstream.Write([]byte("response")); err != nil {
+		t.Fatal(err)
+	}
+	app.SetDeadline(time.Now().Add(5 * time.Second))
+	if _, err := io.ReadAtLeast(app, buf, len("response")); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for e.LastRxMs() == 0 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if e.LastRxMs() == 0 {
+		t.Fatal("engine rx not stamped by the proxy's response")
+	}
+}

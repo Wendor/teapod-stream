@@ -113,10 +113,23 @@ class VpnNotifier extends Notifier<VpnState2> {
   @override
   VpnState2 build() {
     _engine = ref.read(xrayEngineProvider);
-    listenSelf((_, next) => ref.read(tunnelSocksProvider.notifier).set(next.tunnelSocks));
+    listenSelf((prev, next) {
+      ref.read(tunnelSocksProvider.notifier).set(next.tunnelSocks);
+      // A session that ended may have run older settings than the current ones: the tile, boot and automation start
+      // from the saved parameters, so they are saved again from what would run now.
+      if (_idle(next.connectionState) && prev != null && !_idle(prev.connectionState)) _refreshQuickConnect();
+    });
     // The active profile's core changed (priority, disabling, pinning).
     ref.listen(activeCoreProvider, (prev, next) {
       if (prev != null && next != null && prev != next && !_profileSwitching) _onCoreChanged();
+    });
+    // Connection settings changed while off: the saved quick-connect parameters follow them (a running session keeps
+    // its own until it ends, above).
+    ref.listen(settingsProvider, (prev, next) {
+      final (a, b) = (prev?.value, next.value);
+      if (a == null || b == null || _profileSwitching) return;
+      // The core part is the core listener's.
+      if (connectionFingerprint(a) != connectionFingerprint(b)) _refreshQuickConnect();
     });
 
     _eventSub = XrayEngine.events.listen(
@@ -157,6 +170,9 @@ class VpnNotifier extends Notifier<VpnState2> {
               .read(logServiceProvider.notifier)
               .addDebug('Ignored ${event['value']} of connect attempt ${session.attempt}');
         }
+        // Native is off now and accepts the save: an earlier one may have been refused while it was stopping (a
+        // timed-out connect shows `error` before native stops).
+        if (_idle(session.state)) _refreshQuickConnect();
       case 'log':
         final level = event['level'] as String? ?? 'info';
         final msg = event['message'] as String? ?? '';
@@ -368,9 +384,31 @@ class VpnNotifier extends Notifier<VpnState2> {
         );
   }
 
+  static bool _idle(VpnState s) => s == VpnState.disconnected || s == VpnState.error;
+
+  /// While off, re-saves (or clears) the quick-connect parameters from the current settings and config.
+  /// Runs after the notification that asked for it: providers aren't read while they rebuild.
+  void _refreshQuickConnect() {
+    // Several asks in one turn (native's off report and the transition it causes) save once.
+    if (_refreshQueued) return;
+    _refreshQueued = true;
+    unawaited(
+      Future(() async {
+        _refreshQueued = false;
+        if (ref.mounted && _idle(state.connectionState) && !_profileSwitching) await _onCoreChanged();
+      }),
+    );
+  }
+
+  bool _refreshQueued = false;
+
   /// The active profile's core changed: disconnect if nothing runs the profile anymore,
   /// otherwise re-save/clear quick-reconnect.
   Future<void> _onCoreChanged() async {
+    // The saved parameters are built as a connect builds them: geosite codes missing from geosite.dat left out.
+    await _loadGeosite();
+    // A profile switch begun meanwhile has its settings without its server yet; its end reconciles.
+    if (!ref.mounted || _profileSwitching) return;
     final settings = ref.read(settingsProvider).value;
     if (settings == null) return;
     final config = _resolveEffectiveConfig(ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null));
@@ -487,9 +525,11 @@ class VpnNotifier extends Notifier<VpnState2> {
   }
 
   /// Makes the tunnel run the active config: a connect in flight is redone, a live tunnel on another config switches,
-  /// one on this config stays.
+  /// one on this config stays, an idle VPN saves it for quick connect.
   Future<void> _followSelection() async {
     if (state.isBusy) return reconnectWithNewConfig();
+    // Off: the tile, boot and automation start the selected config.
+    if (_idle(state.connectionState)) return _onCoreChanged();
     final config = ref.read(effectiveConfigProvider);
     if (state.isConnected && config != null && !runsConfig(config)) await reconnectWithNewConfig();
   }
@@ -514,7 +554,7 @@ class VpnNotifier extends Notifier<VpnState2> {
 
   /// Runs a profile switch ([body] returns false — nothing switched), then makes the VPN follow the
   /// final state: a profile no core runs disconnects (as a core change does), a live tunnel is
-  /// rebuilt if stale, a core change suppressed meanwhile is handled.
+  /// rebuilt if stale, a core change suppressed meanwhile is handled, an idle VPN saves the quick-connect parameters.
   /// Switches to profile [id]; the VPN follows once its settings and server are in place, also when restoring the
   /// server failed: the profile is already switched, and a retry can't — it is active.
   Future<void> switchProfile(String id) =>
@@ -529,12 +569,17 @@ class VpnNotifier extends Notifier<VpnState2> {
     try {
       switched = await body();
     } finally {
+      // Settings rebuild lazily: read here, the switch's change reaches the settings listener while it is skipped, and
+      // the idle save below is the only one.
+      ref.read(settingsProvider);
       _profileSwitching = false;
       final core = ref.read(activeCoreProvider);
       final live = switched && (state.isConnected || state.isConnecting);
       if (live && core?.kind != null) {
         await reconnectIfStale();
-      } else if (live || core != coreBefore) {
+      } else if (live || core != coreBefore || _idle(state.connectionState)) {
+        // Off: the profile's server and connection settings reach the saved quick-connect parameters (the settings
+        // listener skips the switch).
         await _onCoreChanged();
       }
     }

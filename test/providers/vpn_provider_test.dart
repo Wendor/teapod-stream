@@ -15,6 +15,9 @@ import 'package:teapodstream/core/models/config_selection.dart';
 import 'package:teapodstream/core/models/connection_fingerprint.dart';
 import 'package:teapodstream/core/models/core_kind.dart';
 import 'package:teapodstream/core/models/heartbeat_settings.dart';
+import 'package:teapodstream/core/services/geosite_index.dart';
+import 'package:teapodstream/core/models/routing_settings.dart';
+import 'package:teapodstream/providers/geo_provider.dart';
 import 'package:teapodstream/core/models/pinned_ref.dart';
 import 'package:teapodstream/core/services/profile_storage_service.dart';
 import 'package:teapodstream/core/models/profile.dart';
@@ -1291,8 +1294,113 @@ void main() {
           .read(settingsProvider.notifier)
           .save(_settings.copyWith(coreOrder: [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox]));
       await _settle();
-      expect(engine.quickSaves, [CoreKind.xrayRust]);
+      // The ended session re-saves what would run now (sing-box), then the core change saves rust.
+      expect(engine.quickSaves, [CoreKind.singBox, CoreKind.xrayRust]);
       expect(native.named('connect'), isEmpty);
+    });
+
+    test('quick connect follows connection settings changed while off', () async {
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      await c.read(settingsProvider.notifier).save(_settings.copyWith(killSwitchEnabled: true));
+      await _settle();
+      expect((native.named('saveQuickConnect').single.arguments as Map)['killSwitch'], isTrue);
+
+      // A change outside the connection (auto-connect) saves nothing.
+      native.calls.clear();
+      await c.read(settingsProvider.notifier).save(_settings.copyWith(killSwitchEnabled: true, autoConnect: true));
+      await _settle();
+      expect(native.named('saveQuickConnect'), isEmpty);
+    });
+
+    test('an idle profile switch with the same core reaches quick connect', () async {
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      await c.read(profileProvider.future);
+      final profiles = c.read(profileProvider.notifier);
+      final defaultId = c.read(profileProvider).value!.activeProfileId;
+      await profiles.createProfile('B');
+      final bId = c.read(profileProvider).value!.profiles.last.id;
+      await n().switchProfile(bId);
+      await c.read(settingsProvider.notifier).save(_settings.copyWith(killSwitchEnabled: true));
+      await _settle();
+      expect((native.named('saveQuickConnect').last.arguments as Map)['killSwitch'], isTrue);
+
+      native.calls.clear();
+      await n().switchProfile(defaultId);
+      await _settle();
+      expect(native.named("saveQuickConnect").map((c) => (c.arguments as Map)["killSwitch"]), [false]);
+    });
+
+    test('a server selected while off reaches quick connect', () async {
+      await boot(configs: [_cfg('a'), _cfg('b')], activeId: 'a');
+      await _settle();
+      native.calls.clear();
+      await n().selectConfig(c.read(configProvider).value!.configs.last);
+      await _settle();
+      expect(native.named('saveQuickConnect').map((c) => (c.arguments as Map)['xrayConfig'] as String), [
+        contains('hb.example'),
+      ]);
+    });
+
+    test('a server selected while the geosite index loads is saved without missing codes', () async {
+      final index = Completer<GeositeIndex?>();
+      await boot(
+        configs: [_cfg('a'), _cfg('b')],
+        activeId: 'a',
+        settings: _settings.copyWith(routing: const RoutingSettings(adBlockEnabled: true)),
+        overrides: [geositeIndexProvider.overrideWith((ref) => index.future)],
+      );
+      native.calls.clear();
+      await n().selectConfig(c.read(configProvider).value!.configs.last);
+      await _settle();
+      expect(native.named('saveQuickConnect'), isEmpty);
+      index.complete(const GeositeIndex({}));
+      await _settle();
+      final saved = native.named('saveQuickConnect').single.arguments as Map;
+      expect(saved['xrayConfig'], allOf(contains('hb.example'), isNot(contains('category-ads-all'))));
+    });
+
+    test('a save waiting for the geosite index skips a profile switch begun meanwhile', () async {
+      final index = Completer<GeositeIndex?>();
+      await boot(
+        configs: [_cfg('a')],
+        activeId: 'a',
+        overrides: [geositeIndexProvider.overrideWith((ref) => index.future)],
+      );
+      await c.read(settingsProvider.notifier).save(_settings.copyWith(killSwitchEnabled: true));
+      await _settle();
+      native.calls.clear();
+      var savedDuringSwitch = -1;
+      await n().duringProfileSwitch(() async {
+        index.complete(const GeositeIndex({}));
+        await _settle();
+        savedDuringSwitch = native.named('saveQuickConnect').length;
+        return true;
+      });
+      await _settle();
+      expect(savedDuringSwitch, 0);
+      expect(native.named('saveQuickConnect'), isNotEmpty); // the switch's end saves
+    });
+
+    test("native's off report saves quick connect again", () async {
+      // A timed-out connect shows `error` before native stops, and the save asked for then is refused: native's
+      // later off report (no state change here) must save again.
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      await _settle();
+      native.calls.clear();
+      emit({'type': 'state', 'value': 'disconnected', 'attempt': 0});
+      emit({'type': 'state', 'value': 'disconnected', 'attempt': 0});
+      await _settle();
+      expect(native.named('saveQuickConnect'), hasLength(1));
+    });
+
+    test('settings changed during a session reach quick connect when it ends', () async {
+      await connected();
+      await c.read(settingsProvider.notifier).save(_settings.copyWith(killSwitchEnabled: true));
+      await _settle();
+      await n().disconnect();
+      emit({'type': 'state', 'value': 'disconnected'});
+      await _settle();
+      expect((native.named('saveQuickConnect').last.arguments as Map)['killSwitch'], isTrue);
     });
 
     test('connected session on an unsupported config is disconnected', () async {

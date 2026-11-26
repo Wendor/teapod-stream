@@ -100,7 +100,6 @@ Teapodcore.startTun2Socks(fd, mtu, port, "", "", true, false, object : TunValida
 |---|---|
 | `initCoreEnv(path, xudpKey)` | Set asset directory and optional XUDP base key |
 | `registerVpnProtector(p)` | Protect xray sockets via `VpnService.protect()` |
-| `registerXrayProcessFinder(f)` | Enable UID-based routing rules in xray-core |
 | `startXray(config, cb)` | Start xray-core with a JSON config string |
 | `stopXray()` | Stop xray-core |
 | `getXrayVersion()` | Returns the xray-core version string |

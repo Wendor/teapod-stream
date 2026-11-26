@@ -28,7 +28,7 @@ RustCore:          TUN fd → xray-rust → server
 
 | Area | Functions |
 |---|---|
-| Setup | `InitCoreEnv(dir, …)` (geodata location; missing files are read from APK assets), `RegisterVpnProtector` (`VpnService.protect` for xray dialers and sing-box `AutoDetectInterfaceControl`), `RegisterLogListener`, `RegisterXrayProcessFinder` |
+| Setup | `InitCoreEnv(dir, …)` (geodata location; missing files are read from APK assets), `RegisterVpnProtector` (`VpnService.protect` for xray dialers and sing-box `AutoDetectInterfaceControl`), `RegisterLogListener` |
 | xray | `StartXray(config, cb)`, `StopXray`, `GetXrayVersion`, `QueryXrayStats(tag, dir)`, `MeasureXrayDelay(url)`, `MeasureOutboundDelay(config, url)` |
 | sing-box | `StartBox(config, dataDir, cb)`, `StopBox`, `GetBoxVersion`, `MeasureBoxDelay(url)`, `MeasureBoxOutboundDelay(config, dataDir, url)` |
 | tun2socks | `StartTun2Socks(fd, mtu, socksPort, user, pass, allowICMP, blockQuic, validator)`, `StopTun2Socks`, `IsTunRunning`, `GetTunUpload/DownloadBytes`, `GetTunLastRxActivityMs`, `TunActiveConnections`, `ForceTunCloseAllConnections`, `GetTunStatsLine`, `GetTunDiagnostics`, `GetTunCacheSize`, `SetTunLogEnabled` |

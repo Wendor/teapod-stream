@@ -61,12 +61,6 @@ type TunValidator interface {
 	OnValidate(srcIP string, srcPort int64, dstIP string, dstPort int64, protocol int64) bool
 }
 
-// ProcessFinder resolves the UID of the process owning a given connection.
-// Used for per-app routing rules in xray-core.
-type ProcessFinder interface {
-	FindProcessByConnection(network, srcIP string, srcPort int64, destIP string, destPort int64) int64
-}
-
 // --- INTERNAL XRAY STATE ---
 
 type xrayEngine struct {
@@ -369,30 +363,6 @@ func MeasureOutboundDelay(config string, url string) (int64, error) {
 	}
 	defer inst.Close()
 	return measureDelay(context.Background(), inst, url)
-}
-
-// RegisterXrayProcessFinder registers a per-app UID resolver for xray-core routing.
-// Must be called after StartXray. Pass nil to unregister.
-func RegisterXrayProcessFinder(finder ProcessFinder) {
-	if finder == nil {
-		corenet.RegisterAndroidProcessFinder(nil)
-		return
-	}
-	corenet.RegisterAndroidProcessFinder(func(network, srcIP string, srcPort uint16, destIP string, destPort uint16) (uid int, name string, path string, err error) {
-		if destPort == 0 || destIP == "" {
-			return 0, "", "", fmt.Errorf("processFinder: no dest for %s %s:%d", network, srcIP, srcPort)
-		}
-		defer func() {
-			if r := recover(); r != nil {
-				uid, name, path, err = 0, "", "", fmt.Errorf("processFinder panic: %v", r)
-			}
-		}()
-		uid = int(finder.FindProcessByConnection(network, srcIP, int64(srcPort), destIP, int64(destPort)))
-		if uid < 0 {
-			return 0, "", "", fmt.Errorf("processFinder: not found for %s %s:%d -> %s:%d", network, srcIP, srcPort, destIP, destPort)
-		}
-		return uid, fmt.Sprintf("%d", uid), "", nil
-	})
 }
 
 // measureDelay measures HTTP round-trip latency through a running core instance.

@@ -14,6 +14,7 @@ import '../core/services/log_service.dart';
 import 'settings_provider.dart';
 import 'vpn_provider.dart';
 import '../core/models/app_message.dart';
+import '../protocols/parsers/wireguard_parser.dart';
 import '../protocols/xray/vless_parser.dart';
 
 class ConfigState {
@@ -99,8 +100,9 @@ class ConfigState {
   );
 
   /// Config [id] replaced by [parsed] — the config of its edited link — keeping what the link doesn't hold: the id
-  /// (selection and pins stay), `createdAt`, the subscription and the pinned core; the ping results only when the
-  /// endpoint is the same (they are the endpoint's). Unchanged when [id] is gone.
+  /// (the selection stays), `createdAt`, the subscription and the pinned core; the ping results only when the
+  /// endpoint is the same (they are the endpoint's). A pin of the config follows its new name and endpoint. Unchanged
+  /// when [id] is gone.
   ConfigState withEditedLink(String id, VpnConfig parsed) {
     final old = configs.where((c) => c.id == id).firstOrNull;
     if (old == null) return this;
@@ -113,7 +115,12 @@ class ConfigState {
       latencyMs: samePing ? old.latencyMs : null,
       lastPingedAt: samePing ? old.lastPingedAt : null,
     );
-    return copyWith(configs: [for (final c in configs) c.id == id ? edited : c]);
+    return copyWith(
+      configs: [for (final c in configs) c.id == id ? edited : c],
+      pins: isPinned(old)
+          ? <PinnedRef>{for (final (p, c) in resolvedPins) c?.id == id ? PinnedRef.of(edited) : p}.toList()
+          : null,
+    );
   }
 
   /// [sub] (added, or replacing the one with its id) with its freshly fetched [fetched] configs in place of the old
@@ -282,10 +289,10 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
       _mutate((s) => s.copyWith(configs: [for (final c in s.configs) c.id == updated.id ? updated : c]));
 
   /// Replaces config [id]'s link with [link] ([ConfigState.withEditedLink]). false — [link] isn't a link the app reads;
-  /// a link it reads but can't accept throws the parser's [FormatException].
+  /// a WireGuard `.conf` it can't accept throws [FormatException] with the reason, as on adding.
   Future<bool> editLink(String id, String link) async {
     final text = link.trim();
-    final parsed = VlessParser.parseUri(text);
+    final parsed = WireGuardParser.isConf(text) ? WireGuardParser.parseConf(text) : VlessParser.parseUri(text);
     if (parsed == null) return false;
     await _mutate((s) => s.withEditedLink(id, parsed.copyWith(rawUri: parsed.rawUri ?? text)));
     return true;

@@ -39,10 +39,11 @@ The transitions are `ConfigState` methods without side effects: `withoutConfig`,
 `withEditedLink`, `withSubscription` (below); the rest are `copyWith` in the mutator.
 
 **Editing a link** (`editLink(id, link)`, the configs list's *edit* item): the parsed link replaces the config's
-fields; `withEditedLink` keeps the id (selection and pins stay), `createdAt`, the subscription and the pinned core,
+fields; `withEditedLink` keeps the id (the selection stays), `createdAt`, the subscription and the pinned core,
 and the ping results only when the endpoint (`VpnConfig.endpoint`, `address:port`) is unchanged — pings are the
-endpoint's. A link the app doesn't read returns false; one it reads but rejects throws the parser's
-`FormatException`.
+endpoint's. A pin of the config (`PinnedRef`: name + endpoint, not the id) is rewritten to the new name and endpoint.
+A link the app doesn't read returns false; a WireGuard `.conf` it rejects throws `FormatException` with the reason,
+as on adding.
 
 ## Subscriptions
 

@@ -266,6 +266,26 @@ void main() {
       expect((edited.configs.single.latencyMs, edited.configs.single.lastPingedAt), (null, null));
     });
 
+    test('a pin of the edited config follows its new name and endpoint', () {
+      final other = PinnedRef.of(_cfg('b', subId: 's', name: 'B'));
+      final st = ConfigState(
+        configs: [
+          old(),
+          _cfg('b', subId: 's', name: 'B'),
+        ],
+        pins: [PinnedRef.of(old()), other],
+      );
+      final edited = st.withEditedLink('a', _cfg('new', name: 'Renamed', address: 'h2'));
+      expect(edited.pins, [PinnedRef(subscriptionId: 's', name: 'Renamed', endpoint: 'h2:443'), other]);
+      expect(edited.isPinned(edited.configs.first), isTrue);
+      expect(st.withEditedLink('b', _cfg('new', name: 'B2')).pins.first, PinnedRef.of(old()));
+    });
+
+    test('an unpinned config leaves the pins as they are', () {
+      final st = ConfigState(configs: [old(), _cfg('b')], pins: [PinnedRef.of(_cfg('b'))]);
+      expect(st.withEditedLink('a', _cfg('new', name: 'Renamed')).pins, same(st.pins));
+    });
+
     test('a config gone meanwhile stays gone', () {
       final st = ConfigState(configs: [_cfg('b')]);
       expect(st.withEditedLink('a', _cfg('new')), same(st));
@@ -283,6 +303,12 @@ void main() {
 
       expect(await n().editLink('a', 'not a link'), isFalse);
       expect(s().configs.single.name, 'Fresh');
+    });
+
+    test('editLink throws the reason a WireGuard conf is rejected', () async {
+      await boot(configs: [old()]);
+      await expectLater(n().editLink('a', '[Interface]\nPrivateKey = k\n'), throwsFormatException);
+      expect(s().configs.single.name, old().name);
     });
   });
 

@@ -12,32 +12,16 @@ import 'ui/screens/home/home_screen.dart';
 import 'ui/screens/configs/configs_screen.dart';
 import 'ui/screens/routing/routing_screen.dart';
 import 'ui/screens/settings/settings_screen.dart';
-import 'providers/config_provider.dart';
-import 'providers/vpn_provider.dart';
 import 'core/models/app_settings.dart';
 import 'providers/settings_provider.dart';
 import 'providers/update_provider.dart';
-import 'providers/geo_provider.dart';
+import 'providers/app_lifecycle_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/locale_provider.dart';
 import 'ui/deeplink_handler.dart';
 import 'protocols/xray/xray_engine.dart';
 import 'itest/itest_agent.dart';
 import 'itest/itest_protocol.dart';
-import 'providers/auto_switch_provider.dart';
-import 'providers/native_logs_provider.dart';
-import 'providers/ping_provider.dart';
-import 'providers/vpn_stats_provider.dart';
-
-/// Active tab index. A separate provider so screens
-/// (e.g. Home with an empty config list) can switch tabs.
-class TabIndexNotifier extends Notifier<int> {
-  @override
-  int build() => 0;
-  void set(int index) => state = index;
-}
-
-final tabIndexProvider = NotifierProvider<TabIndexNotifier, int>(TabIndexNotifier.new);
 
 class TeapodApp extends StatelessWidget {
   const TeapodApp({super.key});
@@ -97,7 +81,6 @@ class _AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<_AppShell> with WidgetsBindingObserver {
-  bool _autoConnectAttempted = false;
   StreamSubscription<dynamic>? _deeplinkSubscription;
 
   static const _pages = [HomeScreen(), ConfigsScreen(), RoutingScreen(), SettingsScreen()];
@@ -108,22 +91,7 @@ class _AppShellState extends ConsumerState<_AppShell> with WidgetsBindingObserve
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (kItest) ItestAgent.start(ProviderScope.containerOf(context, listen: false));
-      // A failed restore still lets the refresh run.
-      final restored = ref.read(nativeLogsProvider).restore().then((_) {}, onError: (Object _) {});
-      ref.read(autoSwitchProvider);
-      ref.read(pingProvider.notifier).pingStale();
-      // Only after the VPN state sync: otherwise tunnelSocks is still empty and a subscription would bypass the
-      // tunnel when the VPN is already up (from the tile). And after the log restore, which replaces the in-app log:
-      // the refresh's errors must stay in it.
-      final configs = ref.read(configProvider.notifier);
-      Future.wait([restored, ref.read(vpnProvider.notifier).synced]).then((_) {
-        if (mounted) configs.refreshStaleIfDue();
-      });
-      ref.read(geoProvider.notifier).check();
-      if (_autoConnectAttempted) return;
-      _autoConnectAttempted = true;
-      _tryAutoConnect();
-      _scheduleUpdateCheck();
+      ref.read(appLifecycleProvider.notifier).start();
     });
 
     _deeplinkSubscription = XrayEngine.events.listen(_handleEvent);
@@ -138,38 +106,11 @@ class _AppShellState extends ConsumerState<_AppShell> with WidgetsBindingObserve
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    final lifecycle = ref.read(appLifecycleProvider.notifier);
     if (state == AppLifecycleState.resumed) {
-      // The hourly background timer is gone — subscription staleness is checked here,
-      // after the sync: the refresh must see the tunnel's current SOCKS.
-      final configs = ref.read(configProvider.notifier);
-      ref.read(vpnProvider.notifier).syncNativeState().then((_) {
-        if (mounted) configs.refreshStaleIfDue();
-      });
-      ref.read(vpnStatsProvider.notifier).resume();
+      lifecycle.resumed();
     } else if (state == AppLifecycleState.paused) {
-      // Don't run the per-second MethodChannel stats polling in the background —
-      // resumed on return.
-      ref.read(vpnStatsProvider.notifier).pause();
-    }
-  }
-
-  Future<void> _scheduleUpdateCheck() async {
-    await Future<void>.delayed(const Duration(seconds: 5));
-    if (!mounted) return;
-    final updateState = ref.read(updateProvider);
-    if (updateState is UpdateIdle) {
-      ref.read(updateProvider.notifier).checkForUpdate();
-    }
-  }
-
-  Future<void> _tryAutoConnect() async {
-    final settings = await ref.read(settingsProvider.future);
-    if (!mounted || !settings.autoConnect) return;
-    await ref.read(configProvider.future);
-    if (!mounted || ref.read(effectiveConfigProvider) == null) return;
-    final vpnState = ref.read(vpnProvider);
-    if (!vpnState.isConnected && !vpnState.isConnecting) {
-      await ref.read(vpnProvider.notifier).connect();
+      lifecycle.paused();
     }
   }
 
@@ -184,24 +125,13 @@ class _AppShellState extends ConsumerState<_AppShell> with WidgetsBindingObserve
 
   @override
   Widget build(BuildContext context) {
-    ref.listen<AsyncValue<ConfigState>>(configProvider, (prev, next) {
-      final prevIds = prev?.maybeWhen(data: (d) => d.configs.map((c) => c.id).toSet(), orElse: () => null);
-      final nextIds = next.maybeWhen(data: (d) => d.configs.map((c) => c.id).toSet(), orElse: () => null);
-      if (prevIds == null || nextIds == null) return;
-      if (nextIds.difference(prevIds).isNotEmpty) {
-        ref.read(pingProvider.notifier).pingStale();
-      }
-    });
-
+    // Its listeners (new configs pinged, the chart on the home tab) live as long as the shell.
+    ref.watch(appLifecycleProvider);
     final updateState = ref.watch(updateProvider);
     final hasUpdate =
         updateState is UpdateAvailable || updateState is UpdateDownloading || updateState is UpdateDownloaded;
 
     final currentIndex = ref.watch(tabIndexProvider);
-    // Chart history is pulled only while the home tab is visible
-    ref.listen(tabIndexProvider, (_, next) {
-      ref.read(vpnStatsProvider.notifier).setChartVisible(next == 0);
-    });
     // The system bars follow the theme: the framework applies the region's style when it changes, not on every build.
     final theme = Theme.of(context);
     final icons = theme.brightness == Brightness.dark ? Brightness.light : Brightness.dark;

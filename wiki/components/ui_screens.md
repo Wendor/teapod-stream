@@ -22,8 +22,13 @@ TeapodApp (app.dart) → _TeapodMaterialApp (theme, locale, text scale; builder 
                                DnsSettingsScreen, ProfilesScreen
 ```
 
-`_AppShell` also: listens to `XrayEngine.events` for deep links, syncs native state on resume and pauses stats on
-pause, auto-connects on start (`autoConnect`), pings stale configs, checks geodata. The system bars follow the theme
+`_AppShell` also listens to `XrayEngine.events` for deep links and hands the app's lifecycle to
+`appLifecycleProvider` (`lib/providers/app_lifecycle_provider.dart`, next to `tabIndexProvider`): `start()` after the
+first frame, `resumed()` / `paused()` from its observer. The notifier holds the steps and their order — at start the
+log restore, `autoSwitchProvider`, the stale ping, the geodata check, auto-connect (`autoConnect` on, an effective
+config, the VPN not already up or coming up), the subscription refresh after both the log restore and the VPN sync,
+the update check after 5 s; on resume the stats polling, the sync, then the refresh; on pause the stats polling
+stops. It also pings configs that were added and pulls the chart only on the home tab. The system bars follow the theme
 through an `AnnotatedRegion<SystemUiOverlayStyle>` around its scaffold. Deep-link imports (profile or connections)
 share one confirmation dialog in `DeeplinkHandler` (`_showImportDialog`).
 

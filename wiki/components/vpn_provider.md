@@ -159,10 +159,10 @@ then rebuilt on the chosen config. One run at a time; logged with `source: urlte
   `appliedFingerprint` once profiles and cores are loaded (otherwise the banner would show falsely). The SOCKS login
   and `connectedAtMs` (the duration timer keeps the real start) come with the snapshot; `ipInfoProvider` reads them
   from the notifier.
-- **Start** — `build` runs the sync (`synced` completes after it, also on failure); the app shell restores the log
+- **Start** — `build` runs the sync (`synced` completes after it, also on failure); `appLifecycleProvider.start()` restores the log
   file (`nativeLogsProvider.restore`: resyncs `logsEnabled`, `getLogs`) and, after `synced`, runs
   `ConfigNotifier.refreshStaleIfDue()`.
-- **Resume** (`app.dart`) — the sync, then `refreshStaleIfDue()` (only now `tunnelSocksProvider` knows a VPN started
+- **Resume** (`appLifecycleProvider.resumed()`) — the sync, then `refreshStaleIfDue()` (only now `tunnelSocksProvider` knows a VPN started
   from the tile, so subscriptions go through the tunnel); the stats polling resumes.
 
 ## Stats (`vpnStatsProvider`)

@@ -12,7 +12,7 @@ import '../../../providers/app_info_provider.dart';
 import '../../../providers/settings_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
-import '../../../app.dart';
+import '../../../providers/app_lifecycle_provider.dart';
 import '../../widgets/live_sparkline.dart';
 import '../../widgets/reconnect_banner.dart';
 import '../../widgets/server_picker_sheet.dart';

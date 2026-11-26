@@ -1,4 +1,12 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../../tool/itest/src/agent_client.dart';
+import '../../../tool/itest/src/device_guard.dart';
+import '../../../tool/itest/src/relay.dart';
+import 'fake_shell.dart';
 
 import '../../../tool/itest/src/probes.dart';
 import '../../../tool/itest/src/soak.dart';
@@ -163,5 +171,68 @@ void main() {
     final passed = FaultResult(Fault.serverDown, Verdict.pass, Duration.zero, 'recovered in 0s');
     expect(cutChecked(passed, trafficDuringCut: trafficDuringCut(answers)).verdict, Verdict.fail);
     expect(cutChecked(passed, trafficDuringCut: trafficDuringCut([null, null])), same(passed));
+  });
+
+  test('Soak server-down: an answer from another exit while cut sets the leak', () async {
+    final tmp = Directory.systemTemp.createTempSync('itest_soak');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    // Every probe answers 8.8.4.4: not direct (1.1.1.1), not the expected exit (9.9.9.9).
+    final shell = FakeShell({'curl': '8.8.4.4\n200'});
+    final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(server.close);
+    final relay = Relay(shell, '127.0.0.1', server.port);
+    await relay.start();
+    addTearDown(relay.stop);
+    final logcat = StreamController<String>.broadcast();
+    addTearDown(logcat.close);
+    Soak soak(String? egress) => Soak(
+      agent: AgentClient(shell, logcat.stream),
+      probes: Probes(shell),
+      device: DeviceGuard(shell),
+      baseline: Baseline({for (final u in echoMain) u: '1.1.1.1'}, null, null),
+      shell: shell,
+      dir: tmp,
+      logcat: logcat.stream,
+      configId: 'cfg',
+      core: 'go',
+      egress: egress,
+      faults: const [Fault.serverDown],
+      repeat: 1,
+      duration: Duration.zero,
+      probeInterval: const Duration(milliseconds: 20),
+      onResult: (_) {},
+      relay: relay,
+      relayConfigId: 'cfg-relay',
+      cutFor: const Duration(milliseconds: 150),
+    );
+
+    final s = soak('9.9.9.9');
+    await s.inject(Fault.serverDown);
+    expect(s.cutLeak, isTrue, reason: 'off-exit answers are traffic during the cut');
+    expect(relay.isUp, isTrue, reason: 'the server is back after the cut');
+
+    final silent = FakeShell({'curl': 'timeout'});
+    final quiet = Soak(
+      agent: AgentClient(silent, logcat.stream),
+      probes: Probes(silent),
+      device: DeviceGuard(silent),
+      baseline: Baseline({for (final u in echoMain) u: '1.1.1.1'}, null, null),
+      shell: silent,
+      dir: tmp,
+      logcat: logcat.stream,
+      configId: 'cfg',
+      core: 'go',
+      egress: '9.9.9.9',
+      faults: const [Fault.serverDown],
+      repeat: 1,
+      duration: Duration.zero,
+      probeInterval: const Duration(milliseconds: 20),
+      onResult: (_) {},
+      relay: relay,
+      relayConfigId: 'cfg-relay',
+      cutFor: const Duration(milliseconds: 150),
+    );
+    await quiet.inject(Fault.serverDown);
+    expect(quiet.cutLeak, isFalse);
   });
 }

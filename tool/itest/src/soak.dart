@@ -221,6 +221,9 @@ class Soak {
   final String? relayEgress;
   final bool relayStrictEgress;
 
+  /// How long `server-down` keeps the server cut.
+  final Duration cutFor;
+
   late final IOSink _timeline = File('${dir.path}/timeline.jsonl').openWrite();
   final _recent = ListQueue<String>();
   var _diagN = 0;
@@ -254,6 +257,7 @@ class Soak {
     this.relayConfigId,
     this.relayEgress,
     this.relayStrictEgress = false,
+    this.cutFor = const Duration(minutes: 2),
   });
 
   void _expect(({String? egress, bool strict})? exit) => _exits.expect(exit);
@@ -392,8 +396,11 @@ class Soak {
     onResult(r);
   }
 
-  /// Returns the moment the network recovered.
-  Future<DateTime> _inject(Fault f) async {
+  /// Whether the last `server-down` cut saw traffic (its verdict, [cutChecked]).
+  bool get cutLeak => _cutLeak;
+
+  /// Injects [f]; returns the moment the network recovered. Public for the tests.
+  Future<DateTime> inject(Fault f) async {
     _event('fault-start', {'fault': f.cli});
     _onWifi = false;
     switch (f) {
@@ -435,7 +442,7 @@ class Soak {
         // Any answer while the server is cut — through another exit or direct — means the session doesn't go
         // through the relay; `ok` alone would miss an exit other than the expected one.
         _answers.clear();
-        await _sample(const Duration(minutes: 2));
+        await _sample(cutFor);
         _cutLeak = trafficDuringCut(_answers);
         await relay!.up();
       case Fault.serverSwitch:
@@ -482,7 +489,7 @@ class Soak {
         if (!DateTime.now().isBefore(deadline) || (repeat > 1 && i >= schedule.length)) break;
         final f = schedule[i++ % schedule.length];
         if (f.needsRelay && !await _onRelay(f)) continue;
-        final restoredAt = await _inject(f);
+        final restoredAt = await inject(f);
         var r = classifyRecovery(
           fault: f,
           restoredAt: restoredAt,

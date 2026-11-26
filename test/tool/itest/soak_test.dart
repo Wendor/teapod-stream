@@ -126,4 +126,31 @@ void main() {
       expect(adoptionChecked(failed, 'disconnected'), same(failed));
     });
   });
+
+  group('ExpectedExit', () {
+    const direct = '198.51.100.1';
+    bool check(ExpectedExit e, String? ip, {bool onWifi = true}) =>
+        e.check(ip: ip, direct: direct, distinguishable: true, onWifi: onWifi);
+
+    test('relay → server-switch → back: each expectation replaces the last and forgets the Wi-Fi exit', () {
+      final e = ExpectedExit('203.0.113.5', true);
+      expect(check(e, '203.0.113.9'), isFalse, reason: 'the config is strict');
+
+      e.expect((egress: '203.0.113.7', strict: false)); // on the relay copy
+      expect(check(e, '203.0.113.7'), isTrue);
+      expect(e.tunnelIp, '203.0.113.7');
+      expect(check(e, '192.0.2.1', onWifi: false), isFalse, reason: 'off Wi-Fi the exit seen on Wi-Fi is expected');
+
+      e.expect((egress: null, strict: false)); // server-switch: any other config
+      expect(e.tunnelIp, isNull);
+      expect(check(e, '192.0.2.44'), isTrue);
+      expect(check(e, direct), isFalse);
+
+      e.expect(null); // back on the config
+      expect(e.current, (egress: '203.0.113.5', strict: true));
+      expect(e.tunnelIp, isNull);
+      expect(check(e, '192.0.2.44'), isFalse);
+      expect(check(e, '203.0.113.5'), isTrue);
+    });
+  });
 }

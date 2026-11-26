@@ -111,6 +111,42 @@ bool probeOk({
   return ip != null && (byEgress ? ip == expected : !distinguishable || ip != direct);
 }
 
+/// The exit the probes expect: the config's own ([egress], [strict]), or one set by [expect] while the session
+/// isn't on that config — the relayed config's, or none after `server-switch` (any exit but the direct path).
+/// [tunnelIp] is the exit seen on Wi-Fi, expected off Wi-Fi; a new expectation forgets it.
+class ExpectedExit {
+  final String? egress;
+  final bool strict;
+  ({String? egress, bool strict})? _override;
+  String? tunnelIp;
+
+  ExpectedExit(this.egress, this.strict);
+
+  ({String? egress, bool strict}) get current => _override ?? (egress: egress, strict: strict);
+
+  void expect(({String? egress, bool strict})? exit) {
+    _override = exit;
+    tunnelIp = null;
+  }
+
+  /// One probe's answer against the current expectation; a pass on Wi-Fi from a distinguishable service
+  /// becomes the exit expected off Wi-Fi.
+  bool check({required String? ip, required String? direct, required bool distinguishable, required bool onWifi}) {
+    final c = current;
+    final ok = probeOk(
+      ip: ip,
+      direct: direct,
+      distinguishable: distinguishable,
+      egress: c.egress,
+      strict: c.strict,
+      tunnelIp: tunnelIp,
+      onWifi: onWifi,
+    );
+    if (ok && onWifi && distinguishable) tunnelIp = ip;
+    return ok;
+  }
+}
+
 /// A server fault without a relayed config is SKIP before it starts.
 FaultResult? relayMissing(Fault f, {required bool hasRelay}) =>
     hasRelay ? null : FaultResult(f, Verdict.skip, null, 'no TCP config for the relay');
@@ -187,11 +223,7 @@ class Soak {
   var _diagN = 0;
   var _onWifi = true;
   var _lteOk = true;
-  String? _tunnelIp;
-
-  /// The exit the probes expect while the session isn't on [configId]: the relayed config's, or after
-  /// `server-switch` none (any config's exit, just not the direct path).
-  ({String? egress, bool strict})? _exit;
+  late final _exits = ExpectedExit(egress, strictEgress);
   var _cutLeak = false;
 
   /// Probes that got any answer (an IP, whatever the exit) since the last reset.
@@ -221,11 +253,7 @@ class Soak {
     this.relayStrictEgress = false,
   });
 
-  /// Probes expect [exit] from now on (null — [configId]'s); the exit seen on Wi-Fi is forgotten.
-  void _expect(({String? egress, bool strict})? exit) {
-    _exit = exit;
-    _tunnelIp = null;
-  }
+  void _expect(({String? egress, bool strict})? exit) => _exits.expect(exit);
 
   void _event(String kind, [Map<String, Object?> extra = const {}]) =>
       _timeline.writeln(jsonEncode({'t': DateTime.now().toIso8601String(), 'kind': kind, ...extra}));
@@ -234,7 +262,7 @@ class Soak {
   /// so the recovery time doesn't include retries of failed attempts.
   Future<ProbeSample> _probe({bool fast = false}) async {
     // A distinguishable service: answer ≠ its direct IP; otherwise any answer is enough.
-    final (:egress, strict: strictEgress) = _exit ?? (egress: this.egress, strict: this.strictEgress);
+    final egress = _exits.current.egress;
     final urls = egress != null && egress == baseline.directRuIp
         ? const <String>[]
         : informative(baseline.direct, egress);
@@ -246,16 +274,7 @@ class Soak {
     // Off Wi-Fi the direct IP differs from the baseline — "not direct" doesn't yet mean "through VPN".
     // The expected exit is the one confirmed on Wi-Fi (the server's entry address may differ).
     if (ip != null) _answers++;
-    final ok = probeOk(
-      ip: ip,
-      direct: baseline.direct[u],
-      distinguishable: urls.isNotEmpty,
-      egress: egress,
-      strict: strictEgress,
-      tunnelIp: _tunnelIp,
-      onWifi: _onWifi,
-    );
-    if (ok && _onWifi && urls.isNotEmpty) _tunnelIp = ip;
+    final ok = _exits.check(ip: ip, direct: baseline.direct[u], distinguishable: urls.isNotEmpty, onWifi: _onWifi);
     final s = (t: DateTime.now(), ok: ok, appState: agent.lastState);
     _event('probe', {'ip': ip, 'ok': ok, 'onWifi': _onWifi, 'state': agent.lastState});
     return s;

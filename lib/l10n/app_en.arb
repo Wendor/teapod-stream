@@ -904,7 +904,7 @@
   "xrayNoH2Quic": "The HTTP/2 and QUIC transports were removed from Xray-core: the server needs to move to xHTTP.",
   "xrayInsecure": "Xray-core no longer supports allowInsecure: set the server certificate's pinSHA256 or use a valid certificate.",
   "xrayNoSsPlugins": "Shadowsocks plugins (SIP003, plugin=…) aren't available in the Xray-core core.",
-  "linkUnknownSecurity": "Unknown security in the link: \"{value}\". Supported: none, tls, reality.",
+  "linkUnknownSecurity": "Unknown security in the link: \"{value}\".",
   "@linkUnknownSecurity": {
     "placeholders": {
       "value": {

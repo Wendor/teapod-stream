@@ -2777,7 +2777,7 @@ abstract class AppLocalizations {
   /// No description provided for @linkUnknownSecurity.
   ///
   /// In en, this message translates to:
-  /// **'Unknown security in the link: \"{value}\". Supported: none, tls, reality.'**
+  /// **'Unknown security in the link: \"{value}\".'**
   String linkUnknownSecurity(String value);
 
   /// No description provided for @linkUnknownTransport.

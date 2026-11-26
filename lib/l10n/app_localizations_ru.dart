@@ -1551,7 +1551,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String linkUnknownSecurity(String value) {
-    return 'Неизвестное шифрование в ссылке: «$value». Поддерживаются none, tls, reality.';
+    return 'Неизвестное шифрование в ссылке: «$value».';
   }
 
   @override

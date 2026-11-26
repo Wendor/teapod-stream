@@ -1528,7 +1528,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String linkUnknownSecurity(String value) {
-    return 'Unknown security in the link: \"$value\". Supported: none, tls, reality.';
+    return 'Unknown security in the link: \"$value\".';
   }
 
   @override

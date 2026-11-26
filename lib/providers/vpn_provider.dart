@@ -113,10 +113,23 @@ class VpnNotifier extends Notifier<VpnState2> {
   @override
   VpnState2 build() {
     _engine = ref.read(xrayEngineProvider);
-    listenSelf((_, next) => ref.read(tunnelSocksProvider.notifier).set(next.tunnelSocks));
+    listenSelf((prev, next) {
+      ref.read(tunnelSocksProvider.notifier).set(next.tunnelSocks);
+      // A session that ended may have run older settings than the current ones: the tile, boot and automation start
+      // from the saved parameters, so they are saved again from what would run now.
+      if (_idle(next.connectionState) && prev != null && !_idle(prev.connectionState)) _refreshQuickConnect();
+    });
     // The active profile's core changed (priority, disabling, pinning).
     ref.listen(activeCoreProvider, (prev, next) {
       if (prev != null && next != null && prev != next && !_profileSwitching) _onCoreChanged();
+    });
+    // Connection settings changed while off: the saved quick-connect parameters follow them (a running session keeps
+    // its own until it ends, above).
+    ref.listen(settingsProvider, (prev, next) {
+      final (a, b) = (prev?.value, next.value);
+      if (a == null || b == null || _profileSwitching) return;
+      // The core part is the core listener's.
+      if (connectionFingerprint(a) != connectionFingerprint(b)) _refreshQuickConnect();
     });
 
     _eventSub = XrayEngine.events.listen(
@@ -367,6 +380,16 @@ class VpnNotifier extends Notifier<VpnState2> {
           source: 'core',
         );
   }
+
+  static bool _idle(VpnState s) => s == VpnState.disconnected || s == VpnState.error;
+
+  /// While off, re-saves (or clears) the quick-connect parameters from the current settings and config.
+  /// Runs after the notification that asked for it: providers aren't read while they rebuild.
+  void _refreshQuickConnect() => unawaited(
+    Future(() async {
+      if (ref.mounted && _idle(state.connectionState) && !_profileSwitching) await _onCoreChanged();
+    }),
+  );
 
   /// The active profile's core changed: disconnect if nothing runs the profile anymore,
   /// otherwise re-save/clear quick-reconnect.

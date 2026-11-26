@@ -1291,8 +1291,32 @@ void main() {
           .read(settingsProvider.notifier)
           .save(_settings.copyWith(coreOrder: [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox]));
       await _settle();
-      expect(engine.quickSaves, [CoreKind.xrayRust]);
+      // The ended session re-saves what would run now (sing-box), then the core change saves rust.
+      expect(engine.quickSaves, [CoreKind.singBox, CoreKind.xrayRust]);
       expect(native.named('connect'), isEmpty);
+    });
+
+    test('quick connect follows connection settings changed while off', () async {
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      await c.read(settingsProvider.notifier).save(_settings.copyWith(killSwitchEnabled: true));
+      await _settle();
+      expect((native.named('saveQuickConnect').single.arguments as Map)['killSwitch'], isTrue);
+
+      // A change outside the connection (auto-connect) saves nothing.
+      native.calls.clear();
+      await c.read(settingsProvider.notifier).save(_settings.copyWith(killSwitchEnabled: true, autoConnect: true));
+      await _settle();
+      expect(native.named('saveQuickConnect'), isEmpty);
+    });
+
+    test('settings changed during a session reach quick connect when it ends', () async {
+      await connected();
+      await c.read(settingsProvider.notifier).save(_settings.copyWith(killSwitchEnabled: true));
+      await _settle();
+      await n().disconnect();
+      emit({'type': 'state', 'value': 'disconnected'});
+      await _settle();
+      expect((native.named('saveQuickConnect').last.arguments as Map)['killSwitch'], isTrue);
     });
 
     test('connected session on an unsupported config is disconnected', () async {

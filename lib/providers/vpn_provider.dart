@@ -521,6 +521,29 @@ class VpnNotifier extends Notifier<VpnState2> {
     return null;
   }
 
+  /// A dead-tunnel switch (`autoSwitchProvider`) from [dead] to [to], queued like a selection and dropped when by its
+  /// turn the effective config is no longer [dead] (a profile switch or a selection came first). In auto mode with [to]
+  /// in the auto subscription, auto mode stays: what urltest [measured] (latency by `address:port`, null — no answer;
+  /// the dead config among them) is stored as the ping results, so the subscription's best is [to]. Otherwise [to]
+  /// becomes the active config, as a selection makes it.
+  Future<void> switchDeadTunnel({
+    required VpnConfig dead,
+    required VpnConfig to,
+    required Map<String, int?> measured,
+  }) => _queued(() async {
+    if (ref.read(effectiveConfigProvider)?.id != dead.id) {
+      ref
+          .read(logServiceProvider.notifier)
+          .addInfo('urltest: the server changed meanwhile, no switch', source: 'urltest');
+      return;
+    }
+    final configs = ref.read(configProvider.notifier);
+    final auto = ref.read(configProvider).value?.activeSubscriptionId;
+    if (auto != null && to.subscriptionId == auto) await configs.batchUpdatePingResults(measured, DateTime.now());
+    if (ref.read(effectiveConfigProvider)?.id != to.id) await configs.setActiveConfig(to.id);
+    await _followSelection();
+  });
+
   /// Makes the tunnel run the active config: a connect in flight is redone, a live tunnel on another config switches,
   /// one on this config stays. An idle VPN saves it for quick connect through the source listener.
   Future<void> _followSelection() async {

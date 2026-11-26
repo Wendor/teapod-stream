@@ -2,9 +2,8 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../core/constants/app_constants.dart';
 import '../core/cores/core_switch.dart';
-import '../core/interfaces/vpn_engine.dart';
+import '../core/cores/engine_options.dart';
 import '../core/models/app_settings.dart';
 import '../core/models/heartbeat_settings.dart';
 import '../core/models/vpn_config.dart';
@@ -43,6 +42,7 @@ class AutoSwitch {
       final configState = _ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
       if (configState == null) return;
       final current = _ref.read(effectiveConfigProvider);
+      if (current == null) return;
       await _ref.read(availableCoresProvider.future);
       final candidates = supportedCandidates(
         _candidates(configState, settings.heartbeat.switchSource, current),
@@ -54,22 +54,14 @@ class AutoSwitch {
       }
 
       log.addInfo('urltest: tunnel not responding, checking ${candidates.length} config(s)', source: 'urltest');
-      // The measurement goes through a temporary xray instance with the candidate's config: a TCP ping
-      // would say "alive" even for a server whose port is open while the protocol is silent.
-      // The instance is temporary and Go strips inbounds itself — only fields
-      // affecting the outbound matter.
-      final options = VpnEngineOptions(
-        socksPort: AppConstants.defaultSocksPort,
-        socksUser: '',
-        socksPassword: '',
-        tlsFingerprint: settings.tlsFingerprint,
-        fragment: settings.fragment,
-        noise: settings.noise,
-        mux: settings.mux,
-      );
+      // The measurement goes through a temporary core instance with the candidate's config: a TCP ping would say
+      // "alive" even for a server whose port is open while the protocol is silent. The probe keeps only what affects
+      // the outbound.
       final engine = _ref.read(xrayEngineProvider);
+      final geosite = _ref.read(coreResolverProvider).geosite;
       final probed = await Future.wait(
         candidates.map((c) async {
+          final options = buildEngineOptions(settings, c.config, c.backend, geosite: geosite);
           final ms = await engine.measureOutbound(c.config, c.backend, options, settings.heartbeat.url);
           return (config: c.config, latency: ms);
         }),
@@ -82,8 +74,16 @@ class AutoSwitch {
 
       final best = alive.first;
       log.addInfo('urltest: switching to "${best.config.name}" (${best.latency} ms)', source: 'urltest');
-      await _ref.read(configProvider.notifier).setActiveConfig(best.config.id);
-      await _ref.read(vpnProvider.notifier).reconnectWithNewConfig();
+      await _ref
+          .read(vpnProvider.notifier)
+          .switchDeadTunnel(
+            dead: current,
+            to: best.config,
+            measured: {
+              '${current.address}:${current.port}': null,
+              for (final r in probed) '${r.config.address}:${r.config.port}': r.latency,
+            },
+          );
     } catch (e) {
       log.addError('urltest: switch error: $e');
     } finally {
@@ -92,10 +92,10 @@ class AutoSwitch {
   }
 
   /// Switch candidates: the active config is excluded — it just failed the probe.
-  List<VpnConfig> _candidates(ConfigState configState, SwitchSource source, VpnConfig? current) {
-    final all = configState.configs.where((c) => c.id != current?.id);
+  List<VpnConfig> _candidates(ConfigState configState, SwitchSource source, VpnConfig current) {
+    final all = configState.configs.where((c) => c.id != current.id);
     return switch (source) {
-      SwitchSource.subscription => all.where((c) => c.subscriptionId == current?.subscriptionId).toList(),
+      SwitchSource.subscription => all.where((c) => c.subscriptionId == current.subscriptionId).toList(),
       SwitchSource.pinned => all.where(configState.isPinned).toList(),
       SwitchSource.all => all.toList(),
     };

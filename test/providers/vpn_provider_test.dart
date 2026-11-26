@@ -1226,6 +1226,57 @@ void main() {
       expect(native.lastConnect()['xrayConfig'], contains('hc.example'));
     });
 
+    test('auto mode stays on: the measured results make the live config its best', () async {
+      native.outboundMs = {'hb.example': 200, 'hc.example': 80};
+      await boot(
+        configs: subConfigs,
+        subs: [Subscription(id: 's', name: 'S', url: 'https://sub.example/s', createdAt: DateTime(2026))],
+        activeSubId: 's',
+        settings: switchOn,
+      );
+      await n().connect();
+      emit({'type': 'state', 'value': 'connected', 'socksPort': 1});
+      await _settle();
+      expect(native.lastConnect()['xrayConfig'], contains('ha.example'));
+      emit({'type': 'tunnel_dead', 'failures': 3});
+      await _settle();
+      final cs = c.read(configProvider).value!;
+      expect(cs.activeSubscriptionId, 's');
+      expect(c.read(effectiveConfigProvider)?.id, 'c');
+      expect(cs.configs.firstWhere((x) => x.id == 'a').latencyMs, isNull);
+      expect(native.lastConnect()['xrayConfig'], contains('hc.example'));
+    });
+
+    test('a switch found during a profile switch runs after it', () async {
+      native.outboundMs = {'hc.example': 80};
+      await connected(configs: subConfigs, settings: switchOn);
+      await n().duringProfileSwitch(() async {
+        emit({'type': 'tunnel_dead', 'failures': 3});
+        await _settle();
+        expect(native.named('measureOutbound'), isNotEmpty);
+        expect(c.read(configProvider).value!.activeConfigId, 'a');
+        return false;
+      });
+      await _settle();
+      expect(c.read(configProvider).value!.activeConfigId, 'c');
+      expect(native.lastConnect()['xrayConfig'], contains('hc.example'));
+    });
+
+    test('a switch is dropped when a profile switch changed the server meanwhile', () async {
+      native.outboundMs = {'hc.example': 80};
+      await connected(configs: subConfigs, settings: switchOn);
+      await n().duringProfileSwitch(() async {
+        // The profile's server is in place before the measurement ends.
+        emit({'type': 'tunnel_dead', 'failures': 3});
+        await c.read(configProvider.notifier).setActiveConfig('d');
+        await _settle();
+        return true;
+      });
+      await _settle();
+      expect(c.read(configProvider).value!.activeConfigId, 'd');
+      expect(native.lastConnect()['xrayConfig'], contains('hd.example'));
+    });
+
     test('pinned source probes only pinned configs', () async {
       native.outboundMs = {'hd.example': 10};
       await boot(

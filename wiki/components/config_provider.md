@@ -16,7 +16,8 @@ removing, ordering, the active selection, pins, subscription refresh and import 
 | `activeSubscriptionId` | auto mode: connect to the best config of this subscription |
 | `pins` | `List<PinnedRef>` — pinned connections |
 
-`activeConfigId` and `activeSubscriptionId` are not exclusive. A manual `setActiveConfig()` turns auto mode off.
+`activeConfigId` and `activeSubscriptionId` are not exclusive. `setActiveConfig()` (a selection) turns auto mode
+off; a dead-tunnel switch inside the auto subscription keeps it ([vpn_provider](vpn_provider.md#switching-config-on-a-dead-tunnel-autoswitchprovider)).
 
 **`effectiveConfigProvider`** — the config the next `connect()` uses: in auto mode the subscription's config with
 the lowest `latencyMs` (never-pinged last), otherwise the active config. Used by `VpnNotifier` and Home.

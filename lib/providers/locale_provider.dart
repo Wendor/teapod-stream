@@ -1,11 +1,11 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-/// App language: `null` follows the system. Stored under `app_locale`,
-/// which the native side also reads for notification texts.
+import '../core/services/ui_prefs_service.dart';
+
+/// App language: `null` follows the system ([UiPrefsService.locale]).
 class LocaleNotifier extends Notifier<Locale?> {
-  static const _key = 'app_locale';
+  var _chosen = false;
 
   @override
   Locale? build() {
@@ -14,19 +14,15 @@ class LocaleNotifier extends Notifier<Locale?> {
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final v = prefs.getString(_key);
-    if (v != null && v.isNotEmpty) state = Locale(v);
+    final v = await ref.read(uiPrefsServiceProvider).locale();
+    // A choice made while it loaded wins.
+    if (!_chosen && v != null && v.isNotEmpty) state = Locale(v);
   }
 
   Future<void> set(Locale? locale) async {
+    _chosen = true;
     state = locale;
-    final prefs = await SharedPreferences.getInstance();
-    if (locale == null) {
-      await prefs.remove(_key);
-    } else {
-      await prefs.setString(_key, locale.languageCode);
-    }
+    await ref.read(uiPrefsServiceProvider).setLocale(locale?.languageCode);
   }
 }
 

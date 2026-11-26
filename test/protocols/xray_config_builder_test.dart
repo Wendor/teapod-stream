@@ -641,6 +641,15 @@ void main() {
       expect(XrayConfigBuilder.unsupportedReason(link('vless://u@h:443?security=tls&type=ws#n')), isNull);
     });
 
+    test('a Shadowsocks link with a plugin is refused, as the other cores do', () {
+      const key = 'Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpwdw';
+      expect(
+        XrayConfigBuilder.unsupportedReason(link('ss://$key@h:8388/?plugin=obfs-local%3Bobfs%3Dhttp#n')),
+        contains('plugin'),
+      );
+      expect(XrayConfigBuilder.unsupportedReason(link('ss://$key@h:8388#n')), isNull);
+    });
+
     test('ECH goes to tlsSettings.echConfigList', () {
       final tls = streamOf(link('vless://u@h:443?security=tls&ech=AEX%2B#n'))['tlsSettings'] as Map;
       expect(tls['echConfigList'], 'AEX+');

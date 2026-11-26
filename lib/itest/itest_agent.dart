@@ -104,7 +104,12 @@ class ItestAgent {
     final parsed = <dynamic>[];
     final failed = <String>[];
     for (final uri in (cmd['uris'] as List? ?? const []).cast<String>()) {
-      final c = VlessParser.parseUri(uri);
+      VpnConfig? c;
+      try {
+        c = VlessParser.parseUri(uri);
+      } on FormatException {
+        c = null;
+      }
       c == null ? failed.add(Uri.tryParse(uri)?.scheme ?? '?') : parsed.add(c);
     }
     final configs = read(configProvider.notifier);

@@ -2768,6 +2768,30 @@ abstract class AppLocalizations {
   /// **'Xray-core no longer supports allowInsecure: set the server certificate\'s pinSHA256 or use a valid certificate.'**
   String get xrayInsecure;
 
+  /// No description provided for @xrayNoSsPlugins.
+  ///
+  /// In en, this message translates to:
+  /// **'Shadowsocks plugins (SIP003, plugin=…) aren\'t available in the Xray-core core.'**
+  String get xrayNoSsPlugins;
+
+  /// No description provided for @linkUnknownSecurity.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown security in the link: \"{value}\". Supported: none, tls, reality.'**
+  String linkUnknownSecurity(String value);
+
+  /// No description provided for @linkUnknownTransport.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown transport in the link: \"{value}\".'**
+  String linkUnknownTransport(String value);
+
+  /// No description provided for @linkUnknownObfs.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown Hysteria2 obfuscation in the link: \"{value}\". Supported: salamander, gecko.'**
+  String linkUnknownObfs(String value);
+
   /// No description provided for @xrayPinFormat.
   ///
   /// In en, this message translates to:

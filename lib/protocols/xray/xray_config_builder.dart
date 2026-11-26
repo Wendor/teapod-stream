@@ -22,6 +22,10 @@ class XrayConfigBuilder {
     if (config.transport == VpnTransport.http2 || config.transport == VpnTransport.quic) {
       return L10n.current.xrayNoH2Quic;
     }
+    if (config.protocol == VpnProtocol.shadowsocks &&
+        (VlessParser.linkParams(config)['plugin']?.trim().isNotEmpty ?? false)) {
+      return L10n.current.xrayNoSsPlugins;
+    }
     final pin = config.pinSHA256?.trim() ?? '';
     if (pin.isNotEmpty) {
       try {

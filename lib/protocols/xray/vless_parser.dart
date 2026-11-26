@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:uuid/uuid.dart';
 import '../../core/models/vpn_config.dart';
+import '../../l10n/l10n.dart';
 import '../parsers/amnezia_key_parser.dart';
 import '../parsers/naive_parser.dart';
 import '../parsers/ssh_parser.dart';
@@ -17,21 +18,32 @@ Map<String, dynamic>? _parseExtra(String? raw) {
   }
 }
 
+/// A link of a known scheme with a value that changes how the connection works and that the app doesn't know: refused
+/// rather than replaced by a default (a VLESS link with an unknown security would otherwise go out in cleartext).
+class _Rejected implements Exception {
+  final String message;
+  const _Rejected(this.message);
+}
+
 class VlessParser {
+  /// The config of link [uri]; null — not a link the app reads. A link it reads but refuses (an unknown security,
+  /// transport or obfuscation; a broken WireGuard `.conf`) throws [FormatException] naming the reason.
   static VpnConfig? parseUri(String uri) {
+    try {
+      return _parse(uri);
+    } on _Rejected catch (e) {
+      throw FormatException(e.message);
+    }
+  }
+
+  static VpnConfig? _parse(String uri) {
     uri = uri.trim();
     // Chat/Markdown exports may escape URI punctuation. Only undo the
     // punctuation escapes, preserving percent-encoded path/query values.
     if (uri.startsWith(r'vless\://')) {
       uri = uri.replaceAllMapped(RegExp(r'\\([:@_])'), (m) => m[1]!);
     }
-    if (WireGuardParser.isConf(uri)) {
-      try {
-        return WireGuardParser.parseConf(uri);
-      } on FormatException {
-        return null;
-      }
-    }
+    if (WireGuardParser.isConf(uri)) return WireGuardParser.parseConf(uri);
     if (uri.startsWith('wireguard://') || uri.startsWith('wg://')) return WireGuardParser.parseUri(uri);
     if (uri.startsWith('vpn://')) return AmneziaKeyParser.parse(uri);
     if (uri.startsWith('ssh://')) return SshParser.parseUri(uri);
@@ -76,7 +88,7 @@ class VlessParser {
       final (host, port) = _parseHostPort(hostPort, 443);
       final params = Uri.splitQueryString(queryStr);
 
-      final security = _parseSecurity(params['security'] ?? 'none');
+      final security = _parseSecurity(params['security'] ?? '');
       final transport = _parseTransport(params['type'] ?? 'tcp');
       final allowInsecure = _parseInsecure(params);
       final pinSHA256 = params['pinSHA256'];
@@ -113,7 +125,9 @@ class VlessParser {
         createdAt: DateTime.now(),
         rawUri: uri,
       );
-    } catch (e) {
+    } on _Rejected {
+      rethrow;
+    } catch (_) {
       return null;
     }
   }
@@ -131,7 +145,11 @@ class VlessParser {
       final name = _cleanName(rawName);
 
       final net = json['net'] as String? ?? 'tcp';
-      final tls = json['tls'] as String? ?? '';
+      final security = switch ((json['tls'] as String? ?? '').trim().toLowerCase()) {
+        '' || 'none' => VpnSecurity.none,
+        'tls' => VpnSecurity.tls,
+        final other => throw _Rejected(L10n.current.linkUnknownSecurity(other)),
+      };
 
       return VpnConfig(
         id: const Uuid().v4(),
@@ -140,7 +158,7 @@ class VlessParser {
         address: host,
         port: port,
         uuid: json['id'] as String? ?? '',
-        security: tls == 'tls' ? VpnSecurity.tls : VpnSecurity.none,
+        security: security,
         transport: _parseTransport(net),
         sni: json['sni'] as String?,
         wsPath: json['path'] as String?,
@@ -149,10 +167,14 @@ class VlessParser {
         alterId: json['aid']?.toString() ?? '0',
         xhttpMode: json['mode'] as String?,
         xhttpExtra: json['extra'] is Map<String, dynamic> ? json['extra'] as Map<String, dynamic> : null,
+        fingerprint: _nonEmpty(json['fp']),
+        alpn: _nonEmpty(json['alpn']),
         createdAt: DateTime.now(),
         rawUri: uri,
       );
-    } catch (e) {
+    } on _Rejected {
+      rethrow;
+    } catch (_) {
       return null;
     }
   }
@@ -215,7 +237,9 @@ class VlessParser {
         createdAt: DateTime.now(),
         rawUri: uri,
       );
-    } catch (e) {
+    } on _Rejected {
+      rethrow;
+    } catch (_) {
       return null;
     }
   }
@@ -307,7 +331,9 @@ class VlessParser {
         createdAt: DateTime.now(),
         rawUri: uri,
       );
-    } catch (e) {
+    } on _Rejected {
+      rethrow;
+    } catch (_) {
       return null;
     }
   }
@@ -357,6 +383,9 @@ class VlessParser {
       // Salamander and Gecko (Salamander plus packet fragmentation) share obfs-password; a Gecko link without a
       // password or with invalid packet sizes is an import error: the server drops unobfuscated packets.
       final obfs = params['obfs']?.trim() ?? '';
+      if (!const {'', 'none', 'salamander', 'gecko'}.contains(obfs)) {
+        throw _Rejected(L10n.current.linkUnknownObfs(obfs));
+      }
       final obfsPassword = obfs == 'salamander' || obfs == 'gecko' ? params['obfs-password'] : null;
       if (obfs == 'gecko' && ((obfsPassword?.isEmpty ?? true) || geckoSizes(params) == null)) return null;
       final allowInsecure = _parseInsecure(params);
@@ -380,7 +409,9 @@ class VlessParser {
         createdAt: DateTime.now(),
         rawUri: uri,
       );
-    } catch (e) {
+    } on _Rejected {
+      rethrow;
+    } catch (_) {
       return null;
     }
   }
@@ -450,19 +481,22 @@ class VlessParser {
     return (first!, parts.join(','));
   }
 
-  static VpnSecurity _parseSecurity(String s) {
-    switch (s.toLowerCase()) {
-      case 'tls':
-        return VpnSecurity.tls;
-      case 'reality':
-        return VpnSecurity.reality;
-      default:
-        return VpnSecurity.none;
-    }
-  }
+  /// A non-empty string value of a JSON field, else null.
+  static String? _nonEmpty(Object? value) => value is String && value.trim().isNotEmpty ? value.trim() : null;
+
+  static VpnSecurity _parseSecurity(String s) => switch (s.trim().toLowerCase()) {
+    '' || 'none' => VpnSecurity.none,
+    'tls' => VpnSecurity.tls,
+    'reality' => VpnSecurity.reality,
+    _ => throw _Rejected(L10n.current.linkUnknownSecurity(s)),
+  };
 
   static VpnTransport _parseTransport(String s) {
-    switch (s.toLowerCase()) {
+    switch (s.trim().toLowerCase()) {
+      case '':
+      case 'tcp':
+      case 'raw':
+        return VpnTransport.tcp;
       case 'ws':
       case 'websocket':
         return VpnTransport.ws;
@@ -480,13 +514,10 @@ class VlessParser {
       case 'splithttp':
         return VpnTransport.splithttp;
       default:
-        return VpnTransport.tcp;
+        throw _Rejected(L10n.current.linkUnknownTransport(s));
     }
   }
 
-  /// Query parameters of the profile's original link, including the base64 body of SIP002
-  /// `ss://BASE64#name`. Empty if there's no link or it's unreadable. Needed by
-  /// builders for fields [VpnConfig] doesn't have (headerType, obfs, plugin).
   /// Gecko packet sizes `(min, max)` of a Hysteria2 profile imported with `obfs=gecko`; null for Salamander
   /// or no obfuscation.
   static (int, int)? geckoPacketSize(VpnConfig config) {
@@ -508,6 +539,9 @@ class VlessParser {
     return (min, max);
   }
 
+  /// Query parameters of the profile's original link, including the base64 body of SIP002
+  /// `ss://BASE64#name`. Empty if there's no link or it's unreadable. Needed by
+  /// builders for fields [VpnConfig] doesn't have (headerType, obfs, plugin).
   static Map<String, String> linkParams(VpnConfig config) {
     final raw = config.rawUri;
     if (raw == null) return const {};

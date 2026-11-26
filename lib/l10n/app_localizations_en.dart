@@ -1524,6 +1524,24 @@ class AppLocalizationsEn extends AppLocalizations {
       'Xray-core no longer supports allowInsecure: set the server certificate\'s pinSHA256 or use a valid certificate.';
 
   @override
+  String get xrayNoSsPlugins => 'Shadowsocks plugins (SIP003, plugin=…) aren\'t available in the Xray-core core.';
+
+  @override
+  String linkUnknownSecurity(String value) {
+    return 'Unknown security in the link: \"$value\". Supported: none, tls, reality.';
+  }
+
+  @override
+  String linkUnknownTransport(String value) {
+    return 'Unknown transport in the link: \"$value\".';
+  }
+
+  @override
+  String linkUnknownObfs(String value) {
+    return 'Unknown Hysteria2 obfuscation in the link: \"$value\". Supported: salamander, gecko.';
+  }
+
+  @override
   String get xrayPinFormat => 'pinSHA256 must be the certificate\'s SHA-256: 64 hex characters or base64 of 32 bytes.';
 
   @override

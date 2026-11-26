@@ -122,7 +122,8 @@ Shown to the user on Home: their DNS settings and ad block via DNS don't apply; 
 ## Core compatibility
 
 - **Go** (`XrayGoBackend.checkConfig` → `XrayConfigBuilder.unsupportedReason`): refuses what xray v26 rejects at start
-  — `h2`/`http`/`quic` transports, `allowInsecure` without a pin, a broken pin, sing-box-only protocols.
+  — `h2`/`http`/`quic` transports, `allowInsecure` without a pin, a broken pin, sing-box-only protocols; and a
+  Shadowsocks link with a SIP003 `plugin`, which Xray-core can't run (as the other two cores refuse it).
 - **Rust** (`XrayRustBackend`, `RustConfigBuilder.unsupportedReason`): VLESS, Trojan, VMess AEAD, Shadowsocks 2022,
   Hysteria2; no raw configs, no link `finalmask` (the builder assembles its own subset), no `mux=on` in the link (except
   Hysteria2), no Vision on non-RAW transports without VLESS encryption. Unsupported features (`CoreFeature`):

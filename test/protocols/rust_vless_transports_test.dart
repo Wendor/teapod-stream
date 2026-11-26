@@ -70,7 +70,6 @@ void main() {
       link('tcp', 'tls', extra: '&headerType=http'),
       link('tcp', 'tls', extra: '&ech=AEX%2B'),
       link('tcp', 'none'),
-      link('kcp', 'tls'),
       link('quic', 'tls'),
       link('h2', 'tls'),
       link('tcp', 'reality', flow: 'xtls-rprx-direct'),

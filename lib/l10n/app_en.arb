@@ -903,6 +903,31 @@
   },
   "xrayNoH2Quic": "The HTTP/2 and QUIC transports were removed from Xray-core: the server needs to move to xHTTP.",
   "xrayInsecure": "Xray-core no longer supports allowInsecure: set the server certificate's pinSHA256 or use a valid certificate.",
+  "xrayNoSsPlugins": "Shadowsocks plugins (SIP003, plugin=…) aren't available in the Xray-core core.",
+  "linkUnknownSecurity": "Unknown security in the link: \"{value}\". Supported: none, tls, reality.",
+  "@linkUnknownSecurity": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "linkUnknownTransport": "Unknown transport in the link: \"{value}\".",
+  "@linkUnknownTransport": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "linkUnknownObfs": "Unknown Hysteria2 obfuscation in the link: \"{value}\". Supported: salamander, gecko.",
+  "@linkUnknownObfs": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
   "xrayPinFormat": "pinSHA256 must be the certificate's SHA-256: 64 hex characters or base64 of 32 bytes.",
   "xrayRawJsonParse": "Couldn't parse the subscription JSON config: {error}",
   "@xrayRawJsonParse": {

@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/models/vpn_config.dart';
@@ -8,7 +7,8 @@ import '../core/models/connections_bundle.dart';
 import '../core/models/import_review.dart';
 import '../core/services/config_storage_service.dart';
 import '../core/models/subscription.dart';
-import '../core/services/subscription_service.dart' show SubscriptionService, SubscriptionFetchResult, HwidDeviceInfo;
+import '../core/services/subscription_service.dart'
+    show subscriptionServiceProvider, SubscriptionFetchResult, HwidDeviceInfo;
 import '../core/services/device_service.dart';
 import '../core/services/log_service.dart';
 import 'settings_provider.dart';
@@ -143,8 +143,7 @@ class ConfigState {
 }
 
 class ConfigNotifier extends AsyncNotifier<ConfigState> {
-  @visibleForTesting
-  static ConfigStorageService storage = ConfigStorageService();
+  ConfigStorageService get _storage => ref.read(configStorageServiceProvider);
 
   /// Mutations run strictly in order: each reads the state, computes the next one and commits it. Run in parallel (a
   /// ping in the middle of a subscription refresh) they overwrote each other.
@@ -173,13 +172,13 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     var saved = from;
     Future<void> saveSubscriptions() async {
       if (identical(next.subscriptions, from.subscriptions)) return;
-      await storage.saveSubscriptions(next.subscriptions);
+      await _storage.saveSubscriptions(next.subscriptions);
       saved = saved.copyWith(subscriptions: next.subscriptions);
     }
 
     Future<void> saveConfigs() async {
       if (identical(next.configs, from.configs)) return;
-      await storage.saveConfigs(next.configs);
+      await _storage.saveConfigs(next.configs);
       saved = saved.copyWith(configs: next.configs);
     }
 
@@ -196,15 +195,15 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
         await saveSubscriptions();
       }
       if (!identical(next.pins, from.pins)) {
-        await storage.savePins(next.pins);
+        await _storage.savePins(next.pins);
         saved = saved.copyWith(pins: next.pins);
       }
       if (next.activeConfigId != from.activeConfigId) {
-        await storage.saveActiveConfigId(next.activeConfigId);
+        await _storage.saveActiveConfigId(next.activeConfigId);
         saved = saved.copyWith(activeConfigId: next.activeConfigId, clearActive: next.activeConfigId == null);
       }
       if (next.activeSubscriptionId != from.activeSubscriptionId) {
-        await storage.saveActiveSubscriptionId(next.activeSubscriptionId);
+        await _storage.saveActiveSubscriptionId(next.activeSubscriptionId);
       }
       saved = next;
     } finally {
@@ -221,11 +220,11 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
 
   @override
   Future<ConfigState> build() async {
-    final configs = await storage.loadConfigs();
-    final activeId = await storage.loadActiveConfigId();
-    final activeSubId = await storage.loadActiveSubscriptionId();
-    final subs = await storage.loadSubscriptions();
-    final pins = await storage.loadPins();
+    final configs = await _storage.loadConfigs();
+    final activeId = await _storage.loadActiveConfigId();
+    final activeSubId = await _storage.loadActiveSubscriptionId();
+    final subs = await _storage.loadSubscriptions();
+    final pins = await _storage.loadPins();
     return ConfigState(
       configs: configs,
       activeConfigId: activeId,
@@ -299,7 +298,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     final host = Uri.parse(url).host;
     // A subscription that registered the raw id keeps it while its host stays the same.
     final rawHwid = target != null && target.rawHwid && Uri.parse(target.url).host == host;
-    final device = (settings?.hwidEnabled ?? false) ? await DeviceService.getHwidInfo() : null;
+    final device = (settings?.hwidEnabled ?? false) ? await ref.read(deviceServiceProvider).getHwidInfo() : null;
     final hwid = rawHwid ? device : device?.forHost(host);
     // Network — outside the mutation queue so config selection doesn't wait for the download.
     final (tagged, fetchResult) = await _fetchAndTagConfigs(
@@ -356,7 +355,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     HwidDeviceInfo? hwid,
     String? userAgent,
   }) async {
-    final svc = SubscriptionService();
+    final svc = ref.read(subscriptionServiceProvider);
     final result = await svc.fetchSubscription(
       url,
       pinnedCertDer: pinnedCertDer,

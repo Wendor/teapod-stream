@@ -6,6 +6,7 @@ import '../models/vpn_config.dart';
 import 'app_http.dart';
 import 'tunnel_socks.dart';
 import '../../protocols/xray/vless_parser.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Thrown when the subscription server presents an untrusted TLS certificate. [der] (base64) is the certificate
 /// that was presented: once the user accepts it, the retry pins exactly this one (`pinnedCertDer`).
@@ -465,3 +466,5 @@ Uint8List sha256(List<int> data) {
   }
   return out.buffer.asUint8List();
 }
+
+final subscriptionServiceProvider = Provider<SubscriptionService>((ref) => SubscriptionService());

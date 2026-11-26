@@ -32,8 +32,8 @@ class ProfileState {
 }
 
 class ProfileNotifier extends AsyncNotifier<ProfileState> {
-  final _storage = ProfileStorageService();
-  final _legacy = SettingsService();
+  ProfileStorageService get _storage => ref.read(profileStorageServiceProvider);
+  SettingsService get _legacy => ref.read(settingsServiceProvider);
 
   ProfileState? get _current => state.maybeWhen(data: (d) => d, orElse: () => null);
 

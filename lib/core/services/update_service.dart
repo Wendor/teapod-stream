@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../models/app_settings.dart' show UpdateChannel;
 import 'app_http.dart';
 import 'tunnel_socks.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Release notes languages: code → the language's own name. The name is the H1 of `changelog/<code>.md` and the
 /// `### <name>` heading of that language's section in a release body (`./build.sh notes`).
@@ -217,3 +218,5 @@ class UpdateService {
     return 0;
   }
 }
+
+final updateServiceProvider = Provider<UpdateService>((ref) => UpdateService());

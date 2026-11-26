@@ -1,19 +1,22 @@
 import 'dart:convert';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'platform_service.dart';
 import 'storage_secure_service.dart';
 import 'subscription_service.dart';
 
 class DeviceService {
-  static const _platform = PlatformService();
+  DeviceService(this._platform);
+
+  final PlatformService _platform;
   static const _storage = FlutterSecureStorage(aOptions: StorageSecureService.androidOptions);
   static const _deviceIdKey = 'cached_device_id';
   static const _deviceInfoKey = 'cached_device_info';
 
-  static String? _cachedDeviceId;
-  static Map<String, dynamic>? _cachedDeviceInfo;
+  String? _cachedDeviceId;
+  Map<String, dynamic>? _cachedDeviceInfo;
 
-  static Future<String> getDeviceId() async {
+  Future<String> getDeviceId() async {
     if (_cachedDeviceId != null) return _cachedDeviceId!;
 
     final cached = await _storage.read(key: _deviceIdKey);
@@ -33,7 +36,7 @@ class DeviceService {
     return '';
   }
 
-  static Future<Map<String, dynamic>> getDeviceInfo() async {
+  Future<Map<String, dynamic>> getDeviceInfo() async {
     if (_cachedDeviceInfo != null) return _cachedDeviceInfo!;
 
     final cachedJson = await _storage.read(key: _deviceInfoKey);
@@ -55,7 +58,7 @@ class DeviceService {
     return {'model': 'Unknown', 'osVersion': 0};
   }
 
-  static Future<HwidDeviceInfo?> getHwidInfo() async {
+  Future<HwidDeviceInfo?> getHwidInfo() async {
     final deviceId = await getDeviceId();
     if (deviceId.isEmpty) return null;
 
@@ -67,10 +70,12 @@ class DeviceService {
     );
   }
 
-  static Future<void> clearCache() async {
+  Future<void> clearCache() async {
     _cachedDeviceId = null;
     _cachedDeviceInfo = null;
     await _storage.delete(key: _deviceIdKey);
     await _storage.delete(key: _deviceInfoKey);
   }
 }
+
+final deviceServiceProvider = Provider<DeviceService>((ref) => DeviceService(ref.watch(platformServiceProvider)));

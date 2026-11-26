@@ -10,7 +10,6 @@ import 'package:teapodstream/core/models/pinned_ref.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/core/models/vpn_log_entry.dart';
 import 'package:teapodstream/core/services/config_storage_service.dart';
-import 'package:teapodstream/core/services/device_service.dart';
 import 'package:teapodstream/core/models/subscription.dart';
 import 'package:teapodstream/core/services/log_service.dart';
 import 'package:teapodstream/core/services/subscription_service.dart';
@@ -74,6 +73,7 @@ class _FailingStorage extends ConfigStorageService {
 void main() {
   late ProviderContainer c;
   final storage = ConfigStorageService();
+  ConfigStorageService? storageOverride;
 
   ConfigNotifier n() => c.read(configProvider.notifier);
   ConfigState s() => c.read(configProvider).value!;
@@ -88,15 +88,15 @@ void main() {
     Map<String, String> secure = const {},
   }) async {
     SharedPreferences.setMockInitialValues({...prefs});
-    FlutterSecureStorage.setMockInitialValues({});
-    await DeviceService.clearCache();
     FlutterSecureStorage.setMockInitialValues({...secure});
     await storage.saveConfigs(configs);
     await storage.saveSubscriptions(subs);
     await storage.savePins(pins);
     await storage.saveActiveConfigId(activeId);
     await storage.saveActiveSubscriptionId(activeSubId);
-    c = ProviderContainer();
+    c = ProviderContainer(
+      overrides: [if (storageOverride case final s?) configStorageServiceProvider.overrideWithValue(s)],
+    );
     addTearDown(c.dispose);
     await c.read(configProvider.future);
   }
@@ -242,9 +242,8 @@ void main() {
   group('a failed write', () {
     late _FailingStorage failing;
     setUp(() {
-      final original = ConfigNotifier.storage;
-      ConfigNotifier.storage = failing = _FailingStorage();
-      addTearDown(() => ConfigNotifier.storage = original);
+      storageOverride = failing = _FailingStorage();
+      addTearDown(() => storageOverride = null);
     });
 
     test('in a removal publishes the configs saved before it; the next mutation keeps them', () async {

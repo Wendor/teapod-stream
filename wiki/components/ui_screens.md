@@ -32,7 +32,7 @@ share one confirmation dialog in `DeeplinkHandler` (`_showImportDialog`).
 | Screen | What's on it |
 |---|---|
 | `HomeScreen` | hero panel: power button (`_PowerCore`), state with the error reason for FAILED/BLOCKED, server, exit IP, core line (`[core] xray-core ›`, tap → core sheet), speeds and the live chart; server picker sheet; warning for managed configs |
-| `ConfigsScreen` | groups: pinned → local → subscriptions (collapsible, drag to reorder in sort mode); flat mode and sort-by-ping (`cfg_hide_groups`, `cfg_sort_by_ping`); auto-select per subscription; context menus (pin, core, copy/QR, edit, rename, refresh, delete); export of all connections as a compact `teapod://import/connections` link |
+| `ConfigsScreen` | groups: pinned → local → subscriptions (collapsible, drag to reorder in sort mode); flat mode and sort-by-ping (`configsViewProvider`); auto-select per subscription; context menus (pin, core, copy/QR, edit, rename, refresh, delete); export of all connections as a compact `teapod://import/connections` link |
 | `AddConfigScreen` | one input for links, subscription URLs (`http(s)://`), WireGuard `.conf` text, `vpn://` keys and `teapod://import/connections`; QR scan |
 | `RoutingScreen` | direction (global / bypass / only selected), kill switch, split tunneling entry, sniffing, geo data (source, download), domain zones, sites, geosite/geoip codes, Russian services, ad block |
 | `SplitTunnelScreen` | app list with lazy icons, mode, tethering through VPN (`allExcept` only), cleans uninstalled packages |

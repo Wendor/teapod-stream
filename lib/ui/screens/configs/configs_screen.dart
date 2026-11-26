@@ -6,7 +6,6 @@ import '../../../providers/core_provider.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/models/connections_bundle.dart';
 import '../../../core/models/vpn_config.dart';
@@ -14,6 +13,7 @@ import '../../../core/models/pinned_ref.dart';
 import '../../../core/models/subscription.dart';
 import '../../../core/services/subscription_service.dart';
 import '../../../providers/config_provider.dart';
+import '../../../providers/theme_provider.dart';
 import '../../../providers/vpn_provider.dart';
 import '../../../core/interfaces/vpn_engine.dart';
 import '../../theme/app_colors.dart';
@@ -42,33 +42,11 @@ class ConfigsScreen extends ConsumerStatefulWidget {
 class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
   final Set<String> _expandedSubs = {'__local__'};
   bool _isRefreshingAll = false;
-  bool _hideGroups = false;
-  bool _sortByPing = false;
   bool _sortMode = false; // explicit manual sort mode (not persisted)
 
-  static const _keyHideGroups = 'cfg_hide_groups';
-  static const _keySortByPing = 'cfg_sort_by_ping';
-
-  @override
-  void initState() {
-    super.initState();
-    _loadPrefs();
-  }
-
-  Future<void> _loadPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (!mounted) return;
-    setState(() {
-      _hideGroups = prefs.getBool(_keyHideGroups) ?? false;
-      _sortByPing = prefs.getBool(_keySortByPing) ?? false;
-    });
-  }
-
-  Future<void> _savePrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_keyHideGroups, _hideGroups);
-    await prefs.setBool(_keySortByPing, _sortByPing);
-  }
+  // The view is watched in build.
+  bool get _hideGroups => ref.read(configsViewProvider).hideGroups;
+  bool get _sortByPing => ref.read(configsViewProvider).sortByPing;
 
   List<VpnConfig> _applySort(List<VpnConfig> configs) {
     if (!_sortByPing) return configs;
@@ -86,6 +64,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
   Widget build(BuildContext context) {
     final configStateAsync = ref.watch(configProvider);
     final vpnState = ref.watch(vpnProvider);
+    ref.watch(configsViewProvider);
     final t = Theme.of(context).extension<TeapodTokens>()!;
 
     ref.listen<AsyncValue<ConfigState>>(configProvider, (prev, next) {
@@ -342,9 +321,8 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
                 label: context.l10n.configsHideGroups,
                 value: _hideGroups,
                 onChanged: (v) {
+                  ref.read(configsViewProvider.notifier).set(hideGroups: v);
                   setSheet(() {});
-                  setState(() => _hideGroups = v);
-                  _savePrefs();
                 },
               ),
               _ToggleTile(
@@ -352,12 +330,9 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
                 label: context.l10n.configsSortByPing,
                 value: _sortByPing,
                 onChanged: (v) {
+                  ref.read(configsViewProvider.notifier).set(sortByPing: v);
                   setSheet(() {});
-                  setState(() {
-                    _sortByPing = v;
-                    if (v) _sortMode = false;
-                  });
-                  _savePrefs();
+                  if (v) setState(() => _sortMode = false);
                 },
               ),
               _ToggleTile(
@@ -365,12 +340,9 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
                 label: context.l10n.configsSortMode,
                 value: _sortMode,
                 onChanged: (v) {
+                  if (v) ref.read(configsViewProvider.notifier).set(sortByPing: false);
                   setSheet(() {});
-                  setState(() {
-                    _sortMode = v;
-                    if (v) _sortByPing = false;
-                  });
-                  _savePrefs();
+                  setState(() => _sortMode = v);
                 },
               ),
               const SizedBox(height: 8),

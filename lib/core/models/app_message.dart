@@ -14,20 +14,28 @@ enum MessageCode {
   updateInstallError,
   subHwidLimit,
   subEmpty,
+  coreUnavailable,
+  coreDisabled,
+  coreNoneAvailable,
 }
 
-/// A message in state (an error, a refusal): a [code] with its [arg], localized only where it is shown, or [text]
-/// that came as text from outside the app's strings (native, a server, a core's check, an exception).
+/// A message in state (an error, a refusal), localized only where it is shown: a [code] with its [arg] that the app
+/// tells apart, a string of the app's picked by [AppMessage.l10n] (a core's or a check's reason), or [text] that came
+/// from outside the app's strings (native, a server, an exception).
 final class AppMessage implements Exception {
-  const AppMessage(MessageCode this.code, [this.arg]) : text = null;
-  const AppMessage.text(String this.text) : code = null, arg = null;
+  const AppMessage(MessageCode this.code, [this.arg]) : text = null, _pick = null;
+  const AppMessage.text(String this.text) : code = null, arg = null, _pick = null;
+
+  /// [pick] takes the string, with its arguments, from the strings of the language it is shown in.
+  const AppMessage.l10n(String Function(AppLocalizations l) pick) : _pick = pick, code = null, arg = null, text = null;
 
   final MessageCode? code;
   final String? arg;
   final String? text;
+  final String Function(AppLocalizations l)? _pick;
 
   String localize(AppLocalizations l) => switch (code) {
-    null => text!,
+    null => _pick?.call(l) ?? text!,
     MessageCode.vpnConnectError => l.vpnConnectError,
     MessageCode.vpnConnectTimeout => l.vpnConnectTimeout,
     MessageCode.vpnNoConfigSelected => l.vpnNoConfigSelected,
@@ -40,6 +48,9 @@ final class AppMessage implements Exception {
     MessageCode.updateInstallError => l.updateInstallError,
     MessageCode.subHwidLimit => l.subHwidLimit,
     MessageCode.subEmpty => l.subEmpty,
+    MessageCode.coreUnavailable => l.coreUnavailable,
+    MessageCode.coreDisabled => l.coreDisabled,
+    MessageCode.coreNoneAvailable => l.coreNoneAvailable,
   };
 
   /// For logs and `'$e'` in a catch: no context there.
@@ -47,8 +58,9 @@ final class AppMessage implements Exception {
   String toString() => localize(L10n.current);
 
   @override
-  bool operator ==(Object other) => other is AppMessage && other.code == code && other.arg == arg && other.text == text;
+  bool operator ==(Object other) =>
+      other is AppMessage && other.code == code && other.arg == arg && other.text == text && other._pick == _pick;
 
   @override
-  int get hashCode => Object.hash(code, arg, text);
+  int get hashCode => Object.hash(code, arg, text, _pick);
 }

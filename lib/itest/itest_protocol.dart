@@ -22,5 +22,5 @@ Map<String, dynamic> deepMerge(Map<String, dynamic> base, Map<String, dynamic> p
 String? pickCoreError(CoreResolution r, CoreKind wanted) {
   if (r.backend?.kind == wanted && r.pinned) return null;
   final reason = r.verdicts.where((v) => v.kind == wanted).firstOrNull?.reason;
-  return reason ?? 'resolved to ${r.backend?.kind.displayName ?? 'none'}';
+  return reason?.toString() ?? 'resolved to ${r.backend?.kind.displayName ?? 'none'}';
 }

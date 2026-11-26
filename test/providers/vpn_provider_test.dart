@@ -448,7 +448,7 @@ void main() {
         settings: _settings.copyWith(proxyOnly: true, disabledCores: {CoreKind.xrayGo, CoreKind.singBox}),
       );
       await n().connect();
-      expect(st().error, AppMessage.text(const XrayRustBackend().unavailableReason(CoreFeature.proxyOnly)!));
+      expect(st().error, const XrayRustBackend().unavailableReason(CoreFeature.proxyOnly));
       expect(native.named('connect'), isEmpty);
     });
 

@@ -135,7 +135,7 @@ class _CoreLine extends StatelessWidget {
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 250),
           child: RichText(
-            key: ValueKey('${kind?.name}|${core.pinned}|${core.reason}'),
+            key: ValueKey('${kind?.name}|${core.pinned}|${core.reason?.localize(context.l10n)}'),
             textAlign: TextAlign.center,
             text: TextSpan(
               style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 0.5),
@@ -150,7 +150,7 @@ class _CoreLine extends StatelessWidget {
                 ),
                 TextSpan(
                   text: kind == null
-                      ? '${core.reason} · ${context.l10n.homeCoreEnableHint} ›'
+                      ? '${core.reason?.localize(context.l10n)} · ${context.l10n.homeCoreEnableHint} ›'
                       : '${kind.displayName}${core.pinned ? ' · ${context.l10n.homeCorePinned}' : ''} ›',
                 ),
               ],

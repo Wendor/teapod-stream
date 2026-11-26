@@ -29,4 +29,12 @@ void main() {
       isNot(const AppMessage(MessageCode.updateCheckError, 'b')),
     );
   });
+
+  test('an app string picked by l10n is localized in the language it is shown in', () {
+    final m = AppMessage.l10n((l) => l.rustGeositeTrimmed('ads'));
+    expect(m.localize(en), en.rustGeositeTrimmed('ads'));
+    expect(m.localize(ru), ru.rustGeositeTrimmed('ads'));
+    expect(m, m);
+    expect(m, isNot(const AppMessage.text('x')));
+  });
 }

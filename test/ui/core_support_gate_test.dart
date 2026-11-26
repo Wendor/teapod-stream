@@ -39,7 +39,7 @@ Widget _host(Set<CoreKind> available) => ProviderScope(
 void main() {
   testWidgets('profile no core can run is dimmed with the reason', (tester) async {
     await tester.pumpWidget(_host({CoreKind.xrayRust}));
-    expect(find.text(const XrayRustBackend().checkConfig(_raw)!), findsOneWidget);
+    expect(find.text('${const XrayRustBackend().checkConfig(_raw)}'), findsOneWidget);
     expect(find.byType(Opacity), findsOneWidget);
   });
 

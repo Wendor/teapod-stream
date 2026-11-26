@@ -42,9 +42,11 @@ class _CoreSheet extends ConsumerWidget {
         ? const <String>[]
         : [
             if (missing.isNotEmpty) context.l10n.geositeMissing(missing.join(', ')),
-            ...chosen
-                .checkOptions(config, buildEngineOptions(resolver.settings, config, chosen, geosite: geosite))
-                .warnings,
+            for (final w
+                in chosen
+                    .checkOptions(config, buildEngineOptions(resolver.settings, config, chosen, geosite: geosite))
+                    .warnings)
+              w.localize(context.l10n),
           ];
     final pinOptions = [
       for (final v in r.verdicts)
@@ -84,7 +86,9 @@ class _CoreSheet extends ConsumerWidget {
               t: t,
               mark: v.kind == config.core ? '★' : '${resolver.settings.coreOrder.indexOf(v.kind) + 1}',
               name: v.kind.displayName,
-              status: v.kind == chosen?.kind ? context.l10n.coreInUse : (v.reason ?? context.l10n.coreCompatible),
+              status: v.kind == chosen?.kind
+                  ? context.l10n.coreInUse
+                  : (v.reason?.localize(context.l10n) ?? context.l10n.coreCompatible),
               active: v.kind == chosen?.kind,
               warnings: v.kind == chosen?.kind ? warnings : const [],
             ),

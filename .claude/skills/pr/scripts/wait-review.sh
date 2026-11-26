@@ -79,11 +79,18 @@ while :; do
       echo "SKIPPED: CodeRabbit finished without reviewing ${head:0:7} (rate limit, paused reviews, or nothing to review)."
       # The usual case after a round of fixes: CodeRabbit already accepted every reply (🚀 / 👍) or resolved the
       # thread. Then its review of the fix commit adds nothing — don't wait out a rate limit for it.
-      total=$(gh api graphql -F n="$n" -f query='query($n:Int!){repository(owner:"Wendor",name:"teapod-stream"){
-        pullRequest(number:$n){reviewThreads(first:100){nodes{comments(first:1){nodes{author{login}}}}}}}}' \
-        --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.comments.nodes[0].author.login == "coderabbitai")]
-          | length' 2>/dev/null || echo "")
-      if open=$(threads) && [ -n "$total" ] && [ "$total" -gt 0 ]; then
+      # Only a round of fixes counts: someone replied in a CodeRabbit thread after the reviewed commit was made.
+      # A new feature pushed onto threads resolved in an earlier round still needs its review.
+      since=$(gh api "repos/$repo/commits/$covered" --jq .commit.committer.date 2>/dev/null || echo "")
+      total=$(gh api graphql --paginate -F n="$n" -f query='query($n:Int!,$endCursor:String){repository(owner:"Wendor",
+        name:"teapod-stream"){pullRequest(number:$n){reviewThreads(first:100,after:$endCursor){nodes{
+        comments(first:100){nodes{author{login} createdAt}}} pageInfo{hasNextPage endCursor}}}}}' \
+        --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.comments.nodes[0].author.login == "coderabbitai")
+          | [([.comments.nodes[] | select(.author.login != "coderabbitai") | .createdAt] | max // "-")] | @tsv' \
+        2>/dev/null || echo "")
+      replies=$(awk -v s="$since" '$1 != "-" && $1 > s' <<< "$total" | wc -l | tr -d ' ')
+      total=$(sed '/^$/d' <<< "$total" | wc -l | tr -d ' ')
+      if [ -n "$since" ] && [ "$total" -gt 0 ] && [ "$replies" -gt 0 ] && open=$(threads); then
         pending=$(awk -F'\t' '$2 == "coderabbitai" && $6 != 1' <<< "$open" | sed '/^$/d' | wc -l | tr -d ' ')
         if [ "$pending" = 0 ]; then
           accepted=$(awk -F'\t' '$2 == "coderabbitai" && $6 == 1' <<< "$open" | cut -f1,4 | sed '/^$/d')
@@ -93,7 +100,8 @@ while :; do
             sed 's/^/  /' <<< "$accepted"
           fi
           echo "Next: don't wait for its review of ${head:0:7} and don't post '@coderabbitai review' — check that"
-          echo "nothing else is left (review bodies: outside-diff, nitpicks), then ask for the approval review and merge."
+          echo "nothing else is left (review bodies: outside-diff, nitpicks) and that the commits since ${covered:0:7}"
+          echo "only fix those threads, then ask for the approval review and merge."
           exit 2
         fi
       fi

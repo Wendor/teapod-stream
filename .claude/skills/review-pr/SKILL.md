@@ -54,7 +54,10 @@ gh api --paginate repos/Wendor/teapod-stream/issues/<n>/comments \
 - The `CodeRabbit` check is running → **pending: CodeRabbit**, stop.
 - No CodeRabbit review for the head commit → if nobody asked yet since that push, post `@coderabbitai review` (ending
   with your `Co-Authored-By:` line); **pending: CodeRabbit**, stop. If it was asked and CodeRabbit says the push has
-  nothing to review (e.g. only a merge from `master`), accept its latest review.
+  nothing to review (e.g. only a merge from `master`), accept its latest review. Also accept it, without asking,
+  when the commits since the reviewed one only fix its threads and CodeRabbit accepted every fix: each of its threads
+  is resolved or its last reply carries CodeRabbit's 🚀 / 👍. Read those commits: anything beyond the accepted fixes
+  needs its review.
 - Review threads: GitHub blocks the merge while one is unresolved, so don't count them. Read the resolved ones:
   a thread resolved without a fix needs a reply whose reasoning holds — if it doesn't, that is an issue.
 - Outside-diff and nitpick items live only in review bodies, not in threads: each needs a fix or an answer in a PR

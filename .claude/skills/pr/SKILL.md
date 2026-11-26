@@ -58,7 +58,7 @@ says what to do next. Run it after `gh pr ready`, after every push and after eve
 |---|---|---|
 | `READY` (0) | Checks passed, CodeRabbit reviewed the head commit, every thread you replied to has its answer (a reply, or a 🚀 / 👍 reaction on your comment — listed as accepted) or got none for `WAIT_REVIEW_IDLE` minutes (default 10; listed separately — it may have answered in a sibling thread) | Read and act (below), then run the script again — or ask for approval when nothing is left |
 | `FAILED` (1) | A required check failed | Read the log, fix, push, run again |
-| `SKIPPED` (2) | CodeRabbit finished without reviewing the head (rate limit, "Reviews paused" after many pushes, or a push with nothing to review). With `ACCEPTED` above it: every CodeRabbit thread is resolved or its last reply has CodeRabbit's 🚀 / 👍 — go straight to the approval, don't wait for or request its review | Rate limit: the script prints when CodeRabbit takes a request again (from the wait in its comment) — sleep until then, post `@coderabbitai review`, run again. Paused: post it right away. A request newer than CodeRabbit's last result counts as pending, so the script waits for that review. Nothing to review (e.g. only a merge from `master`): its previous review stands |
+| `SKIPPED` (2) | CodeRabbit finished without reviewing the head (rate limit, "Reviews paused" after many pushes, or a push with nothing to review). With `ACCEPTED` above it: after a round of fix replies every CodeRabbit thread is resolved or its last reply has CodeRabbit's 🚀 / 👍 — if the commits since its review only fix those threads, go straight to the approval, don't wait for or request its review | Rate limit: the script prints when CodeRabbit takes a request again (from the wait in its comment) — sleep until then, post `@coderabbitai review`, run again. Paused: post it right away. A request newer than CodeRabbit's last result counts as pending, so the script waits for that review. Nothing to review (e.g. only a merge from `master`): its previous review stands |
 | `TIMEOUT` (3) | Something is still pending after 40 minutes | Tell the person you work for what is stuck |
 
 How it knows, if you need to check by hand:
@@ -101,7 +101,8 @@ gh api graphql -F id=<thread id> -f query='mutation($id:ID!){resolveReviewThread
 An approving GitHub review of the draft by a maintainer or the reviewer bot stands when CodeRabbit raised nothing
 on the commit it approved (no thread, no actionable,
 outside-diff or nitpick item, no push since). Otherwise ask for it when the script says `READY` — or `SKIPPED` because the last push had nothing to review (only a merge
-from `master`; CodeRabbit's comment says so, never after a rate limit) — and nothing is left: every finding fixed or answered, fixed and accepted
+from `master`; CodeRabbit's comment says so), or `SKIPPED` with `ACCEPTED` after a push that only fixes threads
+CodeRabbit accepted — and nothing is left: every finding fixed or answered, fixed and accepted
 threads resolved, disputed ones left open with a PR comment. A maintainer or the reviewer bot approves the latest
 commit; any push after that dismisses the approval, so ask once, after the last push. Waiting for CodeRabbit to
 come round on a thread it still disputes is not a reason to hold the approval request.

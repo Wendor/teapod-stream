@@ -1,5 +1,20 @@
 # English
 
+## 1.9.0
+
+- A dead server is no longer taken for a live one: the heartbeat sees that apps get no answers and reconnects or switches the config (#301)
+- The tile, boot start and the `CONNECT` command use the current settings and the selected server, not those of the last in-app connect
+- The tile no longer shows "Connected" after the app is force-stopped (#305)
+- The app no longer crashes when closed from recents on some Adreno devices, and the VPN no longer drops with it
+- A `teapod://import/connections` link accepts the app's own connection export and works when the app isn't running
+- Importing a profile or a connections bundle first shows what changes
+- Hysteria2 with `obfs=gecko` is imported with its obfuscation (#240)
+- Subscriptions: a separate HWID per provider; a subscription removed during its download doesn't come back (#257, #278)
+- A server certificate accepted by hand is pinned, its SHA-256 shown in the dialog
+- Exported logs mask addresses, links and ids
+- Geodata: geosite codes missing from the file are skipped; xray-rust starts again after a geodata update (#275)
+- The battery-optimization request is asked once and from settings; after a disconnect the service and its notification go away
+
 ## 1.8.4
 
 - The exit IP on the home screen comes from a chain of services (ip-api.com → ipinfo.io → api.ipify.org) and works where one of them is blocked; the country comes from the geodata when the service gives none; "IP unknown" instead of dashes (#198)

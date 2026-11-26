@@ -1359,6 +1359,28 @@ void main() {
       expect(saved['xrayConfig'], allOf(contains('hb.example'), isNot(contains('category-ads-all'))));
     });
 
+    test('a save waiting for the geosite index skips a profile switch begun meanwhile', () async {
+      final index = Completer<GeositeIndex?>();
+      await boot(
+        configs: [_cfg('a')],
+        activeId: 'a',
+        overrides: [geositeIndexProvider.overrideWith((ref) => index.future)],
+      );
+      await c.read(settingsProvider.notifier).save(_settings.copyWith(killSwitchEnabled: true));
+      await _settle();
+      native.calls.clear();
+      var savedDuringSwitch = -1;
+      await n().duringProfileSwitch(() async {
+        index.complete(const GeositeIndex({}));
+        await _settle();
+        savedDuringSwitch = native.named('saveQuickConnect').length;
+        return true;
+      });
+      await _settle();
+      expect(savedDuringSwitch, 0);
+      expect(native.named('saveQuickConnect'), isNotEmpty); // the switch's end saves
+    });
+
     test("native's off report saves quick connect again", () async {
       // A timed-out connect shows `error` before native stops, and the save asked for then is refused: native's
       // later off report (no state change here) must save again.

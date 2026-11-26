@@ -407,7 +407,8 @@ class VpnNotifier extends Notifier<VpnState2> {
   Future<void> _onCoreChanged() async {
     // The saved parameters are built as a connect builds them: geosite codes missing from geosite.dat left out.
     await _loadGeosite();
-    if (!ref.mounted) return;
+    // A profile switch begun meanwhile has its settings without its server yet; its end reconciles.
+    if (!ref.mounted || _profileSwitching) return;
     final settings = ref.read(settingsProvider).value;
     if (settings == null) return;
     final config = _resolveEffectiveConfig(ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null));

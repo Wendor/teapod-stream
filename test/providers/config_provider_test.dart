@@ -239,6 +239,53 @@ void main() {
     });
   });
 
+  group('editing a link', () {
+    final pingedAt = DateTime(2026, 5);
+    VpnConfig old({String address = 'h1'}) => _cfg(
+      'a',
+      subId: 's',
+      address: address,
+      latency: 42,
+    ).copyWith(lastPingedAt: pingedAt, core: CoreKind.singBox, createdAt: DateTime(2025));
+
+    test('keeps identity, subscription, pinned core, and the ping on the same endpoint', () {
+      final st = ConfigState(configs: [old(), _cfg('b')], activeConfigId: 'a');
+      final edited = st.withEditedLink('a', _cfg('new', name: 'Renamed', address: 'h1', rawUri: 'trojan://x@h1:443'));
+      final a = edited.configs.first;
+      expect(
+        (a.id, a.name, a.rawUri, a.subscriptionId, a.core, a.createdAt),
+        ('a', 'Renamed', 'trojan://x@h1:443', 's', CoreKind.singBox, DateTime(2025)),
+      );
+      expect((a.latencyMs, a.lastPingedAt), (42, pingedAt));
+      expect(edited.activeConfigId, 'a');
+      expect(edited.configs.last.id, 'b');
+    });
+
+    test('drops the ping when the endpoint changed', () {
+      final edited = ConfigState(configs: [old()]).withEditedLink('a', _cfg('new', address: 'h2'));
+      expect((edited.configs.single.latencyMs, edited.configs.single.lastPingedAt), (null, null));
+    });
+
+    test('a config gone meanwhile stays gone', () {
+      final st = ConfigState(configs: [_cfg('b')]);
+      expect(st.withEditedLink('a', _cfg('new')), same(st));
+    });
+
+    test('editLink stores the parsed link; an unreadable one changes nothing', () async {
+      await boot(configs: [old()]);
+      expect(await n().editLink('a', '  trojan://pw@h1:443?security=tls#Fresh  '), isTrue);
+      final a = s().configs.single;
+      expect(
+        (a.id, a.name, a.rawUri, a.lastPingedAt),
+        ('a', 'Fresh', 'trojan://pw@h1:443?security=tls#Fresh', pingedAt),
+      );
+      expect((await storage.loadConfigs()).single.name, 'Fresh');
+
+      expect(await n().editLink('a', 'not a link'), isFalse);
+      expect(s().configs.single.name, 'Fresh');
+    });
+  });
+
   group('a failed write', () {
     late _FailingStorage failing;
     setUp(() {

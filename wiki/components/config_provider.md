@@ -36,7 +36,13 @@ prevents a ping update and a subscription refresh from overwriting each other's 
 a public mutator — it would deadlock.
 
 The transitions are `ConfigState` methods without side effects: `withoutConfig`, `withoutSubscription`,
-`withSubscription` (below); the rest are `copyWith` in the mutator.
+`withEditedLink`, `withSubscription` (below); the rest are `copyWith` in the mutator.
+
+**Editing a link** (`editLink(id, link)`, the configs list's *edit* item): the parsed link replaces the config's
+fields; `withEditedLink` keeps the id (selection and pins stay), `createdAt`, the subscription and the pinned core,
+and the ping results only when the endpoint (`VpnConfig.endpoint`, `address:port`) is unchanged — pings are the
+endpoint's. A link the app doesn't read returns false; one it reads but rejects throws the parser's
+`FormatException`.
 
 ## Subscriptions
 

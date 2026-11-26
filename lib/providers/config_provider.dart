@@ -98,6 +98,24 @@ class ConfigState {
     clearActiveSub: activeSubscriptionId == subId,
   );
 
+  /// Config [id] replaced by [parsed] — the config of its edited link — keeping what the link doesn't hold: the id
+  /// (selection and pins stay), `createdAt`, the subscription and the pinned core; the ping results only when the
+  /// endpoint is the same (they are the endpoint's). Unchanged when [id] is gone.
+  ConfigState withEditedLink(String id, VpnConfig parsed) {
+    final old = configs.where((c) => c.id == id).firstOrNull;
+    if (old == null) return this;
+    final samePing = old.endpoint == parsed.endpoint;
+    final edited = parsed.copyWith(
+      id: old.id,
+      createdAt: old.createdAt,
+      subscriptionId: old.subscriptionId,
+      core: old.core,
+      latencyMs: samePing ? old.latencyMs : null,
+      lastPingedAt: samePing ? old.lastPingedAt : null,
+    );
+    return copyWith(configs: [for (final c in configs) c.id == id ? edited : c]);
+  }
+
   /// [sub] (added, or replacing the one with its id) with its freshly fetched [fetched] configs in place of the old
   /// ones. Carried over from the old configs: the ping by endpoint (`address:port`), the pinned core by name+endpoint
   /// or by an endpoint unique in the subscription, and the selection by name+endpoint → endpoint → name (the parser
@@ -107,11 +125,11 @@ class ConfigState {
     final subId = sub.id;
     final oldByEndpoint = <String, List<VpnConfig>>{};
     for (final c in configs.where((c) => c.subscriptionId == subId)) {
-      (oldByEndpoint['${c.address}:${c.port}'] ??= []).add(c);
+      (oldByEndpoint[c.endpoint] ??= []).add(c);
     }
     final merged = [
       for (final c in fetched)
-        if (oldByEndpoint['${c.address}:${c.port}'] case final olds?)
+        if (oldByEndpoint[c.endpoint] case final olds?)
           () {
             final same = olds.where((o) => o.name == c.name).firstOrNull ?? (olds.length == 1 ? olds.first : null);
             final ping = same ?? olds.last;
@@ -125,7 +143,7 @@ class ConfigState {
     // An id that resolves to no config (a commit that failed before saving the selection) counts as none.
     var activeId = oldActive?.id;
     if (oldActive != null && oldActive.subscriptionId == subId) {
-      bool sameEndpoint(VpnConfig c) => c.address == oldActive.address && c.port == oldActive.port;
+      bool sameEndpoint(VpnConfig c) => c.endpoint == oldActive.endpoint;
       activeId =
           (merged.where((c) => sameEndpoint(c) && c.name == oldActive.name).firstOrNull ??
                   merged.where(sameEndpoint).firstOrNull ??
@@ -264,6 +282,16 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
       _mutate((s) => s.copyWith(configs: [for (final c in s.configs) c.id == updated.id ? updated : c]));
 
   /// Selecting a specific config (or none) leaves the subscription mode.
+  /// Replaces config [id]'s link with [link] ([ConfigState.withEditedLink]). false — [link] isn't a link the app reads;
+  /// a link it reads but can't accept throws the parser's [FormatException].
+  Future<bool> editLink(String id, String link) async {
+    final text = link.trim();
+    final parsed = VlessParser.parseUri(text);
+    if (parsed == null) return false;
+    await _mutate((s) => s.withEditedLink(id, parsed.copyWith(rawUri: parsed.rawUri ?? text)));
+    return true;
+  }
+
   Future<void> setActiveConfig(String? id) =>
       _mutate((s) => s.copyWith(activeConfigId: id, clearActive: id == null, clearActiveSub: true));
 
@@ -484,7 +512,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
       newSubscriptions.add(newSub);
     }
 
-    String key(VpnConfig c) => c.rawUri ?? '${c.address}:${c.port}';
+    String key(VpnConfig c) => c.rawUri ?? c.endpoint;
     final existingKeys = current.configs.map(key).toSet();
     final parsed = bundle.rawUris.map(VlessParser.parseUri).nonNulls;
     final remapped = [
@@ -522,14 +550,14 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
   /// Ping results by `address:port`; null — the server didn't answer: the old value is cleared, otherwise a dead
   /// server with a "fresh" ping wins auto-select in subscription mode.
   Future<void> batchUpdatePingResults(Map<String, int?> latencyByEndpoint, DateTime pingedAt) => _mutate((s) {
-    if (!s.configs.any((c) => latencyByEndpoint.containsKey('${c.address}:${c.port}'))) return null;
+    if (!s.configs.any((c) => latencyByEndpoint.containsKey(c.endpoint))) return null;
     return s.copyWith(
       configs: [
         for (final c in s.configs)
-          if (latencyByEndpoint.containsKey('${c.address}:${c.port}'))
+          if (latencyByEndpoint.containsKey(c.endpoint))
             c.copyWith(
-              latencyMs: latencyByEndpoint['${c.address}:${c.port}'],
-              clearLatency: latencyByEndpoint['${c.address}:${c.port}'] == null,
+              latencyMs: latencyByEndpoint[c.endpoint],
+              clearLatency: latencyByEndpoint[c.endpoint] == null,
               lastPingedAt: pingedAt,
             )
           else

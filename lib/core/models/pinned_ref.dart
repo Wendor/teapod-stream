@@ -14,14 +14,14 @@ class PinnedRef {
 
   const PinnedRef({required this.subscriptionId, required this.name, this.endpoint});
 
-  PinnedRef.of(VpnConfig c) : subscriptionId = c.subscriptionId, name = c.name, endpoint = '${c.address}:${c.port}';
+  PinnedRef.of(VpnConfig c) : subscriptionId = c.subscriptionId, name = c.name, endpoint = c.endpoint;
 
   bool _sameGroupAndName(VpnConfig c) => c.subscriptionId == subscriptionId && c.name == name;
 
   /// Exact match, otherwise the first one with the same name.
   VpnConfig? resolve(Iterable<VpnConfig> configs) {
     final named = configs.where(_sameGroupAndName);
-    return named.where((c) => '${c.address}:${c.port}' == endpoint).firstOrNull ?? named.firstOrNull;
+    return named.where((c) => c.endpoint == endpoint).firstOrNull ?? named.firstOrNull;
   }
 
   Map<String, dynamic> toJson() => {

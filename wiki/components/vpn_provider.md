@@ -68,8 +68,9 @@ per-core `verdicts`, `pinned` and `reason`. Results are cached per `VpnConfig` i
 `activeCoreProvider` reports the core of the active config. The notifier listens to one derived value of what
 would run now: the effective config (its ping results aside), the connection settings (`connectionFingerprint`) and
 that core. Whenever it changes, `coreSwitchAction` decides: while connected or connecting, a config no core can run
-any more → disconnect with an error; one a core runs → the reconnect banner; while off → save or clear the
-quick-connect parameters. The tile, boot and automation start from those, so they follow every change of the
+anymore → disconnect with an error; otherwise the session keeps running what it started with (the reconnect banner
+shows only for changed connection settings or core, `pendingReconnectProvider`); while off → save the quick-connect
+parameters, or clear them when no core runs the config or `validate()` refuses it. The tile, boot and automation start from those, so they follow every change of the
 effective config — a selection, a link edit, a subscription refresh, auto mode, a ping that changes the best
 config — and of the connection settings. They are built as a connect builds them (after the geosite index is
 loaded). A session that ends saves again (it may have run older settings); native refuses while a session runs, so

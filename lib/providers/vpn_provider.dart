@@ -396,7 +396,7 @@ class VpnNotifier extends Notifier<VpnState2> {
   bool _reconcileQueued = false;
 
   /// Makes native follow what would run now ([coreSwitchAction]): while off the quick-connect parameters are saved,
-  /// or cleared when no core runs the effective config; a live session no core runs anymore is stopped; a live session
+  /// or cleared when no core runs the effective config or it fails validation; a live session no core runs anymore is stopped; a live session
   /// a core still runs is left to the reconnect banner.
   Future<void> _reconcile() async {
     // The saved parameters are built as a connect builds them: geosite codes missing from geosite.dat left out.
@@ -421,6 +421,9 @@ class VpnNotifier extends Notifier<VpnState2> {
         case CoreSwitchAction.disconnect:
           ref.read(logServiceProvider.notifier).addError('Core: $unsupported');
           await _disconnect(reason: unsupported);
+        // A config connect() refuses ([VpnConfig.validate]) isn't saved either; a live session on it stays.
+        case CoreSwitchAction.saveQuickConnect when config!.validate() != null:
+          await _engine.clearQuickConnect();
         case CoreSwitchAction.saveQuickConnect:
           await _engine.saveQuickConnect(
             config!,

@@ -60,22 +60,29 @@ const _visionRaw =
     '"r.example","port":443,"users":[{"id":"11111111-2222-4333-8444-555555555555",'
     '"encryption":"none","flow":"xtls-rprx-vision"}]}]}}]}';
 
-VpnConfig _cfg(String id, {String? subId, String password = 'p', DateTime? pingedAt, String? rawXray, String? host}) =>
-    VpnConfig(
-      id: id,
-      name: 'n$id',
-      protocol: VpnProtocol.trojan,
-      address: host ?? 'h$id.example',
-      port: 443,
-      uuid: '',
-      password: password,
-      security: VpnSecurity.tls,
-      transport: VpnTransport.tcp,
-      createdAt: DateTime(2026),
-      subscriptionId: subId,
-      lastPingedAt: pingedAt,
-      rawXrayConfig: rawXray,
-    );
+VpnConfig _cfg(
+  String id, {
+  String? subId,
+  String password = 'p',
+  DateTime? pingedAt,
+  String? rawXray,
+  String? host,
+  int port = 443,
+}) => VpnConfig(
+  id: id,
+  name: 'n$id',
+  protocol: VpnProtocol.trojan,
+  address: host ?? 'h$id.example',
+  port: port,
+  uuid: '',
+  password: password,
+  security: VpnSecurity.tls,
+  transport: VpnTransport.tcp,
+  createdAt: DateTime(2026),
+  subscriptionId: subId,
+  lastPingedAt: pingedAt,
+  rawXrayConfig: rawXray,
+);
 
 VpnConfig _vision(String id) => VpnConfig(
   id: id,
@@ -1404,6 +1411,15 @@ void main() {
         await c.read(configProvider.notifier).setActiveSubscription('s');
         await _settle();
         expect(saved(), [contains('hb.example')]);
+      });
+
+      test('a config connect refuses clears the saved parameters', () async {
+        await boot(configs: [_cfg('a')], activeId: 'a');
+        native.calls.clear();
+        await c.read(configProvider.notifier).updateConfig(_cfg('a', port: 0));
+        await _settle();
+        expect(saved(), isEmpty);
+        expect(native.named('clearQuickConnect'), hasLength(1));
       });
 
       test('a ping that changes the best config in auto mode', () async {

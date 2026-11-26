@@ -1531,6 +1531,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String xrayRawConflictingKeys(String keys) {
+    return 'The subscription JSON config spells one key in several ways ($keys): it\'s unclear which one Xray would take.';
+  }
+
+  @override
   String get profileDefaultName => 'Default';
 
   @override

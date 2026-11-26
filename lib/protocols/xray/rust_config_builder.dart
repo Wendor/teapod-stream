@@ -337,13 +337,6 @@ class RustConfigBuilder {
     // xray-rust's freedom accepts only `fragment` (not `domainStrategy` or
     // `noises`) and Hysteria rejects sockopt.
     stream.remove('sockopt');
-    // xray-rust moves Host from headers into host with a warning about
-    // the deprecated field; an empty Host means serverName/address anyway.
-    final ws = stream['wsSettings'] as Map?;
-    if (ws != null) {
-      final host = (ws.remove('headers') as Map?)?['Host'] as String? ?? '';
-      if (host.isNotEmpty) ws['host'] = host;
-    }
     if (config.transport == VpnTransport.xhttp || config.transport == VpnTransport.splithttp) {
       stream['network'] = 'xhttp';
       stream.remove('splithttpSettings');

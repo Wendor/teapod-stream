@@ -1554,6 +1554,11 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
+  String xrayRawConflictingKeys(String keys) {
+    return 'В JSON-конфиге подписки один ключ записан по-разному ($keys): неясно, какой из них возьмёт Xray.';
+  }
+
+  @override
   String get profileDefaultName => 'По умолчанию';
 
   @override

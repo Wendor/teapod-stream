@@ -2774,6 +2774,12 @@ abstract class AppLocalizations {
   /// **'Couldn\'t parse the subscription JSON config: {error}'**
   String xrayRawJsonParse(String error);
 
+  /// No description provided for @xrayRawConflictingKeys.
+  ///
+  /// In en, this message translates to:
+  /// **'The subscription JSON config spells one key in several ways ({keys}): it\'s unclear which one Xray would take.'**
+  String xrayRawConflictingKeys(String keys);
+
   /// No description provided for @profileDefaultName.
   ///
   /// In en, this message translates to:

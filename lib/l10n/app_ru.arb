@@ -461,6 +461,7 @@
   "linkUnknownObfs": "Неизвестная обфускация Hysteria2 в ссылке: «{value}». Поддерживаются salamander, gecko.",
   "xrayPinFormat": "pinSHA256 должен быть SHA-256 сертификата: 64 hex-символа или base64 от 32 байт.",
   "xrayRawJsonParse": "Не удалось разобрать JSON-конфиг подписки: {error}",
+  "xrayRawConflictingKeys": "В JSON-конфиге подписки один ключ записан по-разному ({keys}): неясно, какой из них возьмёт Xray.",
   "profileDefaultName": "По умолчанию",
   "geoNoFilesDir": "Не удалось получить путь к файлам",
   "subHwidLimit": "Достигнут лимит устройств подписки (HWID)",

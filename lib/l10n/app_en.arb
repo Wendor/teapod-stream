@@ -918,6 +918,14 @@
       }
     }
   },
+  "xrayRawConflictingKeys": "The subscription JSON config spells one key in several ways ({keys}): it's unclear which one Xray would take.",
+  "@xrayRawConflictingKeys": {
+    "placeholders": {
+      "keys": {
+        "type": "String"
+      }
+    }
+  },
   "profileDefaultName": "Default",
   "geoNoFilesDir": "Couldn't get the files directory",
   "subHwidLimit": "Subscription device limit reached (HWID)",

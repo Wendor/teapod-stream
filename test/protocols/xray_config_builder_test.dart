@@ -3,12 +3,14 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:teapodstream/protocols/xray/xray_config_builder.dart';
 import 'package:teapodstream/protocols/xray/vless_parser.dart';
+import 'package:teapodstream/core/models/app_message.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/core/models/routing_settings.dart';
 import 'package:teapodstream/core/interfaces/vpn_engine.dart';
 import 'package:teapodstream/core/models/dns_config.dart';
 import 'package:teapodstream/core/models/vpn_log_entry.dart' show LogLevel;
 import 'package:teapodstream/core/models/xray_tuning.dart';
+import 'package:teapodstream/core/constants/routing_defaults.dart';
 
 VpnConfig _vlessConfig({String address = '1.2.3.4', int port = 443}) => VpnConfig(
   id: 'id',
@@ -279,6 +281,32 @@ void main() {
       );
     });
 
+    test('rewrites a freedom fallback whatever the letter case of its keys', () {
+      final raw = rawManaged(fallbackTag: null);
+      final balancer = ((raw['routing'] as Map)['balancers'] as List).first as Map<String, dynamic>;
+      balancer
+        ..remove('selector')
+        ..['Selector'] = ['c1-']
+        ..['FallbackTag'] = 'free';
+      (raw['outbounds'] as List).add({'Tag': 'free', 'Protocol': 'freedom'});
+      final cfg = merge(raw);
+      final merged = ((cfg['routing'] as Map)['balancers'] as List).first as Map;
+      expect(merged['fallbackTag'], 'c1-a');
+      expect(merged.containsKey('FallbackTag'), isFalse);
+    });
+
+    test('refuses a balancer or outbound with two spellings of a key it reads', () {
+      final raw = rawManaged();
+      (((raw['routing'] as Map)['balancers'] as List).first as Map)['Selector'] = ['t'];
+      expect(
+        () => merge(raw),
+        throwsA(isA<ReasonException>().having((e) => '${e.reason}', 'reason', contains('(selector, Selector)'))),
+      );
+      final outbound = rawManaged();
+      ((outbound['outbounds'] as List).first as Map)['TAG'] = 'other';
+      expect(() => merge(outbound), throwsFormatException);
+    });
+
     test('keeps fallbackTag pointing to non-freedom outbound', () {
       final cfg = merge(rawManaged(fallbackTag: 'blocked'));
       final balancer = ((cfg['routing'] as Map)['balancers'] as List).first as Map;
@@ -411,6 +439,157 @@ void main() {
       });
       final bh = (cfg['outbounds'] as List).firstWhere((o) => o['tag'] == XrayConfigBuilder.blackholeTag);
       expect(bh['protocol'], 'blackhole');
+    });
+
+    test('mergeWithRaw sends the direct rules to a direct freedom that exists', () {
+      const bypass = RoutingSettings(bypassLocal: true);
+      List<Map<String, dynamic>> outbounds(Map<String, dynamic> cfg) =>
+          (cfg['outbounds'] as List).cast<Map<String, dynamic>>();
+      String privateTag(Map<String, dynamic> cfg) =>
+          ((cfg['routing']['rules'] as List).cast<Map<String, dynamic>>().firstWhere(
+                    (r) => (r['ip'] as List?)?.contains('geoip:private') ?? false,
+                  )
+                  as Map)['outboundTag']
+              as String;
+      Map<String, dynamic> merge(List<Map<String, Object>> serverOutbounds, RoutingSettings routing) =>
+          jsonDecode(
+                XrayConfigBuilder.mergeWithRaw(
+                  jsonEncode({
+                    'outbounds': [
+                      {'tag': 'node', 'protocol': 'vless'},
+                      ...serverOutbounds,
+                    ],
+                  }),
+                  _defaultOptions(routing: routing),
+                ),
+              )
+              as Map<String, dynamic>;
+
+      // The server's own direct freedom is used as is.
+      final own = merge([
+        {'tag': 'direct', 'protocol': 'freedom'},
+      ], bypass);
+      expect(privateTag(own), 'direct');
+      expect(outbounds(own).map((o) => o['tag']), ['node', 'direct']);
+
+      // No direct outbound, or a direct of another protocol: a freedom of the app's own.
+      final none = merge([], bypass);
+      expect(privateTag(none), XrayConfigBuilder.directTag);
+      expect(outbounds(none).last, {
+        'tag': XrayConfigBuilder.directTag,
+        'protocol': 'freedom',
+        'settings': <String, dynamic>{},
+      });
+      final taken = merge([
+        {'tag': 'direct', 'protocol': 'blackhole'},
+      ], bypass);
+      expect(privateTag(taken), XrayConfigBuilder.directTag);
+      expect(outbounds(taken).firstWhere((o) => o['tag'] == 'direct')['protocol'], 'blackhole');
+
+      // No direct rule — nothing added.
+      expect(outbounds(merge([], const RoutingSettings(bypassLocal: false))).map((o) => o['tag']), ['node']);
+    });
+
+    test('mergeWithRaw keeps injected outbounds out of server balancers and reads keys in any case', () {
+      Map<String, dynamic> merge(Map<String, Object> raw) =>
+          jsonDecode(
+                XrayConfigBuilder.mergeWithRaw(
+                  jsonEncode(raw),
+                  _defaultOptions(routing: const RoutingSettings(bypassLocal: true)),
+                ),
+              )
+              as Map<String, dynamic>;
+      Map<String, Object> raw(List<Object> selector, [List<Map<String, Object>> extra = const []]) => {
+        'outbounds': [
+          {'tag': 'node', 'protocol': 'vless'},
+          ...extra,
+        ],
+        'routing': {
+          'balancers': [
+            {'tag': 'lb', 'selector': selector},
+          ],
+        },
+      };
+      String privateTag(Map<String, dynamic> cfg) =>
+          ((cfg['routing']['rules'] as List).cast<Map<String, dynamic>>().firstWhere(
+                    (r) => (r['ip'] as List?)?.contains('geoip:private') ?? false,
+                  )
+                  as Map)['outboundTag']
+              as String;
+      List<Object?> selector(Map<String, dynamic> cfg) => cfg['routing']['balancers'][0]['selector'] as List;
+
+      // A selector prefix that matches the injected tag: the tag moves out of its reach.
+      for (final prefix in ['t', 'teapod', 'teapod-direct']) {
+        final cfg = merge(raw([prefix, 'node']));
+        final tag = privateTag(cfg);
+        expect(tag.startsWith(prefix), isFalse, reason: prefix);
+        expect((cfg['outbounds'] as List).last, {'tag': tag, 'protocol': 'freedom', 'settings': <String, dynamic>{}});
+      }
+      // An empty selector matches every tag: it becomes all the server's tags, also ones like the app's.
+      final all = merge(
+        raw(
+          [''],
+          [
+            {'tag': 'teapod-direct-east', 'protocol': 'vless'},
+            {'tag': 'teapod-blackhole-west', 'protocol': 'vless'},
+          ],
+        ),
+      );
+      expect(selector(all), ['node', 'teapod-direct-east', 'teapod-blackhole-west']);
+      expect(privateTag(all), XrayConfigBuilder.directTag);
+      expect(selector(all).whereType<String>().any(privateTag(all).startsWith), isFalse);
+      // Untagged outbounds aren't balanced: an empty tag isn't a candidate, and with none tagged the selector
+      // matches nothing (xray refuses an empty list) while the injected tag stays out of it.
+      final untagged = merge({
+        'outbounds': [
+          {'tag': '', 'protocol': 'vless'},
+          {'protocol': 'vless'},
+        ],
+        'routing': {
+          'balancers': [
+            {
+              'tag': 'lb',
+              'selector': [''],
+            },
+          ],
+        },
+      });
+      expect(selector(untagged), hasLength(1));
+      expect(selector(untagged).single, isNot(''));
+      expect(privateTag(untagged), XrayConfigBuilder.directTag);
+
+      // Xray reads `Tag` / `Protocol` as tag / protocol: a server direct freedom written so is used, and a tag taken
+      // so isn't added a second time.
+      final upper = merge(
+        raw(
+          ['node'],
+          [
+            {'Tag': 'direct', 'Protocol': 'freedom'},
+          ],
+        ),
+      );
+      expect(privateTag(upper), 'direct');
+      expect((upper['outbounds'] as List), hasLength(2));
+      final taken = merge(
+        raw(
+          ['node'],
+          [
+            {'Tag': XrayConfigBuilder.directTag, 'protocol': 'blackhole'},
+          ],
+        ),
+      );
+      expect(privateTag(taken), '${XrayConfigBuilder.directTag}-2');
+
+      // A tag the server already names without an outbound (a fallback, a rule) isn't taken: the reference would
+      // start pointing to an injected freedom.
+      final named = raw(['node']);
+      ((named['routing'] as Map)['balancers'] as List).first['fallbackTag'] = XrayConfigBuilder.directTag;
+      (named['routing'] as Map)['rules'] = [
+        {'type': 'field', 'network': 'udp', 'outboundTag': '${XrayConfigBuilder.directTag}-2'},
+      ];
+      final avoided = merge(named);
+      expect(privateTag(avoided), '${XrayConfigBuilder.directTag}-3');
+      expect(avoided['routing']['balancers'][0]['fallbackTag'], XrayConfigBuilder.directTag);
     });
 
     test('mergeWithRaw keeps a server outbound that took our tag and blocks UDP via a free tag', () {
@@ -660,6 +839,20 @@ void main() {
       final tls = streamOf(link('vless://u@h:443?security=tls&ech=AEX%2B#n'))['tlsSettings'] as Map;
       expect(tls['echConfigList'], 'AEX+');
       expect(tls.containsKey('echSettings'), isFalse);
+    });
+
+    test('WebSocket Host goes to wsSettings.host, not the deprecated headers; none without a host', () {
+      expect(streamOf(link('vless://u@h:443?security=tls&type=ws&host=edge.example&path=%2Fws#n'))['wsSettings'], {
+        'path': '/ws',
+        'host': 'edge.example',
+      });
+      expect(streamOf(link('vless://u@h:443?security=tls&type=ws#n'))['wsSettings'], {'path': '/'});
+    });
+
+    test('ruServicesDomains uses only the prefixes every core reads (sing-box: domain: and full:)', () {
+      for (final d in RoutingDefaults.ruServicesDomains) {
+        expect(d.startsWith('domain:') || d.startsWith('full:'), isTrue, reason: d);
+      }
     });
 
     test('TCP HTTP header from headerType / VMess type', () {

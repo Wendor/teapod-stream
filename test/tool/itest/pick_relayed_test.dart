@@ -4,8 +4,8 @@ import '../../../tool/itest/main.dart' as runner;
 import '../../../tool/itest/src/matrix.dart';
 import '../../../tool/itest/src/probes.dart';
 
-AgentConfig cfg(String id, String protocol, List<String> cores) =>
-    (id: id, name: id, protocol: protocol, host: '$id.example', port: 443, sub: null, cores: cores);
+AgentConfig cfg(String id, String protocol, List<String> cores, {bool raw = false}) =>
+    (id: id, name: id, protocol: protocol, host: '$id.example', port: 443, sub: null, cores: cores, raw: raw);
 
 void main() {
   final hy2 = cfg('hy2', 'hysteria2', ['go', 'box']);
@@ -27,5 +27,10 @@ void main() {
   test('no owned TCP config of the core — none', () {
     expect(runner.pickRelayed([hy2, vless], {...owned, 'vless': false}, 'go', 'hy2', const []), isNull);
     expect(runner.pickRelayed([hy2, trojan], owned, 'rust', 'hy2', const []), isNull);
+  });
+
+  test('a managed config with its own xray JSON is never relayed', () {
+    final managed = cfg('managed', 'vless', ['go'], raw: true);
+    expect(runner.pickRelayed([managed, trojan], {...owned, 'managed': true}, 'go', 'managed', const [])?.id, 'trojan');
   });
 }

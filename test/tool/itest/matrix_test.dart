@@ -9,7 +9,7 @@ import '../../../tool/itest/src/probes.dart';
 import 'fake_shell.dart';
 
 AgentConfig cfg(String id, String name, List<String> cores, {String protocol = 'vless'}) =>
-    (id: id, name: name, protocol: protocol, host: 'h', port: 1, sub: null, cores: cores);
+    (id: id, name: name, protocol: protocol, host: 'h', port: 1, sub: null, cores: cores, raw: false);
 
 void main() {
   final configs = [
@@ -65,8 +65,8 @@ void main() {
 
   test('duplicate names get host:port suffix', () {
     final dup = [
-      (id: 'a', name: 'XHTTP-TLS', protocol: 'vless', host: 'h', port: 4445, sub: 's', cores: ['go']),
-      (id: 'b', name: 'XHTTP-TLS', protocol: 'vless', host: 'h', port: 4043, sub: 's', cores: ['go']),
+      (id: 'a', name: 'XHTTP-TLS', protocol: 'vless', host: 'h', port: 4445, sub: 's', cores: ['go'], raw: false),
+      (id: 'b', name: 'XHTTP-TLS', protocol: 'vless', host: 'h', port: 4043, sub: 's', cores: ['go'], raw: false),
     ];
     expect(buildMatrix(dup, owned: {}).map((c) => c.id), [
       'base/xray-core/XHTTP-TLS@h:4445',

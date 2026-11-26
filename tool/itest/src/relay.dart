@@ -49,6 +49,8 @@ class Relay {
   }
 
   Future<void> _accept(Socket a) async {
+    // A write to a socket the peer reset fails its `done`; the read side's onError closes the pair.
+    a.done.ignore();
     final Socket b;
     try {
       b = await Socket.connect(host, serverPort, timeout: const Duration(seconds: 10));
@@ -56,6 +58,7 @@ class Relay {
       a.destroy();
       return;
     }
+    b.done.ignore();
     if (_server == null) {
       a.destroy();
       b.destroy();

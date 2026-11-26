@@ -94,6 +94,43 @@ FaultResult classifyRecovery({
   );
 }
 
+/// One probe's answer [ip]: through the tunnel or not. [expected] exit — the strict [egress], else the exit seen on
+/// Wi-Fi ([tunnelIp]) or the [egress] hint, checked when strict or off Wi-Fi (the direct IP changes there); otherwise
+/// any answer but the [direct] one of a [distinguishable] service passes.
+bool probeOk({
+  required String? ip,
+  required String? direct,
+  required bool distinguishable,
+  required String? egress,
+  required bool strict,
+  required String? tunnelIp,
+  required bool onWifi,
+}) {
+  final expected = strict ? egress : tunnelIp ?? egress;
+  final byEgress = expected != null && (strict || !onWifi);
+  return ip != null && (byEgress ? ip == expected : !distinguishable || ip != direct);
+}
+
+/// A server fault without a relayed config is SKIP before it starts.
+FaultResult? relayMissing(Fault f, {required bool hasRelay}) =>
+    hasRelay ? null : FaultResult(f, Verdict.skip, null, 'no TCP config for the relay');
+
+/// `server-down`: traffic while the server was cut means the session wasn't on the relay — the recovery says nothing.
+FaultResult cutChecked(FaultResult r, {required bool trafficDuringCut}) => trafficDuringCut
+    ? FaultResult(
+        r.fault,
+        Verdict.fail,
+        null,
+        'traffic while the server was cut: the relay is not in the path',
+        at: r.at,
+      )
+    : r;
+
+/// After `kill` / `ui-restart` traffic came back: the fresh UI must also show the session ([uiState]) as connected.
+FaultResult adoptionChecked(FaultResult r, String? uiState) => r.verdict != Verdict.pass || uiState == 'connected'
+    ? r
+    : FaultResult(r.fault, Verdict.fail, r.recovery, 'traffic back, but the app shows $uiState', at: r.at);
+
 /// Quiet interval: ≥ [minRun] failed probes in a row — a drop without a cause.
 FaultResult classifyIdle(List<ProbeSample> samples, {int minRun = 3}) {
   var run = <ProbeSample>[];
@@ -205,9 +242,15 @@ class Soak {
     if (ip == null && urls.length > 1) (u, ip) = (urls[1], await get(urls[1]));
     // Off Wi-Fi the direct IP differs from the baseline — "not direct" doesn't yet mean "through VPN".
     // The expected exit is the one confirmed on Wi-Fi (the server's entry address may differ).
-    final expected = strictEgress ? egress : _tunnelIp ?? egress;
-    final byEgress = expected != null && (strictEgress || !_onWifi);
-    final ok = ip != null && (byEgress ? ip == expected : urls.isEmpty || ip != baseline.direct[u]);
+    final ok = probeOk(
+      ip: ip,
+      direct: baseline.direct[u],
+      distinguishable: urls.isNotEmpty,
+      egress: egress,
+      strict: strictEgress,
+      tunnelIp: _tunnelIp,
+      onWifi: _onWifi,
+    );
     if (ok && _onWifi && urls.isNotEmpty) _tunnelIp = ip;
     final s = (t: DateTime.now(), ok: ok, appState: agent.lastState);
     _event('probe', {'ip': ip, 'ok': ok, 'onWifi': _onWifi, 'state': agent.lastState});
@@ -272,8 +315,8 @@ class Soak {
 
   /// Moves the session to the relay copy before a server fault; false — the fault is reported and skipped.
   Future<bool> _onRelay(Fault f) async {
-    if (relay == null || relayConfigId == null) {
-      _report(FaultResult(f, Verdict.skip, null, 'no TCP config for the relay'));
+    if (relayMissing(f, hasRelay: relay != null && relayConfigId != null) case final skip?) {
+      _report(skip);
       return false;
     }
     await relay!.up();
@@ -312,10 +355,10 @@ class Soak {
       } catch (e) {
         state = '$e';
       }
-      if (state == 'connected') return r;
+      if (state == 'connected') break;
       await Future<void>.delayed(const Duration(seconds: 3));
     }
-    return FaultResult(r.fault, Verdict.fail, r.recovery, 'traffic back, but the app shows $state', at: r.at);
+    return adoptionChecked(r, state);
   }
 
   void _report(FaultResult r) {
@@ -435,15 +478,7 @@ class Soak {
           r = FaultResult(f, Verdict.fail, null, 'no VPN traffic during the LTE minute', at: r.at);
         }
         if ((f == Fault.killApp || f == Fault.uiRestart) && r.verdict == Verdict.pass) r = await _adopted(r);
-        if (f == Fault.serverDown && _cutLeak) {
-          r = FaultResult(
-            f,
-            Verdict.fail,
-            null,
-            'traffic while the server was cut: the relay is not in the path',
-            at: r.at,
-          );
-        }
+        if (f == Fault.serverDown) r = cutChecked(r, trafficDuringCut: _cutLeak);
         _cutLeak = false;
         _report(r);
         if (r.verdict != Verdict.pass) await _diag(r);

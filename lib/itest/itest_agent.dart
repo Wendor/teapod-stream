@@ -130,6 +130,7 @@ class ItestAgent {
           'id': c.id,
           'name': c.name,
           'protocol': c.protocol.name,
+          if (c.rawXrayConfig != null) 'raw': true,
           'host': c.address,
           'port': c.port,
           'sub': subNames[c.subscriptionId],
@@ -177,6 +178,8 @@ class ItestAgent {
       (c) => c.id == configId,
       orElse: () => throw ArgumentError('unknown config: $configId'),
     );
+    // A managed config's raw JSON carries its own endpoint: the copy would dial the real server.
+    if (config.rawXrayConfig != null) throw ArgumentError('config $configId has a raw xray config');
     final id = '$configId-relay';
     final configs = read(configProvider.notifier);
     if (read(configProvider).value!.configs.any((c) => c.id == id)) await configs.removeConfig(id);

@@ -344,7 +344,8 @@ AgentConfig? pickRelayed(
   String referenceId,
   List<CaseResult> results,
 ) {
-  bool fits(AgentConfig c) => owned[c.id] == true && c.cores.contains(core) && relayProtocols.contains(c.protocol);
+  bool fits(AgentConfig c) =>
+      owned[c.id] == true && c.cores.contains(core) && relayProtocols.contains(c.protocol) && !c.raw;
   bool passed(AgentConfig c) => results.any(
     (r) => r.configId == c.id && r.id.startsWith('base/${coreNames[core]}/') && r.verdict == Verdict.pass,
   );

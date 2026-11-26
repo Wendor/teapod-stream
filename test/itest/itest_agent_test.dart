@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:teapodstream/core/models/core_kind.dart';
+import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/itest/itest_agent.dart';
 import 'package:teapodstream/providers/config_provider.dart';
 import 'package:teapodstream/providers/settings_provider.dart';
@@ -114,6 +115,17 @@ void main() {
     await agent.handle({'id': '4', 'op': 'relay', 'configId': id, 'port': 40124});
     final relays = container.read(configProvider).value!.configs.where((c) => c.address == '127.0.0.1');
     expect(relays.map((c) => c.port), [40124]);
+  });
+
+  test('relay refuses a managed config: its raw xray JSON dials the real server', () async {
+    await container.read(configProvider.future);
+    await container
+        .read(configProvider.notifier)
+        .addConfig(VpnConfig.fromJson({...testConfig('m').toJson(), 'rawXrayConfig': '{"outbounds":[]}'}));
+    final r = await agent.handle({'id': '1', 'op': 'relay', 'configId': 'm', 'port': 40125});
+    expect(r['ok'], isFalse);
+    final list = await agent.handle({'id': '2', 'op': 'list'});
+    expect(((list['data'] as List).single as Map)['raw'], isTrue);
   });
 
   test('reset clears configs unless keepConfigs and applies settings', () async {

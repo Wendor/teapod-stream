@@ -74,4 +74,56 @@ void main() {
     expect(Fault.fromCli('kill'), Fault.killApp);
     expect(() => Fault.fromCli('nope'), throwsArgumentError);
   });
+
+  group('probeOk', () {
+    bool ok(String? ip, {String? egress, bool strict = false, String? tunnelIp, bool onWifi = true}) => probeOk(
+      ip: ip,
+      direct: '198.51.100.1',
+      distinguishable: true,
+      egress: egress,
+      strict: strict,
+      tunnelIp: tunnelIp,
+      onWifi: onWifi,
+    );
+
+    test('after server-switch (no expected exit): any exit but the direct one', () {
+      expect(ok('203.0.113.9'), isTrue);
+      expect(ok('198.51.100.1'), isFalse);
+      expect(ok(null), isFalse);
+    });
+
+    test('a strict exit must match, on Wi-Fi too', () {
+      expect(ok('203.0.113.5', egress: '203.0.113.5', strict: true), isTrue);
+      expect(ok('203.0.113.9', egress: '203.0.113.5', strict: true), isFalse);
+    });
+
+    test('off Wi-Fi the exit seen on Wi-Fi is expected', () {
+      expect(ok('203.0.113.7', tunnelIp: '203.0.113.7', onWifi: false), isTrue);
+      expect(ok('192.0.2.50', tunnelIp: '203.0.113.7', onWifi: false), isFalse);
+    });
+  });
+
+  group('server faults and adoption', () {
+    final passed = FaultResult(Fault.serverDown, Verdict.pass, const Duration(seconds: 1), 'recovered in 1s');
+
+    test('no relay → SKIP', () {
+      expect(relayMissing(Fault.serverSwitch, hasRelay: false)?.verdict, Verdict.skip);
+      expect(relayMissing(Fault.serverSwitch, hasRelay: true), isNull);
+    });
+
+    test('traffic during the cut turns a recovery into FAIL', () {
+      expect(cutChecked(passed, trafficDuringCut: true).verdict, Verdict.fail);
+      expect(cutChecked(passed, trafficDuringCut: false), same(passed));
+    });
+
+    test('a recovered kill / ui-restart fails unless the fresh UI shows connected', () {
+      final r = FaultResult(Fault.uiRestart, Verdict.pass, Duration.zero, 'recovered in 0s');
+      expect(adoptionChecked(r, 'connected'), same(r));
+      final bad = adoptionChecked(r, 'disconnected');
+      expect(bad.verdict, Verdict.fail);
+      expect(bad.note, contains('disconnected'));
+      final failed = FaultResult(Fault.killApp, Verdict.fail, null, 'no traffic');
+      expect(adoptionChecked(failed, 'disconnected'), same(failed));
+    });
+  });
 }

@@ -16,6 +16,9 @@ typedef AgentConfig = ({
   int port,
   String? sub,
   List<String> cores,
+
+  /// A managed config with its own xray JSON (the outer address isn't the one it dials).
+  bool raw,
 });
 
 AgentConfig agentConfigFromJson(Map<String, dynamic> m) => (
@@ -26,6 +29,7 @@ AgentConfig agentConfigFromJson(Map<String, dynamic> m) => (
   port: m['port'] as int,
   sub: m['sub'] as String?,
   cores: (m['cores'] as List).cast<String>(),
+  raw: m['raw'] == true,
 );
 
 /// Core nativeId → name in the report and filters.

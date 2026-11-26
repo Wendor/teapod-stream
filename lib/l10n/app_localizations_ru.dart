@@ -530,6 +530,11 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
+  String geoChecksumMismatch(String file) {
+    return '$file не совпадает с опубликованной контрольной суммой; оставлены прежние геобазы';
+  }
+
+  @override
   String get geoDownload => 'ЗАГРУЗИТЬ';
 
   @override

@@ -13,8 +13,13 @@ State (sealed): `GeoMissing`, `GeoReady(lastUpdated)`, `GeoDownloading(downloade
   fallback bundled in `assets/binaries/` (put there by `./build.sh binaries` from the Loyalsoldier release pinned in
   `build.sh`, `GEODATA_VERSION` with SHA-256 per file; the monthly update check reports a newer release, and the pin
   is moved by a pull request), then checks again.
-- **`download()`** from `AppSettings.geoipUrl` / `geositeUrl` (`GeodataService.download`): HEAD for the total size, both files into `*.tmp`,
-  then an atomic rename — a failure leaves the old files intact. While connected the download goes through the
+- **`download()`** from `AppSettings.geoipUrl` / `geositeUrl` (`GeodataService.download`): HEAD for the total size, both files into `*.tmp`
+  (hashed as they arrive, `Sha256` in `lib/core/crypto/sha256.dart`), each checked against the SHA-256 its source
+  publishes next to it (`<url>.sha256sum`: Loyalsoldier, runetfreedom and v2fly do), then renamed over the old files
+  only when both arrived and matched. A failure or mismatch (`geoChecksumMismatch`) leaves both old files intact. No
+  sum file (404) or one not in `sha256sum` form — a custom source — means no check; any other status for it is an
+  error, so a failed request never skips the check. `releases/latest` links resolve per request: a release published
+  between the file and its sum gives a mismatch, and the next download succeeds. While connected the download goes through the
   tunnel (`TunnelSocks.orDirect`, [services](services.md#tunnelsocks)): the app is excluded from TUN and GitHub's CDN
   may be blocked. Requests go through [AppHttp](services.md#apphttp). Timeouts: 15 s for HEAD, 30 s for the response
 and for a stalled stream; at most 200 MB per file. The timestamp is kept in

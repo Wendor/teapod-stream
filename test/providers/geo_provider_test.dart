@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:teapodstream/core/crypto/sha256.dart';
 import 'package:teapodstream/core/models/app_message.dart';
 import 'package:teapodstream/core/constants/app_constants.dart';
 import 'package:teapodstream/core/services/geodata_service.dart';
@@ -96,19 +97,38 @@ void main() {
       );
     }
 
-    test('downloads both files from the configured URLs', () async {
+    String hex(String s) => sha256(s.codeUnits).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+
+    /// Serves `IPDATA` / `SITEDATA!` and, next to them, the `.sha256sum` files from [sums] (404 when absent).
+    void serveGeo(Map<String, String> sums, {List<String>? requested}) {
+      server.handler = (r) async {
+        requested?.add('${r.method} ${r.uri}');
+        final path = r.uri.path;
+        final body = path.endsWith('.sha256sum') ? sums[path] : (path.endsWith('ip.dat') ? 'IPDATA' : 'SITEDATA!');
+        if (body == null) r.response.statusCode = HttpStatus.notFound;
+        r.response.contentLength = body?.length ?? 0;
+        if (r.method != 'HEAD' && body != null) r.response.write(body);
+        await r.response.close();
+      };
+    }
+
+    test('downloads both files from the configured URLs and checks their published sums', () async {
       final requested = <String>[];
       final states = <GeoState>[];
       c.listen(geoProvider, (_, s) => states.add(s));
-      server.handler = (r) async {
-        requested.add('${r.method} ${r.uri}');
-        final body = r.uri.path.endsWith('ip.dat') ? 'IPDATA' : 'SITEDATA!';
-        r.response.contentLength = body.length;
-        if (r.method != 'HEAD') r.response.write(body);
-        await r.response.close();
-      };
+      serveGeo({
+        '/ip.dat.sha256sum': '${hex('IPDATA')}  geoip.dat\n',
+        '/site.dat.sha256sum': hex('SITEDATA!').toUpperCase(),
+      }, requested: requested);
       await download();
-      expect(requested, ['HEAD /ip.dat', 'HEAD /site.dat', 'GET /ip.dat', 'GET /site.dat']);
+      expect(requested, [
+        'HEAD /ip.dat',
+        'HEAD /site.dat',
+        'GET /ip.dat',
+        'GET /ip.dat.sha256sum',
+        'GET /site.dat',
+        'GET /site.dat.sha256sum',
+      ]);
       expect(File('${dir.path}/geoip.dat').readAsStringSync(), 'IPDATA');
       expect(File('${dir.path}/geosite.dat').readAsStringSync(), 'SITEDATA!');
       expect(File('${dir.path}/geoip.dat.tmp').existsSync(), isFalse);
@@ -130,6 +150,43 @@ void main() {
       expect(s, isA<GeoError>());
       expect('${(s as GeoError).message}', 'The geo database server answered HTTP 404');
       expect(File('${dir.path}/geoip.dat').readAsStringSync(), 'old');
+    });
+
+    test('a file that does not match its published sum keeps both old files and reports it', () async {
+      File('${dir.path}/geoip.dat').writeAsStringSync('old ip');
+      File('${dir.path}/geosite.dat').writeAsStringSync('old site');
+      serveGeo({'/ip.dat.sha256sum': hex('IPDATA'), '/site.dat.sha256sum': hex('tampered')});
+      await download();
+      final s = c.read(geoProvider);
+      expect(s, isA<GeoError>());
+      expect(
+        '${(s as GeoError).message}',
+        "geosite.dat doesn't match the checksum published next to it; the old geo databases are kept",
+      );
+      expect(File('${dir.path}/geoip.dat').readAsStringSync(), 'old ip');
+      expect(File('${dir.path}/geosite.dat').readAsStringSync(), 'old site');
+      expect(dir.listSync().where((f) => f.path.endsWith('.tmp')), isEmpty);
+    });
+
+    test('a source without sums (404) or with something else in them is not checked', () async {
+      serveGeo({'/site.dat.sha256sum': '<html>not found</html>'});
+      await download();
+      expect(c.read(geoProvider), isA<GeoReady>());
+      expect(File('${dir.path}/geosite.dat').readAsStringSync(), 'SITEDATA!');
+    });
+
+    test('a failed sum request is an error, not a skipped check', () async {
+      File('${dir.path}/geoip.dat').writeAsStringSync('old ip');
+      server.handler = (r) async {
+        if (r.uri.path.endsWith('.sha256sum')) r.response.statusCode = HttpStatus.badGateway;
+        if (r.method != 'HEAD' && !r.uri.path.endsWith('.sha256sum')) r.response.write('x');
+        await r.response.close();
+      };
+      await download();
+      final s = c.read(geoProvider);
+      expect('${(s as GeoError).message}', 'The geo database server answered HTTP 502');
+      expect(File('${dir.path}/geoip.dat').readAsStringSync(), 'old ip');
+      expect(dir.listSync().where((f) => f.path.endsWith('.tmp')), isEmpty);
     });
 
     test('files over the default body limit report their size', () async {

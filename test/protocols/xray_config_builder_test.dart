@@ -9,6 +9,7 @@ import 'package:teapodstream/core/interfaces/vpn_engine.dart';
 import 'package:teapodstream/core/models/dns_config.dart';
 import 'package:teapodstream/core/models/vpn_log_entry.dart' show LogLevel;
 import 'package:teapodstream/core/models/xray_tuning.dart';
+import 'package:teapodstream/core/constants/routing_defaults.dart';
 
 VpnConfig _vlessConfig({String address = '1.2.3.4', int port = 443}) => VpnConfig(
   id: 'id',
@@ -413,6 +414,55 @@ void main() {
       expect(bh['protocol'], 'blackhole');
     });
 
+    test('mergeWithRaw sends the direct rules to a direct freedom that exists', () {
+      const bypass = RoutingSettings(bypassLocal: true);
+      List<Map<String, dynamic>> outbounds(Map<String, dynamic> cfg) =>
+          (cfg['outbounds'] as List).cast<Map<String, dynamic>>();
+      String privateTag(Map<String, dynamic> cfg) =>
+          ((cfg['routing']['rules'] as List).cast<Map<String, dynamic>>().firstWhere(
+                    (r) => (r['ip'] as List?)?.contains('geoip:private') ?? false,
+                  )
+                  as Map)['outboundTag']
+              as String;
+      Map<String, dynamic> merge(List<Map<String, Object>> serverOutbounds, RoutingSettings routing) =>
+          jsonDecode(
+                XrayConfigBuilder.mergeWithRaw(
+                  jsonEncode({
+                    'outbounds': [
+                      {'tag': 'node', 'protocol': 'vless'},
+                      ...serverOutbounds,
+                    ],
+                  }),
+                  _defaultOptions(routing: routing),
+                ),
+              )
+              as Map<String, dynamic>;
+
+      // The server's own direct freedom is used as is.
+      final own = merge([
+        {'tag': 'direct', 'protocol': 'freedom'},
+      ], bypass);
+      expect(privateTag(own), 'direct');
+      expect(outbounds(own).map((o) => o['tag']), ['node', 'direct']);
+
+      // No direct outbound, or a direct of another protocol: a freedom of the app's own.
+      final none = merge([], bypass);
+      expect(privateTag(none), XrayConfigBuilder.directTag);
+      expect(outbounds(none).last, {
+        'tag': XrayConfigBuilder.directTag,
+        'protocol': 'freedom',
+        'settings': <String, dynamic>{},
+      });
+      final taken = merge([
+        {'tag': 'direct', 'protocol': 'blackhole'},
+      ], bypass);
+      expect(privateTag(taken), XrayConfigBuilder.directTag);
+      expect(outbounds(taken).firstWhere((o) => o['tag'] == 'direct')['protocol'], 'blackhole');
+
+      // No direct rule — nothing added.
+      expect(outbounds(merge([], const RoutingSettings(bypassLocal: false))).map((o) => o['tag']), ['node']);
+    });
+
     test('mergeWithRaw keeps a server outbound that took our tag and blocks UDP via a free tag', () {
       const tag = XrayConfigBuilder.blackholeTag;
       final serverRule = {'type': 'field', 'network': 'tcp', 'outboundTag': tag};
@@ -660,6 +710,20 @@ void main() {
       final tls = streamOf(link('vless://u@h:443?security=tls&ech=AEX%2B#n'))['tlsSettings'] as Map;
       expect(tls['echConfigList'], 'AEX+');
       expect(tls.containsKey('echSettings'), isFalse);
+    });
+
+    test('WebSocket Host goes to wsSettings.host, not the deprecated headers; none without a host', () {
+      expect(streamOf(link('vless://u@h:443?security=tls&type=ws&host=edge.example&path=%2Fws#n'))['wsSettings'], {
+        'path': '/ws',
+        'host': 'edge.example',
+      });
+      expect(streamOf(link('vless://u@h:443?security=tls&type=ws#n'))['wsSettings'], {'path': '/'});
+    });
+
+    test('ruServicesDomains uses only the prefixes every core reads (sing-box: domain: and full:)', () {
+      for (final d in RoutingDefaults.ruServicesDomains) {
+        expect(d.startsWith('domain:') || d.startsWith('full:'), isTrue, reason: d);
+      }
     });
 
     test('TCP HTTP header from headerType / VMess type', () {

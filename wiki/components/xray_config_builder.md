@@ -68,6 +68,8 @@ and security (`tls` with `serverName`, `fingerprint`, `alpn`, `echConfigList`; `
   destination to `GetTLSConfig()`, so an empty `serverName` became the literal `hysteria`; the builder uses the
   address when `sni` is empty.
 - **TCP HTTP header** (`VpnConfig.tcpHttpHeader`) → `tcpSettings.header`.
+- **WebSocket Host** → `wsSettings.host` (none when the link has no host); the `headers.Host` form is deprecated in
+  Xray v26, and xray-rust reads the same key.
 - `sockopt.tcpUserTimeout: 30000` (not Hysteria2; on `dialer-out` when it is used): a connection whose packets DPI
   drops breaks after 30 s instead of hanging until `tcp_retries2`.
 
@@ -112,7 +114,7 @@ must:
 | `observatory.probeInterval` | raised to at least `obsProbeIntervalSec` (default 600 s, 0 = keep): configs with 30 s and 20+ outbounds flooded mobile links with TLS probes and triggered server resets |
 | balancer `fallbackTag` pointing to freedom | rewritten to the first proxy outbound of the selector, else `teapod-blackhole` — otherwise traffic leaves outside the VPN when all nodes are "dead" and in the first seconds before observatory has results |
 | ad block | `geosite:` ads rule → `teapod-blackhole` at the top (no DNS-level ad block here) |
-| `routing.rules` | only `→ direct` rules are prepended (bypassLocal, geo bypass); proxy rules and the catch-all stay the server's |
+| `routing.rules` | only direct rules are prepended (bypassLocal, geo bypass, port 53 in direct DNS mode); proxy rules and the catch-all stay the server's. They go to the server's `direct` when it is a freedom, else to an added freedom `teapod-direct` (suffixed when a server outbound of another protocol has the tag; not `direct`, which a balancer's tag-prefix selector could pick) — Xray drops traffic routed to a missing tag |
 | UDP off | the same `network: udp` rule on the server's SOCKS tag → `teapod-blackhole` |
 | parse error | `FormatException` (never fall back to the raw config with the server's inbounds) |
 

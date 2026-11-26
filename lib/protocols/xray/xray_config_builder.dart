@@ -528,10 +528,7 @@ class XrayConfigBuilder {
           },
         },
       if (config.transport == VpnTransport.ws)
-        'wsSettings': {
-          'path': config.wsPath ?? '/',
-          'headers': {'Host': config.wsHost ?? ''},
-        },
+        'wsSettings': {'path': config.wsPath ?? '/', if (config.wsHost?.isNotEmpty ?? false) 'host': config.wsHost},
       if (config.transport == VpnTransport.grpc) 'grpcSettings': {'serviceName': config.grpcServiceName ?? ''},
       if (config.transport == VpnTransport.xhttp)
         'xhttpSettings': {
@@ -675,7 +672,14 @@ class XrayConfigBuilder {
         });
       }
 
-      // No catch-all rule — the server's routing handles the remainder.
+      // No catch-all rule — the server's routing handles the remainder. Xray drops traffic routed to a tag that
+      // doesn't exist, so the direct rules go to the server's own `direct` freedom or to one added for them.
+      if (appRules.any((r) => r['outboundTag'] == 'direct')) {
+        final direct = _ensureDirectOutbound(cfg);
+        for (final r in appRules) {
+          if (r['outboundTag'] == 'direct') r['outboundTag'] = direct;
+        }
+      }
 
       if (appRules.isNotEmpty) {
         final serverRouting = cfg['routing'] as Map<String, dynamic>? ?? {};
@@ -739,6 +743,10 @@ class XrayConfigBuilder {
   /// neutralization, adblock). Injected once by [_ensureBlackholeOutbound].
   static const blackholeTag = 'teapod-blackhole';
 
+  /// Tag of the freedom outbound injected into a managed config without a `direct` freedom, for the app's direct
+  /// rules ([_ensureDirectOutbound]). Not `direct`: a balancer selector is a tag prefix and must not pick it.
+  static const directTag = 'teapod-direct';
+
   /// Balancers in managed configs may declare `fallbackTag: "direct"` — when the
   /// leastLoad strategy has no qualified nodes (all marked dead, or the first
   /// seconds after start before observatory produced any probe results), xray
@@ -785,21 +793,31 @@ class XrayConfigBuilder {
     return null;
   }
 
-  /// Tag of the blackhole outbound. If [blackholeTag] is taken by a server outbound
-  /// of another protocol, it stays as is (server rules may point to it),
-  /// and the blackhole gets a free tag with a suffix.
-  static String _ensureBlackholeOutbound(Map<String, dynamic> cfg) {
+  /// Tag of the blackhole outbound ([_ensureOutbound]).
+  static String _ensureBlackholeOutbound(Map<String, dynamic> cfg) => _ensureOutbound(cfg, blackholeTag, 'blackhole');
+
+  /// Tag for the app's direct rules: the server's `direct` outbound when it is a freedom, else [directTag]
+  /// ([_ensureOutbound]).
+  static String _ensureDirectOutbound(Map<String, dynamic> cfg) {
+    final outbounds = (cfg['outbounds'] as List<dynamic>? ?? const []).whereType<Map<String, dynamic>>();
+    if (outbounds.any((o) => o['tag'] == 'direct' && o['protocol'] == 'freedom')) return 'direct';
+    return _ensureOutbound(cfg, directTag, 'freedom');
+  }
+
+  /// Tag of an outbound of [protocol] the app injected as [tag]. If [tag] is taken by a server outbound of another
+  /// protocol, it stays as is (server rules may point to it), and ours gets a free tag with a suffix.
+  static String _ensureOutbound(Map<String, dynamic> cfg, String tag, String protocol) {
     final outbounds = cfg['outbounds'] as List<dynamic>? ?? (cfg['outbounds'] = <dynamic>[]);
     final byTag = {
       for (final o in outbounds.whereType<Map<String, dynamic>>())
         if (o['tag'] case final String t) t: o['protocol'],
     };
-    var tag = blackholeTag;
-    for (var i = 2; byTag.containsKey(tag) && byTag[tag] != 'blackhole'; i++) {
-      tag = '$blackholeTag-$i';
+    var free = tag;
+    for (var i = 2; byTag.containsKey(free) && byTag[free] != protocol; i++) {
+      free = '$tag-$i';
     }
-    if (!byTag.containsKey(tag)) outbounds.add({'tag': tag, 'protocol': 'blackhole', 'settings': <String, dynamic>{}});
-    return tag;
+    if (!byTag.containsKey(free)) outbounds.add({'tag': free, 'protocol': protocol, 'settings': <String, dynamic>{}});
+    return free;
   }
 
   /// Managed configs often ship aggressive observatory settings (e.g. probeInterval

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/app_message.dart';
 import 'app_http.dart';
 import 'tunnel_socks.dart';
 
@@ -26,7 +27,7 @@ class GeodataService {
 
   /// Downloads [geoipUrl] and [geositeUrl] into [dir] through [socks] (direct when null). [onProgress] gets the bytes
   /// so far and the total from the HEAD sizes (-1 — unknown). Returns the time it finished, which [lastUpdated]
-  /// reports from then on. Throws on a failed request or an HTTP status other than 200.
+  /// reports from then on. Throws on a failed request, or a [ReasonException] on an HTTP status other than 200.
   Future<DateTime> download({
     required String dir,
     required String geoipUrl,
@@ -69,7 +70,8 @@ class GeodataService {
       maxBytes: _maxFileBytes,
     );
     try {
-      if (resp.statusCode != 200) throw Exception('HTTP ${resp.statusCode}');
+      final status = resp.statusCode;
+      if (status != 200) throw ReasonException(AppMessage.l10n((l) => l.geoHttpStatus(status)));
       final sink = tmpFile.openWrite();
       try {
         await for (final chunk in resp.body) {

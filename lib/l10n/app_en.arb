@@ -293,6 +293,14 @@
   "routingModeMatch": "match only",
   "commonDone": "DONE",
   "geoNotLoaded": "Geo databases not downloaded",
+  "geoHttpStatus": "The geo database server answered HTTP {status}",
+  "@geoHttpStatus": {
+    "placeholders": {
+      "status": {
+        "type": "int"
+      }
+    }
+  },
   "geoDownload": "DOWNLOAD",
   "geoLoaded": "Geo databases downloaded",
   "geoUpdate": "UPDATE",

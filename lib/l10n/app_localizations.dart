@@ -992,6 +992,12 @@ abstract class AppLocalizations {
   /// **'Geo databases not downloaded'**
   String get geoNotLoaded;
 
+  /// No description provided for @geoHttpStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'The geo database server answered HTTP {status}'**
+  String geoHttpStatus(int status);
+
   /// No description provided for @geoDownload.
   ///
   /// In en, this message translates to:

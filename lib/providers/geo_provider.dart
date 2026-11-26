@@ -86,6 +86,8 @@ class GeoNotifier extends Notifier<GeoState> {
       );
       ref.invalidate(geositeIndexProvider);
       state = GeoReady(lastUpdated: finished);
+    } on ReasonException catch (e) {
+      state = GeoError(e.reason);
     } catch (e) {
       state = GeoError(AppMessage.text(e.toString().replaceFirst('Exception: ', '')));
     }

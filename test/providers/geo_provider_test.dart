@@ -128,7 +128,7 @@ void main() {
       await download();
       final s = c.read(geoProvider);
       expect(s, isA<GeoError>());
-      expect((s as GeoError).message, const AppMessage.text('HTTP 404'));
+      expect('${(s as GeoError).message}', 'The geo database server answered HTTP 404');
       expect(File('${dir.path}/geoip.dat').readAsStringSync(), 'old');
     });
 

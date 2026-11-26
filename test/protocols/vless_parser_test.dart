@@ -345,6 +345,9 @@ void main() {
         final ss = VlessParser.parseUri('ss://$legacy#n')!;
         expect((ss.plugin, ss.mux), ('v2ray-plugin', true));
         expect(VlessParser.parseUri('ss://YWVzLTEyOC1nY206cA@h:8388#n')!.plugin, isNull);
+        // Outline's prefix is bytes, not UTF-8: it doesn't break reading the other parameters.
+        final outline = VlessParser.parseUri('ss://YWVzLTEyOC1nY206cA@h:8388/?prefix=%FF%16&plugin=p#n')!;
+        expect((outline.ssPrefix, outline.plugin), ('ff16', 'p'));
         final salamander = VlessParser.parseUri('hy2://p@h:443?obfs=salamander&obfs-password=ob#n')!;
         expect((salamander.obfs, salamander.geckoPacketSize), ('salamander', null));
         expect(VlessParser.parseUri('hy2://p@h:443?obfs=none#n')!.obfs, isNull);

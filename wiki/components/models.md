@@ -19,7 +19,7 @@ One server. Fields by purpose:
 | Endpoint | `protocol`, `address`, `port`, `hopPorts` (Hysteria2 port hopping) |
 | Credentials | `uuid` (VLESS/VMess), `password` (Trojan/SS/Hy2), `method` (SS cipher; VMess `scy`), `encryption`, `alterId`, `flow` |
 | Security | `security` (`none`/`tls`/`reality`), `sni`, `fingerprint`, `alpn`, `allowInsecure`, `ech`, Reality `publicKey`/`shortId`/`spiderX`/`postQuantumKey` |
-| Transport | `transport`, `wsPath`, `wsHost`, `grpcServiceName`, `xhttpMode`, `xhttpExtra`, `finalmask`, `obfsPassword` with `obfs` (Hy2 `salamander` / `gecko`) and `geckoPacketSize` (`(min, max)`), `headerType` (TCP header, lower case; `tcpHttpHeader` — TCP with HTTP camouflage), `mux` (`mux=on|off` of the link), `plugin` (SS SIP003), `ssPrefix` (Outline prefix, hex) |
+| Transport | `transport`, `wsPath`, `wsHost`, `grpcServiceName`, `xhttpMode`, `xhttpExtra`, `finalmask`, `obfsPassword` with `obfs` (Hy2 `salamander` / `gecko`) and `geckoPacketSize` (`(min, max)`), `headerType` (TCP header, lower case; `tcpHttpHeader` — TCP with HTTP camouflage), `mux` (`mux=on\|off` of the link), `plugin` (SS SIP003), `ssPrefix` (Outline prefix, hex) |
 | Managed | `rawXrayConfig` — a ready xray JSON from a managed subscription, merged instead of generated |
 | sing-box only | `protocolSettings` (below) |
 | Core | `core` — the pinned core, null = by priority ([vpn_provider](vpn_provider.md#choosing-the-core)) |

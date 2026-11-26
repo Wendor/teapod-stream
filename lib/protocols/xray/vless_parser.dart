@@ -291,7 +291,8 @@ class VlessParser {
         (host, port) = _parseHostPort(hostPortClean, 8388);
       }
 
-      final params = queryStr.isEmpty ? const <String, String>{} : Uri.splitQueryString(queryStr);
+      // Outline's prefix is raw bytes, not UTF-8 text: it is decoded below and kept out of the text decoding.
+      final params = Uri.splitQueryString(queryStr.split('&').where((p) => !p.startsWith('prefix=')).join('&'));
       // Parse Outline prefix bytes (raw percent-encoded bytes, not UTF-8 characters)
       String? ssPrefix;
       if (queryStr.isNotEmpty) {

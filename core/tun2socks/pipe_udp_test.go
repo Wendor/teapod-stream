@@ -158,6 +158,11 @@ func TestPipeUDPStampsEngineRxOnReply(t *testing.T) {
 	if _, err := f.app.Read(buf); err != nil {
 		t.Fatalf("app got no reply: %v", err)
 	}
+	// pipeUDP stamps right after its write to the app: the read here can return first.
+	deadline := time.Now().Add(2 * time.Second)
+	for f.rx.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
 	if f.rx.Load() == 0 {
 		t.Fatal("engine rx not stamped by the reply")
 	}

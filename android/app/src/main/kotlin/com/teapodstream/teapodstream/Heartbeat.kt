@@ -167,7 +167,7 @@ internal class Heartbeat(private val host: Host) {
         return true
     }
 
-    // True when tun2socks wrote data to the TUN within the last heartbeat interval —
+    // True when an app got payload from the proxy within the last heartbeat interval —
     // the tunnel is demonstrably passing traffic even if the probe itself fails.
     fun isTunRxFresh(): Boolean {
         if (!host.tunMode) return false

@@ -172,11 +172,11 @@ func (t *TeapodTun2socks) GetDownloadBytes() int64 {
 	return int64(engine.rxBytes.Load())
 }
 
-// GetLastRxActivityMs returns the Unix timestamp (milliseconds) of the last successful
-// write to the TUN interface. Returns 0 if nothing has been written yet.
-// Use this to detect tun2socks hangs: if the heartbeat SOCKS5 probe succeeds but
-// this value hasn't changed for several minutes with active connections, tun2socks
-// goroutines are receiving data from the proxy but it's not reaching the TUN.
+// GetLastRxActivityMs returns the Unix timestamp (milliseconds) of the last payload from the
+// proxy delivered to an app (a TCP flow or a UDP reply). Returns 0 if none yet. The stack's
+// own ACK/RST to connection attempts don't count: with a dead server they never stop.
+// The heartbeat reads it as liveness; unchanged for minutes with active connections means
+// the apps get no answers.
 func (t *TeapodTun2socks) GetLastRxActivityMs() int64 {
 	t.mu.Lock()
 	engine := t.engine

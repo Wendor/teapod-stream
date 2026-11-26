@@ -510,9 +510,11 @@ class VpnNotifier extends Notifier<VpnState2> {
   }
 
   /// Makes the tunnel run the active config: a connect in flight is redone, a live tunnel on another config switches,
-  /// one on this config stays.
+  /// one on this config stays, an idle VPN saves it for quick connect.
   Future<void> _followSelection() async {
     if (state.isBusy) return reconnectWithNewConfig();
+    // Off: the tile, boot and automation start the selected config.
+    if (_idle(state.connectionState)) return _onCoreChanged();
     final config = ref.read(effectiveConfigProvider);
     if (state.isConnected && config != null && !runsConfig(config)) await reconnectWithNewConfig();
   }
@@ -537,7 +539,7 @@ class VpnNotifier extends Notifier<VpnState2> {
 
   /// Runs a profile switch ([body] returns false — nothing switched), then makes the VPN follow the
   /// final state: a profile no core runs disconnects (as a core change does), a live tunnel is
-  /// rebuilt if stale, a core change suppressed meanwhile is handled.
+  /// rebuilt if stale, a core change suppressed meanwhile is handled, an idle VPN saves the quick-connect parameters.
   /// Switches to profile [id]; the VPN follows once its settings and server are in place, also when restoring the
   /// server failed: the profile is already switched, and a retry can't — it is active.
   Future<void> switchProfile(String id) =>
@@ -552,12 +554,17 @@ class VpnNotifier extends Notifier<VpnState2> {
     try {
       switched = await body();
     } finally {
+      // Settings rebuild lazily: read here, the switch's change reaches the settings listener while it is skipped, and
+      // the idle save below is the only one.
+      ref.read(settingsProvider);
       _profileSwitching = false;
       final core = ref.read(activeCoreProvider);
       final live = switched && (state.isConnected || state.isConnecting);
       if (live && core?.kind != null) {
         await reconnectIfStale();
-      } else if (live || core != coreBefore) {
+      } else if (live || core != coreBefore || _idle(state.connectionState)) {
+        // Off: the profile's server and connection settings reach the saved quick-connect parameters (the settings
+        // listener skips the switch).
         await _onCoreChanged();
       }
     }

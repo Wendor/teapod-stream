@@ -1309,6 +1309,35 @@ void main() {
       expect(native.named('saveQuickConnect'), isEmpty);
     });
 
+    test('an idle profile switch with the same core reaches quick connect', () async {
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      await c.read(profileProvider.future);
+      final profiles = c.read(profileProvider.notifier);
+      final defaultId = c.read(profileProvider).value!.activeProfileId;
+      await profiles.createProfile('B');
+      final bId = c.read(profileProvider).value!.profiles.last.id;
+      await n().switchProfile(bId);
+      await c.read(settingsProvider.notifier).save(_settings.copyWith(killSwitchEnabled: true));
+      await _settle();
+      expect((native.named('saveQuickConnect').last.arguments as Map)['killSwitch'], isTrue);
+
+      native.calls.clear();
+      await n().switchProfile(defaultId);
+      await _settle();
+      expect(native.named("saveQuickConnect").map((c) => (c.arguments as Map)["killSwitch"]), [false]);
+    });
+
+    test('a server selected while off reaches quick connect', () async {
+      await boot(configs: [_cfg('a'), _cfg('b')], activeId: 'a');
+      await _settle();
+      native.calls.clear();
+      await n().selectConfig(c.read(configProvider).value!.configs.last);
+      await _settle();
+      expect(native.named('saveQuickConnect').map((c) => (c.arguments as Map)['xrayConfig'] as String), [
+        contains('hb.example'),
+      ]);
+    });
+
     test('settings changed during a session reach quick connect when it ends', () async {
       await connected();
       await c.read(settingsProvider.notifier).save(_settings.copyWith(killSwitchEnabled: true));

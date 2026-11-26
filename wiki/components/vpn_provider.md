@@ -70,7 +70,8 @@ pinning, profile switch) `coreSwitchAction` decides: the config can't run any mo
 it can → reconnect banner; disconnected → refresh or clear the saved quick-connect parameters.
 The tile, boot and automation start from those saved parameters, so they also follow the settings: when a session
 ends (it may have run older ones) and when connection settings (the parts of `connectionFingerprint`) change while
-off, the notifier saves them again from the current settings and config (native refuses while a session runs).
+off, and after a server selection or a profile switch while off, the notifier saves them again from the current
+settings and config (native refuses while a session runs).
 
 ## `connect({switching})`
 

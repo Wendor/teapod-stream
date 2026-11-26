@@ -1,9 +1,7 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:path_provider/path_provider.dart';
 import '../core/models/app_settings.dart' show UpdateChannel;
 import '../core/services/update_service.dart';
 import '../core/constants/app_constants.dart';
@@ -82,11 +80,10 @@ class UpdateNotifier extends Notifier<UpdateState> {
         state = UpdateError(const AppMessage(MessageCode.updateNoReleaseInfo));
         return;
       }
-      final path = await _apkPath(update.version, abi);
-      await _cleanOldApks(keepPath: path);
+      final path = await _service.apkPath(update.version, abi);
+      await _service.cleanOldApks(keepPath: path);
       if (_isNewer(update.version, currentVersion)) {
-        final resumable = File(path).existsSync() ? File(path).lengthSync() : 0;
-        state = UpdateAvailable(update, resumableBytes: resumable);
+        state = UpdateAvailable(update, resumableBytes: _service.downloadedBytes(path));
       } else {
         state = UpdateUpToDate(update);
       }
@@ -97,21 +94,16 @@ class UpdateNotifier extends Notifier<UpdateState> {
 
   Future<void> reinstall(UpdateInfo info) async {
     final abi = await ref.read(platformServiceProvider).abi() ?? 'arm64-v8a';
-    final path = await _apkPath(info.version, abi);
-    if (File(path).existsSync()) await File(path).delete();
+    await _service.deleteApk(await _service.apkPath(info.version, abi));
     await startDownload(info);
   }
 
   Future<void> startDownload(UpdateInfo info) async {
     final abi = await ref.read(platformServiceProvider).abi() ?? 'arm64-v8a';
-    final path = await _apkPath(info.version, abi);
+    final path = await _service.apkPath(info.version, abi);
     _currentApkPath = path;
 
-    state = UpdateDownloading(
-      info,
-      downloaded: File(path).existsSync() ? File(path).lengthSync() : 0,
-      total: info.totalBytes ?? -1,
-    );
+    state = UpdateDownloading(info, downloaded: _service.downloadedBytes(path), total: info.totalBytes ?? -1);
 
     // Like the release check — through the tunnel if it is up (#150).
     final socks = ref.read(vpnProvider).tunnelSocks;
@@ -139,15 +131,14 @@ class UpdateNotifier extends Notifier<UpdateState> {
     final cur = state;
     if (cur is UpdateDownloading) {
       final path = _currentApkPath;
-      final resumable = path != null && File(path).existsSync() ? File(path).lengthSync() : 0;
-      state = UpdateAvailable(cur.info, resumableBytes: resumable);
+      state = UpdateAvailable(cur.info, resumableBytes: path == null ? 0 : _service.downloadedBytes(path));
     }
   }
 
   Future<void> installApk(String filePath) async {
     try {
       await ref.read(platformServiceProvider).installApk(filePath);
-      await _cleanOldApks(keepPath: filePath);
+      await _service.cleanOldApks(keepPath: filePath);
       state = UpdateIdle();
     } on PlatformException catch (e) {
       state = UpdateError(
@@ -165,27 +156,6 @@ class UpdateNotifier extends Notifier<UpdateState> {
       if (av != bv) return av > bv;
     }
     return false;
-  }
-
-  /// Downloads live in `updates/`, the only directory the FileProvider exposes (`file_provider_paths.xml`).
-  Future<String> _apkPath(String version, String abi) async {
-    final root = await getApplicationSupportDirectory();
-    final dir = Directory('${root.path}/updates');
-    await dir.create(recursive: true);
-    return '${dir.path}/teapod-update-$abi-$version.apk';
-  }
-
-  /// Deletes every downloaded APK except [keepPath], including ones left in the support root by older versions.
-  Future<void> _cleanOldApks({String? keepPath}) async {
-    final root = await getApplicationSupportDirectory();
-    for (final dir in [root, Directory('${root.path}/updates')]) {
-      if (!dir.existsSync()) continue;
-      for (final f in dir.listSync().whereType<File>()) {
-        if (f.path.contains('teapod-update-') && f.path.endsWith('.apk') && f.path != keepPath) {
-          await f.delete();
-        }
-      }
-    }
   }
 }
 

@@ -112,9 +112,10 @@ must:
 | `reverse` in outbound `settings` | removed at any depth in any letter case (`Settings`, `vnext` users) — a client config doesn't run reverse proxying |
 | `allowInsecure` in outbounds | removed — fatal in xray v26 |
 | `observatory.probeInterval` | raised to at least `obsProbeIntervalSec` (default 600 s, 0 = keep): configs with 30 s and 20+ outbounds flooded mobile links with TLS probes and triggered server resets |
-| balancer `fallbackTag` pointing to freedom | rewritten to the first proxy outbound of the selector, else `teapod-blackhole` — otherwise traffic leaves outside the VPN when all nodes are "dead" and in the first seconds before observatory has results |
+| balancer `fallbackTag` pointing to freedom (keys in any letter case) | rewritten to the first proxy outbound of the selector, else `teapod-blackhole` — otherwise traffic leaves outside the VPN when all nodes are "dead" and in the first seconds before observatory has results |
 | ad block | `geosite:` ads rule → `teapod-blackhole` at the top (no DNS-level ad block here) |
-| `routing.rules` | only direct rules are prepended (bypassLocal, geo bypass, port 53 in direct DNS mode); proxy rules and the catch-all stay the server's. They go to the server's `direct` when it is a freedom, else to an added freedom `teapod-direct` (suffixed when a server outbound of another protocol has the tag; not `direct`, which a balancer's tag-prefix selector could pick) — Xray drops traffic routed to a missing tag |
+| `routing.rules` | only direct rules are prepended (bypassLocal, geo bypass, port 53 in direct DNS mode); proxy rules and the catch-all stay the server's. They go to the server's `direct` when it is a freedom, else to an added freedom `teapod-direct` — Xray drops traffic routed to a missing tag |
+| injected outbounds (`teapod-direct`, `teapod-blackhole`) | a variant of the tag (`-2`…, then a leading `_`, `~`, …) when a server outbound of another protocol has it, or when a balancer selector — a tag prefix, any protocol — would match it: a balancer keeps choosing among the server's outbounds only, so an injected freedom never takes balanced traffic out of the VPN. An empty selector (every tag) is replaced by the server's tags. Outbound and balancer keys are read in any letter case, as xray reads them |
 | UDP off | the same `network: udp` rule on the server's SOCKS tag → `teapod-blackhole` |
 | parse error | `FormatException` (never fall back to the raw config with the server's inbounds) |
 

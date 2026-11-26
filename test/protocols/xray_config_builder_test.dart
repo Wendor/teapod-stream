@@ -280,6 +280,20 @@ void main() {
       );
     });
 
+    test('rewrites a freedom fallback whatever the letter case of its keys', () {
+      final raw = rawManaged(fallbackTag: null);
+      final balancer = ((raw['routing'] as Map)['balancers'] as List).first as Map<String, dynamic>;
+      balancer
+        ..remove('selector')
+        ..['Selector'] = ['c1-']
+        ..['FallbackTag'] = 'free';
+      (raw['outbounds'] as List).add({'Tag': 'free', 'Protocol': 'freedom'});
+      final cfg = merge(raw);
+      final merged = ((cfg['routing'] as Map)['balancers'] as List).first as Map;
+      expect(merged['FallbackTag'], 'c1-a');
+      expect(merged.containsKey('fallbackTag'), isFalse);
+    });
+
     test('keeps fallbackTag pointing to non-freedom outbound', () {
       final cfg = merge(rawManaged(fallbackTag: 'blocked'));
       final balancer = ((cfg['routing'] as Map)['balancers'] as List).first as Map;
@@ -461,6 +475,69 @@ void main() {
 
       // No direct rule — nothing added.
       expect(outbounds(merge([], const RoutingSettings(bypassLocal: false))).map((o) => o['tag']), ['node']);
+    });
+
+    test('mergeWithRaw keeps injected outbounds out of server balancers and reads keys in any case', () {
+      Map<String, dynamic> merge(Map<String, Object> raw) =>
+          jsonDecode(
+                XrayConfigBuilder.mergeWithRaw(
+                  jsonEncode(raw),
+                  _defaultOptions(routing: const RoutingSettings(bypassLocal: true)),
+                ),
+              )
+              as Map<String, dynamic>;
+      Map<String, Object> raw(List<Object> selector, [List<Map<String, Object>> extra = const []]) => {
+        'outbounds': [
+          {'tag': 'node', 'protocol': 'vless'},
+          ...extra,
+        ],
+        'routing': {
+          'balancers': [
+            {'tag': 'lb', 'selector': selector},
+          ],
+        },
+      };
+      String privateTag(Map<String, dynamic> cfg) =>
+          ((cfg['routing']['rules'] as List).cast<Map<String, dynamic>>().firstWhere(
+                    (r) => (r['ip'] as List?)?.contains('geoip:private') ?? false,
+                  )
+                  as Map)['outboundTag']
+              as String;
+      List<Object?> selector(Map<String, dynamic> cfg) => cfg['routing']['balancers'][0]['selector'] as List;
+
+      // A selector prefix that matches the injected tag: the tag moves out of its reach.
+      for (final prefix in ['t', 'teapod', 'teapod-direct']) {
+        final cfg = merge(raw([prefix, 'node']));
+        final tag = privateTag(cfg);
+        expect(tag.startsWith(prefix), isFalse, reason: prefix);
+        expect((cfg['outbounds'] as List).last, {'tag': tag, 'protocol': 'freedom', 'settings': <String, dynamic>{}});
+      }
+      // An empty selector matches every tag: it becomes the server's tags.
+      final all = merge(raw(['']));
+      expect(selector(all), ['node']);
+      expect(privateTag(all), XrayConfigBuilder.directTag);
+
+      // Xray reads `Tag` / `Protocol` as tag / protocol: a server direct freedom written so is used, and a tag taken
+      // so isn't added a second time.
+      final upper = merge(
+        raw(
+          ['node'],
+          [
+            {'Tag': 'direct', 'Protocol': 'freedom'},
+          ],
+        ),
+      );
+      expect(privateTag(upper), 'direct');
+      expect((upper['outbounds'] as List), hasLength(2));
+      final taken = merge(
+        raw(
+          ['node'],
+          [
+            {'Tag': XrayConfigBuilder.directTag, 'protocol': 'blackhole'},
+          ],
+        ),
+      );
+      expect(privateTag(taken), '${XrayConfigBuilder.directTag}-2');
     });
 
     test('mergeWithRaw keeps a server outbound that took our tag and blocks UDP via a free tag', () {

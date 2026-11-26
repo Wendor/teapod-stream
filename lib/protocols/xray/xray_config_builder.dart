@@ -744,7 +744,8 @@ class XrayConfigBuilder {
   static const blackholeTag = 'teapod-blackhole';
 
   /// Tag of the freedom outbound injected into a managed config without a `direct` freedom, for the app's direct
-  /// rules ([_ensureDirectOutbound]). Not `direct`: a balancer selector is a tag prefix and must not pick it.
+  /// rules ([_ensureDirectOutbound]); a variant of it when a server outbound or balancer selector is in the way
+  /// ([_ensureOutbound]).
   static const directTag = 'teapod-direct';
 
   /// Balancers in managed configs may declare `fallbackTag: "direct"` — when the
@@ -757,25 +758,22 @@ class XrayConfigBuilder {
   static void _neutralizeDirectFallback(Map<String, dynamic> cfg) {
     final routing = cfg['routing'];
     if (routing is! Map<String, dynamic>) return;
-    final balancers = routing['balancers'];
+    final balancers = _field(routing, 'balancers');
     if (balancers is! List) return;
 
     final outbounds = (cfg['outbounds'] as List<dynamic>? ?? []).whereType<Map<String, dynamic>>().toList();
-    final freedomTags = outbounds
-        .where((o) => o['protocol'] == 'freedom')
-        .map((o) => o['tag'] as String?)
-        .whereType<String>()
-        .toSet();
+    final freedomTags = {
+      for (final o in outbounds)
+        if (_field(o, 'protocol') == 'freedom')
+          if (_field(o, 'tag') case final String t) t,
+    };
 
     for (final b in balancers.whereType<Map<String, dynamic>>()) {
-      final fb = b['fallbackTag'];
+      final fb = _field(b, 'fallbackTag');
       if (fb is! String || !freedomTags.contains(fb)) continue;
-      final proxy = _firstSelectorOutbound(outbounds, b['selector']);
-      if (proxy != null) {
-        b['fallbackTag'] = proxy;
-      } else {
-        b['fallbackTag'] = _ensureBlackholeOutbound(cfg);
-      }
+      // Written under the key it was read from: a second spelling would leave xray a choice.
+      final key = b.keys.firstWhere((k) => k.toLowerCase() == 'fallbacktag');
+      b[key] = _firstSelectorOutbound(outbounds, _field(b, 'selector')) ?? _ensureBlackholeOutbound(cfg);
     }
   }
 
@@ -786,8 +784,8 @@ class XrayConfigBuilder {
     const nonProxy = {'freedom', 'blackhole', 'dns', 'loopback'};
     final prefixes = selector.whereType<String>().toList();
     for (final o in outbounds) {
-      final tag = o['tag'];
-      if (tag is! String || nonProxy.contains(o['protocol'])) continue;
+      final tag = _field(o, 'tag');
+      if (tag is! String || nonProxy.contains(_field(o, 'protocol'))) continue;
       if (prefixes.any(tag.startsWith)) return tag;
     }
     return null;
@@ -800,24 +798,68 @@ class XrayConfigBuilder {
   /// ([_ensureOutbound]).
   static String _ensureDirectOutbound(Map<String, dynamic> cfg) {
     final outbounds = (cfg['outbounds'] as List<dynamic>? ?? const []).whereType<Map<String, dynamic>>();
-    if (outbounds.any((o) => o['tag'] == 'direct' && o['protocol'] == 'freedom')) return 'direct';
+    if (outbounds.any((o) => _field(o, 'tag') == 'direct' && _field(o, 'protocol') == 'freedom')) return 'direct';
     return _ensureOutbound(cfg, directTag, 'freedom');
   }
 
-  /// Tag of an outbound of [protocol] the app injected as [tag]. If [tag] is taken by a server outbound of another
-  /// protocol, it stays as is (server rules may point to it), and ours gets a free tag with a suffix.
+  /// Tag of an outbound of [protocol] the app injected: [tag], or a variant of it. A variant is taken when a server
+  /// outbound of another protocol has the tag (it stays as is: server rules may point to it), or when a server
+  /// balancer's selector — a tag prefix, whatever the protocol — would match it: a balancer must keep choosing among
+  /// the server's outbounds only (an injected freedom would take traffic out of the VPN). An empty selector matches
+  /// every tag, so it is replaced by the server's tags first. Keys are read in any letter case, as xray does.
   static String _ensureOutbound(Map<String, dynamic> cfg, String tag, String protocol) {
     final outbounds = cfg['outbounds'] as List<dynamic>? ?? (cfg['outbounds'] = <dynamic>[]);
     final byTag = {
       for (final o in outbounds.whereType<Map<String, dynamic>>())
-        if (o['tag'] case final String t) t: o['protocol'],
+        if (_field(o, 'tag') case final String t) t: _field(o, 'protocol'),
     };
-    var free = tag;
-    for (var i = 2; byTag.containsKey(free) && byTag[free] != protocol; i++) {
-      free = '$tag-$i';
+    final prefixes = <String>{};
+    final balancers = switch (cfg['routing']) {
+      final Map<String, dynamic> routing => _field(routing, 'balancers'),
+      _ => null,
+    };
+    for (final b in (balancers is List ? balancers : const <Object?>[]).whereType<Map<String, dynamic>>()) {
+      final selector = _field(b, 'selector');
+      if (selector is! List) continue;
+      if (selector.contains('')) {
+        final serverTags = [
+          for (final t in byTag.keys)
+            if (!t.startsWith(blackholeTag) && !t.startsWith(directTag)) t,
+        ];
+        selector
+          ..remove('')
+          ..addAll(serverTags.where((t) => !selector.contains(t)));
+      }
+      prefixes.addAll(selector.whereType<String>());
     }
-    if (!byTag.containsKey(free)) outbounds.add({'tag': free, 'protocol': protocol, 'settings': <String, dynamic>{}});
-    return free;
+    for (final candidate in _tagVariants(tag)) {
+      if (prefixes.any(candidate.startsWith)) continue;
+      final taken = byTag[candidate];
+      if (taken == protocol) return candidate;
+      if (taken != null) continue;
+      outbounds.add({'tag': candidate, 'protocol': protocol, 'settings': <String, dynamic>{}});
+      return candidate;
+    }
+    throw StateError('no free tag for $tag');
+  }
+
+  /// [tag], `tag-2`… `tag-9`, then the same behind a leading character: a selector prefix can rule out a start.
+  static Iterable<String> _tagVariants(String tag) sync* {
+    for (final lead in ['', ...'_~.+=#@!0123456789'.split('')]) {
+      for (var i = 1; i <= 9; i++) {
+        yield '$lead$tag${i == 1 ? '' : '-$i'}';
+      }
+    }
+  }
+
+  /// [key] of a config object in any letter case (xray decodes keys case-insensitively).
+  static Object? _field(Map<String, dynamic> object, String key) {
+    if (object.containsKey(key)) return object[key];
+    final lower = key.toLowerCase();
+    for (final e in object.entries) {
+      if (e.key.toLowerCase() == lower) return e.value;
+    }
+    return null;
   }
 
   /// Managed configs often ship aggressive observatory settings (e.g. probeInterval

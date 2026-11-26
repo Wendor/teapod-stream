@@ -535,14 +535,21 @@ void main() {
       );
       await c.read(configProvider.notifier).setActiveConfig('bad');
       await n().reconnectWithNewConfig();
+      final en = lookupAppLocalizations(const Locale('en'));
+      final ru = lookupAppLocalizations(const Locale('ru'));
+      void expectReason() {
+        expect(st().error!.localize(en), en.validateEmptyPassword);
+        expect(st().error!.localize(ru), ru.validateEmptyPassword);
+      }
+
       expect(st().isConnected, isTrue);
-      expect('${st().error}', 'Empty password');
+      expectReason();
       expect(native.named('connect'), hasLength(1));
-      // A stats tick keeps the reason.
+      // A stats tick keeps the reason, still localizable.
       await Future<void>.delayed(const Duration(milliseconds: 1100));
       await _settle();
       expect(stats().uploadBytes, 10);
-      expect('${st().error}', 'Empty password');
+      expectReason();
       c.read(vpnStatsProvider.notifier).pause();
     });
 

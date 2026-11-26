@@ -499,6 +499,27 @@ void main() {
       expect(server.requests, hasLength(1));
     });
 
+    test('one link in two subscriptions of a bundle stays in both; twice in one subscription — once', () async {
+      await boot();
+      final r = await n().importBundle(
+        ConnectionsBundle(
+          exportedAt: DateTime(2026),
+          configs: [
+            _cfg('a1', rawUri: 'trojan://same', subId: 'A'),
+            _cfg('a2', rawUri: 'trojan://same', subId: 'A'),
+            _cfg('b1', rawUri: 'trojan://same', subId: 'B'),
+          ],
+          subscriptions: [
+            _sub('A', url: 'https://a'),
+            _sub('B', url: 'https://b'),
+          ],
+        ),
+      );
+      expect(r.addedConfigs, 2);
+      expect(r.skippedConfigs, 1);
+      expect(s().configs.map((c) => c.subscriptionId).toSet(), hasLength(2));
+    });
+
     test('dedupes configs, remaps and reuses subscriptions, selects first', () async {
       await boot(
         configs: [

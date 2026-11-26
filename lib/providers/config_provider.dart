@@ -495,8 +495,12 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
           subscriptionId: subIdMap[c.subscriptionId] ?? c.subscriptionId,
         ),
     ];
-    // add() also drops a second copy of the same link within the bundle.
-    final newConfigs = remapped.where((c) => existingKeys.add(key(c))).toList();
+    // A second copy of a link within the bundle is dropped only inside the same subscription: a profile export can
+    // carry one server in two subscriptions, and each keeps its copy.
+    final seen = <String>{};
+    final newConfigs = remapped
+        .where((c) => !existingKeys.contains(key(c)) && seen.add('${c.subscriptionId}|${key(c)}'))
+        .toList();
 
     var next = current;
     if (newSubscriptions.isNotEmpty) next = next.copyWith(subscriptions: [...next.subscriptions, ...newSubscriptions]);

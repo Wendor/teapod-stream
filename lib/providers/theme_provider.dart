@@ -67,7 +67,8 @@ final accentProvider = NotifierProvider<AccentNotifier, Color>(AccentNotifier.ne
 typedef ConfigsView = ({bool hideGroups, bool sortByPing});
 
 class ConfigsViewNotifier extends Notifier<ConfigsView> {
-  var _chosen = false;
+  bool? _hideGroups;
+  bool? _sortByPing;
 
   @override
   ConfigsView build() {
@@ -75,15 +76,18 @@ class ConfigsViewNotifier extends Notifier<ConfigsView> {
     return (hideGroups: false, sortByPing: false);
   }
 
+  /// A flag chosen while it loaded wins; the other one is the stored value.
   Future<void> _load() async {
     final v = await ref.read(uiPrefsServiceProvider).configsView();
-    if (!_chosen) state = v;
+    state = (hideGroups: _hideGroups ?? v.hideGroups, sortByPing: _sortByPing ?? v.sortByPing);
   }
 
+  /// Sets and stores only the flags given.
   Future<void> set({bool? hideGroups, bool? sortByPing}) async {
-    _chosen = true;
+    _hideGroups = hideGroups ?? _hideGroups;
+    _sortByPing = sortByPing ?? _sortByPing;
     state = (hideGroups: hideGroups ?? state.hideGroups, sortByPing: sortByPing ?? state.sortByPing);
-    await ref.read(uiPrefsServiceProvider).setConfigsView(hideGroups: state.hideGroups, sortByPing: state.sortByPing);
+    await ref.read(uiPrefsServiceProvider).setConfigsView(hideGroups: hideGroups, sortByPing: sortByPing);
   }
 }
 

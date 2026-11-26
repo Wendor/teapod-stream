@@ -41,10 +41,11 @@ class UiPrefsService {
     return (hideGroups: prefs.getBool(_hideGroups) ?? false, sortByPing: prefs.getBool(_sortByPing) ?? false);
   }
 
-  Future<void> setConfigsView({required bool hideGroups, required bool sortByPing}) async {
+  /// Writes only the flags given.
+  Future<void> setConfigsView({bool? hideGroups, bool? sortByPing}) async {
     final prefs = await _prefs;
-    await prefs.setBool(_hideGroups, hideGroups);
-    await prefs.setBool(_sortByPing, sortByPing);
+    if (hideGroups != null) await prefs.setBool(_hideGroups, hideGroups);
+    if (sortByPing != null) await prefs.setBool(_sortByPing, sortByPing);
   }
 }
 

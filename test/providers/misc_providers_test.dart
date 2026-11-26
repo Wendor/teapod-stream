@@ -174,7 +174,9 @@ void main() {
       expect(c2.read(localeProvider), const Locale('en'));
       expect(c2.read(themeModeProvider), ThemeMode.system);
       expect(c2.read(accentProvider), const Color(0xFF00FF00));
-      expect(c2.read(configsViewProvider), (hideGroups: false, sortByPing: true));
+      // the flag not chosen keeps its stored value
+      expect(c2.read(configsViewProvider), (hideGroups: true, sortByPing: true));
+      expect(prefs.written, [(null, true)]);
     });
   });
 
@@ -240,6 +242,8 @@ class _SlowPrefs extends UiPrefsService {
   Future<({bool hideGroups, bool sortByPing})> configsView() async =>
       loaded.future.then((_) => (hideGroups: true, sortByPing: false));
 
+  final written = <(bool?, bool?)>[];
+
   @override
-  Future<void> setConfigsView({required bool hideGroups, required bool sortByPing}) async {}
+  Future<void> setConfigsView({bool? hideGroups, bool? sortByPing}) async => written.add((hideGroups, sortByPing));
 }

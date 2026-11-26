@@ -3,6 +3,7 @@ package tun2socks
 import (
 	"net"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -13,6 +14,7 @@ type udpFlow struct {
 	relay *net.UDPConn // the core's UDP relay
 	local *net.UDPAddr // tun2socks' socket the relay sends to
 	done  chan struct{}
+	rx    atomic.Int64 // the engine's liveness stamp
 }
 
 func startUDPFlow(t *testing.T) *udpFlow {
@@ -36,7 +38,7 @@ func startUDPFlow(t *testing.T) *udpFlow {
 	assoc := &UDPAssociation{RelayAddr: relay.LocalAddr().(*net.UDPAddr), UDPConn: assocConn, ctrl: ctrl}
 	f := &udpFlow{app: app, relay: relay, local: assocConn.LocalAddr().(*net.UDPAddr), done: make(chan struct{})}
 	go func() {
-		pipeUDP(gvisorSide, assoc, net.IPv4(192, 0, 2, 1), 5004, 1500)
+		pipeUDP(gvisorSide, assoc, net.IPv4(192, 0, 2, 1), 5004, 1500, &f.rx)
 		close(f.done)
 	}()
 	// Join pipeUDP before the earlier cleanups (the idle timeout restore among them) run:
@@ -141,5 +143,22 @@ func TestUDPActivityNeverMovesBack(t *testing.T) {
 	act.advance(10 * time.Second)
 	if got := time.Duration(act.last.Load()); got != 11*time.Second {
 		t.Fatalf("activity at %v after a late older touch; want 11s", got)
+	}
+}
+
+// The engine's liveness stamp moves with a reply delivered to the app.
+func TestPipeUDPStampsEngineRxOnReply(t *testing.T) {
+	f := startUDPFlow(t)
+	if got := f.rx.Load(); got != 0 {
+		t.Fatalf("engine rx stamped before any reply: %d", got)
+	}
+	f.relay.WriteToUDP(EncodeUDPDatagram(net.IPv4(192, 0, 2, 1), 5004, []byte("answer")), f.local)
+	buf := make([]byte, 64)
+	f.app.SetReadDeadline(time.Now().Add(3 * time.Second))
+	if _, err := f.app.Read(buf); err != nil {
+		t.Fatalf("app got no reply: %v", err)
+	}
+	if f.rx.Load() == 0 {
+		t.Fatal("engine rx not stamped by the reply")
 	}
 }

@@ -91,7 +91,7 @@ type Engine struct {
 	rxBytes        atomic.Uint64
 	activeConns    atomic.Int64
 	activeUDPConns atomic.Int64
-	lastRxMs       atomic.Int64
+	lastRxMs       atomic.Int64 // last payload proxy → app, any flow (TCP or UDP): the heartbeat's liveness signal
 	ctx            context.Context
 	cancel         context.CancelFunc
 	connsMu        sync.Mutex
@@ -467,8 +467,9 @@ func (e *Engine) tunWriteLoop(ctx context.Context) {
 				log.Printf("%s TUN write: %v", e.logPrefix, err)
 			}
 		} else {
+			// Not lastRxMs: the stack's own SYN-ACK / ACK / RST for the apps' connection attempts
+			// keep flowing to a dead server; liveness is payload from the proxy (pipes below).
 			e.rxBytes.Add(uint64(len(data)))
-			e.lastRxMs.Store(time.Now().UnixMilli())
 		}
 		v.Release()
 		pkt.DecRef()
@@ -754,7 +755,7 @@ func handleUDPForwarder(ctx context.Context, req *udp.ForwarderRequest, hook *En
 	defer e.untrackUDPConn(connID)
 	// Run the relay inline: handleUDPForwarder is already its own goroutine, and
 	// keeping it on the stack ties the reserved slot's lifetime to the live flow.
-	pipeUDP(conn, assoc, dstIP, int(dstPort), mtu)
+	pipeUDP(conn, assoc, dstIP, int(dstPort), mtu, &e.lastRxMs)
 }
 
 // udpActivity is the time of a UDP flow's last forwarded datagram. It is kept as an
@@ -784,7 +785,8 @@ func (a *udpActivity) deadline() time.Time {
 	return a.base.Add(time.Duration(a.last.Load()) + udpIdleTimeout)
 }
 
-func pipeUDP(gonetConn net.Conn, assoc *UDPAssociation, dstIP net.IP, dstPort int, mtu int) {
+// engineRx (may be nil) is stamped on every reply delivered to the app: the engine's liveness signal.
+func pipeUDP(gonetConn net.Conn, assoc *UDPAssociation, dstIP net.IP, dstPort int, mtu int, engineRx *atomic.Int64) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("[teapod-tun2socks] panic in pipeUDP: %v", r)
@@ -878,6 +880,9 @@ func pipeUDP(gonetConn net.Conn, assoc *UDPAssociation, dstIP net.IP, dstPort in
 			if _, err := gonetConn.Write(payload); err != nil {
 				return
 			}
+			if engineRx != nil {
+				engineRx.Store(time.Now().UnixMilli())
+			}
 			act.touch()
 		}
 	}()
@@ -917,7 +922,7 @@ func pipeConnections(tc *trackedConn, e *Engine) {
 	// Closing both ends here lost it. The half-open state is bounded by xray's
 	// uplinkOnly/downlinkOnly policy and by the idle checks above. Any other error
 	// tears the whole flow down.
-	pipe := func(dst, src net.Conn, touched *atomic.Int64) {
+	pipe := func(dst, src net.Conn, touched, engineRx *atomic.Int64) {
 		defer wg.Done()
 		bufPtr := tcpBufPool.Get().(*[]byte)
 		buf := *bufPtr
@@ -931,6 +936,9 @@ func pipeConnections(tc *trackedConn, e *Engine) {
 				if _, werr := dst.Write(buf[:n]); werr != nil {
 					shutdown()
 					return
+				}
+				if engineRx != nil {
+					engineRx.Store(time.Now().UnixMilli())
 				}
 			}
 			if err != nil {
@@ -955,7 +963,7 @@ func pipeConnections(tc *trackedConn, e *Engine) {
 		}
 	}
 
-	go pipe(tc.proxy, tc.app, &tc.lastTxMs)
-	go pipe(tc.app, tc.proxy, &tc.lastRxMs)
+	go pipe(tc.proxy, tc.app, &tc.lastTxMs, nil)
+	go pipe(tc.app, tc.proxy, &tc.lastRxMs, &e.lastRxMs)
 	wg.Wait()
 }

@@ -74,7 +74,7 @@ data class SessionSnapshot(
         }
     }
 
-    /** The itest marker of the state (`tool/itest` reads `value` and, for `connected`, the SOCKS login). */
+    /** The itest marker of the state (`tool/itest` reads `value` and, for `connected`, the SOCKS login and the core). */
     fun itestMarker(t: Long): Map<String, Any?> = buildMap {
         put("ev", "state")
         put("value", state.wire)
@@ -83,6 +83,7 @@ data class SessionSnapshot(
             put("socksPort", socksPort)
             put("socksUser", socksUser)
             put("socksPassword", socksPassword)
+            put("core", core.id)
         }
     }
 

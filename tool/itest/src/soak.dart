@@ -8,6 +8,7 @@ import 'agent_client.dart';
 import 'device_guard.dart';
 import 'matrix.dart' show collectDiag, dumpGoroutines;
 import 'probes.dart';
+import 'relay.dart';
 import 'report.dart' show maskSecrets;
 
 enum Fault {
@@ -17,11 +18,19 @@ enum Fault {
   offline5m('offline-5m'),
   doze('doze'),
   killApp('kill'),
+
+  /// The server dies for 2 minutes and comes back (a relay copy of a TCP config): the heartbeat's reconnect.
+  serverDown('server-down'),
+
+  /// The server dies for good under `failAction: switchConfig`: the move to another live config.
+  serverSwitch('server-switch'),
   idle('idle');
 
   const Fault(this.cli);
 
   final String cli;
+
+  bool get needsRelay => this == serverDown || this == serverSwitch;
 
   static Fault fromCli(String s) =>
       values.firstWhere((f) => f.cli == s, orElse: () => throw ArgumentError('unknown fault: $s'));
@@ -126,6 +135,10 @@ class Soak {
   final Duration probeInterval;
   final void Function(FaultResult) onResult;
 
+  /// The relay to a TCP config and the phone's copy of that config ([Fault.needsRelay]); none — those faults are skipped.
+  final Relay? relay;
+  final String? relayConfigId;
+
   late final IOSink _timeline = File('${dir.path}/timeline.jsonl').openWrite();
   final _recent = ListQueue<String>();
   var _diagN = 0;
@@ -151,6 +164,8 @@ class Soak {
     required this.duration,
     required this.probeInterval,
     required this.onResult,
+    this.relay,
+    this.relayConfigId,
   });
 
   void _event(String kind, [Map<String, Object?> extra = const {}]) =>
@@ -192,11 +207,11 @@ class Soak {
     return out;
   }
 
-  Future<bool> _connect() async {
+  Future<bool> _connect({String? config, Map<String, dynamic> settings = const {}}) async {
     agent.lastState = null;
     try {
-      await agent.send('reset', {'keepConfigs': true});
-      await agent.send('connect', {'configId': configId, 'core': core});
+      await agent.send('reset', {'keepConfigs': true, 'settings': settings});
+      await agent.send('connect', {'configId': config ?? configId, 'core': core});
       return await agent.waitState({'connected', 'error', 'blocked'}, const Duration(seconds: 60)) == 'connected';
     } catch (e) {
       _event('note', {'text': 'connect: $e'});
@@ -233,6 +248,45 @@ class Soak {
     } catch (_) {
       return false;
     }
+  }
+
+  /// Moves the session to the relay copy before a server fault; false — the fault is reported and skipped.
+  Future<bool> _onRelay(Fault f) async {
+    if (relay == null || relayConfigId == null) {
+      _report(FaultResult(f, Verdict.skip, null, 'no TCP config for the relay'));
+      return false;
+    }
+    await relay!.up();
+    final settings = f == Fault.serverSwitch
+        ? const {
+            'heartbeat': {'failAction': 'switchConfig', 'switchSource': 'all'},
+          }
+        : const <String, dynamic>{};
+    if (await _connect(config: relayConfigId, settings: settings) &&
+        (await _sample(const Duration(minutes: 1), untilOk: true)).any((s) => s.ok)) {
+      return true;
+    }
+    final r = FaultResult(f, Verdict.fail, null, 'no traffic through the relay before the fault');
+    _report(r);
+    await _diag(r);
+    _event('note', {'text': 'back to the config: ${await _connect()}'});
+    return false;
+  }
+
+  /// After the process was killed and the service restarted, a fresh UI adopts the running session.
+  Future<FaultResult> _adopted(FaultResult r) async {
+    String? state;
+    final end = DateTime.now().add(const Duration(seconds: 30));
+    while (DateTime.now().isBefore(end)) {
+      try {
+        state = ((await agent.send('state')) as Map)['state'] as String?;
+      } catch (e) {
+        state = '$e';
+      }
+      if (state == 'connected') return r;
+      await Future<void>.delayed(const Duration(seconds: 3));
+    }
+    return FaultResult(r.fault, Verdict.fail, r.recovery, 'traffic back, but the app shows $state', at: r.at);
   }
 
   void _report(FaultResult r) {
@@ -272,6 +326,13 @@ class Soak {
         await device.killApp(itestPackage);
         // A killed process sends no markers: the previous `connected` would give a false ZOMBIE.
         agent.lastState = null;
+      case Fault.serverDown:
+        await relay!.down();
+        await Future<void>.delayed(const Duration(minutes: 2));
+        await relay!.up();
+      case Fault.serverSwitch:
+        // The server stays dead: recovery is the switch, counted from the cut.
+        await relay!.down();
       case Fault.idle:
         break;
     }
@@ -311,6 +372,7 @@ class Soak {
         if (schedule.isEmpty) continue;
         if (!DateTime.now().isBefore(deadline) || (repeat > 1 && i >= schedule.length)) break;
         final f = schedule[i++ % schedule.length];
+        if (f.needsRelay && !await _onRelay(f)) continue;
         final restoredAt = await _inject(f);
         var r = classifyRecovery(
           fault: f,
@@ -335,9 +397,13 @@ class Soak {
         if (f == Fault.wifiLte && !_lteOk && r.verdict == Verdict.pass) {
           r = FaultResult(f, Verdict.fail, null, 'no VPN traffic during the LTE minute', at: r.at);
         }
+        if (f == Fault.killApp && r.verdict == Verdict.pass) r = await _adopted(r);
         _report(r);
-        if (r.verdict != Verdict.pass) {
-          await _diag(r);
+        if (r.verdict != Verdict.pass) await _diag(r);
+        if (f.needsRelay) {
+          await relay!.up();
+          _event('note', {'text': 'back to the config: ${await _connect()}'});
+        } else if (r.verdict != Verdict.pass) {
           await _reconnect();
         }
       }

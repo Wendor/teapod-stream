@@ -49,7 +49,18 @@ class CaseCtx {
   final String? egress;
   final bool strictEgress;
 
-  CaseCtx(this.agent, this.probes, this.baseline, this.device, this.egress, {this.strictEgress = false});
+  /// The case's config (the core switch connects it again on other cores).
+  final String configId;
+
+  CaseCtx(
+    this.agent,
+    this.probes,
+    this.baseline,
+    this.device,
+    this.egress, {
+    this.strictEgress = false,
+    this.configId = '',
+  });
 
   /// Services through which this tunnel is distinguishable from the direct path.
   List<String> get informativeUrls =>
@@ -184,6 +195,38 @@ Future<Outcome> _proxyOnly(CaseCtx c) async {
   );
 }
 
+/// The hot switch of the running session to each other core that runs the config (the server list's
+/// path), then a disconnect: the stop must reach the core that runs now, not the one the session started on.
+Future<Outcome> _coreSwitch(CaseCtx c) async {
+  final from = c.agent.lastConnected?['core'];
+  final outs = <Outcome>[];
+  for (final core in coreNames.keys.where((k) => k != from)) {
+    c.agent.lastState = null;
+    try {
+      await c.agent.send('connect', {'configId': c.configId, 'core': core});
+    } on ItestAgentError catch (e) {
+      if (e.message.contains('Bad state: core')) continue;
+      rethrow;
+    }
+    final state = await c.agent.waitState({'connected', 'error', 'blocked'}, const Duration(seconds: 60));
+    final runs = c.agent.lastConnected?['core'];
+    if (state != 'connected' || runs != core) {
+      return (v: Verdict.fail, note: 'switch to ${coreNames[core]}: $state${runs == core ? '' : ' on $runs'}');
+    }
+    await Future<void>.delayed(const Duration(seconds: 2));
+    final o = await c.tunnel();
+    outs.add((v: o.v, note: '${coreNames[core]}: ${o.note}'));
+  }
+  if (outs.isEmpty) return (v: Verdict.skip, note: 'no other core runs this config');
+  c.agent.lastState = null;
+  await c.agent.send('disconnect');
+  final state = await c.agent.waitState({'disconnected', 'error'}, const Duration(seconds: 15));
+  if (state != 'disconnected') return (v: Verdict.fail, note: 'disconnect after the switch: $state');
+  final urls = c.informativeUrls;
+  if (urls.isNotEmpty) outs.add(await c.direct(urls.first));
+  return combine(outs);
+}
+
 /// Options not supported by all cores (`CoreBackend.supports`): name → cores.
 /// xray-rust answers pings itself, ICMP can't be turned off in it.
 const _coreOptions = {
@@ -312,6 +355,7 @@ final Map<String, (Map<String, dynamic>, Check)> optionCases = {
   'sniffing-off': ({'sniffingEnabled': false}, _tunnelOnly),
   'mtu-1280': ({'mtu': 1280}, _tunnelOnly),
   'tls-fp-chrome': ({'tlsFingerprint': 'chrome'}, _tunnelOnly),
+  'core-switch': (const {}, _coreSwitch),
   'proxy-only': ({'proxyOnly': true}, _proxyOnly),
 };
 

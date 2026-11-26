@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import '../core/constants/app_constants.dart';
 import '../core/models/core_kind.dart';
 import '../core/models/app_settings.dart';
+import '../core/models/vpn_config.dart';
 import '../protocols/xray/vless_parser.dart';
 import '../providers/config_provider.dart';
 import '../providers/core_provider.dart';
@@ -66,6 +67,7 @@ class ItestAgent {
         'list' => _list(),
         'settings' => _settings(cmd['patch'] as Map<String, dynamic>),
         'connect' => _connect(cmd['configId'] as String, cmd['core'] as String),
+        'relay' => _relay(cmd['configId'] as String, cmd['port'] as int),
         'disconnect' => read(vpnProvider.notifier).disconnect().then((_) => null),
         'state' => _state(),
         final op => throw ArgumentError('unknown op: $op'),
@@ -161,8 +163,35 @@ class ItestAgent {
     await configs.updateConfig(pinned);
     await configs.setActiveSubscription(null);
     await configs.setActiveConfig(configId);
-    await read(vpnProvider.notifier).connect();
+    // Over a live session — the hot switch the server list makes, not a refused connect().
+    final vpn = read(vpnProvider.notifier);
+    final s = read(vpnProvider);
+    await (s.isConnected || s.isConnecting ? vpn.reconnectWithNewConfig() : vpn.connect());
     return null;
+  }
+
+  /// A copy of [configId] that dials `127.0.0.1:[port]` — the runner's relay to the real server
+  /// (`adb reverse`), which it can cut to make the server dead. The SNI stays the real host.
+  Future<Object?> _relay(String configId, int port) async {
+    final config = read(configProvider).value!.configs.firstWhere(
+      (c) => c.id == configId,
+      orElse: () => throw ArgumentError('unknown config: $configId'),
+    );
+    final id = '$configId-relay';
+    final configs = read(configProvider.notifier);
+    if (read(configProvider).value!.configs.any((c) => c.id == id)) await configs.removeConfig(id);
+    await configs.addConfig(
+      VpnConfig.fromJson({
+        ...config.toJson(),
+        'id': id,
+        'name': '${config.name} (relay)',
+        'address': '127.0.0.1',
+        'port': port,
+        'sni': (config.sni?.isNotEmpty ?? false) ? config.sni : config.address,
+        'subscriptionId': null,
+      }),
+    );
+    return {'id': id};
   }
 
   Future<Object?> _state() async {

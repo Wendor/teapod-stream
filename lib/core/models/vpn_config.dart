@@ -145,6 +145,9 @@ class VpnConfig {
     return null;
   }
 
+  /// `address:port`: what pings measure and are stored by.
+  String get endpoint => '$address:$port';
+
   VpnConfig copyWith({
     String? id,
     String? name,

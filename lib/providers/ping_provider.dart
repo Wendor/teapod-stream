@@ -41,12 +41,12 @@ class PingNotifier extends Notifier<bool> {
     final endpoints = <String, VpnConfig>{};
     for (final c in configs) {
       if (c.rawXrayConfig == null) {
-        endpoints['${c.address}:${c.port}'] = c;
+        endpoints[c.endpoint] = c;
       }
     }
     for (final c in configs) {
       if (c.rawXrayConfig != null) {
-        endpoints.putIfAbsent('${c.address}:${c.port}', () => c);
+        endpoints.putIfAbsent(c.endpoint, () => c);
       }
     }
 

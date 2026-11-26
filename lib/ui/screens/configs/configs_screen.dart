@@ -13,7 +13,6 @@ import '../../../core/models/vpn_config.dart';
 import '../../../core/models/pinned_ref.dart';
 import '../../../core/models/subscription.dart';
 import '../../../core/services/subscription_service.dart';
-import '../../../protocols/xray/vless_parser.dart';
 import '../../../providers/config_provider.dart';
 import '../../../providers/vpn_provider.dart';
 import '../../../core/interfaces/vpn_engine.dart';
@@ -545,23 +544,15 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
         ],
       ),
     );
-    if (ok == true && controller.text.trim().isNotEmpty) {
-      final updated = VlessParser.parseUri(controller.text.trim());
-      if (updated != null) {
-        // All parsed fields come from the new link; the old profile keeps only
-        // identity, latency, subscription and pinned core.
-        final renamed = updated.copyWith(
-          id: config.id,
-          createdAt: config.createdAt,
-          rawUri: updated.rawUri ?? controller.text.trim(),
-          latencyMs: config.latencyMs,
-          subscriptionId: config.subscriptionId,
-          core: config.core,
-        );
-        ref.read(configProvider.notifier).updateConfig(renamed);
-      } else if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.l10n.configsUriParseFailed)));
+    if (ok != true || controller.text.trim().isEmpty || !context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final failed = context.l10n.configsUriParseFailed;
+    try {
+      if (!await ref.read(configProvider.notifier).editLink(config.id, controller.text)) {
+        messenger.showSnackBar(SnackBar(content: Text(failed)));
       }
+    } on FormatException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
     }
   }
 

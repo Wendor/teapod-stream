@@ -1,9 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:teapodstream/core/models/core_kind.dart';
+import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/itest/itest_agent.dart';
 import 'package:teapodstream/providers/config_provider.dart';
 import 'package:teapodstream/providers/settings_provider.dart';
+import 'package:teapodstream/providers/vpn_provider.dart';
 
 import '../helpers/ui_harness.dart';
 
@@ -76,6 +78,54 @@ void main() {
     expect(state.activeSubscriptionId, isNull);
     expect(state.activeConfig!.core, CoreKind.singBox);
     expect(native.named('connect'), hasLength(1));
+  });
+
+  test('connect over a live session switches it instead of being refused', () async {
+    native.state = {'value': 'connected', 'socksPort': 2000, 'socksUser': 'u', 'socksPassword': 'p'};
+    await agent.handle({
+      'id': '1',
+      'op': 'import',
+      'uris': [_vless],
+    });
+    container.read(vpnProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(container.read(vpnProvider).isConnected, isTrue);
+    final id = ((await agent.handle({'id': '2', 'op': 'list'}))['data'] as List).first['id'];
+    final r = await agent.handle({'id': '3', 'op': 'connect', 'configId': id, 'core': 'rust'});
+    expect(r['ok'], isTrue, reason: '$r');
+    expect(native.named('connect'), hasLength(1));
+  });
+
+  test('relay copies a config to 127.0.0.1 with the real host as SNI', () async {
+    await agent.handle({
+      'id': '1',
+      'op': 'import',
+      'uris': [_vless],
+    });
+    final id = ((await agent.handle({'id': '2', 'op': 'list'}))['data'] as List).first['id'] as String;
+    final r = await agent.handle({'id': '3', 'op': 'relay', 'configId': id, 'port': 40123});
+    expect(r['ok'], isTrue, reason: '$r');
+    final copy = container.read(configProvider).value!.configs.firstWhere((c) => c.id == (r['data'] as Map)['id']);
+    expect(copy.address, '127.0.0.1');
+    expect(copy.port, 40123);
+    expect(copy.sni, 'v.example');
+    expect(copy.subscriptionId, isNull);
+
+    // Again: the copy is replaced, not duplicated.
+    await agent.handle({'id': '4', 'op': 'relay', 'configId': id, 'port': 40124});
+    final relays = container.read(configProvider).value!.configs.where((c) => c.address == '127.0.0.1');
+    expect(relays.map((c) => c.port), [40124]);
+  });
+
+  test('relay refuses a managed config: its raw xray JSON dials the real server', () async {
+    await container.read(configProvider.future);
+    await container
+        .read(configProvider.notifier)
+        .addConfig(VpnConfig.fromJson({...testConfig('m').toJson(), 'rawXrayConfig': '{"outbounds":[]}'}));
+    final r = await agent.handle({'id': '1', 'op': 'relay', 'configId': 'm', 'port': 40125});
+    expect(r['ok'], isFalse);
+    final list = await agent.handle({'id': '2', 'op': 'list'});
+    expect(((list['data'] as List).single as Map)['raw'], isTrue);
   });
 
   test('reset clears configs unless keepConfigs and applies settings', () async {

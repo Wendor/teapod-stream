@@ -8,6 +8,7 @@ import 'agent_client.dart';
 import 'device_guard.dart';
 import 'matrix.dart' show collectDiag, dumpGoroutines;
 import 'probes.dart';
+import 'relay.dart';
 import 'report.dart' show maskSecrets;
 
 enum Fault {
@@ -17,11 +18,23 @@ enum Fault {
   offline5m('offline-5m'),
   doze('doze'),
   killApp('kill'),
+
+  /// The activity is recreated over a running session (a new task, like a launch from recents after a swipe):
+  /// the fresh UI must adopt the session without dropping it.
+  uiRestart('ui-restart'),
+
+  /// The server dies for 2 minutes and comes back (a relay copy of a TCP config): the heartbeat's reconnect.
+  serverDown('server-down'),
+
+  /// The server dies for good under `failAction: switchConfig`: the move to another live config.
+  serverSwitch('server-switch'),
   idle('idle');
 
   const Fault(this.cli);
 
   final String cli;
+
+  bool get needsRelay => this == serverDown || this == serverSwitch;
 
   static Fault fromCli(String s) =>
       values.firstWhere((f) => f.cli == s, orElse: () => throw ArgumentError('unknown fault: $s'));
@@ -81,6 +94,82 @@ FaultResult classifyRecovery({
   );
 }
 
+/// One probe's answer [ip]: through the tunnel or not. [expected] exit — the strict [egress], else the exit seen on
+/// Wi-Fi ([tunnelIp]) or the [egress] hint, checked when strict or off Wi-Fi (the direct IP changes there); otherwise
+/// any answer but the [direct] one of a [distinguishable] service passes.
+bool probeOk({
+  required String? ip,
+  required String? direct,
+  required bool distinguishable,
+  required String? egress,
+  required bool strict,
+  required String? tunnelIp,
+  required bool onWifi,
+}) {
+  final expected = strict ? egress : tunnelIp ?? egress;
+  final byEgress = expected != null && (strict || !onWifi);
+  return ip != null && (byEgress ? ip == expected : !distinguishable || ip != direct);
+}
+
+/// The exit the probes expect: the config's own ([egress], [strict]), or one set by [expect] while the session
+/// isn't on that config — the relayed config's, or none after `server-switch` (any exit but the direct path).
+/// [tunnelIp] is the exit seen on Wi-Fi, expected off Wi-Fi; a new expectation forgets it.
+class ExpectedExit {
+  final String? egress;
+  final bool strict;
+  ({String? egress, bool strict})? _override;
+  String? tunnelIp;
+
+  ExpectedExit(this.egress, this.strict);
+
+  ({String? egress, bool strict}) get current => _override ?? (egress: egress, strict: strict);
+
+  void expect(({String? egress, bool strict})? exit) {
+    _override = exit;
+    tunnelIp = null;
+  }
+
+  /// One probe's answer against the current expectation; a pass on Wi-Fi from a distinguishable service
+  /// becomes the exit expected off Wi-Fi.
+  bool check({required String? ip, required String? direct, required bool distinguishable, required bool onWifi}) {
+    final c = current;
+    final ok = probeOk(
+      ip: ip,
+      direct: direct,
+      distinguishable: distinguishable,
+      egress: c.egress,
+      strict: c.strict,
+      tunnelIp: tunnelIp,
+      onWifi: onWifi,
+    );
+    if (ok && onWifi && distinguishable) tunnelIp = ip;
+    return ok;
+  }
+}
+
+/// A server fault without a relayed config is SKIP before it starts.
+FaultResult? relayMissing(Fault f, {required bool hasRelay}) =>
+    hasRelay ? null : FaultResult(f, Verdict.skip, null, 'no TCP config for the relay');
+
+/// While the server is cut any answer counts — through another exit too, which the expected-exit check rejects.
+bool trafficDuringCut(Iterable<String?> answers) => answers.any((ip) => ip != null);
+
+/// `server-down`: traffic while the server was cut means the session wasn't on the relay — the recovery says nothing.
+FaultResult cutChecked(FaultResult r, {required bool trafficDuringCut}) => trafficDuringCut
+    ? FaultResult(
+        r.fault,
+        Verdict.fail,
+        null,
+        'traffic while the server was cut: the relay is not in the path',
+        at: r.at,
+      )
+    : r;
+
+/// After `kill` / `ui-restart` traffic came back: the fresh UI must also show the session ([uiState]) as connected.
+FaultResult adoptionChecked(FaultResult r, String? uiState) => r.verdict != Verdict.pass || uiState == 'connected'
+    ? r
+    : FaultResult(r.fault, Verdict.fail, r.recovery, 'traffic back, but the app shows $uiState', at: r.at);
+
 /// Quiet interval: ≥ [minRun] failed probes in a row — a drop without a cause.
 FaultResult classifyIdle(List<ProbeSample> samples, {int minRun = 3}) {
   var run = <ProbeSample>[];
@@ -126,12 +215,25 @@ class Soak {
   final Duration probeInterval;
   final void Function(FaultResult) onResult;
 
+  /// The relay to a TCP config and the phone's copy of that config ([Fault.needsRelay]); none — those faults are skipped.
+  final Relay? relay;
+  final String? relayConfigId;
+  final String? relayEgress;
+  final bool relayStrictEgress;
+
+  /// How long `server-down` keeps the server cut.
+  final Duration cutFor;
+
   late final IOSink _timeline = File('${dir.path}/timeline.jsonl').openWrite();
   final _recent = ListQueue<String>();
   var _diagN = 0;
   var _onWifi = true;
   var _lteOk = true;
-  String? _tunnelIp;
+  late final _exits = ExpectedExit(egress, strictEgress);
+  var _cutLeak = false;
+
+  /// Every probe's answer (an IP or none, whatever the exit) since the last reset.
+  final _answers = <String?>[];
   List<String>? _faultLog;
 
   Soak({
@@ -151,7 +253,14 @@ class Soak {
     required this.duration,
     required this.probeInterval,
     required this.onResult,
+    this.relay,
+    this.relayConfigId,
+    this.relayEgress,
+    this.relayStrictEgress = false,
+    this.cutFor = const Duration(minutes: 2),
   });
+
+  void _expect(({String? egress, bool strict})? exit) => _exits.expect(exit);
 
   void _event(String kind, [Map<String, Object?> extra = const {}]) =>
       _timeline.writeln(jsonEncode({'t': DateTime.now().toIso8601String(), 'kind': kind, ...extra}));
@@ -160,6 +269,7 @@ class Soak {
   /// so the recovery time doesn't include retries of failed attempts.
   Future<ProbeSample> _probe({bool fast = false}) async {
     // A distinguishable service: answer ≠ its direct IP; otherwise any answer is enough.
+    final egress = _exits.current.egress;
     final urls = egress != null && egress == baseline.directRuIp
         ? const <String>[]
         : informative(baseline.direct, egress);
@@ -170,10 +280,8 @@ class Soak {
     if (ip == null && urls.length > 1) (u, ip) = (urls[1], await get(urls[1]));
     // Off Wi-Fi the direct IP differs from the baseline — "not direct" doesn't yet mean "through VPN".
     // The expected exit is the one confirmed on Wi-Fi (the server's entry address may differ).
-    final expected = strictEgress ? egress : _tunnelIp ?? egress;
-    final byEgress = expected != null && (strictEgress || !_onWifi);
-    final ok = ip != null && (byEgress ? ip == expected : urls.isEmpty || ip != baseline.direct[u]);
-    if (ok && _onWifi && urls.isNotEmpty) _tunnelIp = ip;
+    _answers.add(ip);
+    final ok = _exits.check(ip: ip, direct: baseline.direct[u], distinguishable: urls.isNotEmpty, onWifi: _onWifi);
     final s = (t: DateTime.now(), ok: ok, appState: agent.lastState);
     _event('probe', {'ip': ip, 'ok': ok, 'onWifi': _onWifi, 'state': agent.lastState});
     return s;
@@ -192,11 +300,11 @@ class Soak {
     return out;
   }
 
-  Future<bool> _connect() async {
+  Future<bool> _connect({String? config, Map<String, dynamic> settings = const {}}) async {
     agent.lastState = null;
     try {
-      await agent.send('reset', {'keepConfigs': true});
-      await agent.send('connect', {'configId': configId, 'core': core});
+      await agent.send('reset', {'keepConfigs': true, 'settings': settings});
+      await agent.send('connect', {'configId': config ?? configId, 'core': core});
       return await agent.waitState({'connected', 'error', 'blocked'}, const Duration(seconds: 60)) == 'connected';
     } catch (e) {
       _event('note', {'text': 'connect: $e'});
@@ -235,13 +343,64 @@ class Soak {
     }
   }
 
+  /// Moves the session to the relay copy before a server fault; false — the fault is reported and skipped.
+  Future<bool> _onRelay(Fault f) async {
+    if (relayMissing(f, hasRelay: relay != null && relayConfigId != null) case final skip?) {
+      _report(skip);
+      return false;
+    }
+    await relay!.up();
+    _expect((egress: relayEgress, strict: relayStrictEgress));
+    final settings = f == Fault.serverSwitch
+        ? const {
+            'heartbeat': {'failAction': 'switchConfig', 'switchSource': 'all'},
+          }
+        : const <String, dynamic>{};
+    if (await _connect(config: relayConfigId, settings: settings) &&
+        (await _sample(const Duration(minutes: 1), untilOk: true)).any((s) => s.ok)) {
+      return true;
+    }
+    // The relay dials from the computer's network, which may not reach the server (a firewall, the
+    // computer's own VPN): an environment limit, not the app's failure.
+    final r = FaultResult(
+      f,
+      Verdict.skip,
+      null,
+      'no traffic through the relay (the computer may not reach the server)',
+    );
+    _report(r);
+    await _diag(r);
+    _expect(null);
+    _event('note', {'text': 'back to the config: ${await _connect()}'});
+    return false;
+  }
+
+  /// After the process was killed and the service restarted, a fresh UI adopts the running session.
+  Future<FaultResult> _adopted(FaultResult r) async {
+    String? state;
+    final end = DateTime.now().add(const Duration(seconds: 30));
+    while (DateTime.now().isBefore(end)) {
+      try {
+        state = ((await agent.send('state')) as Map)['state'] as String?;
+      } catch (e) {
+        state = '$e';
+      }
+      if (state == 'connected') break;
+      await Future<void>.delayed(const Duration(seconds: 3));
+    }
+    return adoptionChecked(r, state);
+  }
+
   void _report(FaultResult r) {
     _event('result', r.toJson());
     onResult(r);
   }
 
-  /// Returns the moment the network recovered.
-  Future<DateTime> _inject(Fault f) async {
+  /// Whether the last `server-down` cut saw traffic (its verdict, [cutChecked]).
+  bool get cutLeak => _cutLeak;
+
+  /// Injects [f]; returns the moment the network recovered. Public for the tests.
+  Future<DateTime> inject(Fault f) async {
     _event('fault-start', {'fault': f.cli});
     _onWifi = false;
     switch (f) {
@@ -272,6 +431,24 @@ class Soak {
         await device.killApp(itestPackage);
         // A killed process sends no markers: the previous `connected` would give a false ZOMBIE.
         agent.lastState = null;
+      case Fault.uiRestart:
+        await shell.run([
+          'shell',
+          'am start -W -f 0x10008000 -a android.intent.action.MAIN -c android.intent.category.LAUNCHER '
+              '-n $itestPackage/com.teapodstream.teapodstream.MainActivity',
+        ]);
+      case Fault.serverDown:
+        await relay!.down();
+        // Any answer while the server is cut — through another exit or direct — means the session doesn't go
+        // through the relay; `ok` alone would miss an exit other than the expected one.
+        _answers.clear();
+        await _sample(cutFor);
+        _cutLeak = trafficDuringCut(_answers);
+        await relay!.up();
+      case Fault.serverSwitch:
+        // The server stays dead: recovery is the switch, counted from the cut, to any other config.
+        await relay!.down();
+        _expect((egress: null, strict: false));
       case Fault.idle:
         break;
     }
@@ -311,7 +488,8 @@ class Soak {
         if (schedule.isEmpty) continue;
         if (!DateTime.now().isBefore(deadline) || (repeat > 1 && i >= schedule.length)) break;
         final f = schedule[i++ % schedule.length];
-        final restoredAt = await _inject(f);
+        if (f.needsRelay && !await _onRelay(f)) continue;
+        final restoredAt = await inject(f);
         var r = classifyRecovery(
           fault: f,
           restoredAt: restoredAt,
@@ -335,9 +513,16 @@ class Soak {
         if (f == Fault.wifiLte && !_lteOk && r.verdict == Verdict.pass) {
           r = FaultResult(f, Verdict.fail, null, 'no VPN traffic during the LTE minute', at: r.at);
         }
+        if ((f == Fault.killApp || f == Fault.uiRestart) && r.verdict == Verdict.pass) r = await _adopted(r);
+        if (f == Fault.serverDown) r = cutChecked(r, trafficDuringCut: _cutLeak);
+        _cutLeak = false;
         _report(r);
-        if (r.verdict != Verdict.pass) {
-          await _diag(r);
+        if (r.verdict != Verdict.pass) await _diag(r);
+        if (f.needsRelay) {
+          await relay!.up();
+          _expect(null);
+          _event('note', {'text': 'back to the config: ${await _connect()}'});
+        } else if (r.verdict != Verdict.pass) {
           await _reconnect();
         }
       }

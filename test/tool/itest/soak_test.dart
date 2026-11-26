@@ -1,4 +1,12 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../../tool/itest/src/agent_client.dart';
+import '../../../tool/itest/src/device_guard.dart';
+import '../../../tool/itest/src/relay.dart';
+import 'fake_shell.dart';
 
 import '../../../tool/itest/src/probes.dart';
 import '../../../tool/itest/src/soak.dart';
@@ -73,5 +81,158 @@ void main() {
     expect(Fault.fromCli('offline-5m'), Fault.offline5m);
     expect(Fault.fromCli('kill'), Fault.killApp);
     expect(() => Fault.fromCli('nope'), throwsArgumentError);
+  });
+
+  group('probeOk', () {
+    bool ok(String? ip, {String? egress, bool strict = false, String? tunnelIp, bool onWifi = true}) => probeOk(
+      ip: ip,
+      direct: '198.51.100.1',
+      distinguishable: true,
+      egress: egress,
+      strict: strict,
+      tunnelIp: tunnelIp,
+      onWifi: onWifi,
+    );
+
+    test('after server-switch (no expected exit): any exit but the direct one', () {
+      expect(ok('203.0.113.9'), isTrue);
+      expect(ok('198.51.100.1'), isFalse);
+      expect(ok(null), isFalse);
+    });
+
+    test('a strict exit must match, on Wi-Fi too', () {
+      expect(ok('203.0.113.5', egress: '203.0.113.5', strict: true), isTrue);
+      expect(ok('203.0.113.9', egress: '203.0.113.5', strict: true), isFalse);
+    });
+
+    test('off Wi-Fi the exit seen on Wi-Fi is expected', () {
+      expect(ok('203.0.113.7', tunnelIp: '203.0.113.7', onWifi: false), isTrue);
+      expect(ok('192.0.2.50', tunnelIp: '203.0.113.7', onWifi: false), isFalse);
+    });
+  });
+
+  group('server faults and adoption', () {
+    final passed = FaultResult(Fault.serverDown, Verdict.pass, const Duration(seconds: 1), 'recovered in 1s');
+
+    test('no relay → SKIP', () {
+      expect(relayMissing(Fault.serverSwitch, hasRelay: false)?.verdict, Verdict.skip);
+      expect(relayMissing(Fault.serverSwitch, hasRelay: true), isNull);
+    });
+
+    test('traffic during the cut turns a recovery into FAIL', () {
+      expect(cutChecked(passed, trafficDuringCut: true).verdict, Verdict.fail);
+      expect(cutChecked(passed, trafficDuringCut: false), same(passed));
+    });
+
+    test('a recovered kill / ui-restart fails unless the fresh UI shows connected', () {
+      final r = FaultResult(Fault.uiRestart, Verdict.pass, Duration.zero, 'recovered in 0s');
+      expect(adoptionChecked(r, 'connected'), same(r));
+      final bad = adoptionChecked(r, 'disconnected');
+      expect(bad.verdict, Verdict.fail);
+      expect(bad.note, contains('disconnected'));
+      final failed = FaultResult(Fault.killApp, Verdict.fail, null, 'no traffic');
+      expect(adoptionChecked(failed, 'disconnected'), same(failed));
+    });
+  });
+
+  group('ExpectedExit', () {
+    const direct = '198.51.100.1';
+    bool check(ExpectedExit e, String? ip, {bool onWifi = true}) =>
+        e.check(ip: ip, direct: direct, distinguishable: true, onWifi: onWifi);
+
+    test('relay → server-switch → back: each expectation replaces the last and forgets the Wi-Fi exit', () {
+      final e = ExpectedExit('203.0.113.5', true);
+      expect(check(e, '203.0.113.9'), isFalse, reason: 'the config is strict');
+
+      e.expect((egress: '203.0.113.7', strict: false)); // on the relay copy
+      expect(check(e, '203.0.113.7'), isTrue);
+      expect(e.tunnelIp, '203.0.113.7');
+      expect(check(e, '192.0.2.1', onWifi: false), isFalse, reason: 'off Wi-Fi the exit seen on Wi-Fi is expected');
+
+      e.expect((egress: null, strict: false)); // server-switch: any other config
+      expect(e.tunnelIp, isNull);
+      expect(check(e, '192.0.2.44'), isTrue);
+      expect(check(e, direct), isFalse);
+
+      e.expect(null); // back on the config
+      expect(e.current, (egress: '203.0.113.5', strict: true));
+      expect(e.tunnelIp, isNull);
+      expect(check(e, '192.0.2.44'), isFalse);
+      expect(check(e, '203.0.113.5'), isTrue);
+    });
+  });
+
+  test('server-down: an answer from another exit during the cut fails, though it is not the expected exit', () {
+    final exits = ExpectedExit('203.0.113.5', false)..tunnelIp = '203.0.113.5';
+    // The cut runs off Wi-Fi bookkeeping: an exit other than the expected one isn't a pass...
+    expect(exits.check(ip: '192.0.2.9', direct: '198.51.100.1', distinguishable: true, onWifi: false), isFalse);
+    // ...but it is traffic, and the session wasn't on the relay.
+    final answers = <String?>[null, '192.0.2.9', null];
+    final passed = FaultResult(Fault.serverDown, Verdict.pass, Duration.zero, 'recovered in 0s');
+    expect(cutChecked(passed, trafficDuringCut: trafficDuringCut(answers)).verdict, Verdict.fail);
+    expect(cutChecked(passed, trafficDuringCut: trafficDuringCut([null, null])), same(passed));
+  });
+
+  test('Soak server-down: an answer from another exit while cut sets the leak', () async {
+    final tmp = Directory.systemTemp.createTempSync('itest_soak');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    // Every probe answers 8.8.4.4: not direct (1.1.1.1), not the expected exit (9.9.9.9).
+    final shell = FakeShell({'curl': '8.8.4.4\n200'});
+    final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(server.close);
+    final relay = Relay(shell, '127.0.0.1', server.port);
+    await relay.start();
+    addTearDown(relay.stop);
+    final logcat = StreamController<String>.broadcast();
+    addTearDown(logcat.close);
+    Soak soak(String? egress) => Soak(
+      agent: AgentClient(shell, logcat.stream),
+      probes: Probes(shell),
+      device: DeviceGuard(shell),
+      baseline: Baseline({for (final u in echoMain) u: '1.1.1.1'}, null, null),
+      shell: shell,
+      dir: tmp,
+      logcat: logcat.stream,
+      configId: 'cfg',
+      core: 'go',
+      egress: egress,
+      faults: const [Fault.serverDown],
+      repeat: 1,
+      duration: Duration.zero,
+      probeInterval: const Duration(milliseconds: 20),
+      onResult: (_) {},
+      relay: relay,
+      relayConfigId: 'cfg-relay',
+      cutFor: const Duration(milliseconds: 150),
+    );
+
+    final s = soak('9.9.9.9');
+    await s.inject(Fault.serverDown);
+    expect(s.cutLeak, isTrue, reason: 'off-exit answers are traffic during the cut');
+    expect(relay.isUp, isTrue, reason: 'the server is back after the cut');
+
+    final silent = FakeShell({'curl': 'timeout'});
+    final quiet = Soak(
+      agent: AgentClient(silent, logcat.stream),
+      probes: Probes(silent),
+      device: DeviceGuard(silent),
+      baseline: Baseline({for (final u in echoMain) u: '1.1.1.1'}, null, null),
+      shell: silent,
+      dir: tmp,
+      logcat: logcat.stream,
+      configId: 'cfg',
+      core: 'go',
+      egress: '9.9.9.9',
+      faults: const [Fault.serverDown],
+      repeat: 1,
+      duration: Duration.zero,
+      probeInterval: const Duration(milliseconds: 20),
+      onResult: (_) {},
+      relay: relay,
+      relayConfigId: 'cfg-relay',
+      cutFor: const Duration(milliseconds: 150),
+    );
+    await quiet.inject(Fault.serverDown);
+    expect(quiet.cutLeak, isFalse);
   });
 }

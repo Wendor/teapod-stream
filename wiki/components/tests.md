@@ -67,7 +67,7 @@ dart run tool/itest/main.dart --skip-install --list          # which cases would
 ```
 
 Filters: `--phase matrix|soak|all`, `--config` / `--core` / `--case` (glob), `--fault
-wifi-lte|offline-10s|offline-1m|offline-5m|doze|kill|idle`, `--repeat`, `--duration`, `--probe-interval`.
+wifi-lte|offline-10s|offline-1m|offline-5m|doze|kill|ui-restart|server-down|server-switch|idle`, `--repeat`, `--duration`, `--probe-interval`.
 
 **How it works.**
 - `./build.sh itest` builds `com.teapodstream.teapodstream.itest` (`TEAPOD_ITEST=1` → `applicationIdSuffix`,
@@ -75,9 +75,10 @@ wifi-lte|offline-10s|offline-1m|offline-5m|doze|kill|idle`, `--repeat`, `--durat
   are unchanged.
 - Commands: `am start … -a com.teapodstream.ITEST --es cmd '<json>'` → `ItestBridge` (Kotlin, buffers until Dart is
   ready) → MethodChannel `com.teapodstream/itest` → `ItestAgent` (`lib/itest/`). Operations: `ping`, `reset`, `import`,
-  `list`, `settings`, `connect {configId, core}`, `disconnect`, `state`, `drop` (unexpected drop, for the kill switch),
+  `list`, `settings`, `connect {configId, core}` (over a live session — the hot switch, as the server list does),
+  `relay {configId, port}` (a copy of the config dialing `127.0.0.1:port`, SNI the real host), `disconnect`, `state`, `drop` (unexpected drop, for the kill switch),
   `goroutines`.
-- Replies are `TEAPOD_ITEST {json}` lines in logcat; replies over 900 characters go to a file read with `run-as`
+- Replies are `TEAPOD_ITEST {json}` lines in logcat (the `connected` state marker carries the running core); replies over 900 characters go to a file read with `run-as`
   (Flutter splits log lines at ~1024).
 - Traffic is checked from `adb shell` (`curl`): the shell UID goes through TUN like a normal app and works for split
   tunneling; the app itself is excluded from the tunnel.
@@ -89,8 +90,19 @@ IP (server in the same network) leak checks are skipped. DNS leaks are judged by
 
 **Cases.** `base/<core>/<config>` — every config on every compatible core; `opt/<core>/<option>` — on a reference
 config: routing (sites, zone, geoip, geosite, ad block), DNS modes, split tunneling, kill switch, ICMP, UDP, QUIC, Mux,
-fragment, noise, sniffing, MTU, TLS fingerprint, proxy-only. **Soak**: per core, quiet interval → fault → recovery
-until `--duration`; FAIL = no traffic 3 min after the network is back, ZOMBIE = `connected` without traffic ≥ 3 min.
+fragment, noise, sniffing, MTU, TLS fingerprint, proxy-only, `core-switch` (the live session switched to each other
+core that runs the config, then a disconnect that must leave traffic direct). **Soak**: per core, quiet interval →
+fault → recovery until `--duration`; FAIL = no traffic 3 min after the network is back, ZOMBIE = `connected` without
+traffic ≥ 3 min. `ui-restart` recreates the activity in a new task over the running session; after it and after
+`kill` the fresh UI must show the session as `connected`. While `server-down` cuts the server the probes must fail —
+otherwise the session isn't on the relay.
+
+**Server faults** need an owned TCP config of the core (VLESS, VMess, Trojan, Shadowsocks; the reference one first):
+the runner relays it from the computer (`Relay`, `adb reverse`) and the phone connects to its `relay` copy, so cutting
+the relay kills the server. `server-down` — 2 min dead, then back: the heartbeat's reconnect must bring traffic back;
+`server-switch` — dead for good with `failAction: switchConfig` over all configs: traffic must come back on another
+config. Without such a config, or when the computer can't reach its server (the relay dials from the computer's
+network), both are SKIP.
 
 **Logs:** `runs/<date_time>/` (gitignored): full logcat, baseline, per-case steps and logcat slices, on failure a Go
 goroutine dump (`goroutines.txt`), connectivity and the app log; soak timelines; `report.md` / `report.json` (secrets

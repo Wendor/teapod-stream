@@ -10,6 +10,7 @@ import 'src/agent_client.dart';
 import 'src/device_guard.dart';
 import 'src/matrix.dart';
 import 'src/probes.dart';
+import 'src/relay.dart';
 import 'src/report.dart';
 import 'src/secrets.dart';
 import 'src/soak.dart';
@@ -164,6 +165,7 @@ Future<void> _main(List<String> argv) async {
       device,
       imported.egress[configId],
       strictEgress: imported.strict.contains(configId),
+      configId: configId,
     );
 
     final reference = <String, String>{};
@@ -207,6 +209,23 @@ Future<void> _main(List<String> argv) async {
           : [Fault.fromCli(args.option('fault')!)];
       for (final MapEntry(key: core, value: configId) in reference.entries) {
         if (glob('core') != null && !globMatch(glob('core')!, coreNames[core]!)) continue;
+        Relay? relay;
+        String? relayConfigId;
+        final relayed = faults.any((f) => f.needsRelay)
+            ? pickRelayed(configs, imported.owned, core, configId, report.cases)
+            : null;
+        if (relayed != null) {
+          try {
+            relay = Relay(adb, relayed.host, relayed.port);
+            await relay.start();
+            relayConfigId =
+                ((await agent.send('relay', {'configId': relayed.id, 'port': relay.port})) as Map)['id'] as String;
+          } catch (e) {
+            report.note('soak ${coreNames[core]}: no relay — $e');
+            await relay?.stop();
+            relay = null;
+          }
+        }
         final soak = Soak(
           agent: agent,
           probes: probes,
@@ -227,9 +246,17 @@ Future<void> _main(List<String> argv) async {
             report.addFault(coreNames[core]!, r);
             stdout.writeln('  ${coreNames[core]} ${r.fault.cli}: ${r.verdict.name} ${r.note}');
           },
+          relay: relay,
+          relayConfigId: relayConfigId,
+          relayEgress: relayed == null ? null : imported.egress[relayed.id],
+          relayStrictEgress: relayed != null && imported.strict.contains(relayed.id),
         );
         stdout.writeln('▶ soak ${coreNames[core]}');
-        await soak.run();
+        try {
+          await soak.run();
+        } finally {
+          await relay?.stop();
+        }
       }
     }
     final bad = {Verdict.fail, Verdict.zombie};
@@ -303,6 +330,27 @@ Future<Imported> importAll(AgentClient agent, Secrets s, RunReport report) async
     } catch (_) {}
   }
   return (configs: configs, owned: owned, egress: egress, strict: strict);
+}
+
+/// Protocols over TCP only: their traffic fits the computer's relay through `adb reverse`.
+const relayProtocols = {'vless', 'vmess', 'trojan', 'shadowsocks'};
+
+/// The config for the server faults on [core]: the reference one if it is over TCP, otherwise
+/// an owned TCP config of the core that passed base (or any owned one before base ran).
+AgentConfig? pickRelayed(
+  List<AgentConfig> configs,
+  Map<String, bool> owned,
+  String core,
+  String referenceId,
+  List<CaseResult> results,
+) {
+  bool fits(AgentConfig c) =>
+      owned[c.id] == true && c.cores.contains(core) && relayProtocols.contains(c.protocol) && !c.raw;
+  bool passed(AgentConfig c) => results.any(
+    (r) => r.configId == c.id && r.id.startsWith('base/${coreNames[core]}/') && r.verdict == Verdict.pass,
+  );
+  final ref = configs.where((c) => c.id == referenceId && fits(c)).firstOrNull;
+  return ref ?? configs.where((c) => fits(c) && (results.isEmpty || passed(c))).firstOrNull;
 }
 
 /// The core's reference config: from secrets.reference by name, otherwise the first owned one with PASS in base.

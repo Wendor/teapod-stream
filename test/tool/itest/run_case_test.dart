@@ -16,7 +16,11 @@ class ScriptedShell implements Shell {
   final StreamController<String> logcat;
   final ops = <String>[];
 
-  ScriptedShell(this.logcat);
+  /// Cores whose connect the agent refuses; the core the native marker reports instead of the asked one.
+  final Set<String> refuse;
+  final String? runs;
+
+  ScriptedShell(this.logcat, {this.refuse = const {}, this.runs});
 
   @override
   Future<ProcResult> run(List<String> args, {Duration timeout = const Duration(seconds: 30)}) async {
@@ -24,10 +28,16 @@ class ScriptedShell implements Shell {
     final i = cmd.indexOf("--es cmd '");
     if (i >= 0) {
       final m = jsonDecode(cmd.substring(i + 10, cmd.lastIndexOf("'"))) as Map;
-      ops.add(m['op'] as String);
+      ops.add(m['op'] == 'connect' ? 'connect ${m['core']}' : m['op'] as String);
       scheduleMicrotask(() {
+        if (m['op'] == 'connect' && refuse.contains(m['core'])) {
+          logcat.add('TEAPOD_ITEST {"id":"${m['id']}","ok":false,"error":"Bad state: core ${m['core']}: no"}');
+          return;
+        }
         logcat.add('TEAPOD_ITEST {"id":"${m['id']}","ok":true}');
-        if (m['op'] == 'connect') logcat.add('TEAPOD_ITEST {"ev":"state","value":"connected","t":1}');
+        if (m['op'] == 'connect') {
+          logcat.add('TEAPOD_ITEST {"ev":"state","value":"connected","t":1,"core":"${runs ?? m['core']}"}');
+        }
         if (m['op'] == 'disconnect') logcat.add('TEAPOD_ITEST {"ev":"state","value":"disconnected","t":2}');
       });
     }
@@ -89,6 +99,45 @@ void main() {
     final r = await runCase(mc, ctx, RunDir(tmp), shell, logcat.stream);
 
     expect(r.verdict, Verdict.skip);
-    expect(shell.ops, isNot(contains('connect')));
+    expect(shell.ops.where((o) => o.startsWith('connect')), isEmpty);
+  });
+
+  group('core-switch', () {
+    Future<(CaseResult, ScriptedShell)> run({Set<String> refuse = const {}, String? runs}) async {
+      final tmp = Directory.systemTemp.createTempSync('itest_case');
+      addTearDown(() => tmp.deleteSync(recursive: true));
+      final logcat = StreamController<String>.broadcast();
+      final shell = ScriptedShell(logcat, refuse: refuse, runs: runs);
+      final ctx = CaseCtx(
+        AgentClient(shell, logcat.stream),
+        Probes(shell),
+        const Baseline({}, null, null),
+        DeviceGuard(shell),
+        null,
+        configId: 'cfg',
+      );
+      final (patch, check) = optionCases['core-switch']!;
+      final mc = MatrixCase('opt/xray-core/core-switch', 'cfg', 'cfg', 'go', patch, check, true);
+      return (await runCase(mc, ctx, RunDir(tmp), shell, logcat.stream), shell);
+    }
+
+    test('switches the live session to every other core that runs the config, then disconnects', () async {
+      final (r, shell) = await run(refuse: {'rust'});
+      expect(shell.ops.where((o) => o.startsWith('connect') || o == 'disconnect').take(4), [
+        'connect go',
+        'connect rust',
+        'connect box',
+        'disconnect',
+      ]);
+      expect(r.note, contains('sing-box'));
+      expect(r.note, isNot(contains('switch to')));
+      expect(shell.ops.where((o) => o == 'disconnect'), hasLength(1), reason: 'no second disconnect when already off');
+    });
+
+    test('a session that still runs the old core fails', () async {
+      final (r, _) = await run(runs: 'go');
+      expect(r.verdict, Verdict.fail);
+      expect(r.note, contains('switch to xray-rust: connected on go'));
+    });
   });
 }

@@ -16,6 +16,9 @@ typedef AgentConfig = ({
   int port,
   String? sub,
   List<String> cores,
+
+  /// A managed config with its own xray JSON (the outer address isn't the one it dials).
+  bool raw,
 });
 
 AgentConfig agentConfigFromJson(Map<String, dynamic> m) => (
@@ -26,6 +29,7 @@ AgentConfig agentConfigFromJson(Map<String, dynamic> m) => (
   port: m['port'] as int,
   sub: m['sub'] as String?,
   cores: (m['cores'] as List).cast<String>(),
+  raw: m['raw'] == true,
 );
 
 /// Core nativeId → name in the report and filters.
@@ -49,7 +53,18 @@ class CaseCtx {
   final String? egress;
   final bool strictEgress;
 
-  CaseCtx(this.agent, this.probes, this.baseline, this.device, this.egress, {this.strictEgress = false});
+  /// The case's config (the core switch connects it again on other cores).
+  final String configId;
+
+  CaseCtx(
+    this.agent,
+    this.probes,
+    this.baseline,
+    this.device,
+    this.egress, {
+    this.strictEgress = false,
+    this.configId = '',
+  });
 
   /// Services through which this tunnel is distinguishable from the direct path.
   List<String> get informativeUrls =>
@@ -78,11 +93,18 @@ class CaseCtx {
   Future<Outcome> directRu() async =>
       classifyDirect(baseline: baseline.directRuIp, observed: await probes.ip(echoRu), egress: egress);
 
-  /// Two distinguishable services for routing rules (a — the rule, b — the rest).
-  (String, String)? get pair => informativeUrls.length < 2 ? null : (informativeUrls[0], informativeUrls[1]);
+  /// Two distinguishable services for routing rules (a — the rule, b — the rest). Not the app's own IP lookup
+  /// services: in `onlySelected` the app sends them through the proxy whatever the rules say.
+  (String, String)? get pair {
+    final urls = informativeUrls.where((u) => !appLookupHosts.contains(Uri.parse(u).host)).toList();
+    return urls.length < 2 ? null : (urls[0], urls[1]);
+  }
 }
 
 typedef Check = Future<Outcome> Function(CaseCtx ctx);
+
+/// Hosts of `IpLookupSource.all` (`lib/core/services/ip_lookup.dart`): `diagnosticRules` route them through the proxy.
+const appLookupHosts = {'ip-api.com', 'ipinfo.io', 'api.ipify.org'};
 
 class MatrixCase {
   final String id;
@@ -182,6 +204,38 @@ Future<Outcome> _proxyOnly(CaseCtx c) async {
     egress: c.egress,
     strictEgress: c.strictEgress,
   );
+}
+
+/// The hot switch of the running session to each other core that runs the config (the server list's
+/// path), then a disconnect: the stop must reach the core that runs now, not the one the session started on.
+Future<Outcome> _coreSwitch(CaseCtx c) async {
+  final from = c.agent.lastConnected?['core'];
+  final outs = <Outcome>[];
+  for (final core in coreNames.keys.where((k) => k != from)) {
+    c.agent.lastState = null;
+    try {
+      await c.agent.send('connect', {'configId': c.configId, 'core': core});
+    } on ItestAgentError catch (e) {
+      if (e.message.contains('Bad state: core')) continue;
+      rethrow;
+    }
+    final state = await c.agent.waitState({'connected', 'error', 'blocked'}, const Duration(seconds: 60));
+    final runs = c.agent.lastConnected?['core'];
+    if (state != 'connected' || runs != core) {
+      return (v: Verdict.fail, note: 'switch to ${coreNames[core]}: $state${runs == core ? '' : ' on $runs'}');
+    }
+    await Future<void>.delayed(const Duration(seconds: 2));
+    final o = await c.tunnel();
+    outs.add((v: o.v, note: '${coreNames[core]}: ${o.note}'));
+  }
+  if (outs.isEmpty) return (v: Verdict.skip, note: 'no other core runs this config');
+  c.agent.lastState = null;
+  await c.agent.send('disconnect');
+  final state = await c.agent.waitState({'disconnected', 'error'}, const Duration(seconds: 15));
+  if (state != 'disconnected') return (v: Verdict.fail, note: 'disconnect after the switch: $state');
+  final urls = c.informativeUrls;
+  if (urls.isNotEmpty) outs.add(await c.direct(urls.first));
+  return combine(outs);
 }
 
 /// Options not supported by all cores (`CoreBackend.supports`): name → cores.
@@ -312,6 +366,7 @@ final Map<String, (Map<String, dynamic>, Check)> optionCases = {
   'sniffing-off': ({'sniffingEnabled': false}, _tunnelOnly),
   'mtu-1280': ({'mtu': 1280}, _tunnelOnly),
   'tls-fp-chrome': ({'tlsFingerprint': 'chrome'}, _tunnelOnly),
+  'core-switch': (const {}, _coreSwitch),
   'proxy-only': ({'proxyOnly': true}, _proxyOnly),
 };
 
@@ -407,10 +462,14 @@ Future<CaseResult> runCase(MatrixCase mc, CaseCtx ctx, RunDir run, Shell shell, 
   step('verdict ${out.v.name}: ${out.note}');
   if (out.v != Verdict.pass) await dumpGoroutines(ctx.agent, dir, step);
   try {
-    // A late marker of this case must not leak into waiting for the next one.
+    // Already off (the check disconnected itself): a second disconnect gets no new state to wait for.
+    if (ctx.agent.lastState != 'disconnected') {
+      // A late marker of this case must not leak into waiting for the next one.
+      ctx.agent.lastState = null;
+      await ctx.agent.send('disconnect');
+      await ctx.agent.waitState({'disconnected', 'error'}, const Duration(seconds: 15));
+    }
     ctx.agent.lastState = null;
-    await ctx.agent.send('disconnect');
-    await ctx.agent.waitState({'disconnected', 'error'}, const Duration(seconds: 15));
   } catch (e) {
     step('disconnect: $e');
   }

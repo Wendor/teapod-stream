@@ -281,7 +281,6 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
   Future<void> updateConfig(VpnConfig updated) =>
       _mutate((s) => s.copyWith(configs: [for (final c in s.configs) c.id == updated.id ? updated : c]));
 
-  /// Selecting a specific config (or none) leaves the subscription mode.
   /// Replaces config [id]'s link with [link] ([ConfigState.withEditedLink]). false — [link] isn't a link the app reads;
   /// a link it reads but can't accept throws the parser's [FormatException].
   Future<bool> editLink(String id, String link) async {
@@ -292,6 +291,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     return true;
   }
 
+  /// Selecting a specific config (or none) leaves the subscription mode.
   Future<void> setActiveConfig(String? id) =>
       _mutate((s) => s.copyWith(activeConfigId: id, clearActive: id == null, clearActiveSub: true));
 

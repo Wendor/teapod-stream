@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:teapodstream/core/constants/app_constants.dart';
 import 'package:teapodstream/core/services/ip_lookup.dart';
+import 'package:teapodstream/core/services/tunnel_socks.dart';
 import 'package:teapodstream/providers/ip_info_provider.dart';
 import 'package:teapodstream/providers/vpn_provider.dart';
 
@@ -191,4 +192,24 @@ void main() {
     nativeState = {'value': 'connected', 'socksPort': port, 'socksUser': 'su', 'socksPassword': 'sp'};
     expect(await read(), isNull);
   });
+
+  test('the notifier hands the lookup the tunnel SOCKS of the VPN state, the HTTP stays in IpLookup', () async {
+    final fake = _FakeLookup();
+    c.dispose();
+    c = ProviderContainer(overrides: [ipLookupProvider.overrideWithValue(fake)]);
+    nativeState = {'value': 'connected', 'socksPort': 1080, 'socksUser': 'su', 'socksPassword': 'sp'};
+    final info = await read();
+    expect((info?.ip, info?.countryCode), ('203.0.113.9', 'DE'));
+    expect(fake.socks.map((s) => (s.port, s.user, s.password)), [(1080, 'su', 'sp')]);
+  });
+}
+
+class _FakeLookup extends IpLookup {
+  final socks = <TunnelSocks>[];
+
+  @override
+  Future<IpLookupResult?> lookupThrough(String configId, TunnelSocks socks) async {
+    this.socks.add(socks);
+    return const IpLookupResult('203.0.113.9', countryCode: 'DE');
+  }
 }

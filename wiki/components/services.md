@@ -93,6 +93,7 @@ app itself is excluded from the VPN, so without it the app's own requests would 
 | `ConfigStorageService` | typed whole-list load/save of configs, subscriptions, active ids, pins (written only by `ConfigNotifier._commit`) | through `StorageSecureService` |
 | `ProfileStorageService` | profiles, active profile id | secure + SharedPreferences |
 | `SettingsService` | the per-key `AppSettings` of before profiles held them, read once by the migration; mirrors the flags native reads | SharedPreferences (+ secure for the old SOCKS login) |
+| `UiPrefsService` | the device's look and list view, outside profiles: language (`app_locale`, also read by native), theme mode, accent, the server list's `cfg_hide_groups` / `cfg_sort_by_ping`; read by `localeProvider`, `themeModeProvider`, `accentProvider`, `configsViewProvider` (a choice made while the stored value loads wins) | SharedPreferences |
 
 ## LogService
 

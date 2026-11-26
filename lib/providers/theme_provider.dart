@@ -1,13 +1,14 @@
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../core/services/ui_prefs_service.dart';
 import '../ui/theme/app_colors.dart';
 
 // ── Theme mode ────────────────────────────────────────────────────
 
 class ThemeModeNotifier extends Notifier<ThemeMode> {
-  static const _key = 'theme_mode';
+  var _chosen = false;
 
   @override
   ThemeMode build() {
@@ -16,23 +17,20 @@ class ThemeModeNotifier extends Notifier<ThemeMode> {
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final v = prefs.getString(_key);
-    ThemeMode mode;
-    if (v == 'light') {
-      mode = ThemeMode.light;
-    } else if (v == 'system') {
-      mode = ThemeMode.system;
-    } else {
-      mode = ThemeMode.dark;
-    }
-    state = mode;
+    final v = await ref.read(uiPrefsServiceProvider).themeMode();
+    // A choice made while it loaded wins.
+    if (_chosen) return;
+    state = switch (v) {
+      'light' => ThemeMode.light,
+      'system' => ThemeMode.system,
+      _ => ThemeMode.dark,
+    };
   }
 
   Future<void> set(ThemeMode mode) async {
+    _chosen = true;
     state = mode;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_key, mode.name);
+    await ref.read(uiPrefsServiceProvider).setThemeMode(mode.name);
   }
 }
 
@@ -41,7 +39,7 @@ final themeModeProvider = NotifierProvider<ThemeModeNotifier, ThemeMode>(ThemeMo
 // ── Accent color ──────────────────────────────────────────────────
 
 class AccentNotifier extends Notifier<Color> {
-  static const _key = 'accent_color';
+  var _chosen = false;
 
   @override
   Color build() {
@@ -50,16 +48,43 @@ class AccentNotifier extends Notifier<Color> {
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final v = prefs.getInt(_key);
-    if (v != null) state = Color(v);
+    final v = await ref.read(uiPrefsServiceProvider).accent();
+    if (!_chosen && v != null) state = Color(v);
   }
 
   Future<void> set(Color color) async {
+    _chosen = true;
     state = color;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_key, color.toARGB32());
+    await ref.read(uiPrefsServiceProvider).setAccent(color.toARGB32());
   }
 }
 
 final accentProvider = NotifierProvider<AccentNotifier, Color>(AccentNotifier.new);
+
+// ── Server list view ──────────────────────────────────────────────
+
+/// How the server list is shown: without subscription groups, sorted by ping.
+typedef ConfigsView = ({bool hideGroups, bool sortByPing});
+
+class ConfigsViewNotifier extends Notifier<ConfigsView> {
+  var _chosen = false;
+
+  @override
+  ConfigsView build() {
+    _load();
+    return (hideGroups: false, sortByPing: false);
+  }
+
+  Future<void> _load() async {
+    final v = await ref.read(uiPrefsServiceProvider).configsView();
+    if (!_chosen) state = v;
+  }
+
+  Future<void> set({bool? hideGroups, bool? sortByPing}) async {
+    _chosen = true;
+    state = (hideGroups: hideGroups ?? state.hideGroups, sortByPing: sortByPing ?? state.sortByPing);
+    await ref.read(uiPrefsServiceProvider).setConfigsView(hideGroups: state.hideGroups, sortByPing: state.sortByPing);
+  }
+}
+
+final configsViewProvider = NotifierProvider<ConfigsViewNotifier, ConfigsView>(ConfigsViewNotifier.new);

@@ -41,7 +41,7 @@ Key prefixes: `common*`, `home*`, `configs*`, `routing*`, `settings*`, `network*
 
 ## Language choice
 
-`localeProvider` (`Locale?`, null = system) in SharedPreferences `app_locale` (`en` / `ru`). Not part of profiles or
+`localeProvider` (`Locale?`, null = system) in SharedPreferences `app_locale` (`en` / `ru`) through `UiPrefsService`. Not part of profiles or
 the connection fingerprint. UI: Settings → appearance → language.
 
 ## Android

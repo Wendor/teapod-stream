@@ -1,3 +1,5 @@
+import 'dart:async';
+
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,12 +11,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:teapodstream/core/constants/app_constants.dart';
 import 'package:teapodstream/core/models/core_kind.dart';
 import 'package:teapodstream/core/services/settings_service.dart';
+import 'package:teapodstream/core/services/ui_prefs_service.dart';
 import 'package:teapodstream/core/models/app_settings.dart';
 import 'package:teapodstream/providers/app_icon_provider.dart';
 import 'package:teapodstream/providers/app_info_provider.dart';
 import 'package:teapodstream/providers/apps_provider.dart';
 import 'package:teapodstream/providers/core_provider.dart';
 import 'package:teapodstream/providers/settings_provider.dart';
+import 'package:teapodstream/providers/locale_provider.dart';
 import 'package:teapodstream/providers/theme_provider.dart';
 import 'package:teapodstream/ui/theme/app_colors.dart';
 
@@ -123,6 +127,57 @@ void main() {
     });
   });
 
+  group('ui prefs', () {
+    test('the language loads, is set and cleared under app_locale (native reads it)', () async {
+      SharedPreferences.setMockInitialValues({'app_locale': 'ru'});
+      final c2 = ProviderContainer();
+      addTearDown(c2.dispose);
+      c2.listen(localeProvider, (_, _) {});
+      await Future<void>.delayed(Duration.zero);
+      expect(c2.read(localeProvider), const Locale('ru'));
+
+      await c2.read(localeProvider.notifier).set(const Locale('en'));
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('app_locale'), 'en');
+      await c2.read(localeProvider.notifier).set(null);
+      expect(prefs.containsKey('app_locale'), isFalse);
+      expect(c2.read(localeProvider), isNull);
+    });
+
+    test('the server list view loads and keeps the other flag on set', () async {
+      SharedPreferences.setMockInitialValues({'cfg_hide_groups': true});
+      final c2 = ProviderContainer();
+      addTearDown(c2.dispose);
+      c2.listen(configsViewProvider, (_, _) {});
+      await Future<void>.delayed(Duration.zero);
+      expect(c2.read(configsViewProvider), (hideGroups: true, sortByPing: false));
+
+      await c2.read(configsViewProvider.notifier).set(sortByPing: true);
+      expect(c2.read(configsViewProvider), (hideGroups: true, sortByPing: true));
+      final prefs = await SharedPreferences.getInstance();
+      expect((prefs.getBool('cfg_hide_groups'), prefs.getBool('cfg_sort_by_ping')), (true, true));
+    });
+
+    test('a choice made while the stored value loads is kept', () async {
+      final prefs = _SlowPrefs();
+      final c2 = ProviderContainer(overrides: [uiPrefsServiceProvider.overrideWithValue(prefs)]);
+      addTearDown(c2.dispose);
+      for (final p in [localeProvider, themeModeProvider, accentProvider, configsViewProvider]) {
+        c2.listen(p, (_, _) {});
+      }
+      await c2.read(localeProvider.notifier).set(const Locale('en'));
+      await c2.read(themeModeProvider.notifier).set(ThemeMode.system);
+      await c2.read(accentProvider.notifier).set(const Color(0xFF00FF00));
+      await c2.read(configsViewProvider.notifier).set(sortByPing: true);
+      prefs.loaded.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(c2.read(localeProvider), const Locale('en'));
+      expect(c2.read(themeModeProvider), ThemeMode.system);
+      expect(c2.read(accentProvider), const Color(0xFF00FF00));
+      expect(c2.read(configsViewProvider), (hideGroups: false, sortByPing: true));
+    });
+  });
+
   group('core providers', () {
     test('coreBackendFor maps every kind', () {
       for (final k in CoreKind.values) {
@@ -157,4 +212,34 @@ void main() {
       expect(await c.read(availableCoresProvider.future), isEmpty);
     });
   });
+}
+
+/// Stored values that arrive only when [loaded] completes; writes are dropped.
+class _SlowPrefs extends UiPrefsService {
+  final loaded = Completer<void>();
+
+  @override
+  Future<String?> locale() async => loaded.future.then((_) => 'ru');
+
+  @override
+  Future<void> setLocale(String? code) async {}
+
+  @override
+  Future<String?> themeMode() async => loaded.future.then((_) => 'light');
+
+  @override
+  Future<void> setThemeMode(String name) async {}
+
+  @override
+  Future<int?> accent() async => loaded.future.then((_) => 0xFF112233);
+
+  @override
+  Future<void> setAccent(int argb) async {}
+
+  @override
+  Future<({bool hideGroups, bool sortByPing})> configsView() async =>
+      loaded.future.then((_) => (hideGroups: true, sortByPing: false));
+
+  @override
+  Future<void> setConfigsView({required bool hideGroups, required bool sortByPing}) async {}
 }

@@ -1251,6 +1251,60 @@ void main() {
       expect(native.lastConnect()['xrayConfig'], contains('hc.example'));
     });
 
+    test('auto mode stays on when the failed config shares the endpoint of the live one', () async {
+      final shared = [
+        _cfg('a', subId: 's', host: 'same.example'),
+        _cfg('b', subId: 's', host: 'same.example', password: 'q'),
+      ];
+      native.outboundMs = {'same.example': 60};
+      await boot(
+        configs: shared,
+        subs: [Subscription(id: 's', name: 'S', url: 'https://sub.example/s', createdAt: DateTime(2026))],
+        activeSubId: 's',
+        settings: switchOn,
+      );
+      await n().connect();
+      emit({'type': 'state', 'value': 'connected', 'socksPort': 1});
+      await _settle();
+      emit({'type': 'tunnel_dead', 'failures': 3});
+      await _settle();
+      final byId = {for (final x in c.read(configProvider).value!.configs) x.id: x};
+      expect(c.read(configProvider).value!.activeSubscriptionId, 's');
+      expect(byId['a']!.latencyMs, isNull);
+      expect(byId['b']!.latencyMs, 60);
+      expect(c.read(effectiveConfigProvider)?.id, 'b');
+    });
+
+    test('auto mode stays on when configs of the subscription were not probed (pinned source)', () async {
+      native.outboundMs = {'hc.example': 50};
+      await boot(
+        configs: subConfigs,
+        pins: [PinnedRef.of(subConfigs[2])],
+        subs: [Subscription(id: 's', name: 'S', url: 'https://sub.example/s', createdAt: DateTime(2026))],
+        activeSubId: 's',
+        settings: switchOn.copyWith(
+          heartbeat: const HeartbeatSettings(
+            failAction: HeartbeatFailAction.switchConfig,
+            switchSource: SwitchSource.pinned,
+          ),
+        ),
+      );
+      await n().connect();
+      emit({'type': 'state', 'value': 'connected', 'socksPort': 1});
+      await _settle();
+      // b's TCP ping is better than c's urltest, but b wasn't probed.
+      await c.read(configProvider.notifier).batchUpdatePingResults({
+        'ha.example:443': 5,
+        'hb.example:443': 1,
+      }, DateTime(2026));
+      await _settle();
+      emit({'type': 'tunnel_dead', 'failures': 3});
+      await _settle();
+      expect(c.read(configProvider).value!.activeSubscriptionId, 's');
+      expect(c.read(effectiveConfigProvider)?.id, 'c');
+      expect(native.lastConnect()['xrayConfig'], contains('hc.example'));
+    });
+
     test('a switch found during a profile switch runs after it', () async {
       native.outboundMs = {'hc.example': 80};
       await connected(configs: subConfigs, settings: switchOn);

@@ -77,14 +77,7 @@ class AutoSwitch {
       log.addInfo('urltest: switching to "${best.config.name}" (${best.latency} ms)', source: 'urltest');
       await _ref
           .read(vpnProvider.notifier)
-          .switchDeadTunnel(
-            dead: current,
-            to: best.config,
-            measured: {
-              '${current.address}:${current.port}': null,
-              for (final r in probed) '${r.config.address}:${r.config.port}': r.latency,
-            },
-          );
+          .switchDeadTunnel(dead: current, to: best.config, measured: {for (final r in probed) r.config.id: r.latency});
     } catch (e) {
       log.addError('urltest: switch error: $e');
     } finally {

@@ -147,8 +147,9 @@ That is much stronger than the TCP ping, which reports "alive" for a server whos
 blocked. No live candidate → only a log entry; the service keeps reconnecting on its own cooldown. Otherwise
 `VpnNotifier.switchDeadTunnel` applies the switch in the queue of selections and profile switches; it is dropped when
 by then the session runs another config. In auto mode with the best candidate in the auto subscription,
-auto mode stays: the measured latencies (the dead config without an answer) are stored as the ping results, so the
-subscription's best is the live config. Otherwise the best becomes the active config, as a selection makes it. A live session is
+auto mode stays: the subscription's ping results become the measurement, by config (`setLatencies`) — a config that
+didn't answer or wasn't probed (the dead one, other configs with the `pinned` source) has none until the next ping —
+so its best is the live config. Otherwise the best becomes the active config, as a selection makes it. A live session is
 then rebuilt on the chosen config. One run at a time; logged with `source: urltest`. The app shell creates it at start; it listens to the events itself.
 
 ## Lifecycle

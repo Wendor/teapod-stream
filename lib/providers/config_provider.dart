@@ -538,6 +538,20 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     );
   });
 
+  /// Latencies by config id ([latencyById]; null — no answer, the old value is cleared); configs not in it keep theirs.
+  Future<void> setLatencies(Map<String, int?> latencyById, DateTime pingedAt) => _mutate((s) {
+    if (!s.configs.any((c) => latencyById.containsKey(c.id))) return null;
+    return s.copyWith(
+      configs: [
+        for (final c in s.configs)
+          if (latencyById.containsKey(c.id))
+            c.copyWith(latencyMs: latencyById[c.id], clearLatency: latencyById[c.id] == null, lastPingedAt: pingedAt)
+          else
+            c,
+      ],
+    );
+  });
+
   // ─── Reorder ───
   // `newIndex` is the item's index after the move, as `ReorderableListView.onReorderItem` reports it.
 

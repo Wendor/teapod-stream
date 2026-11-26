@@ -92,7 +92,8 @@ class DeeplinkHandler {
           Text(context.l10n.deeplinkBundle(bundle.label!), style: AppTheme.mono(size: 12, color: t.text)),
         const SizedBox(height: 6),
         Text(
-          '${context.l10n.configsCount(bundle.configs.length)}, ${context.l10n.subscriptionsCount(bundle.subscriptions.length)}',
+          '${context.l10n.configsCount(bundle.configs.length + bundle.rawUris.length)}, '
+          '${context.l10n.subscriptionsCount(bundle.subscriptions.length + bundle.subscriptionUrls.length)}',
           style: AppTheme.mono(size: 12, color: t.text),
         ),
         const SizedBox(height: 4),

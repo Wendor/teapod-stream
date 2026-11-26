@@ -81,7 +81,8 @@ they pointed there.
 `reorderSubscriptions` / `reorderGroupConfigs(subId, …)` (indices from `ReorderableListView.onReorderItem`:
 `newIndex` is the position after the move),
 `batchUpdatePingResults` (one write for all pings), `importBundle` (connections from a profile or deep link,
-[profiles](profiles.md); one commit for its subscriptions, configs and the selection), `reviewBundle` / `newSubscriptionHosts` (hosts of the subscriptions an import would add,
+[profiles](profiles.md); one commit for its subscriptions, configs and the selection; a compact bundle's share links
+are parsed into that commit, its new subscription URLs fetched after it — the deep link and the Add screen both use it), `reviewBundle` / `newSubscriptionHosts` (hosts of the subscriptions an import would add,
 shown before it), `applySelection` (a profile's remembered server, [profiles](profiles.md#selected-server)).
 
 ## Related

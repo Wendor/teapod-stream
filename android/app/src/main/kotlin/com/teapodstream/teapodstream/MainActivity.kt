@@ -17,7 +17,6 @@ class MainActivity : FlutterActivity() {
     }
 
     private var vpnChannel: VpnChannelHandler? = null
-    private var pendingDeeplink: String? = null
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
@@ -28,14 +27,9 @@ class MainActivity : FlutterActivity() {
             setTurnScreenOn(true)
         }
         if (ItestBridge.onIntent(this, intent)) return
-        intent?.let { handleIncomingIntentForPending(it) }
-    }
-
-    private fun handleIncomingIntentForPending(intent: Intent?) {
-        val uri = intent?.data ?: return
-        if (uri.scheme == "teapod" && uri.host == "import") {
-            pendingDeeplink = uri.toString()
-        }
+        // A link that started the app. super.onCreate has already configured the engine; the event
+        // stream buffers until Dart listens. A recreated activity carries the same intent: not again.
+        if (savedInstanceState == null) handleIncomingIntent(intent)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -45,12 +39,6 @@ class MainActivity : FlutterActivity() {
         EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL)
             .setStreamHandler(VpnEventStreamHandler)
         ItestBridge.attach(flutterEngine.dartExecutor.binaryMessenger)
-
-        // Send pending deeplink if the app was launched via a link
-        pendingDeeplink?.let { uri ->
-            VpnEventStreamHandler.sendDeeplinkEvent(uri)
-            pendingDeeplink = null
-        }
 
         // Before the channel can save a name.
         VpnTileService.migrateLegacyConfigName(this)

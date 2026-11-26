@@ -475,6 +475,51 @@ void main() {
       expect(review.subscriptionHosts, ['full.example', 'compact.example']);
     });
 
+    test('a compact bundle: share links parsed and deduped, new subscription URLs fetched', () async {
+      final server = await LocalServer.start();
+      addTearDown(server.close);
+      server.serve(_trojan('s.example', 'S'));
+      final dup = _trojan('dup.example', 'Dup');
+      await boot(
+        configs: [_cfg('old', rawUri: dup)],
+        subs: [_sub('k', url: 'https://known.example/s')],
+      );
+      final r = await n().importBundle(
+        ConnectionsBundle(
+          exportedAt: DateTime(2026),
+          rawUris: [_trojan('new.example', 'New'), dup, 'garbage://x', _trojan('new.example', 'New')],
+          subscriptionUrls: ['https://known.example/s', server.url('/sub')],
+        ),
+      );
+      expect(r.addedConfigs, 1);
+      expect(r.skippedConfigs, 3);
+      expect(r.addedSubscriptions, 1);
+      expect(s().configs.map((c) => c.address), ['hold', 'new.example', 's.example']);
+      expect(s().subscriptions.map((x) => x.url), ['https://known.example/s', server.url('/sub')]);
+      expect(server.requests, hasLength(1));
+    });
+
+    test('one link in two subscriptions of a bundle stays in both; twice in one subscription — once', () async {
+      await boot();
+      final r = await n().importBundle(
+        ConnectionsBundle(
+          exportedAt: DateTime(2026),
+          configs: [
+            _cfg('a1', rawUri: 'trojan://same', subId: 'A'),
+            _cfg('a2', rawUri: 'trojan://same', subId: 'A'),
+            _cfg('b1', rawUri: 'trojan://same', subId: 'B'),
+          ],
+          subscriptions: [
+            _sub('A', url: 'https://a'),
+            _sub('B', url: 'https://b'),
+          ],
+        ),
+      );
+      expect(r.addedConfigs, 2);
+      expect(r.skippedConfigs, 1);
+      expect(s().configs.map((c) => c.subscriptionId).toSet(), hasLength(2));
+    });
+
     test('dedupes configs, remaps and reuses subscriptions, selects first', () async {
       await boot(
         configs: [

@@ -10,7 +10,7 @@ import 'package:teapodstream/ui/screens/home_screen.dart';
 import 'package:teapodstream/ui/screens/logs_screen.dart';
 import 'package:teapodstream/ui/screens/network_settings_screen.dart';
 import 'package:teapodstream/ui/screens/profiles_screen.dart';
-import 'package:teapodstream/ui/screens/routing_screen.dart';
+import 'package:teapodstream/ui/screens/routing/routing_screen.dart';
 import 'package:teapodstream/ui/screens/settings_screen.dart';
 import 'package:teapodstream/ui/screens/split_tunnel_screen.dart';
 import 'package:teapodstream/ui/screens/subscription_settings_screen.dart';

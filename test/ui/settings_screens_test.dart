@@ -1,3 +1,5 @@
+import 'dart:io';
+
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -101,9 +103,12 @@ void main() {
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
       await settle(tester);
       expect(find.byType(WhatsNewScreen), findsOneWidget);
-      expect(find.text('v1.8.0'), findsOneWidget);
-      expect(find.text('v1.7.0'), findsNothing); // below the fold of the lazy list
-      expect(find.textContaining('Fixed rare AmneziaWG'), findsOneWidget);
+      // The newest section, in English; the oldest one is below the fold of the lazy list.
+      final en = File('changelog/en.md').readAsStringSync();
+      final sections = RegExp(r'^## (\S+)\n\n- (.+)$', multiLine: true).allMatches(en).toList();
+      expect(find.text('v${sections.first.group(1)}'), findsOneWidget);
+      expect(find.textContaining(sections.first.group(2)!.substring(0, 30)), findsOneWidget);
+      expect(find.text('v${sections.last.group(1)}'), findsNothing);
       await unmount(tester, c);
     });
 

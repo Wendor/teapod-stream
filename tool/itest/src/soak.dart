@@ -193,6 +193,9 @@ class Soak {
   /// `server-switch` none (any config's exit, just not the direct path).
   ({String? egress, bool strict})? _exit;
   var _cutLeak = false;
+
+  /// Probes that got any answer (an IP, whatever the exit) since the last reset.
+  var _answers = 0;
   List<String>? _faultLog;
 
   Soak({
@@ -242,6 +245,7 @@ class Soak {
     if (ip == null && urls.length > 1) (u, ip) = (urls[1], await get(urls[1]));
     // Off Wi-Fi the direct IP differs from the baseline — "not direct" doesn't yet mean "through VPN".
     // The expected exit is the one confirmed on Wi-Fi (the server's entry address may differ).
+    if (ip != null) _answers++;
     final ok = probeOk(
       ip: ip,
       direct: baseline.direct[u],
@@ -406,8 +410,11 @@ class Soak {
         ]);
       case Fault.serverDown:
         await relay!.down();
-        // Traffic while the server is cut means the session doesn't go through the relay at all.
-        _cutLeak = (await _sample(const Duration(minutes: 2))).any((s) => s.ok);
+        // Any answer while the server is cut — through another exit or direct — means the session doesn't go
+        // through the relay; `ok` alone would miss an exit other than the expected one.
+        _answers = 0;
+        await _sample(const Duration(minutes: 2));
+        _cutLeak = _answers > 0;
         await relay!.up();
       case Fault.serverSwitch:
         // The server stays dead: recovery is the switch, counted from the cut, to any other config.

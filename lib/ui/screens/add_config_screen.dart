@@ -7,7 +7,9 @@ import '../../core/services/deeplink_router.dart';
 import '../../core/services/subscription_service.dart';
 import '../../protocols/parsers/wireguard_parser.dart';
 import '../../protocols/xray/vless_parser.dart';
+import '../../core/models/vpn_config.dart';
 import '../../providers/config_provider.dart';
+import '../../providers/vpn_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/breadcrumb_bar.dart';
@@ -269,6 +271,16 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
     await _processUri(text);
   }
 
+  /// Adds [config] and selects it as the configs list does: a running tunnel switches to it; one no enabled core runs
+  /// stays added, unselected, with the reason shown.
+  Future<void> _addAndSelect(VpnConfig config) async {
+    final messenger = ScaffoldMessenger.of(context);
+    await ref.read(configProvider.notifier).addConfig(config);
+    final reason = await ref.read(vpnProvider.notifier).selectConfig(config);
+    if (reason != null) messenger.showSnackBar(SnackBar(content: Text(reason)));
+    if (mounted) Navigator.pop(context);
+  }
+
   Future<void> _processUri(String uri, {String? pinnedCertDer}) async {
     setState(() {
       _loading = true;
@@ -276,11 +288,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
     });
     try {
       if (WireGuardParser.isConf(uri)) {
-        final config = WireGuardParser.parseConf(uri);
-        await ref.read(configProvider.notifier).addConfig(config);
-        await ref.read(configProvider.notifier).setActiveConfig(config.id);
-        if (mounted) Navigator.pop(context);
-        return;
+        return await _addAndSelect(WireGuardParser.parseConf(uri));
       }
       final parsed = Uri.parse(uri);
 
@@ -313,12 +321,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
         }
       } else {
         final config = VlessParser.parseUri(uri);
-        if (config != null) {
-          await ref.read(configProvider.notifier).addConfig(config);
-          await ref.read(configProvider.notifier).setActiveConfig(config.id);
-          if (mounted) Navigator.pop(context);
-          return;
-        }
+        if (config != null) return await _addAndSelect(config);
         setState(() => _error = context.l10n.addParseFailed);
       }
     } on FormatException catch (e) {

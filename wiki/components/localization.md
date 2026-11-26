@@ -16,11 +16,15 @@ exceptions in native code and tool output are English.
 | Where | How |
 |---|---|
 | Widgets | `context.l10n.key` — rebuilds on language change |
-| Code without a context (providers, models, builders, parsers) | `L10n.current.key` |
+| State in providers (errors, refusals) | `AppMessage` (`lib/core/models/app_message.dart`): a `MessageCode` with its argument, localized by the widget (`message.localize(context.l10n)`); text from outside the app's strings (native, a server, a core's check, an exception) rides as `AppMessage.text` |
+| Code without a context (models, builders, parsers, logs) | `L10n.current.key` |
 
-`MaterialApp.builder` sets `L10n.current` on every build. Strings computed earlier and kept in state (a connection
-error, `UpdateError`) stay in the old language until recomputed. Text that used to be `static const` is now getters
-(core refusal reasons, DNS presets), and exceptions with user-visible text use `L10n.current`.
+Providers don't read `L10n.current`: a code in state follows a language change. `MaterialApp.builder` sets
+`L10n.current` on every build; text computed earlier stays in the old language until recomputed (core refusal reasons
+and config validation, which reach state as `AppMessage.text`). Text that used to be `static const` is now getters
+(core refusal reasons, DNS presets). `AppMessage` is also an `Exception` (a subscription that returned nothing):
+`'$e'` in a catch and log lines go through `toString()`, which uses `L10n.current`. The first profile's name
+(`Profile.initial`) is localized once at startup and is user data from then on.
 
 Key prefixes: `common*`, `home*`, `configs*`, `routing*`, `settings*`, `network*`, `profiles*`, `split*`, `dns*`,
 `update*`, `geo*`, `deeplink*`, `cert*`, `rust*` / `singbox*` / `xray*` (core refusals and warnings), `validate*`, `wg*`.

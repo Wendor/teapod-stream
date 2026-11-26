@@ -7,6 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:teapodstream/core/models/app_message.dart';
 import 'package:teapodstream/core/constants/app_constants.dart';
 import 'package:teapodstream/core/services/update_service.dart';
 import 'package:teapodstream/providers/update_provider.dart';
@@ -79,7 +80,7 @@ void main() {
     test('unsupported ABI is reported without a network call', () async {
       abi = 'armeabi-v7a';
       await n().checkForUpdate();
-      expect((st() as UpdateError).message, contains('armeabi-v7a'));
+      expect((st() as UpdateError).message, const AppMessage(MessageCode.updateUnsupportedDevice, 'armeabi-v7a'));
       expect(server.paths, isEmpty);
     });
 
@@ -110,7 +111,7 @@ void main() {
     test('missing release data is an error', () async {
       server.serve('{}', status: 500);
       await redirected(() => n().checkForUpdate());
-      expect((st() as UpdateError).message, "Couldn't get release info");
+      expect((st() as UpdateError).message, const AppMessage(MessageCode.updateNoReleaseInfo));
     });
   });
 
@@ -144,7 +145,8 @@ void main() {
         await waitFor((s) => s is! UpdateDownloading);
       });
       final s = st() as UpdateError;
-      expect(s.message, contains('HTTP 503'));
+      expect(s.message.code, MessageCode.updateDownloadError);
+      expect(s.message.arg, contains('HTTP 503'));
       expect(s.retryInfo?.version, '1.8.0');
     });
 
@@ -201,7 +203,7 @@ void main() {
 
       onInstall = (_) => throw PlatformException(code: 'X', message: 'blocked');
       await n().installApk(keep.path);
-      expect((st() as UpdateError).message, 'blocked');
+      expect((st() as UpdateError).message, const AppMessage.text('blocked'));
     });
   });
 }

@@ -23,6 +23,7 @@ import 'package:teapodstream/core/models/vpn_log_entry.dart';
 import 'package:teapodstream/core/services/config_storage_service.dart';
 import 'package:teapodstream/core/services/log_service.dart';
 import 'package:teapodstream/core/services/settings_service.dart';
+import 'package:teapodstream/core/models/app_message.dart';
 import 'package:teapodstream/core/models/app_settings.dart';
 import 'package:teapodstream/protocols/xray/xray_engine.dart';
 import 'package:teapodstream/protocols/xray/xray_rust_backend.dart';
@@ -253,7 +254,7 @@ void main() {
       await boot();
       await n().connect();
       expect(st().connectionState, VpnState.error);
-      expect(st().error, 'No configuration selected');
+      expect(st().error, const AppMessage(MessageCode.vpnNoConfigSelected));
       expect(logs().last.level, LogLevel.error);
       expect(native.named('connect'), isEmpty);
     });
@@ -264,7 +265,7 @@ void main() {
         activeId: 'a',
       );
       await n().connect();
-      expect(st().error, 'Empty password');
+      expect(st().error, const AppMessage.text('Empty password'));
       expect(native.named('connect'), isEmpty);
     });
 
@@ -362,7 +363,7 @@ void main() {
       await boot(configs: [_cfg('a')], activeId: 'a');
       await n().connect();
       expect(st().connectionState, VpnState.error);
-      expect(st().error, 'denied');
+      expect(st().error, const AppMessage.text('denied'));
     });
 
     test('the first core by priority that can run the profile is used', () async {
@@ -412,7 +413,7 @@ void main() {
         settings: _settings.copyWith(proxyOnly: true, disabledCores: {CoreKind.xrayGo, CoreKind.singBox}),
       );
       await n().connect();
-      expect(st().error, const XrayRustBackend().unavailableReason(CoreFeature.proxyOnly));
+      expect(st().error, AppMessage.text(const XrayRustBackend().unavailableReason(CoreFeature.proxyOnly)!));
       expect(native.named('connect'), isEmpty);
     });
 
@@ -495,13 +496,13 @@ void main() {
       await c.read(configProvider.notifier).setActiveConfig('bad');
       await n().reconnectWithNewConfig();
       expect(st().isConnected, isTrue);
-      expect(st().error, 'Empty password');
+      expect(st().error, const AppMessage.text('Empty password'));
       expect(native.named('connect'), hasLength(1));
       // A stats tick keeps the reason.
       await Future<void>.delayed(const Duration(milliseconds: 1100));
       await _settle();
       expect(stats().uploadBytes, 10);
-      expect(st().error, 'Empty password');
+      expect(st().error, const AppMessage.text('Empty password'));
       c.read(vpnStatsProvider.notifier).pause();
     });
 
@@ -949,7 +950,7 @@ void main() {
       emit({'type': 'state', 'value': 'error', 'error': 'native failure'});
       await _settle();
       expect(st().connectionState, VpnState.error);
-      expect(st().error, 'native failure');
+      expect(st().error, const AppMessage.text('native failure'));
     });
 
     test('a new config while connecting replaces the starting session without a disconnect', () async {
@@ -990,7 +991,7 @@ void main() {
       permission.complete({17: 1});
       await switching;
       await _settle();
-      expect((st().connectionState, st().error), (VpnState.error, 'old dropped'));
+      expect((st().connectionState, st().error), (VpnState.error, const AppMessage.text('old dropped')));
       expect(c.read(tunnelSocksProvider), isNull);
     });
 
@@ -1060,17 +1061,17 @@ void main() {
       emit({'type': 'state', 'value': 'error'});
       await _settle();
       expect(st().connectionState, VpnState.error);
-      expect(st().error, 'Connection error');
+      expect(st().error, const AppMessage(MessageCode.vpnConnectError));
     });
 
     test('native failure reason reaches error and blocked states', () async {
       await connected();
       emit({'type': 'state', 'value': 'blocked', 'error': 'port busy'});
       await _settle();
-      expect((st().isBlocked, st().error), (true, 'port busy'));
+      expect((st().isBlocked, st().error), (true, const AppMessage.text('port busy')));
       emit({'type': 'state', 'value': 'error', 'error': 'bad config'});
       await _settle();
-      expect((st().isError, st().error), (true, 'bad config'));
+      expect((st().isError, st().error), (true, const AppMessage.text('bad config')));
     });
 
     test('late history after a failure keeps the reason; tunnel config is tracked', () async {
@@ -1089,7 +1090,7 @@ void main() {
         ],
       });
       await _settle();
-      expect(st().error, 'bad config');
+      expect(st().error, const AppMessage.text('bad config'));
       expect(stats().speedHistory, isEmpty);
       expect(n().runsConfig(a), isFalse);
     });
@@ -1099,7 +1100,7 @@ void main() {
       emit({'type': 'state', 'value': 'error'});
       emit({'type': 'state', 'value': 'error', 'error': 'port busy'});
       await _settle();
-      expect(st().error, 'port busy');
+      expect(st().error, const AppMessage.text('port busy'));
     });
 
     test('log events go to the log with level', () async {
@@ -1383,7 +1384,7 @@ void main() {
       native.state = {'value': 'error', 'error': 'core failed'};
       await n().syncNativeState();
       expect(st().connectionState, VpnState.error);
-      expect(st().error, 'core failed');
+      expect(st().error, const AppMessage.text('core failed'));
     });
 
     test('stats poller updates traffic while connected', () async {
@@ -1435,7 +1436,7 @@ void main() {
         expect(st().connectionState, VpnState.connecting);
         async.elapse(const Duration(seconds: 2));
         expect(st().connectionState, VpnState.error);
-        expect(st().error, 'Connection timeout');
+        expect(st().error, const AppMessage(MessageCode.vpnConnectTimeout));
         expect(native.named('disconnect'), hasLength(1));
         c.dispose();
       });
@@ -1454,11 +1455,11 @@ void main() {
         n().connect();
         async.flushMicrotasks();
         async.elapse(const Duration(seconds: 46));
-        expect(st().error, 'Connection timeout');
+        expect(st().error, const AppMessage(MessageCode.vpnConnectTimeout));
         gate.complete();
         async.flushMicrotasks();
         expect(st().connectionState, VpnState.error);
-        expect(st().error, 'Connection timeout');
+        expect(st().error, const AppMessage(MessageCode.vpnConnectTimeout));
         c.dispose();
       });
     });
@@ -1481,7 +1482,7 @@ void main() {
         expect(st().connectionState, VpnState.connecting);
         async.elapse(const Duration(seconds: 46));
         expect(st().connectionState, VpnState.error);
-        expect(st().error, 'Connection timeout');
+        expect(st().error, const AppMessage(MessageCode.vpnConnectTimeout));
         c.dispose();
       });
     });
@@ -1496,7 +1497,7 @@ void main() {
         n().syncNativeState();
         async.flushMicrotasks();
         async.elapse(const Duration(seconds: 46));
-        expect(st().error, 'Connection timeout');
+        expect(st().error, const AppMessage(MessageCode.vpnConnectTimeout));
         c.dispose();
       });
     });
@@ -1519,14 +1520,18 @@ void main() {
         async.flushMicrotasks();
         final attempt = native.lastConnect()['attempt'];
         async.elapse(const Duration(seconds: 46));
-        expect((st().connectionState, st().error), (VpnState.error, 'Connection timeout'));
+        expect((st().connectionState, st().error), (VpnState.error, const AppMessage(MessageCode.vpnConnectTimeout)));
         expect(st().activeSocksPort, 0);
         // A late connected of the timed-out attempt, then the stop tagged with it.
         for (final v in ['connected', 'disconnected']) {
           native.state = {'value': v, 'socksPort': 2080, 'attempt': attempt};
           n().syncNativeState();
           async.flushMicrotasks();
-          expect((st().connectionState, st().error), (VpnState.error, 'Connection timeout'), reason: v);
+          expect(
+            (st().connectionState, st().error),
+            (VpnState.error, const AppMessage(MessageCode.vpnConnectTimeout)),
+            reason: v,
+          );
           expect(c.read(tunnelSocksProvider), isNull);
         }
         c.dispose();
@@ -1547,7 +1552,7 @@ void main() {
           async.flushMicrotasks();
         }
         async.elapse(const Duration(seconds: 46));
-        expect(st().error, 'Connection timeout');
+        expect(st().error, const AppMessage(MessageCode.vpnConnectTimeout));
         c.dispose();
       });
     });
@@ -1571,7 +1576,7 @@ void main() {
         reply.completeError(PlatformException(code: 'X', message: 'late'));
         async.flushMicrotasks();
         async.elapse(const Duration(seconds: 46));
-        expect(st().error, 'Connection timeout');
+        expect(st().error, const AppMessage(MessageCode.vpnConnectTimeout));
         c.dispose();
       });
     });

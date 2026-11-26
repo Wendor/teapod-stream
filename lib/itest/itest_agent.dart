@@ -167,6 +167,6 @@ class ItestAgent {
 
   Future<Object?> _state() async {
     final s = read(vpnProvider);
-    return {'state': s.connectionState.name, 'error': ?s.error};
+    return {'state': s.connectionState.name, 'error': ?s.error?.toString()};
   }
 }

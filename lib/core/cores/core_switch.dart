@@ -1,4 +1,5 @@
 import '../interfaces/vpn_engine.dart';
+import '../models/app_message.dart';
 import '../models/vpn_config.dart';
 import 'core_backend.dart';
 import 'core_resolver.dart';
@@ -8,7 +9,7 @@ enum CoreSwitchAction { none, disconnect, saveQuickConnect, clearQuickConnect }
 /// What to do after a core change. [unsupported] — why the active
 /// profile (or settings) won't start on the new core; null — they will.
 /// A connected VPN on a supported profile waits for a reconnect (banner).
-CoreSwitchAction coreSwitchAction({required VpnState state, required String? unsupported}) => switch (state) {
+CoreSwitchAction coreSwitchAction({required VpnState state, required AppMessage? unsupported}) => switch (state) {
   VpnState.connected ||
   VpnState.connecting ||
   VpnState.blocked => unsupported != null ? CoreSwitchAction.disconnect : CoreSwitchAction.none,

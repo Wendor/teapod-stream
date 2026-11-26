@@ -935,7 +935,7 @@ class _UpdateTile extends ConsumerWidget {
       ),
       UpdateError(:final message, :final retryInfo) => _UpdateRow(
         t: t,
-        label: message,
+        label: message.localize(l),
         labelColor: t.danger,
         action: _SqBtn(
           t: t,

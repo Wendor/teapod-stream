@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:teapodstream/core/models/app_message.dart';
 import 'package:teapodstream/core/constants/app_constants.dart';
 import 'package:teapodstream/core/services/settings_service.dart';
 import 'package:teapodstream/core/models/app_settings.dart';
@@ -124,7 +125,7 @@ void main() {
       await download();
       final s = c.read(geoProvider);
       expect(s, isA<GeoError>());
-      expect((s as GeoError).message, 'HTTP 404');
+      expect((s as GeoError).message, const AppMessage.text('HTTP 404'));
       expect(File('${dir.path}/geoip.dat').readAsStringSync(), 'old');
     });
 

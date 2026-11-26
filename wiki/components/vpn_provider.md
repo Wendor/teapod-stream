@@ -17,7 +17,7 @@ them.
 |---|---|
 | `connectionState` | `VpnState`: `disconnected`, `connecting`, `connected`, `disconnecting`, `error`, `blocked` |
 | `connectedAt` | when the running session connected (native's `connectedAtMs`, else the first `connected` seen); reconnects keep it, an explicit disconnect or a switch resets it |
-| `error` | reason for `error`/`blocked` (or a refused switch over a running session): a Flutter failure or native's `error` (below); shown on Home |
+| `error` | `AppMessage` ([localization](localization.md)), the reason for `error`/`blocked` (or a refused switch over a running session): a Flutter failure (a code, or a core's or validation's text) or native's `error` as text (below); Home localizes it |
 | `activeSocksPort/User/Password` | the tunnel's local SOCKS from the `connected` snapshot; `tunnelSocks` exposes it for the app's own downloads ([services](services.md#tunnelsocks)) |
 | `appliedFingerprint` | `connectionFingerprint(settings, core:)` the session was started with |
 

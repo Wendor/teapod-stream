@@ -15,6 +15,9 @@ import 'package:teapodstream/core/models/config_selection.dart';
 import 'package:teapodstream/core/models/connection_fingerprint.dart';
 import 'package:teapodstream/core/models/core_kind.dart';
 import 'package:teapodstream/core/models/heartbeat_settings.dart';
+import 'package:teapodstream/core/services/geosite_index.dart';
+import 'package:teapodstream/core/models/routing_settings.dart';
+import 'package:teapodstream/providers/geo_provider.dart';
 import 'package:teapodstream/core/models/pinned_ref.dart';
 import 'package:teapodstream/core/services/profile_storage_service.dart';
 import 'package:teapodstream/core/models/profile.dart';
@@ -1336,6 +1339,36 @@ void main() {
       expect(native.named('saveQuickConnect').map((c) => (c.arguments as Map)['xrayConfig'] as String), [
         contains('hb.example'),
       ]);
+    });
+
+    test('a server selected while the geosite index loads is saved without missing codes', () async {
+      final index = Completer<GeositeIndex?>();
+      await boot(
+        configs: [_cfg('a'), _cfg('b')],
+        activeId: 'a',
+        settings: _settings.copyWith(routing: const RoutingSettings(adBlockEnabled: true)),
+        overrides: [geositeIndexProvider.overrideWith((ref) => index.future)],
+      );
+      native.calls.clear();
+      await n().selectConfig(c.read(configProvider).value!.configs.last);
+      await _settle();
+      expect(native.named('saveQuickConnect'), isEmpty);
+      index.complete(const GeositeIndex({}));
+      await _settle();
+      final saved = native.named('saveQuickConnect').single.arguments as Map;
+      expect(saved['xrayConfig'], allOf(contains('hb.example'), isNot(contains('category-ads-all'))));
+    });
+
+    test("native's off report saves quick connect again", () async {
+      // A timed-out connect shows `error` before native stops, and the save asked for then is refused: native's
+      // later off report (no state change here) must save again.
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      await _settle();
+      native.calls.clear();
+      emit({'type': 'state', 'value': 'disconnected', 'attempt': 0});
+      emit({'type': 'state', 'value': 'disconnected', 'attempt': 0});
+      await _settle();
+      expect(native.named('saveQuickConnect'), hasLength(1));
     });
 
     test('settings changed during a session reach quick connect when it ends', () async {

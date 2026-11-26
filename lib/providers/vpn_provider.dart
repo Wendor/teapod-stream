@@ -170,6 +170,9 @@ class VpnNotifier extends Notifier<VpnState2> {
               .read(logServiceProvider.notifier)
               .addDebug('Ignored ${event['value']} of connect attempt ${session.attempt}');
         }
+        // Native is off now and accepts the save: an earlier one may have been refused while it was stopping (a
+        // timed-out connect shows `error` before native stops).
+        if (_idle(session.state)) _refreshQuickConnect();
       case 'log':
         final level = event['level'] as String? ?? 'info';
         final msg = event['message'] as String? ?? '';
@@ -385,15 +388,26 @@ class VpnNotifier extends Notifier<VpnState2> {
 
   /// While off, re-saves (or clears) the quick-connect parameters from the current settings and config.
   /// Runs after the notification that asked for it: providers aren't read while they rebuild.
-  void _refreshQuickConnect() => unawaited(
-    Future(() async {
-      if (ref.mounted && _idle(state.connectionState) && !_profileSwitching) await _onCoreChanged();
-    }),
-  );
+  void _refreshQuickConnect() {
+    // Several asks in one turn (native's off report and the transition it causes) save once.
+    if (_refreshQueued) return;
+    _refreshQueued = true;
+    unawaited(
+      Future(() async {
+        _refreshQueued = false;
+        if (ref.mounted && _idle(state.connectionState) && !_profileSwitching) await _onCoreChanged();
+      }),
+    );
+  }
+
+  bool _refreshQueued = false;
 
   /// The active profile's core changed: disconnect if nothing runs the profile anymore,
   /// otherwise re-save/clear quick-reconnect.
   Future<void> _onCoreChanged() async {
+    // The saved parameters are built as a connect builds them: geosite codes missing from geosite.dat left out.
+    await _loadGeosite();
+    if (!ref.mounted) return;
     final settings = ref.read(settingsProvider).value;
     if (settings == null) return;
     final config = _resolveEffectiveConfig(ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null));

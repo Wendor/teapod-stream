@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:teapodstream/core/models/app_message.dart';
 import 'package:teapodstream/core/interfaces/vpn_engine.dart';
 import 'package:teapodstream/protocols/xray/xray_engine.dart';
 import 'package:teapodstream/providers/vpn_session.dart';
@@ -13,8 +14,8 @@ NativeSession _n(VpnState state, {int attempt = 0, String? error, bool reconnect
 
 const _connect = PendingConnect(7);
 const _disconnect = PendingDisconnect();
-const _refusal = SessionFailure('bad', 7);
-const _timeout = SessionFailure('timeout', 7, stopping: true);
+const _refusal = SessionFailure(AppMessage.text('bad'), 7);
+const _timeout = SessionFailure(AppMessage.text('timeout'), 7, stopping: true);
 
 /// What happens to the failure.
 enum _F { none, kept, settled }
@@ -218,7 +219,7 @@ void main() {
       ('a pending disconnect', const VpnSession(pending: _disconnect), VpnState.disconnecting, null),
       (
         'a disconnect for a failure',
-        const VpnSession(pending: _disconnect, failure: SessionFailure('no core', 1, stopping: true)),
+        const VpnSession(pending: _disconnect, failure: SessionFailure(AppMessage.text('no core'), 1, stopping: true)),
         VpnState.disconnecting,
         'no core',
       ),
@@ -274,7 +275,12 @@ void main() {
       ('native states otherwise', VpnSession(native: _n(VpnState.connected)), VpnState.connected, null),
     ];
     for (final (name, session, state, error) in cases) {
-      test(name, () => expect(session.view, (state: state, error: error)));
+      final message = error == 'Connection error'
+          ? const AppMessage(MessageCode.vpnConnectError)
+          : error == null
+          ? null
+          : AppMessage.text(error);
+      test(name, () => expect(session.view, (state: state, error: message)));
     }
   });
 }

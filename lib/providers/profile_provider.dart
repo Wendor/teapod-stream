@@ -12,7 +12,6 @@ import '../core/services/settings_service.dart';
 import '../core/models/app_settings.dart';
 import 'config_provider.dart';
 import 'vpn_provider.dart';
-import '../l10n/l10n.dart';
 
 class ProfileState {
   final List<Profile> profiles;
@@ -69,14 +68,7 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
     final legacy = await _legacy.migrated() ? null : await _legacy.load();
 
     if (profiles.isEmpty) {
-      final defaultProfile = Profile(
-        id: 'default',
-        name: L10n.current.profileDefaultName,
-        isDefault: true,
-        settings: legacy ?? const AppSettings(),
-        createdAt: DateTime.now(),
-      );
-      profiles = [defaultProfile];
+      profiles = [Profile.initial(legacy ?? const AppSettings())];
       await _storage.saveProfiles(profiles);
       await _storage.saveActiveProfileId('default');
       activeId = 'default';

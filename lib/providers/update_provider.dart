@@ -9,7 +9,7 @@ import '../core/services/update_service.dart';
 import '../core/constants/app_constants.dart';
 import 'vpn_provider.dart';
 import 'settings_provider.dart';
-import '../l10n/l10n.dart';
+import '../core/models/app_message.dart';
 import '../core/services/platform_service.dart';
 
 sealed class UpdateState {}
@@ -43,7 +43,7 @@ class UpdateDownloaded extends UpdateState {
 }
 
 class UpdateError extends UpdateState {
-  final String message;
+  final AppMessage message;
   final UpdateInfo? retryInfo;
   UpdateError(this.message, {this.retryInfo});
 }
@@ -66,7 +66,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
       final currentVersion = pkgInfo.version;
       final abi = await ref.read(platformServiceProvider).abi() ?? 'arm64-v8a';
       if (!AppConstants.supportedAbis.contains(abi)) {
-        state = UpdateError(L10n.current.updateUnsupportedDevice(abi));
+        state = UpdateError(AppMessage(MessageCode.updateUnsupportedDevice, abi));
         return;
       }
       final settings = ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
@@ -79,7 +79,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
         force: true,
       );
       if (update == null) {
-        state = UpdateError(L10n.current.updateNoReleaseInfo);
+        state = UpdateError(const AppMessage(MessageCode.updateNoReleaseInfo));
         return;
       }
       final path = await _apkPath(update.version, abi);
@@ -91,7 +91,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
         state = UpdateUpToDate(update);
       }
     } catch (e) {
-      state = UpdateError(L10n.current.updateCheckError('$e'));
+      state = UpdateError(AppMessage(MessageCode.updateCheckError, '$e'));
     }
   }
 
@@ -127,7 +127,7 @@ class UpdateNotifier extends Notifier<UpdateState> {
             }
           },
           onError: (Object e) {
-            state = UpdateError(L10n.current.updateDownloadError('$e'), retryInfo: info);
+            state = UpdateError(AppMessage(MessageCode.updateDownloadError, '$e'), retryInfo: info);
             _dlSub = null;
           },
         );
@@ -150,7 +150,9 @@ class UpdateNotifier extends Notifier<UpdateState> {
       await _cleanOldApks(keepPath: filePath);
       state = UpdateIdle();
     } on PlatformException catch (e) {
-      state = UpdateError(e.message ?? L10n.current.updateInstallError);
+      state = UpdateError(
+        e.message != null ? AppMessage.text(e.message!) : const AppMessage(MessageCode.updateInstallError),
+      );
     }
   }
 

@@ -1,3 +1,4 @@
+import '../../l10n/l10n.dart';
 import '../models/app_settings.dart';
 import 'config_selection.dart';
 
@@ -25,6 +26,16 @@ class Profile {
     this.lastFetchedAt,
     this.selection,
   });
+
+  /// The first profile, created at startup before any screen: its name is localized here once and is the user's data
+  /// from then on.
+  factory Profile.initial(AppSettings settings) => Profile(
+    id: 'default',
+    name: L10n.current.profileDefaultName,
+    isDefault: true,
+    settings: settings,
+    createdAt: DateTime.now(),
+  );
 
   Profile copyWith({
     String? name,

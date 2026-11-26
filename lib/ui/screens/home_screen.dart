@@ -232,7 +232,8 @@ class _StateInfo extends ConsumerWidget {
     final isDisconnecting = vpnState.isDisconnecting;
     final isBlocked = vpnState.isBlocked;
     final isError = vpnState.isError;
-    final error = vpnState.error;
+    final l = context.l10n;
+    final error = vpnState.error?.localize(l);
     final ipAsync = ref.watch(ipInfoProvider);
     final hasConfig = ref.watch(effectiveConfigProvider) != null;
 
@@ -245,7 +246,6 @@ class _StateInfo extends ConsumerWidget {
         : (isConnecting ? 'HANDSHAKE' : (isDisconnecting ? 'SHUTDOWN' : 'OFFLINE'));
     final stateColor = isBlocked || isError ? t.danger : (isConn ? t.accent : t.textDim);
 
-    final l = context.l10n;
     String subtitle;
     if (isBlocked) {
       subtitle = '${l.homeKillSwitchBlocked}${error != null ? '\n$error' : ''}';

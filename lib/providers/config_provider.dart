@@ -13,7 +13,7 @@ import '../core/services/device_service.dart';
 import '../core/services/log_service.dart';
 import 'settings_provider.dart';
 import 'vpn_provider.dart';
-import '../l10n/l10n.dart';
+import '../core/models/app_message.dart';
 
 class ConfigState {
   final List<VpnConfig> configs;
@@ -310,11 +310,11 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     );
     if (tagged.isEmpty) {
       // The provider usually explains an empty response: HWID device limit or announce.
-      throw Exception(
-        fetchResult.hwidStatus?.maxDevicesReached == true
-            ? L10n.current.subHwidLimit
-            : fetchResult.announce ?? L10n.current.subEmpty,
-      );
+      throw fetchResult.hwidStatus?.maxDevicesReached == true
+          ? const AppMessage(MessageCode.subHwidLimit)
+          : fetchResult.announce != null
+          ? AppMessage.text(fetchResult.announce!)
+          : const AppMessage(MessageCode.subEmpty);
     }
 
     // The state is read again in the queue: it could have changed during the download. A subscription removed

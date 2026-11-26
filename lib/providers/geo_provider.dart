@@ -7,7 +7,7 @@ import '../core/services/geosite_index.dart';
 import '../core/services/tunnel_socks.dart';
 import 'settings_provider.dart';
 import 'vpn_provider.dart';
-import '../l10n/l10n.dart';
+import '../core/models/app_message.dart';
 import '../core/services/platform_service.dart';
 
 sealed class GeoState {}
@@ -26,7 +26,7 @@ class GeoDownloading extends GeoState {
 }
 
 class GeoError extends GeoState {
-  final String message;
+  final AppMessage message;
   GeoError(this.message);
 }
 
@@ -70,11 +70,11 @@ class GeoNotifier extends Notifier<GeoState> {
     try {
       dir = await ref.read(platformServiceProvider).filesDir();
     } catch (_) {
-      state = GeoError(L10n.current.geoNoFilesDir);
+      state = GeoError(const AppMessage(MessageCode.geoNoFilesDir));
       return;
     }
     if (dir.isEmpty) {
-      state = GeoError(L10n.current.geoNoFilesDir);
+      state = GeoError(const AppMessage(MessageCode.geoNoFilesDir));
       return;
     }
 
@@ -111,7 +111,7 @@ class GeoNotifier extends Notifier<GeoState> {
       ref.invalidate(geositeIndexProvider);
       state = GeoReady(lastUpdated: now);
     } catch (e) {
-      state = GeoError(e.toString().replaceFirst('Exception: ', ''));
+      state = GeoError(AppMessage.text(e.toString().replaceFirst('Exception: ', '')));
     }
   }
 

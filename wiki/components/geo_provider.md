@@ -5,7 +5,7 @@
 `GeoNotifier` manages `geoip.dat` and `geosite.dat` in `filesDir`, which the cores read for `geoip:` / `geosite:`
 rules and ad blocking.
 
-State (sealed): `GeoMissing`, `GeoReady(lastUpdated)`, `GeoDownloading(downloaded, total)`, `GeoError(message)`.
+State (sealed): `GeoMissing`, `GeoReady(lastUpdated)`, `GeoDownloading(downloaded, total)`, `GeoError(message)` (an `AppMessage`, [localization](localization.md)).
 
 - **`check()`** on app start: both files present → `GeoReady`. Missing → native `prepareBinaries` copies the
   fallback bundled in `assets/binaries/` (put there by `./build.sh binaries` from the Loyalsoldier release pinned in

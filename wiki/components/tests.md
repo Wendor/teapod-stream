@@ -17,7 +17,7 @@ A fix comes with a test that fails without it; a logic change comes with tests o
 
 | Directory | What |
 |---|---|
-| `test/core/` | models, bundles, `AppSettings`/`SettingsService` (the per-key reader of the migration), storage, subscriptions, updates and release notes, `changelog/` files, deep links, logs, `DeviceService` |
+| `test/core/` | models, bundles, `AppSettings`/`SettingsService` (the per-key reader of the migration), storage, subscriptions, updates and release notes, `changelog/` files, deep links, logs, `DeviceService`, `AppMessage` (codes localized per language) |
 | `test/protocols/` | link parsers, Go/Rust/sing-box builders, `XrayEngine` (MethodChannel) |
 | `test/providers/` | `ConfigNotifier`, profiles/settings, `VpnNotifier`, update/geo/ipInfo and small providers |
 | `test/ui/` | smoke of every screen (empty / with data), interactions, deep link dialogs, settings |

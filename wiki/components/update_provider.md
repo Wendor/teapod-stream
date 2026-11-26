@@ -6,7 +6,7 @@
 `beta`) is `AppSettings.updateChannel`; release selection lives in [UpdateService](services.md#updateservice).
 
 State (sealed): `UpdateIdle`, `UpdateChecking`, `UpdateUpToDate(info)`, `UpdateAvailable(info, resumableBytes)`,
-`UpdateDownloading(info, downloaded, total)`, `UpdateDownloaded(info, filePath)`, `UpdateError(message, retryInfo)`.
+`UpdateDownloading(info, downloaded, total)`, `UpdateDownloaded(info, filePath)`, `UpdateError(message, retryInfo)` (`message` is an `AppMessage`, [localization](localization.md)).
 
 | Method | Behaviour |
 |---|---|

@@ -1,5 +1,5 @@
 import '../core/interfaces/vpn_engine.dart';
-import '../l10n/l10n.dart';
+import '../core/models/app_message.dart';
 import '../protocols/xray/xray_engine.dart';
 
 /// What Flutter waits native to report: the outcome of its own connect, or the end of a disconnect.
@@ -23,7 +23,7 @@ final class PendingDisconnect extends Pending {
 /// tag is native's last Flutter connect rather than the session's.
 final class SessionFailure {
   const SessionFailure(this.reason, this.attempt, {this.stopping = false});
-  final String reason;
+  final AppMessage reason;
   final int attempt;
   final bool stopping;
 }
@@ -72,8 +72,11 @@ final class VpnSession {
     );
   }
 
+  /// Native's reason: text it localized itself.
+  AppMessage? get _native => native.error == null ? null : AppMessage.text(native.error!);
+
   /// The state and the reason the UI shows.
-  ({VpnState state, String? error}) get view {
+  ({VpnState state, AppMessage? error}) get view {
     final f = failure;
     switch (pending) {
       case PendingConnect():
@@ -86,11 +89,11 @@ final class VpnSession {
       // A switch refused before native: the old session runs on.
       if (!f.stopping && native.state == VpnState.connected) return (state: VpnState.connected, error: f.reason);
       // Native may name the reason after Flutter's timeout already did.
-      return (state: VpnState.error, error: native.state == VpnState.error ? native.error ?? f.reason : f.reason);
+      return (state: VpnState.error, error: native.state == VpnState.error ? _native ?? f.reason : f.reason);
     }
     return switch (native.state) {
-      VpnState.error => (state: VpnState.error, error: native.error ?? L10n.current.vpnConnectError),
-      VpnState.blocked => (state: VpnState.blocked, error: native.error),
+      VpnState.error => (state: VpnState.error, error: _native ?? const AppMessage(MessageCode.vpnConnectError)),
+      VpnState.blocked => (state: VpnState.blocked, error: _native),
       final s => (state: s, error: null),
     };
   }

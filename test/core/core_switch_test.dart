@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:teapodstream/core/models/app_message.dart';
 import 'package:teapodstream/core/cores/core_resolver.dart';
 import 'package:teapodstream/core/models/core_kind.dart';
 import 'package:teapodstream/core/models/app_settings.dart';
@@ -27,15 +28,24 @@ VpnConfig _cfg(String id, {String? raw}) => VpnConfig.fromJson({
 void main() {
   group('coreSwitchAction', () {
     test('connected on an unsupported profile disconnects', () {
-      expect(coreSwitchAction(state: VpnState.connected, unsupported: 'no'), CoreSwitchAction.disconnect);
-      expect(coreSwitchAction(state: VpnState.blocked, unsupported: 'no'), CoreSwitchAction.disconnect);
+      expect(
+        coreSwitchAction(state: VpnState.connected, unsupported: const AppMessage.text('no')),
+        CoreSwitchAction.disconnect,
+      );
+      expect(
+        coreSwitchAction(state: VpnState.blocked, unsupported: const AppMessage.text('no')),
+        CoreSwitchAction.disconnect,
+      );
     });
     test('connected on a supported profile only waits for reconnect', () {
       expect(coreSwitchAction(state: VpnState.connected, unsupported: null), CoreSwitchAction.none);
     });
     test('disconnected rewrites or clears the quick-connect config', () {
       expect(coreSwitchAction(state: VpnState.disconnected, unsupported: null), CoreSwitchAction.saveQuickConnect);
-      expect(coreSwitchAction(state: VpnState.error, unsupported: 'no'), CoreSwitchAction.clearQuickConnect);
+      expect(
+        coreSwitchAction(state: VpnState.error, unsupported: const AppMessage.text('no')),
+        CoreSwitchAction.clearQuickConnect,
+      );
     });
     test('transitions are left alone', () {
       expect(coreSwitchAction(state: VpnState.disconnecting, unsupported: null), CoreSwitchAction.none);

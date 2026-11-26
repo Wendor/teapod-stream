@@ -21,11 +21,11 @@ import 'settings_provider.dart';
 import 'config_provider.dart';
 import 'profile_provider.dart';
 import 'vpn_session.dart';
-import '../l10n/l10n.dart';
+import '../core/models/app_message.dart';
 
 class VpnState2 {
   final VpnState connectionState;
-  final String? error;
+  final AppMessage? error;
 
   /// When the running session connected (native's `connectedAtMs`; reconnects keep it); null — not connected.
   final DateTime? connectedAt;
@@ -247,7 +247,7 @@ class VpnNotifier extends Notifier<VpnState2> {
       _setSession(
         VpnSession(
           native: _session.native,
-          failure: SessionFailure(L10n.current.vpnConnectTimeout, p.attempt, stopping: true),
+          failure: SessionFailure(const AppMessage(MessageCode.vpnConnectTimeout), p.attempt, stopping: true),
         ),
       );
       _engine.disconnect().ignore();
@@ -261,7 +261,7 @@ class VpnNotifier extends Notifier<VpnState2> {
     if (state.isDisconnecting || ((state.isConnected || state.isConnecting) && !switching)) return;
     final attempt = _attempt = _newAttempt();
     bool superseded() => attempt != _attempt;
-    void fail(String reason) {
+    void fail(AppMessage reason) {
       if (!superseded()) _failConnect(reason, attempt);
     }
 
@@ -278,11 +278,11 @@ class VpnNotifier extends Notifier<VpnState2> {
     final configState = ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
     final config = _resolveEffectiveConfig(configState);
     if (config == null) {
-      return fail(L10n.current.vpnNoConfigSelected);
+      return fail(const AppMessage(MessageCode.vpnNoConfigSelected));
     }
 
     final validationError = config.validate();
-    if (validationError != null) return fail(validationError);
+    if (validationError != null) return fail(AppMessage.text(validationError));
 
     final settings = ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null) ?? const AppSettings();
 
@@ -294,7 +294,7 @@ class VpnNotifier extends Notifier<VpnState2> {
     final geosite = resolver.geosite;
     final resolution = resolver.resolve(config);
     final backend = resolution.backend;
-    if (backend == null) return fail(resolution.reason!);
+    if (backend == null) return fail(AppMessage.text(resolution.reason!));
     _logCoreChoice(resolution);
 
     final credentials = _socksCredentials(settings);
@@ -307,9 +307,12 @@ class VpnNotifier extends Notifier<VpnState2> {
       geosite: geosite,
     );
     final check = backend.checkOptions(config, options);
-    if (check.blocking != null) return fail(check.blocking!);
+    if (check.blocking != null) return fail(AppMessage.text(check.blocking!));
     final missing = missingGeositeCodes(settings.routing, geosite);
-    for (final w in [if (missing.isNotEmpty) L10n.current.geositeMissing(missing.join(', ')), ...check.warnings]) {
+    for (final w in [
+      if (missing.isNotEmpty) '${AppMessage(MessageCode.geositeMissing, missing.join(', '))}',
+      ...check.warnings,
+    ]) {
       ref.read(logServiceProvider.notifier).addWarning(w, source: 'core');
     }
 
@@ -320,7 +323,7 @@ class VpnNotifier extends Notifier<VpnState2> {
       if (switching) _connectedAt = null;
       state = state.copyWith(appliedFingerprint: connectionFingerprint(settings, core: backend.kind));
     } on PlatformException catch (e) {
-      fail(e.message ?? L10n.current.vpnConnectError);
+      fail(e.message != null ? AppMessage.text(e.message!) : const AppMessage(MessageCode.vpnConnectError));
     }
   }
 
@@ -335,8 +338,8 @@ class VpnNotifier extends Notifier<VpnState2> {
   }
 
   /// The connection of [attempt] wasn't started; a running session (a switch) goes on ([VpnSession.view]).
-  void _failConnect(String reason, int attempt) {
-    ref.read(logServiceProvider.notifier).addError(reason);
+  void _failConnect(AppMessage reason, int attempt) {
+    ref.read(logServiceProvider.notifier).addError('$reason');
     _setSession(VpnSession(native: _session.native, failure: SessionFailure(reason, attempt)));
   }
 
@@ -373,7 +376,12 @@ class VpnNotifier extends Notifier<VpnState2> {
     final config = _resolveEffectiveConfig(ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null));
     final resolution = config == null ? null : ref.read(coreResolverProvider).resolve(config);
     final backend = resolution?.backend;
-    final unsupported = config == null ? L10n.current.vpnNoConfigSelected : resolution!.reason;
+    final reason = resolution?.reason;
+    final unsupported = config == null
+        ? const AppMessage(MessageCode.vpnNoConfigSelected)
+        : reason == null
+        ? null
+        : AppMessage.text(reason);
     try {
       switch (coreSwitchAction(state: state.connectionState, unsupported: unsupported)) {
         case CoreSwitchAction.none:
@@ -405,7 +413,7 @@ class VpnNotifier extends Notifier<VpnState2> {
   Future<void> disconnect() => _disconnect();
 
   /// [reason] — why Flutter stops the session: shown through the stop ([SessionFailure.stopping]).
-  Future<void> _disconnect({String? reason}) async {
+  Future<void> _disconnect({AppMessage? reason}) async {
     // A connect still in flight must not dispatch or write state after this — also when native already reported
     // `disconnected` while that connect waited.
     _attempt = _newAttempt();

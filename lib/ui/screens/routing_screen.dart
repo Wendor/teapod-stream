@@ -1368,7 +1368,7 @@ class _GeoUpdateRow extends ConsumerWidget {
       ),
       GeoError(:final message) => _GeoActionRow(
         t: t,
-        label: message,
+        label: message.localize(context.l10n),
         labelColor: t.danger,
         btnLabel: context.l10n.commonRetryUpper,
         onTap: () => ref.read(geoProvider.notifier).download(),

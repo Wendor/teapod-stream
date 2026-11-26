@@ -4,6 +4,7 @@ import '../models/app_settings.dart' show UpdateChannel;
 import 'app_http.dart';
 import 'tunnel_socks.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 
 /// Release notes languages: code → the language's own name. The name is the H1 of `changelog/<code>.md` and the
 /// `### <name>` heading of that language's section in a release body (`./build.sh notes`).
@@ -147,6 +148,38 @@ class UpdateService {
 
   static String _version(Map<String, dynamic> release) =>
       (release['tag_name'] as String? ?? '').replaceFirst(RegExp(r'^v'), '');
+
+  /// Downloads live in `updates/`, the only directory the FileProvider exposes (`file_provider_paths.xml`).
+  Future<String> apkPath(String version, String abi) async {
+    final root = await getApplicationSupportDirectory();
+    final dir = Directory('${root.path}/updates');
+    await dir.create(recursive: true);
+    return '${dir.path}/teapod-update-$abi-$version.apk';
+  }
+
+  /// What a download to [path] already has: [downloadApk] resumes from it.
+  int downloadedBytes(String path) {
+    final f = File(path);
+    return f.existsSync() ? f.lengthSync() : 0;
+  }
+
+  Future<void> deleteApk(String path) async {
+    final f = File(path);
+    if (f.existsSync()) await f.delete();
+  }
+
+  /// Deletes every downloaded APK except [keepPath], including ones left in the support root by older versions.
+  Future<void> cleanOldApks({String? keepPath}) async {
+    final root = await getApplicationSupportDirectory();
+    for (final dir in [root, Directory('${root.path}/updates')]) {
+      if (!dir.existsSync()) continue;
+      for (final f in dir.listSync().whereType<File>()) {
+        if (f.path.contains('teapod-update-') && f.path.endsWith('.apk') && f.path != keepPath) {
+          await f.delete();
+        }
+      }
+    }
+  }
 
   /// Resumable download. Sends Range header if destPath already has bytes.
   /// Pass [socks] to route through the tunnel.

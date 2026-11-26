@@ -17,7 +17,7 @@ import 'package:teapodstream/providers/ip_info_provider.dart';
 import 'package:teapodstream/providers/profile_provider.dart';
 import 'package:teapodstream/providers/settings_provider.dart';
 import 'package:teapodstream/providers/vpn_provider.dart';
-import 'package:teapodstream/ui/screens/home_screen.dart';
+import 'package:teapodstream/ui/screens/home/home_screen.dart';
 import 'package:teapodstream/ui/screens/profiles_screen.dart';
 
 import '../helpers/local_server.dart';

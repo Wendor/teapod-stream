@@ -9,7 +9,7 @@ import 'package:teapodstream/providers/settings_provider.dart';
 import 'package:teapodstream/ui/screens/add_config_screen.dart';
 import 'package:teapodstream/ui/screens/configs/configs_screen.dart';
 import 'package:teapodstream/ui/screens/dns_settings_screen.dart';
-import 'package:teapodstream/ui/screens/home_screen.dart';
+import 'package:teapodstream/ui/screens/home/home_screen.dart';
 import 'package:teapodstream/ui/screens/logs_screen.dart';
 import 'package:teapodstream/ui/screens/profiles_screen.dart';
 import 'package:teapodstream/ui/screens/split_tunnel_screen.dart';

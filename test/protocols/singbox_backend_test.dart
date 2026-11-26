@@ -50,7 +50,7 @@ void main() {
       ),
     );
     expect(check.blocking, isNull);
-    expect(check.warnings, [
+    expect(check.warnings.map((w) => '$w'), [
       "Noise isn't available in the sing-box core and is not applied.",
       'Xray Mux is incompatible with the sing-box core and is not applied.',
       'Fragmentation in the sing-box core covers only the TLS ClientHello; mode "1-3" is not applied.',
@@ -61,7 +61,7 @@ void main() {
   test('Reality pqv: profile runs, ML-DSA check skipped with a warning', () {
     final pqv = _vless(pqv: 'k');
     expect(box.checkConfig(pqv), isNull);
-    expect(box.checkOptions(pqv, _opts()).warnings, [
+    expect(box.checkOptions(pqv, _opts()).warnings.map((w) => '$w'), [
       "Reality: the sing-box core doesn't verify the ML-DSA signature (pqv) — the server is verified by the Reality key only.",
     ]);
   });

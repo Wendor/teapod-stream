@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:teapodstream/core/models/app_message.dart';
 import 'package:teapodstream/core/cores/core_resolver.dart';
 import 'package:teapodstream/core/models/core_kind.dart';
 import 'package:teapodstream/core/models/app_settings.dart';
@@ -52,7 +53,7 @@ void main() {
   });
 
   test('pickCoreError reports the verdict reason of the wanted core', () {
-    const r = CoreResolution(null, [(kind: CoreKind.xrayGo, reason: 'SSH not supported')]);
+    const r = CoreResolution(null, [(kind: CoreKind.xrayGo, reason: AppMessage.text('SSH not supported'))]);
     expect(pickCoreError(r, CoreKind.xrayGo), 'SSH not supported');
   });
 

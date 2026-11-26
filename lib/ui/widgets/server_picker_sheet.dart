@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'core_support_gate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/vpn_config.dart';
+import '../../l10n/l10n.dart';
 import '../../providers/config_provider.dart';
 import '../../providers/vpn_provider.dart';
 import '../theme/app_colors.dart';
@@ -27,9 +28,10 @@ class _ServerPickerSheet extends ConsumerWidget {
   Future<void> _select(BuildContext context, WidgetRef ref, VpnConfig c) async {
     final messenger = ScaffoldMessenger.of(context);
     final route = ModalRoute.of(context);
+    final l = context.l10n;
     final reason = await ref.read(vpnProvider.notifier).selectConfig(c);
     if (reason != null) {
-      messenger.showSnackBar(SnackBar(content: Text(reason)));
+      messenger.showSnackBar(SnackBar(content: Text(reason.localize(l))));
     } else if (context.mounted && (route?.isCurrent ?? false)) {
       // The sheet may be gone already (a second tap, Back during the save): never pop the route below it.
       Navigator.of(context).pop();

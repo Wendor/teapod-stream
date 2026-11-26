@@ -304,7 +304,7 @@ class VpnNotifier extends Notifier<VpnState2> {
     final geosite = resolver.geosite;
     final resolution = resolver.resolve(config);
     final backend = resolution.backend;
-    if (backend == null) return fail(AppMessage.text(resolution.reason!));
+    if (backend == null) return fail(resolution.reason!);
     _logCoreChoice(resolution);
 
     final credentials = _socksCredentials(settings);
@@ -317,13 +317,13 @@ class VpnNotifier extends Notifier<VpnState2> {
       geosite: geosite,
     );
     final check = backend.checkOptions(config, options);
-    if (check.blocking != null) return fail(AppMessage.text(check.blocking!));
+    if (check.blocking case final blocking?) return fail(blocking);
     final missing = missingGeositeCodes(settings.routing, geosite);
     for (final w in [
-      if (missing.isNotEmpty) '${AppMessage(MessageCode.geositeMissing, missing.join(', '))}',
+      if (missing.isNotEmpty) AppMessage(MessageCode.geositeMissing, missing.join(', ')),
       ...check.warnings,
     ]) {
-      ref.read(logServiceProvider.notifier).addWarning(w, source: 'core');
+      ref.read(logServiceProvider.notifier).addWarning('$w', source: 'core');
     }
 
     try {
@@ -409,11 +409,7 @@ class VpnNotifier extends Notifier<VpnState2> {
     final resolution = config == null ? null : ref.read(coreResolverProvider).resolve(config);
     final backend = resolution?.backend;
     final reason = resolution?.reason;
-    final unsupported = config == null
-        ? const AppMessage(MessageCode.vpnNoConfigSelected)
-        : reason == null
-        ? null
-        : AppMessage.text(reason);
+    final unsupported = config == null ? const AppMessage(MessageCode.vpnNoConfigSelected) : reason;
     try {
       switch (coreSwitchAction(state: state.connectionState, unsupported: unsupported)) {
         case CoreSwitchAction.none:
@@ -511,7 +507,7 @@ class VpnNotifier extends Notifier<VpnState2> {
   /// The user picked [config] (configs list, server picker): it becomes the active one, and a running or starting
   /// session switches to it unless it already runs it (not awaited: the caller only waits for the selection). Returns
   /// why no enabled core can run it (nothing changes then).
-  Future<String?> selectConfig(VpnConfig config) async {
+  Future<AppMessage?> selectConfig(VpnConfig config) async {
     final reason = ref.read(coreResolverProvider).resolve(config).reason;
     if (reason != null) return reason;
     await ref.read(configProvider.notifier).setActiveConfig(config.id);

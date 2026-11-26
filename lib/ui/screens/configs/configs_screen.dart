@@ -385,8 +385,9 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
 
   Future<void> _selectConfig(WidgetRef ref, VpnConfig config) async {
     final messenger = ScaffoldMessenger.of(context);
+    final l = context.l10n;
     final reason = await ref.read(vpnProvider.notifier).selectConfig(config);
-    if (reason != null) messenger.showSnackBar(SnackBar(content: Text(reason)));
+    if (reason != null) messenger.showSnackBar(SnackBar(content: Text(reason.localize(l))));
   }
 
   Future<void> _exportAll(List<VpnConfig> configs) async {

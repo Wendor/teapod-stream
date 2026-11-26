@@ -105,14 +105,17 @@ void main() {
 
     final trimmed = rust.checkOptions(_vless(), with_(blocked));
     expect(trimmed.blocking, isNull);
-    expect(trimmed.warnings.single, allOf(contains('ru-blocked-all'), contains('first domains')));
+    expect('${trimmed.warnings.single}', allOf(contains('ru-blocked-all'), contains('first domains')));
     expect(rules(with_(blocked)), contains('ext:geosite-rust.dat:ru-blocked-all'));
 
     // 200k + 200k ads is over the 250k budget: ad blocking is dropped.
     final ads = rust.checkOptions(_vless(), with_(blocked.copyWith(adBlockEnabled: true)));
     expect(ads.blocking, isNull);
     // category-ads-all isn't used then, so it isn't reported as trimmed.
-    expect(ads.warnings, [contains('ad blocking is not applied'), isNot(contains('category-ads-all'))]);
+    expect(ads.warnings.map((w) => '$w'), [
+      contains('ad blocking is not applied'),
+      isNot(contains('category-ads-all')),
+    ]);
     // A code both in the rule and in ad blocking is reported once.
     const small = GeositeIndex({
       'category-ads-all': (domains: 203624, rustDomains: 100000),
@@ -128,14 +131,14 @@ void main() {
         geosite: small,
       ),
     );
-    expect(both.warnings.single, startsWith('GeoSite category-ads-all:'));
+    expect('${both.warnings.single}', startsWith('GeoSite category-ads-all:'));
 
     // Ad blocking alone fits, trimmed; the user's codes alone over the budget block the start.
     const adsOnly = RoutingSettings(adBlockEnabled: true);
-    expect(rust.checkOptions(_vless(), with_(adsOnly)).warnings.single, contains('category-ads-all'));
+    expect('${rust.checkOptions(_vless(), with_(adsOnly)).warnings.single}', contains('category-ads-all'));
     expect(rules(with_(adsOnly)), allOf(contains('category-ads-all'), contains('win-spy')));
     final tooMany = blocked.copyWith(geositeCodes: ['cn', 'china-list', 'ru-blocked']);
-    expect(rust.checkOptions(_vless(), with_(tooMany)).blocking, contains('250k'));
+    expect('${rust.checkOptions(_vless(), with_(tooMany)).blocking}', contains('250k'));
     expect(rust.checkOptions(_vless(), with_(blocked.copyWith(geositeCodes: ['cn', 'china-list']))).blocking, isNull);
     // Literal domains take from the same budget.
     final sites = blocked.copyWith(
@@ -143,7 +146,7 @@ void main() {
       sitesEnabled: true,
       sites: [for (var i = 0; i < 30300; i++) 'site$i.example'],
     );
-    expect(rust.checkOptions(_vless(), with_(sites)).blocking, contains('250k'));
+    expect('${rust.checkOptions(_vless(), with_(sites)).blocking}', contains('250k'));
     // At the boundary: the onlySelected diagnostic hosts count too.
     const exact = GeositeIndex({'big': (domains: 250000, rustDomains: 250000)});
     VpnEngineOptions boundary(RoutingDirection direction) => VpnEngineOptions(
@@ -154,6 +157,6 @@ void main() {
       geosite: exact,
     );
     expect(rust.checkOptions(_vless(), boundary(RoutingDirection.bypass)).blocking, isNull);
-    expect(rust.checkOptions(_vless(), boundary(RoutingDirection.onlySelected)).blocking, contains('250k'));
+    expect('${rust.checkOptions(_vless(), boundary(RoutingDirection.onlySelected)).blocking}', contains('250k'));
   });
 }

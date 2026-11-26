@@ -1,25 +1,25 @@
 import '../../core/cores/core_backend.dart';
 import '../../core/cores/options_sanitizer.dart';
 import '../../core/interfaces/vpn_engine.dart';
+import '../../core/models/app_message.dart';
 import '../../core/models/core_kind.dart';
 import '../../core/models/heartbeat_settings.dart';
 import '../../core/models/vpn_config.dart';
 import '../../core/models/xray_tuning.dart';
 import 'rust_config_builder.dart';
-import '../../l10n/l10n.dart';
 
 /// xray-rust: unsupported profiles are disabled, unsupported settings
 /// are ignored with a warning; proxy-only blocks connecting.
 class XrayRustBackend implements CoreBackend {
   const XrayRustBackend();
 
-  static Map<CoreFeature, String> get _unsupported => {
-    CoreFeature.proxyOnly: L10n.current.rustNoProxyOnly,
-    CoreFeature.icmpToggle: L10n.current.rustIcmpLocal,
-    CoreFeature.customMtu: L10n.current.rustMtuIgnored,
-    CoreFeature.mux: L10n.current.rustMuxIgnored,
-    CoreFeature.observatory: L10n.current.rustNoObservatory,
-    CoreFeature.rawConfig: L10n.current.rustNoRawConfig,
+  static final Map<CoreFeature, AppMessage> _unsupported = {
+    CoreFeature.proxyOnly: AppMessage.l10n((l) => l.rustNoProxyOnly),
+    CoreFeature.icmpToggle: AppMessage.l10n((l) => l.rustIcmpLocal),
+    CoreFeature.customMtu: AppMessage.l10n((l) => l.rustMtuIgnored),
+    CoreFeature.mux: AppMessage.l10n((l) => l.rustMuxIgnored),
+    CoreFeature.observatory: AppMessage.l10n((l) => l.rustNoObservatory),
+    CoreFeature.rawConfig: AppMessage.l10n((l) => l.rustNoRawConfig),
   };
 
   @override
@@ -29,19 +29,22 @@ class XrayRustBackend implements CoreBackend {
   bool supports(CoreFeature feature) => !_unsupported.containsKey(feature);
 
   @override
-  String? unavailableReason(CoreFeature feature) => _unsupported[feature];
+  AppMessage? unavailableReason(CoreFeature feature) => _unsupported[feature];
 
   @override
-  String? checkConfig(VpnConfig config) => RustConfigBuilder.unsupportedReason(config);
+  AppMessage? checkConfig(VpnConfig config) => switch (RustConfigBuilder.unsupportedReason(config)) {
+    final r? => AppMessage.text(r),
+    null => null,
+  };
 
   @override
   SettingsCheck checkOptions(VpnConfig config, VpnEngineOptions options) {
     if (options.proxyOnly) {
-      return (blocking: _unsupported[CoreFeature.proxyOnly], warnings: const <String>[]);
+      return (blocking: _unsupported[CoreFeature.proxyOnly], warnings: const <AppMessage>[]);
     }
     final sanitized = _sanitize(config, options);
     final overBudget = RustConfigBuilder.domainMatchers(sanitized.options) > RustConfigBuilder.maxDomainMatchers;
-    return (blocking: overBudget ? L10n.current.rustGeositeLimit : null, warnings: sanitized.warnings);
+    return (blocking: overBudget ? AppMessage.l10n((l) => l.rustGeositeLimit) : null, warnings: sanitized.warnings);
   }
 
   /// Vision rejects UDP/443. For plain Vision the core answers with ICMP itself,
@@ -62,7 +65,7 @@ class XrayRustBackend implements CoreBackend {
       RustConfigBuilder.buildProbeJson(config, _sanitize(config, options).options);
 
   /// Options the core won't apply are replaced with allowed ones; each replacement is a warning.
-  ({VpnEngineOptions options, List<String> warnings}) _sanitize(VpnConfig config, VpnEngineOptions o) {
+  ({VpnEngineOptions options, List<AppMessage> warnings}) _sanitize(VpnConfig config, VpnEngineOptions o) {
     final routing = o.routing;
     final domainRules =
         routing.geositeEnabled || routing.domainEnabled || routing.sitesEnabled || routing.ruServicesEnabled;
@@ -76,7 +79,7 @@ class XrayRustBackend implements CoreBackend {
       ..warn(when: o.allowIcmp, warning: _unsupported[CoreFeature.icmpToggle]!)
       ..drop(
         when: routing.isActive && !o.sniffingEnabled && domainRules,
-        warning: L10n.current.rustSniffingForced,
+        warning: AppMessage.l10n((l) => l.rustSniffingForced),
         fix: (v) => v.copyWith(sniffingEnabled: true),
       );
     // Over the matcher budget ad blocking goes first; entries over xray-rust's limits come trimmed.
@@ -84,21 +87,21 @@ class XrayRustBackend implements CoreBackend {
       when:
           s.result.options.routing.adBlockEnabled &&
           RustConfigBuilder.domainMatchers(s.result.options) > RustConfigBuilder.maxDomainMatchers,
-      warning: L10n.current.rustAdBlockDropped,
+      warning: AppMessage.l10n((l) => l.rustAdBlockDropped),
       fix: (v) => v.copyWith(routing: v.routing.copyWith(adBlockEnabled: false)),
     );
     final trimmed = RustConfigBuilder.trimmedGeosite(s.result.options);
-    s.warn(when: trimmed.isNotEmpty, warning: L10n.current.rustGeositeTrimmed(trimmed.join(', ')));
+    s.warn(when: trimmed.isNotEmpty, warning: AppMessage.l10n((l) => l.rustGeositeTrimmed(trimmed.join(', '))));
     final fragmentError = _maskError(() => RustConfigBuilder.fragmentMask(config, o.fragment));
     s.drop(
       when: fragmentError != null,
-      warning: L10n.current.rustFragmentDropped(fragmentError ?? ''),
+      warning: AppMessage.l10n((l) => l.rustFragmentDropped(fragmentError ?? '')),
       fix: (v) => v.copyWith(fragment: v.fragment.copyWith(enabled: false)),
     );
     final noiseError = _maskError(() => RustConfigBuilder.noiseMask(config, o.noise));
     s.drop(
       when: noiseError != null,
-      warning: L10n.current.rustNoiseDropped(noiseError ?? ''),
+      warning: AppMessage.l10n((l) => l.rustNoiseDropped(noiseError ?? '')),
       fix: (v) => v.copyWith(noise: v.noise.copyWith(enabled: false)),
     );
     return s.result;

@@ -44,9 +44,9 @@ Three cores ship in one APK. Each config runs on the **first core by priority** 
 | Dart | `CoreResolver` picks the core; `buildEngineOptions` builds the options; `OptionsSanitizer` drops options a core ignores, with warnings | |
 | Native | `VpnCore` (`core/VpnCore.kt`) | `GoCore`, `BoxCore` (both on `Tun2SocksCore`), `RustCore` |
 
-**Adding an option or a protocol** means handling it in every backend — or refusing it there with a localized reason
-(`checkConfig` disables the config, `checkOptions(...).blocking` forbids connecting, `warnings` are logged,
-`CoreFeature` marks the setting in the UI). Never let a core silently ignore something that changes where traffic
+**Adding an option or a protocol** means handling it in every backend — or refusing it there with a reason (an
+`AppMessage`, [localization](components/localization.md); `checkConfig` disables the config,
+`checkOptions(...).blocking` forbids connecting, `warnings` are logged, `CoreFeature` marks the setting in the UI). Never let a core silently ignore something that changes where traffic
 goes. Details: [vpn_provider](components/vpn_provider.md#choosing-the-core),
 [xray_config_builder](components/xray_config_builder.md), [singbox_config_builder](components/singbox_config_builder.md),
 [android_native](components/android_native.md#cores-core).

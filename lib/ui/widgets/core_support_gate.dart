@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/vpn_config.dart';
+import '../../l10n/l10n.dart';
 import '../../providers/core_provider.dart';
 
 /// A profile no core can run: dimmed, with the reason below.
@@ -23,7 +24,7 @@ class CoreSupportGate extends ConsumerWidget {
         Opacity(opacity: 0.45, child: child),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 2, 20, 8),
-          child: Text(reason, style: Theme.of(context).textTheme.bodySmall),
+          child: Text(reason.localize(context.l10n), style: Theme.of(context).textTheme.bodySmall),
         ),
       ],
     );

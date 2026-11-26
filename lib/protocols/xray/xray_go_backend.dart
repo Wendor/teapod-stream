@@ -1,5 +1,6 @@
 import '../../core/cores/core_backend.dart';
 import '../../core/interfaces/vpn_engine.dart';
+import '../../core/models/app_message.dart';
 import '../../core/models/core_kind.dart';
 import '../../core/models/heartbeat_settings.dart';
 import '../../core/models/vpn_config.dart';
@@ -16,14 +17,17 @@ class XrayGoBackend implements CoreBackend {
   bool supports(CoreFeature feature) => true;
 
   @override
-  String? unavailableReason(CoreFeature feature) => null;
+  AppMessage? unavailableReason(CoreFeature feature) => null;
 
   @override
-  String? checkConfig(VpnConfig config) => XrayConfigBuilder.unsupportedReason(config);
+  AppMessage? checkConfig(VpnConfig config) => switch (XrayConfigBuilder.unsupportedReason(config)) {
+    final r? => AppMessage.text(r),
+    null => null,
+  };
 
   @override
   SettingsCheck checkOptions(VpnConfig config, VpnEngineOptions options) =>
-      (blocking: null, warnings: const <String>[]);
+      (blocking: null, warnings: const <AppMessage>[]);
 
   @override
   HeartbeatProbe effectiveHeartbeatProbe(HeartbeatProbe requested) => requested;

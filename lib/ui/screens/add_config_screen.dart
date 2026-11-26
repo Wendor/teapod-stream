@@ -275,9 +275,10 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
   /// stays added, unselected, with the reason shown.
   Future<void> _addAndSelect(VpnConfig config) async {
     final messenger = ScaffoldMessenger.of(context);
+    final l = context.l10n;
     await ref.read(configProvider.notifier).addConfig(config);
     final reason = await ref.read(vpnProvider.notifier).selectConfig(config);
-    if (reason != null) messenger.showSnackBar(SnackBar(content: Text(reason)));
+    if (reason != null) messenger.showSnackBar(SnackBar(content: Text(reason.localize(l))));
     if (mounted) Navigator.pop(context);
   }
 

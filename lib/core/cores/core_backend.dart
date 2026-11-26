@@ -1,4 +1,5 @@
 import '../interfaces/vpn_engine.dart';
+import '../models/app_message.dart';
 import '../models/core_kind.dart';
 import '../models/heartbeat_settings.dart';
 import '../models/vpn_config.dart';
@@ -29,7 +30,7 @@ enum CoreFeature {
 
 /// [blocking] — connecting is forbidden (the reason); [warnings] — settings
 /// the core will ignore.
-typedef SettingsCheck = ({String? blocking, List<String> warnings});
+typedef SettingsCheck = ({AppMessage? blocking, List<AppMessage> warnings});
 
 /// A core on the Dart side: features and config building.
 abstract interface class CoreBackend {
@@ -38,10 +39,10 @@ abstract interface class CoreBackend {
   bool supports(CoreFeature feature);
 
   /// null if [feature] is supported.
-  String? unavailableReason(CoreFeature feature);
+  AppMessage? unavailableReason(CoreFeature feature);
 
   /// null — the profile is supported; otherwise the reason (the profile is disabled).
-  String? checkConfig(VpnConfig config);
+  AppMessage? checkConfig(VpnConfig config);
 
   /// Global settings for connecting to [config].
   SettingsCheck checkOptions(VpnConfig config, VpnEngineOptions options);

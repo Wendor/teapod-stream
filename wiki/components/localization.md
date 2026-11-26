@@ -23,13 +23,15 @@ Flutter UI, sentences, buttons, hints, errors, dialogs and values the user has t
 | Where | How |
 |---|---|
 | Widgets | `context.l10n.key` — rebuilds on language change |
-| State in providers (errors, refusals) | `AppMessage` (`lib/core/models/app_message.dart`): a `MessageCode` with its argument, localized by the widget (`message.localize(context.l10n)`); text from outside the app's strings (native, a server, a core's check, an exception) rides as `AppMessage.text` |
+| State in providers (errors, refusals) | `AppMessage` (`lib/core/models/app_message.dart`), localized by the widget (`message.localize(context.l10n)`): a `MessageCode` with its argument where code tells messages apart (the resolver's `coreDisabled` / `coreUnavailable` / `coreNoneAvailable`); `AppMessage.l10n((l) => l.key(args))` for an app string nobody compares (a backend's refusal or warning); `AppMessage.text` for text from outside the app's strings (native, a server, an exception) |
+| Core checks | `CoreBackend.checkConfig`, `unavailableReason` and `checkOptions` (blocking and warnings) return `AppMessage`; the builders' `unsupportedReason` is still text (`AppMessage.text`) |
 | Code without a context (models, builders, parsers, logs) | `L10n.current.key` |
 
-Providers don't read `L10n.current`: a code in state follows a language change. `MaterialApp.builder` sets
-`L10n.current` on every build; text computed earlier stays in the old language until recomputed (core refusal reasons
-and config validation, which reach state as `AppMessage.text`). Text that used to be `static const` is now getters
-(core refusal reasons, DNS presets). `AppMessage` is also an `Exception` (a subscription that returned nothing):
+Providers don't read `L10n.current`: a code or an `AppMessage.l10n` in state follows a language change — the
+resolver caches a `CoreResolution` per config, and its reasons are localized when shown. `MaterialApp.builder` sets
+`L10n.current` on every build; text computed earlier stays in the old language until recomputed (the builders'
+`unsupportedReason` and config validation, which reach state as `AppMessage.text`). Text that used to be
+`static const` is now getters (DNS presets). `AppMessage` is also an `Exception` (a subscription that returned nothing):
 `'$e'` in a catch and log lines go through `toString()`, which uses `L10n.current`. The first profile's name
 (`Profile.initial`) is localized once at startup and is user data from then on.
 

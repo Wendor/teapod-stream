@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:teapodstream/core/cores/core_backend.dart';
 import 'package:teapodstream/core/cores/core_resolver.dart';
@@ -7,6 +8,7 @@ import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/core/models/app_settings.dart';
 import 'package:teapodstream/core/models/routing_settings.dart';
 import 'package:teapodstream/core/services/geosite_index.dart';
+import 'package:teapodstream/l10n/l10n.dart';
 import 'package:teapodstream/protocols/xray/xray_rust_backend.dart';
 import 'package:teapodstream/providers/core_provider.dart';
 
@@ -45,8 +47,8 @@ void main() {
     expect(r.backend!.kind, CoreKind.singBox);
     expect(r.reason, isNull);
     expect(r.verdicts.first.kind, CoreKind.xrayGo);
-    expect(r.verdicts.first.reason, VpnProtocol.wireguard.singBoxOnlyReason);
-    expect(r.verdicts.last.reason, VpnProtocol.wireguard.singBoxOnlyReason);
+    expect('${r.verdicts.first.reason}', VpnProtocol.wireguard.singBoxOnlyReason);
+    expect('${r.verdicts.last.reason}', VpnProtocol.wireguard.singBoxOnlyReason);
   });
 
   test('disabled and unavailable cores are skipped with a reason', () {
@@ -66,6 +68,29 @@ void main() {
     expect(rustOnly.reason, const XrayRustBackend().unavailableReason(CoreFeature.proxyOnly));
   });
 
+  test('a cached reason is localized where shown: a language switch re-localizes it', () {
+    final r = _resolver(proxyOnly: true, available: {CoreKind.xrayRust}).resolve(_cfg());
+    final en = lookupAppLocalizations(const Locale('en'));
+    final ru = lookupAppLocalizations(const Locale('ru'));
+    expect(r.reason!.localize(en), en.rustNoProxyOnly);
+    expect(r.reason!.localize(ru), ru.rustNoProxyOnly);
+  });
+
+  test('"disabled" and "unavailable" lose to a core\'s own reason after a language switch', () {
+    // Go (disabled) is checked first, then xray-rust (its own reason), then sing-box (not loaded).
+    final r = _resolver(
+      order: const [CoreKind.xrayGo, CoreKind.xrayRust, CoreKind.singBox],
+      disabled: {CoreKind.xrayGo},
+      available: {CoreKind.xrayRust, CoreKind.xrayGo},
+      proxyOnly: true,
+    ).resolve(_cfg());
+    final was = L10n.current;
+    addTearDown(() => L10n.current = was);
+    L10n.current = lookupAppLocalizations(const Locale('ru'));
+    expect(r.backend, isNull);
+    expect(r.reason, const XrayRustBackend().unavailableReason(CoreFeature.proxyOnly));
+  });
+
   test('pinned core goes first; an unusable pin falls back', () {
     final pinned = _resolver().resolve(_cfg(core: CoreKind.singBox));
     expect(pinned.backend!.kind, CoreKind.singBox);
@@ -80,7 +105,7 @@ void main() {
   test('nothing can run the profile — first reason is reported', () {
     final r = _resolver(disabled: {CoreKind.singBox}).resolve(_cfg(protocol: VpnProtocol.wireguard, settings: _wg));
     expect(r.backend, isNull);
-    expect(r.reason, VpnProtocol.wireguard.singBoxOnlyReason);
+    expect('${r.reason}', VpnProtocol.wireguard.singBoxOnlyReason);
   });
 
   test('usable and primary follow order, switches and device', () {
@@ -112,7 +137,7 @@ void main() {
     );
     final r = resolver(geosite).resolve(_cfg());
     expect(r.backend?.kind, CoreKind.xrayGo);
-    expect(r.verdicts.first.reason, contains('250k'));
+    expect('${r.verdicts.first.reason}', contains('250k'));
     // Without the index nothing is known about the rules' size.
     expect(resolver(null).resolve(_cfg()).backend?.kind, CoreKind.xrayRust);
   });

@@ -1,13 +1,13 @@
+import '../models/app_message.dart';
 import '../models/core_kind.dart';
 import '../models/vpn_config.dart';
 import '../models/app_settings.dart';
 import '../services/geosite_index.dart';
 import 'core_backend.dart';
 import 'engine_options.dart';
-import '../../l10n/l10n.dart';
 
 /// A core in check order: [reason] == null — the core can run the profile.
-typedef CoreVerdict = ({CoreKind kind, String? reason});
+typedef CoreVerdict = ({CoreKind kind, AppMessage? reason});
 
 /// Which core runs the profile and why not the others.
 class CoreResolution {
@@ -24,12 +24,12 @@ class CoreResolution {
 
   /// Why the profile won't start; null — it will. A reason from the core
   /// itself beats "disabled"/"doesn't load".
-  String? get reason {
+  AppMessage? get reason {
     if (backend != null) return null;
     final reasons = verdicts.map((v) => v.reason).nonNulls;
     return reasons.where((r) => r != CoreResolver.disabledReason && r != CoreResolver.unavailableReason).firstOrNull ??
         reasons.firstOrNull ??
-        L10n.current.coreNoneAvailable;
+        const AppMessage(MessageCode.coreNoneAvailable);
   }
 }
 
@@ -51,8 +51,8 @@ class CoreResolver {
   /// is cached per instance: config list rows call resolve on every rebuild.
   final _cache = Expando<CoreResolution>();
 
-  static String get unavailableReason => L10n.current.coreUnavailable;
-  static String get disabledReason => L10n.current.coreDisabled;
+  static const unavailableReason = AppMessage(MessageCode.coreUnavailable);
+  static const disabledReason = AppMessage(MessageCode.coreDisabled);
 
   /// Enabled and available cores by priority.
   List<CoreKind> get usable => [
@@ -77,7 +77,7 @@ class CoreResolver {
     );
   }
 
-  String? _check(CoreKind kind, VpnConfig config) {
+  AppMessage? _check(CoreKind kind, VpnConfig config) {
     if (!available.contains(kind)) return unavailableReason;
     if (settings.disabledCores.contains(kind)) return disabledReason;
     final backend = backendFor(kind);

@@ -1,5 +1,6 @@
 package com.teapodstream.teapodstream
 
+import com.teapodstream.teapodstream.core.CoreKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -87,5 +88,13 @@ class SessionSnapshotTest {
         for (state in listOf(SessionState.CONNECTING, SessionState.RECONNECTING, SessionState.CONNECTED, SessionState.DISCONNECTING)) {
             assertFalse(state.wire, serviceIdle(state, tunHeld = false, queueBusy = false))
         }
+    }
+
+    @Test
+    fun `the session's core stays through its states and its stop`() {
+        val rust = SessionSnapshot.connected(7, 2080, "su", "sp", 1, core = CoreKind.RUST)
+        assertEquals(CoreKind.RUST, rust.moved(SessionState.RECONNECTING).core)
+        assertEquals(CoreKind.RUST, rust.moved(SessionState.DISCONNECTING).moved(SessionState.DISCONNECTED).core)
+        assertEquals(CoreKind.BOX, rust.moved(SessionState.CONNECTING, core = CoreKind.BOX).core)
     }
 }

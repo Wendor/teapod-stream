@@ -51,7 +51,7 @@ internal class VpnChannelHandler(
                 )
             )
         },
-        "getTunnelDiag" to { _, result -> result.success(VpnCores.active.diagnostics()) },
+        "getTunnelDiag" to { _, result -> result.success(VpnCores.get(XrayVpnService.snapshot.core).diagnostics()) },
         "ping" to { call, result ->
             val address = call.argument<String>("address") ?: ""
             val port = call.argument<Int>("port") ?: 443

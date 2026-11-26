@@ -8,7 +8,8 @@ import 'package:share_plus/share_plus.dart';
 import '../../core/models/profile.dart';
 import '../../core/models/profile_bundle.dart';
 import '../../core/services/deeplink_router.dart';
-import '../../core/services/tunnel_socks.dart';
+import '../../core/models/app_message.dart';
+import '../../core/services/bundle_loader.dart';
 import '../../providers/profile_provider.dart';
 import '../../providers/vpn_provider.dart';
 import 'dart:convert';
@@ -290,7 +291,7 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
             onPressed: () async {
               var loading = false;
 
-              final parseFuture = _parseProfileInput(ctrl.text, ref.read(tunnelSocksProvider));
+              final loadFuture = ref.read(bundleLoaderProvider).profileInput(ctrl.text);
 
               if (DeeplinkRouter.parse(ctrl.text.trim())?.source == DeeplinkSource.url) {
                 loading = true;
@@ -301,33 +302,33 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
                 );
               }
 
-              final (result, error, sourceUrl) = await parseFuture;
+              final load = await loadFuture;
 
               if (loading && ctx.mounted) Navigator.pop(ctx);
               if (!ctx.mounted) return;
 
-              if (result == null) {
+              if (load is! ProfileLoaded) {
+                final reason = load is BundleFailed ? load.reason : const AppMessage(MessageCode.bundleFetchFailed);
                 ScaffoldMessenger.of(ctx).showSnackBar(
                   SnackBar(
-                    content: Text(
-                      error.isNotEmpty ? error : context.l10n.profilesInvalidFormat,
-                      style: AppTheme.mono(size: 12, color: t.bg),
-                    ),
+                    content: Text(reason.localize(context.l10n), style: AppTheme.mono(size: 12, color: t.bg)),
                     backgroundColor: t.danger,
                     duration: const Duration(seconds: 2),
                   ),
                 );
                 return;
               }
-              final review = await ref.read(profileProvider.notifier).reviewImport(result);
+              final review = await ref.read(profileProvider.notifier).reviewImport(load.bundle);
               if (!ctx.mounted || !await confirmImportReview(ctx, review) || !ctx.mounted) return;
               Navigator.pop(ctx);
-              // Taken before the import: the screen (and its ref) may be gone when it ends.
-              final vpn = ref.read(vpnProvider.notifier);
-              final id = await ref
-                  .read(profileProvider.notifier)
-                  .importBundle(result, makeReadonly: makeReadonly, sourceUrl: sourceUrl);
-              if (switchTo && id != null) await vpn.switchProfile(id);
+              await ref
+                  .read(vpnProvider.notifier)
+                  .importProfile(
+                    load.bundle,
+                    makeReadonly: makeReadonly,
+                    sourceUrl: load.sourceUrl,
+                    switchTo: switchTo,
+                  );
             },
             child: Text(context.l10n.commonImport, style: AppTheme.mono(size: 11, color: t.accent)),
           ),
@@ -526,28 +527,28 @@ Future<void> _refreshProfile(BuildContext context, WidgetRef ref, Profile profil
     barrierDismissible: false,
     builder: (_) => const Center(child: CircularProgressIndicator()),
   );
-  var declined = false;
-  final result = await ref
+  final outcome = await ref
       .read(profileProvider.notifier)
       .refreshProfile(
         profile.id,
         profile.sourceUrl!,
         confirm: (review) async {
           closeSpinner();
-          if (!context.mounted) return false;
-          declined = !await confirmImportReview(context, review);
-          return !declined;
+          return context.mounted && await confirmImportReview(context, review);
         },
       );
   closeSpinner();
-  if (!context.mounted || declined) return;
+  if (!context.mounted) return;
+  final (text, failed) = switch (outcome) {
+    ProfileRefreshed() => (context.l10n.profilesUpdated(profile.name), false),
+    ProfileRefreshDeclined() => (null, false),
+    ProfileRefreshFailed(:final reason) => (reason.localize(context.l10n), true),
+  };
+  if (text == null) return;
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
-      content: Text(
-        result != null ? context.l10n.profilesUpdated(profile.name) : context.l10n.profilesUpdateError,
-        style: AppTheme.mono(size: 12, color: t.bg),
-      ),
-      backgroundColor: result != null ? t.accent : t.danger,
+      content: Text(text, style: AppTheme.mono(size: 12, color: t.bg)),
+      backgroundColor: failed ? t.danger : t.accent,
       duration: const Duration(seconds: 2),
     ),
   );
@@ -819,28 +820,5 @@ class _CheckBox extends StatelessWidget {
       ),
       child: value ? Icon(Icons.check, size: 10, color: t.bg) : null,
     );
-  }
-}
-
-Future<(ProfileBundle?, String, String?)> _parseProfileInput(String input, TunnelSocks? socks) async {
-  try {
-    final trimmed = input.trim();
-    final deeplinkResult = DeeplinkRouter.parse(trimmed);
-    if (deeplinkResult != null && deeplinkResult.type == DeeplinkType.profile) {
-      if (deeplinkResult.source == DeeplinkSource.data) {
-        return (deeplinkResult.profileBundle, '', deeplinkResult.effectiveSourceUrl);
-      }
-      if (deeplinkResult.source == DeeplinkSource.url) {
-        final fetched = await DeeplinkRouter.fetchFromUrl(deeplinkResult, socks: socks);
-        if (fetched is ProfileBundle) return (fetched, '', deeplinkResult.effectiveSourceUrl);
-        return (null, L10n.current.deeplinkFetchFailed, null);
-      }
-    }
-    final json = jsonDecode(trimmed) as Map<String, dynamic>;
-    return (ProfileBundle.fromJson(json), '', null);
-  } on FormatException catch (e) {
-    return (null, 'JSON: ${e.message}', null);
-  } catch (e) {
-    return (null, '$e', null);
   }
 }

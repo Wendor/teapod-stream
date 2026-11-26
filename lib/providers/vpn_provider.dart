@@ -9,6 +9,7 @@ import '../core/models/vpn_config.dart';
 import '../core/models/connection_fingerprint.dart';
 import '../core/models/core_kind.dart';
 import '../core/models/vpn_log_entry.dart';
+import '../core/models/profile_bundle.dart';
 import '../core/services/log_service.dart';
 import '../core/models/app_settings.dart';
 import '../core/services/tunnel_socks.dart';
@@ -581,14 +582,29 @@ class VpnNotifier extends Notifier<VpnState2> {
     return run;
   }
 
-  /// Runs a profile switch ([body] returns false — nothing switched), then makes the VPN follow the
-  /// final state: a profile no core runs disconnects (as a core change does), a live tunnel is
-  /// rebuilt if stale, a core change suppressed meanwhile is handled, an idle VPN saves the quick-connect parameters.
   /// Switches to profile [id]; the VPN follows once its settings and server are in place, also when restoring the
   /// server failed: the profile is already switched, and a retry can't — it is active.
   Future<void> switchProfile(String id) =>
       duringProfileSwitch(() => ref.read(profileProvider.notifier).switchProfile(id));
 
+  /// Adds [bundle]'s profile and its connections (`ProfileNotifier.importBundle`), then switches to it when
+  /// [switchTo]; returns its id.
+  Future<String?> importProfile(
+    ProfileBundle bundle, {
+    bool makeReadonly = false,
+    String? sourceUrl,
+    bool switchTo = true,
+  }) async {
+    final id = await ref
+        .read(profileProvider.notifier)
+        .importBundle(bundle, makeReadonly: makeReadonly, sourceUrl: sourceUrl);
+    if (switchTo && id != null) await switchProfile(id);
+    return id;
+  }
+
+  /// Runs a profile switch ([body] returns false — nothing switched), then makes the VPN follow the
+  /// final state: a profile no core runs disconnects (as a core change does), a live tunnel is
+  /// rebuilt if stale, a core change suppressed meanwhile is handled, an idle VPN saves the quick-connect parameters.
   Future<void> duringProfileSwitch(Future<bool> Function() body) => _queued(() => _profileSwitch(body));
 
   Future<void> _profileSwitch(Future<bool> Function() body) async {

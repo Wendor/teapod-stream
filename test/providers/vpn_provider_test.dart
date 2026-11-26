@@ -22,6 +22,7 @@ import 'package:teapodstream/providers/geo_provider.dart';
 import 'package:teapodstream/core/models/pinned_ref.dart';
 import 'package:teapodstream/core/services/profile_storage_service.dart';
 import 'package:teapodstream/core/models/profile.dart';
+import 'package:teapodstream/core/models/profile_bundle.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/l10n/l10n.dart';
 import 'package:teapodstream/core/models/vpn_log_entry.dart';
@@ -551,6 +552,24 @@ void main() {
       expect(stats().uploadBytes, 10);
       expectReason();
       c.read(vpnStatsProvider.notifier).pause();
+    });
+
+    test('importProfile adds the profile and switches to it unless asked not to', () async {
+      await connected();
+      await c.read(profileProvider.future);
+      final bundle = ProfileBundle(
+        exportedAt: DateTime(2026),
+        profile: Profile(id: 'x', name: 'Imported', settings: _settings, createdAt: DateTime(2026)),
+      );
+      final kept = c.read(profileProvider).value!.activeProfileId;
+      final quiet = await c.read(vpnProvider.notifier).importProfile(bundle, switchTo: false, sourceUrl: 'https://s');
+      expect(c.read(profileProvider).value!.activeProfileId, kept);
+      final p = c.read(profileProvider).value!.profiles.singleWhere((p) => p.id == quiet);
+      expect((p.name, p.sourceUrl, p.readonly), ('Imported', 'https://s', false));
+
+      final id = await c.read(vpnProvider.notifier).importProfile(bundle, makeReadonly: true);
+      expect(c.read(profileProvider).value!.activeProfileId, id);
+      expect(c.read(profileProvider).value!.activeProfile!.readonly, isTrue);
     });
 
     test('profile switch reconnects only when the server or settings change', () async {

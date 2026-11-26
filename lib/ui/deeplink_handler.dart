@@ -1,6 +1,7 @@
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/services/bundle_loader.dart';
 import '../core/services/deeplink_router.dart';
 import '../core/models/profile_bundle.dart';
 import '../core/models/connections_bundle.dart';
@@ -23,29 +24,24 @@ class DeeplinkHandler {
     final parsed = DeeplinkRouter.parse(uri);
     if (parsed == null) return;
 
-    Object? bundle;
-    final sourceUrl = parsed.effectiveSourceUrl;
-
-    if (parsed.source == DeeplinkSource.data) {
-      bundle = parsed.type == DeeplinkType.profile ? parsed.profileBundle : parsed.connectionsBundle;
-    } else {
+    if (parsed.source == DeeplinkSource.url) {
       // Any site or app can open the link: https only and only after the user agrees.
       final url = Uri.tryParse(parsed.urlValue ?? '');
       if (url == null || url.scheme != 'https' || url.host.isEmpty) {
         return _showError(context.l10n.deeplinkHttpsOnly);
       }
       if (!await _confirmFetch(url.host)) return;
-      bundle = await DeeplinkRouter.fetchFromUrl(parsed, socks: ref.read(tunnelSocksProvider));
     }
-
+    final load = await ref.read(bundleLoaderProvider).load(parsed);
     if (!context.mounted) return;
-    if (bundle == null) return _showError(context.l10n.deeplinkFetchFailed);
 
-    switch (parsed.type) {
-      case DeeplinkType.profile:
-        await _showProfileImportDialog(bundle as ProfileBundle, sourceUrl: sourceUrl);
-      case DeeplinkType.connections:
-        await _showConnectionsImportDialog(bundle as ConnectionsBundle);
+    switch (load) {
+      case ProfileLoaded(:final bundle, :final sourceUrl):
+        await _showProfileImportDialog(bundle, sourceUrl: sourceUrl);
+      case ConnectionsLoaded(:final bundle):
+        await _showConnectionsImportDialog(bundle);
+      case BundleFailed(:final reason):
+        _showError(reason.localize(context.l10n));
     }
   }
 
@@ -74,10 +70,7 @@ class DeeplinkHandler {
       ],
       review: review,
       import: () async {
-        // Taken before the import: the widget (and its ref) may be gone when it ends.
-        final vpn = ref.read(vpnProvider.notifier);
-        final id = await ref.read(profileProvider.notifier).importBundle(bundle, sourceUrl: sourceUrl);
-        if (id != null) await vpn.switchProfile(id);
+        await ref.read(vpnProvider.notifier).importProfile(bundle, sourceUrl: sourceUrl);
         return context.mounted ? context.l10n.deeplinkProfileImported(bundle.profile.name) : null;
       },
     );

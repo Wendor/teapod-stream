@@ -18,6 +18,7 @@ import 'package:teapodstream/core/services/config_storage_service.dart';
 import 'package:teapodstream/core/models/subscription.dart';
 import 'package:teapodstream/core/services/profile_storage_service.dart';
 import 'package:teapodstream/core/services/settings_service.dart';
+import 'package:teapodstream/core/models/app_message.dart';
 import 'package:teapodstream/core/models/app_settings.dart';
 import 'package:teapodstream/providers/config_provider.dart';
 import 'package:teapodstream/providers/profile_provider.dart';
@@ -415,7 +416,7 @@ void main() {
       await requested.future;
       await n().switchProfile('b');
       respond.complete();
-      expect(await refreshing, 'a');
+      expect(await refreshing, isA<ProfileRefreshed>());
 
       expect(s().activeProfileId, 'b');
       final stored = await profiles.loadProfiles();
@@ -581,7 +582,12 @@ void main() {
     tearDown(() => server.close());
 
     /// Every request goes to [server], which answers [body] with [status].
-    Future<String?> refresh(String id, String body, {int status = 200, String url = 'https://src/profile.json'}) {
+    Future<ProfileRefresh> refresh(
+      String id,
+      String body, {
+      int status = 200,
+      String url = 'https://src/profile.json',
+    }) {
       server.serve(body, status: status);
       return HttpOverrides.runWithHttpOverrides(() => n().refreshProfile(id, url), RedirectHttpOverrides(server.port));
     }
@@ -592,7 +598,7 @@ void main() {
         activeId: 'p',
       );
       final r = await refresh('p', jsonEncode(_bundle().toJson()));
-      expect(r, 'p');
+      expect(r, isA<ProfileRefreshed>());
       final p = s().activeProfile!;
       expect(p.name, 'Remote');
       expect(p.lastFetchedAt, isNotNull);
@@ -617,11 +623,15 @@ void main() {
       expect((await settings()).mtu, 1500);
     });
 
-    test('bad response or unknown profile gives null', () async {
+    test('a bad response or an unknown profile fails with the reason', () async {
       await boot();
-      expect(await refresh('default', '', status: 500), isNull);
-      expect(await refresh('default', 'not json'), isNull);
-      expect(await refresh('ghost', jsonEncode(_bundle().toJson())), isNull);
+      AppMessage? failed(ProfileRefresh r) => r is ProfileRefreshFailed ? r.reason : null;
+      expect(failed(await refresh('default', '', status: 500)), const AppMessage(MessageCode.bundleFetchFailed));
+      expect(failed(await refresh('default', 'not json'))?.code, MessageCode.bundleInvalid);
+      expect(
+        failed(await refresh('ghost', jsonEncode(_bundle().toJson()))),
+        const AppMessage(MessageCode.profileUpdateError),
+      );
       expect(s().activeProfile!.name, 'Default');
     });
 
@@ -631,7 +641,7 @@ void main() {
         stored: [profile('p', settings: mine)],
         activeId: 'p',
       );
-      expect(await refresh('p', jsonEncode(_bundle().toJson())), 'p');
+      expect(await refresh('p', jsonEncode(_bundle().toJson())), isA<ProfileRefreshed>());
       expect(s().activeProfile!.settings.geoipUrl, 'https://mine/geoip.dat');
       expect((await settings()).geositeUrl, 'https://mine/geosite.dat');
     });
@@ -642,7 +652,7 @@ void main() {
         activeId: 'p',
       );
       final asked = <ImportReview>[];
-      Future<String?> refreshWith(String body, bool answer) {
+      Future<ProfileRefresh> refreshWith(String body, bool answer) {
         server.serve(body);
         return HttpOverrides.runWithHttpOverrides(
           () => n().refreshProfile(
@@ -657,20 +667,26 @@ void main() {
         );
       }
 
-      expect(await refreshWith(jsonEncode(_bundle().toJson()), false), isNull);
+      expect(await refreshWith(jsonEncode(_bundle().toJson()), false), isA<ProfileRefreshDeclined>());
       expect(asked.single.changes, [TrafficSetting.killSwitch]);
       expect(s().activeProfile!.name, 'p');
       expect((await settings()).killSwitchEnabled, isFalse);
 
       asked.clear();
-      expect(await refreshWith(jsonEncode(_bundle(settings: _local.copyWith(mtu: 1280)).toJson()), false), 'p');
+      expect(
+        await refreshWith(jsonEncode(_bundle(settings: _local.copyWith(mtu: 1280)).toJson()), false),
+        isA<ProfileRefreshed>(),
+      );
       expect(asked, isEmpty);
       expect((await settings()).mtu, 1280);
     });
 
     test('a plain http source is not fetched', () async {
       await boot();
-      expect(await refresh('default', jsonEncode(_bundle().toJson()), url: 'http://src/profile.json'), isNull);
+      expect(
+        await refresh('default', jsonEncode(_bundle().toJson()), url: 'http://src/profile.json'),
+        isA<ProfileRefreshFailed>(),
+      );
       expect(server.paths, isEmpty);
       expect(s().activeProfile!.name, 'Default');
     });

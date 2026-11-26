@@ -17,6 +17,9 @@ enum MessageCode {
   coreUnavailable,
   coreDisabled,
   coreNoneAvailable,
+  bundleFetchFailed,
+  bundleInvalid,
+  profileUpdateError,
 }
 
 /// A message in state (an error, a refusal), localized only where it is shown: a [code] with its [arg] that the app
@@ -51,6 +54,9 @@ final class AppMessage implements Exception {
     MessageCode.coreUnavailable => l.coreUnavailable,
     MessageCode.coreDisabled => l.coreDisabled,
     MessageCode.coreNoneAvailable => l.coreNoneAvailable,
+    MessageCode.bundleFetchFailed => l.deeplinkFetchFailed,
+    MessageCode.bundleInvalid => l.bundleInvalid(arg!),
+    MessageCode.profileUpdateError => l.profilesUpdateError,
   };
 
   /// For logs and `'$e'` in a catch: no context there.

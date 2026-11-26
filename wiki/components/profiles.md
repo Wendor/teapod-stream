@@ -31,9 +31,9 @@ outgoing selection through the configs queue (`ConfigNotifier.currentSelection`)
 |---|---|
 | `switchProfile(id)` | remembers the outgoing profile's server, makes the profile active (its settings apply), then restores its server; false — nothing to switch. The app switches through `VpnNotifier.switchProfile(id)`, which runs it inside `duringProfileSwitch`: the VPN follows the final state (a live tunnel is rebuilt if the server or connection settings changed), also when restoring the server failed. (`ProfileNotifier` can't read `vpnProvider`: that one depends on the settings, which derive from profiles.) |
 | `updateActiveSettings(change, {profileId})` | the only writer of the settings in force (`SettingsNotifier` calls it): queued, refused for a read-only profile, mirrors the native flags ([settings](settings_provider.md)) |
-| `refreshProfile(id, url, {confirm})` | downloads the profile again; if it changes traffic settings or adds subscriptions, `confirm` is asked first (declined — nothing applied); applies settings, imports its connections |
+| `refreshProfile(id, url, {confirm})` | downloads the profile again (`BundleLoader.fetch`); if it changes traffic settings or adds subscriptions, `confirm` is asked first; applies settings, imports its connections. Returns a `ProfileRefresh`: `ProfileRefreshed`, `ProfileRefreshDeclined` (nothing applied) or `ProfileRefreshFailed(reason)` — the download's reason, or `profileUpdateError` when the profile is gone |
 | `reviewImport(bundle)` | the `ImportReview` shown before `importBundle` (below) |
-| `importBundle(bundle, …)` | adds a profile and imports its connections through `ConfigNotifier.importBundle` (deduplicated by subscription URL / server); returns its id — switching to it is the caller's (`VpnNotifier.switchProfile`) |
+| `importBundle(bundle, …)` | adds a profile and imports its connections through `ConfigNotifier.importBundle` (deduplicated by subscription URL / server); returns its id. The UI imports through `VpnNotifier.importProfile(bundle, {makeReadonly, sourceUrl, switchTo})`, which calls it and then switches to the profile (`switchTo`, default true) |
 | `exportBundle` | a `ProfileBundle` for sharing |
 
 **Security fields stay local** (`_keepLocalSecurity`): an imported or refreshed profile never sets the SOCKS port and
@@ -70,9 +70,15 @@ encoded as base64url without padding. `ConnectionsBundle` has a full form (confi
 | `teapod://import/connections?data=<base64url>` | connections |
 
 Flow: `MainActivity` → `deeplink` event on the shared event stream → `DeeplinkHandler.handleUri` →
-`DeeplinkRouter.parse` → confirmation dialog → import. A `url=` link is accepted only over https and is downloaded
-**after** a dialog that shows the host. The download (`DeeplinkRouter.fetchBundle`, also used by `refreshProfile`)
-goes through [AppHttp](services.md#apphttp): https only including redirects, at most 1 MB, through the tunnel when
+`DeeplinkRouter.parse` → `BundleLoader.load` → confirmation dialog → import. A `url=` link is accepted only over
+https and is downloaded **after** a dialog that shows the host.
+
+`BundleLoader` (`lib/core/services/bundle_loader.dart`, `bundleLoaderProvider` in `profile_provider.dart`, which reads
+the tunnel SOCKS at each download) returns a `BundleLoad`: `ProfileLoaded(bundle, sourceUrl)`,
+`ConnectionsLoaded(bundle)` or `BundleFailed(reason)` — `bundleFetchFailed` (network, non-200, refused URL, over the
+limit) or `bundleInvalid` with the parser's message. `load(link)` returns an inline bundle or downloads the linked
+one; `profileInput(text)` takes what is pasted into the profile import (a profile link or a bundle's JSON);
+`fetch(url, type)` downloads, also for `refreshProfile`. The download goes through [AppHttp](services.md#apphttp): https only including redirects, at most 1 MB, through the tunnel when
 connected and directly when the tunnel fails; without a tunnel it goes out from the real IP.
 
 ## Related

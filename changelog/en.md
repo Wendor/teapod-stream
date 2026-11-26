@@ -14,6 +14,7 @@
 - Exported logs mask addresses, links and ids
 - Geodata: geosite codes missing from the file are skipped; xray-rust starts again after a geodata update (#275)
 - The battery-optimization request is asked once and from settings; after a disconnect the service and its notification go away
+- A great many stability fixes and refactoring: the VPN session handling, heartbeat, settings and subscription storage were reworked and covered by tests, including integration tests on a device
 
 ## 1.8.4
 

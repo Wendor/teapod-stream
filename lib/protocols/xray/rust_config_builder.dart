@@ -8,7 +8,6 @@ import '../../core/models/app_message.dart';
 import '../../core/models/routing_settings.dart';
 import '../../core/models/vpn_config.dart';
 import '../../core/models/xray_tuning.dart';
-import 'vless_parser.dart';
 import 'xray_config_builder.dart';
 import '../../core/services/geosite_index.dart';
 
@@ -40,7 +39,6 @@ class RustConfigBuilder {
     VpnTransport.xhttp,
     VpnTransport.splithttp,
   };
-  static const _urlTransports = {'tcp', 'raw', 'ws', 'websocket', 'httpupgrade', 'grpc', 'xhttp', 'splithttp'};
 
   static bool supports(VpnConfig config) => unsupportedReason(config) == null;
 
@@ -54,7 +52,7 @@ class RustConfigBuilder {
     if (config.finalmask?.isNotEmpty ?? false) {
       return AppMessage.l10n((l) => l.rustNoFinalmask);
     }
-    if (config.protocol != VpnProtocol.hysteria2 && (VlessParser.linkMux(config) ?? false)) {
+    if (config.protocol != VpnProtocol.hysteria2 && (config.mux ?? false)) {
       return AppMessage.l10n((l) => l.rustLinkMux);
     }
     return switch (config.protocol) {
@@ -74,8 +72,7 @@ class RustConfigBuilder {
     if (!_isUuid(config.uuid)) {
       return AppMessage.l10n((l) => l.rustVlessUuid);
     }
-    final params = VlessParser.linkParams(config);
-    final carrier = _carrierReason(config, declaredTransport: params['type'], headerType: params['headerType']);
+    final carrier = _carrierReason(config);
     if (carrier != null) return carrier;
     if (config.security != VpnSecurity.tls && config.security != VpnSecurity.reality) {
       return AppMessage.l10n((l) => l.rustVlessSecurity);
@@ -98,8 +95,7 @@ class RustConfigBuilder {
     if (password.isEmpty || utf8.encode(password).length > 4096) {
       return AppMessage.l10n((l) => l.rustTrojanPassword);
     }
-    final params = VlessParser.linkParams(config);
-    final carrier = _carrierReason(config, declaredTransport: params['type'], headerType: params['headerType']);
+    final carrier = _carrierReason(config);
     if (carrier != null) return carrier;
     // xray-rust rejects Trojan without TLS/Reality for a public server.
     if (config.security != VpnSecurity.tls && config.security != VpnSecurity.reality) {
@@ -115,20 +111,7 @@ class RustConfigBuilder {
     // aid from the link isn't applied, as in Go: alterId isn't written to the config,
     // the client always speaks VMess AEAD, and an Xray/v2fly 4.28+ server accepts
     // AEAD with any alterId of its own.
-    final json = VlessParser.vmessJson(config);
-    // The parser treats anything but an exact tls as no security: reality from
-    // the link would silently turn into VMess without TLS.
-    final rawTls = json['tls']?.toString() ?? '';
-    final tls = rawTls.trim().toLowerCase();
-    if (tls.isNotEmpty && tls != 'tls' && tls != 'none') {
-      return AppMessage.l10n((l) => l.rustVmessSecurity(tls));
-    }
-    // "TLS" or " tls" isn't recognized by the parser either: the profile would hit the TLS port
-    // with bare VMess.
-    if (tls == 'tls' && config.security != VpnSecurity.tls) {
-      return AppMessage.l10n((l) => l.rustVmessTls(rawTls));
-    }
-    return _carrierReason(config, declaredTransport: json['net']?.toString(), headerType: json['type']?.toString());
+    return _carrierReason(config);
   }
 
   static AppMessage? _shadowsocksUnsupportedReason(VpnConfig config) {
@@ -138,7 +121,7 @@ class RustConfigBuilder {
     }
     final keys = _ss2022KeyReason(method, config.password ?? '');
     if (keys != null) return keys;
-    if (VlessParser.linkParams(config)['plugin']?.trim().isNotEmpty ?? false) {
+    if (config.plugin != null) {
       return AppMessage.l10n((l) => l.rustSsPlugin);
     }
     if (config.ssPrefix?.isNotEmpty ?? false) {
@@ -149,15 +132,13 @@ class RustConfigBuilder {
 
   /// Transport, TCP header and outer TLS/REALITY rules shared by the protocols
   /// on xray-rust's stream carriers (VLESS, Trojan, VMess).
-  static AppMessage? _carrierReason(VpnConfig config, {String? declaredTransport, String? headerType}) {
-    final declared = declaredTransport?.trim().toLowerCase() ?? '';
-    if (!_transports.contains(config.transport) || (declared.isNotEmpty && !_urlTransports.contains(declared))) {
+  static AppMessage? _carrierReason(VpnConfig config) {
+    if (!_transports.contains(config.transport)) {
       return AppMessage.l10n((l) => l.rustTransport);
     }
-    // The parser doesn't read headerType: without the check TCP with HTTP camouflage would silently
-    // go out as bare TCP. xray-rust accepts only header.type none.
-    final header = headerType?.trim().toLowerCase() ?? '';
-    if (config.transport == VpnTransport.tcp && header.isNotEmpty && header != 'none') {
+    // xray-rust accepts only header.type none: TCP with HTTP camouflage would go out as bare TCP.
+    final header = config.headerType;
+    if (config.transport == VpnTransport.tcp && header != null) {
       return AppMessage.l10n((l) => l.rustTcpHeader(header));
     }
     if (config.security == VpnSecurity.reality &&
@@ -173,14 +154,11 @@ class RustConfigBuilder {
     return null;
   }
 
-  /// The link's AEAD `scy` (v2 JSON field), which `vmess::Cipher::parse`
+  /// The link's AEAD `scy` ([VpnConfig.method]), which `vmess::Cipher::parse`
   /// accepts. Go always sends `auto`, and the server reads the body cipher
   /// from the request header, so any other value (`none`, `zero`, CFB, or
   /// none given) is sent as `auto` too.
-  static String _vmessCipher(Map<String, dynamic> json) {
-    final scy = json['scy']?.toString().trim().toLowerCase() ?? '';
-    return vmessCiphers.contains(scy) ? scy : 'auto';
-  }
+  static String _vmessCipher(String? scy) => vmessCiphers.contains(scy) ? scy! : 'auto';
 
   /// `shadowsocks2022::Method::new`: colon-separated padded standard base64
   /// keys, each at least the cipher's key length (longer keys are hashed),
@@ -261,8 +239,8 @@ class RustConfigBuilder {
   static AppMessage? _hysteria2UnsupportedReason(VpnConfig config) {
     // xray-rust has Salamander only: Gecko and unknown types are refused here, and an empty
     // Salamander password Go would silently drop and connect without obfuscation.
-    final obfs = VlessParser.linkParams(config)['obfs']?.trim() ?? '';
-    if (obfs.isNotEmpty && obfs != 'none' && obfs != 'salamander') {
+    final obfs = config.obfs;
+    if (obfs != null && obfs != 'salamander') {
       return AppMessage.l10n((l) => l.rustHy2Obfs(obfs));
     }
     final salamander = config.obfsPassword ?? '';
@@ -387,7 +365,7 @@ class RustConfigBuilder {
     }
     if (config.protocol == VpnProtocol.vmess) {
       final user = proxy['settings']['vnext'][0]['users'][0] as Map;
-      user['security'] = _vmessCipher(VlessParser.vmessJson(config));
+      user['security'] = _vmessCipher(config.method);
     }
     _legacyUdpHop(stream);
     if (fragment != null || noise != null) {

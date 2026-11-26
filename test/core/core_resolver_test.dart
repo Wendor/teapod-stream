@@ -9,6 +9,7 @@ import 'package:teapodstream/core/models/app_settings.dart';
 import 'package:teapodstream/core/models/routing_settings.dart';
 import 'package:teapodstream/core/services/geosite_index.dart';
 import 'package:teapodstream/l10n/l10n.dart';
+import 'package:teapodstream/protocols/xray/vless_parser.dart';
 import 'package:teapodstream/protocols/xray/xray_rust_backend.dart';
 import 'package:teapodstream/providers/core_provider.dart';
 
@@ -106,6 +107,17 @@ void main() {
     final r = _resolver(disabled: {CoreKind.singBox}).resolve(_cfg(protocol: VpnProtocol.wireguard, settings: _wg));
     expect(r.backend, isNull);
     expect('${r.reason}', '${VpnProtocol.wireguard.singBoxOnlyReason}');
+  });
+
+  test('a stored link the parser now refuses runs on no core', () {
+    final refused = VpnConfig.fromJson({
+      ..._cfg().toJson()..remove('linkFields'),
+      'rawUri': 'vless://u@h:443?type=kcp#n',
+    });
+    final r = _resolver().resolve(VlessParser.withLinkFields(refused));
+    expect(r.backend, isNull);
+    expect('${r.reason}', contains('"kcp"'));
+    expect(r.verdicts.map((v) => '${v.reason}').toSet(), {'${r.reason}'});
   });
 
   test('usable and primary follow order, switches and device', () {

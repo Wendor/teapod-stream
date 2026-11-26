@@ -365,8 +365,6 @@
   "rustTrojanPassword": "Пароль Trojan должен быть непустым и не длиннее 4096 байт.",
   "rustTrojanSecurity": "Trojan в ядре xray-rust работает только с TLS или Reality.",
   "rustVmessId": "id VMess должен быть настоящим UUID: Rust-ядро не принимает произвольные строки.",
-  "rustVmessSecurity": "VMess с security={security} из ссылки ядро xray-rust не поддерживает: доступны TLS и транспорт без шифрования.",
-  "rustVmessTls": "VMess-ссылка задаёт tls=«{value}»: парсер понимает только точное «tls», и профиль ушёл бы без TLS. Исправь значение в ссылке.",
   "rustSsMethod": "Rust-ядро поддерживает только Shadowsocks 2022 (2022-blake3-aes-128-gcm, 2022-blake3-aes-256-gcm, 2022-blake3-chacha20-poly1305). Метод «{method}» не поддерживается.",
   "rustSsPlugin": "Плагины Shadowsocks (SIP003, plugin=…) ядро xray-rust не поддерживает.",
   "rustSsPrefix": "Префикс Outline (prefix=…) для Shadowsocks ядро xray-rust не поддерживает.",

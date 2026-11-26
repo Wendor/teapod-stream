@@ -5,7 +5,6 @@ import '../../core/models/app_message.dart';
 import '../../core/models/protocol_settings.dart';
 import '../../core/models/vpn_config.dart';
 import '../../core/models/vpn_log_entry.dart';
-import '../xray/vless_parser.dart';
 import 'singbox_outbound.dart';
 import 'singbox_route.dart';
 
@@ -82,7 +81,7 @@ abstract final class SingBoxConfigBuilder {
     if ((config.xhttpExtra?.isNotEmpty ?? false) || (config.finalmask?.isNotEmpty ?? false)) {
       return AppMessage.l10n((l) => l.singboxNoXrayExtra);
     }
-    if (config.protocol != VpnProtocol.hysteria2 && (VlessParser.linkMux(config) ?? false)) {
+    if (config.protocol != VpnProtocol.hysteria2 && (config.mux ?? false)) {
       return AppMessage.l10n((l) => l.singboxLinkMux);
     }
     if (config.pinSHA256?.trim().isNotEmpty ?? false) {
@@ -95,7 +94,7 @@ abstract final class SingBoxConfigBuilder {
         final flow = config.flow?.trim() ?? '';
         if (flow.isNotEmpty && flow != 'xtls-rprx-vision') return AppMessage.l10n((l) => l.singboxFlow(flow));
       case VpnProtocol.shadowsocks:
-        if (VlessParser.linkParams(config)['plugin']?.trim().isNotEmpty ?? false) {
+        if (config.plugin != null) {
           return AppMessage.l10n((l) => l.singboxNoSsPlugins);
         }
         final method = config.method ?? 'chacha20-ietf-poly1305';
@@ -112,15 +111,7 @@ abstract final class SingBoxConfigBuilder {
           }
         }
     }
-    if (_tcpHttpHeader(config)) return AppMessage.l10n((l) => l.singboxNoTcpHttp);
+    if (config.tcpHttpHeader) return AppMessage.l10n((l) => l.singboxNoTcpHttp);
     return null;
-  }
-
-  static bool _tcpHttpHeader(VpnConfig config) {
-    if (config.transport != VpnTransport.tcp || config.protocol == VpnProtocol.hysteria2) return false;
-    final type = config.protocol == VpnProtocol.vmess
-        ? VlessParser.vmessJson(config)['type']?.toString()
-        : VlessParser.linkParams(config)['headerType'];
-    return type?.trim().toLowerCase() == 'http';
   }
 }

@@ -54,7 +54,7 @@ class VpnConfig {
   final String? flow;
   final String? encryption; // for VLESS: "none"
   final String? alterId; // for VMess
-  final String? method; // for Shadowsocks
+  final String? method; // Shadowsocks cipher; VMess `scy`
   final String? password; // for Trojan/Shadowsocks
   final DateTime createdAt;
   final String? rawUri;
@@ -79,6 +79,37 @@ class VpnConfig {
 
   /// Core pinned to the profile; null — by the priority in settings.
   final CoreKind? core;
+
+  /// TCP header camouflage of the link (`headerType`, VMess `type`), lower case; null — none.
+  final String? headerType;
+
+  /// Shadowsocks SIP003 `plugin` of the link.
+  final String? plugin;
+
+  /// `mux=on|off` in the link: Mux for this server regardless of the global setting; null — not set.
+  final bool? mux;
+
+  /// Hysteria2 obfuscation with [obfsPassword]: `salamander` or `gecko`; null — none.
+  final String? obfs;
+
+  /// Gecko packet sizes `(min, max)`; null unless [obfs] is `gecko`.
+  final (int, int)? geckoPacketSize;
+
+  /// Stored before the link fields above were in the model: they are read again from [rawUri] when loaded. Stays
+  /// set while the parser refuses [rawUri], so the check repeats on every load.
+  final bool needsLinkFields;
+
+  /// Why the parser refuses [rawUri] (an unknown security, transport or obfuscation) of a config stored before it
+  /// did; not stored. Such a config doesn't connect: [validate] returns it, and no core takes it.
+  final AppMessage? linkRejection;
+
+  static const _linkProtocols = {
+    VpnProtocol.vless,
+    VpnProtocol.vmess,
+    VpnProtocol.trojan,
+    VpnProtocol.shadowsocks,
+    VpnProtocol.hysteria2,
+  };
 
   const VpnConfig({
     required this.id,
@@ -121,6 +152,13 @@ class VpnConfig {
     this.rawXrayConfig,
     this.protocolSettings,
     this.core,
+    this.headerType,
+    this.plugin,
+    this.mux,
+    this.obfs,
+    this.geckoPacketSize,
+    this.needsLinkFields = false,
+    this.linkRejection,
   });
 
   /// Protocol label in lists: AmneziaWG differs from WireGuard.
@@ -129,7 +167,11 @@ class VpnConfig {
     _ => protocol.shortTag,
   };
 
+  /// TCP with HTTP camouflage: without the header the server drops the connection.
+  bool get tcpHttpHeader => transport == VpnTransport.tcp && protocol != VpnProtocol.hysteria2 && headerType == 'http';
+
   AppMessage? validate() {
+    if (linkRejection != null) return linkRejection;
     if (rawXrayConfig != null) return null;
     if (protocol.hasProtocolSettings && protocolSettings?.type != protocol.name) {
       return AppMessage.l10n((l) => l.validateNoProtocolParams(protocol.label));
@@ -162,6 +204,7 @@ class VpnConfig {
     bool? allowInsecure,
     String? pinSHA256,
     String? rawUri,
+    AppMessage? linkRejection,
   }) {
     return VpnConfig(
       id: id ?? this.id,
@@ -204,6 +247,13 @@ class VpnConfig {
       rawXrayConfig: rawXrayConfig,
       protocolSettings: protocolSettings,
       core: clearCore ? null : (core ?? this.core),
+      headerType: headerType,
+      plugin: plugin,
+      mux: mux,
+      obfs: obfs,
+      geckoPacketSize: geckoPacketSize,
+      needsLinkFields: needsLinkFields,
+      linkRejection: linkRejection ?? this.linkRejection,
     );
   }
 
@@ -248,50 +298,72 @@ class VpnConfig {
     'rawXrayConfig': rawXrayConfig,
     'protocolSettings': ?protocolSettings?.toJson(),
     'core': ?core?.name,
+    'headerType': ?headerType,
+    'plugin': ?plugin,
+    'mux': ?mux,
+    'obfs': ?obfs,
+    'geckoPacketSize': ?switch (geckoPacketSize) {
+      (final min, final max) => [min, max],
+      null => null,
+    },
+    if (!needsLinkFields) 'linkFields': true,
   };
 
-  factory VpnConfig.fromJson(Map<String, dynamic> json) => VpnConfig(
-    id: json['id'] as String,
-    name: json['name'] as String,
-    protocol: VpnProtocol.values.firstWhere((e) => e.name == json['protocol'], orElse: () => VpnProtocol.vless),
-    address: json['address'] as String,
-    port: json['port'] as int,
-    uuid: json['uuid'] as String? ?? '',
-    security: VpnSecurity.values.firstWhere((e) => e.name == json['security'], orElse: () => VpnSecurity.none),
-    transport: VpnTransport.values.firstWhere((e) => e.name == json['transport'], orElse: () => VpnTransport.tcp),
-    sni: json['sni'] as String?,
-    wsPath: json['wsPath'] as String?,
-    wsHost: json['wsHost'] as String?,
-    grpcServiceName: json['grpcServiceName'] as String?,
-    fingerprint: json['fingerprint'] as String?,
-    publicKey: json['publicKey'] as String?,
-    shortId: json['shortId'] as String?,
-    spiderX: json['spiderX'] as String?,
-    postQuantumKey: json['postQuantumKey'] as String?,
-    flow: json['flow'] as String?,
-    encryption: json['encryption'] as String?,
-    alterId: json['alterId'] as String?,
-    method: json['method'] as String?,
-    password: json['password'] as String?,
-    createdAt: DateTime.parse(json['createdAt'] as String),
-    rawUri: json['rawUri'] as String?,
-    latencyMs: json['latencyMs'] as int?,
-    lastPingedAt: json['lastPingedAt'] != null ? DateTime.parse(json['lastPingedAt'] as String) : null,
-    subscriptionId: json['subscriptionId'] as String?,
-    ssPrefix: json['ssPrefix'] as String?,
-    obfsPassword: json['obfsPassword'] as String?,
-    hopPorts: json['hopPorts'] as String?,
-    allowInsecure: json['allowInsecure'] as bool? ?? false,
-    pinSHA256: json['pinSHA256'] as String?,
-    xhttpMode: json['xhttpMode'] as String?,
-    xhttpExtra: json['xhttpExtra'] as Map<String, dynamic>?,
-    finalmask: json['finalmask'] as Map<String, dynamic>?,
-    alpn: json['alpn'] as String?,
-    ech: json['ech'] as String?,
-    rawXrayConfig: json['rawXrayConfig'] as String?,
-    protocolSettings: ProtocolSettings.fromJson(json['protocolSettings'] as Map<String, dynamic>?),
-    core: CoreKind.tryName(json['core'] as String?),
-  );
+  factory VpnConfig.fromJson(Map<String, dynamic> json) {
+    final protocol = VpnProtocol.values.firstWhere((e) => e.name == json['protocol'], orElse: () => VpnProtocol.vless);
+    final rawUri = json['rawUri'] as String?;
+    final rawXrayConfig = json['rawXrayConfig'] as String?;
+    final gecko = (json['geckoPacketSize'] as List<dynamic>?)?.cast<int>();
+    return VpnConfig(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      protocol: protocol,
+      address: json['address'] as String,
+      port: json['port'] as int,
+      uuid: json['uuid'] as String? ?? '',
+      security: VpnSecurity.values.firstWhere((e) => e.name == json['security'], orElse: () => VpnSecurity.none),
+      transport: VpnTransport.values.firstWhere((e) => e.name == json['transport'], orElse: () => VpnTransport.tcp),
+      sni: json['sni'] as String?,
+      wsPath: json['wsPath'] as String?,
+      wsHost: json['wsHost'] as String?,
+      grpcServiceName: json['grpcServiceName'] as String?,
+      fingerprint: json['fingerprint'] as String?,
+      publicKey: json['publicKey'] as String?,
+      shortId: json['shortId'] as String?,
+      spiderX: json['spiderX'] as String?,
+      postQuantumKey: json['postQuantumKey'] as String?,
+      flow: json['flow'] as String?,
+      encryption: json['encryption'] as String?,
+      alterId: json['alterId'] as String?,
+      method: json['method'] as String?,
+      password: json['password'] as String?,
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      rawUri: rawUri,
+      latencyMs: json['latencyMs'] as int?,
+      lastPingedAt: json['lastPingedAt'] != null ? DateTime.parse(json['lastPingedAt'] as String) : null,
+      subscriptionId: json['subscriptionId'] as String?,
+      ssPrefix: json['ssPrefix'] as String?,
+      obfsPassword: json['obfsPassword'] as String?,
+      hopPorts: json['hopPorts'] as String?,
+      allowInsecure: json['allowInsecure'] as bool? ?? false,
+      pinSHA256: json['pinSHA256'] as String?,
+      xhttpMode: json['xhttpMode'] as String?,
+      xhttpExtra: json['xhttpExtra'] as Map<String, dynamic>?,
+      finalmask: json['finalmask'] as Map<String, dynamic>?,
+      alpn: json['alpn'] as String?,
+      ech: json['ech'] as String?,
+      rawXrayConfig: rawXrayConfig,
+      protocolSettings: ProtocolSettings.fromJson(json['protocolSettings'] as Map<String, dynamic>?),
+      core: CoreKind.tryName(json['core'] as String?),
+      headerType: json['headerType'] as String?,
+      plugin: json['plugin'] as String?,
+      mux: json['mux'] as bool?,
+      obfs: json['obfs'] as String?,
+      geckoPacketSize: gecko == null || gecko.length != 2 ? null : (gecko[0], gecko[1]),
+      needsLinkFields:
+          json['linkFields'] != true && rawUri != null && rawXrayConfig == null && _linkProtocols.contains(protocol),
+    );
+  }
 
   String toJsonString() => jsonEncode(toJson());
   factory VpnConfig.fromJsonString(String s) => VpnConfig.fromJson(jsonDecode(s) as Map<String, dynamic>);

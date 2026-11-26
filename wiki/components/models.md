@@ -17,9 +17,9 @@ One server. Fields by purpose:
 |---|---|
 | Identity | `id` (UUID; subscription configs get a new one on every refresh), `name`, `createdAt`, `subscriptionId`, `rawUri` (original link, for export and to detect edits) |
 | Endpoint | `protocol`, `address`, `port`, `hopPorts` (Hysteria2 port hopping) |
-| Credentials | `uuid` (VLESS/VMess), `password` (Trojan/SS/Hy2), `method` (SS), `encryption`, `alterId`, `flow` |
+| Credentials | `uuid` (VLESS/VMess), `password` (Trojan/SS/Hy2), `method` (SS cipher; VMess `scy`), `encryption`, `alterId`, `flow` |
 | Security | `security` (`none`/`tls`/`reality`), `sni`, `fingerprint`, `alpn`, `allowInsecure`, `ech`, Reality `publicKey`/`shortId`/`spiderX`/`postQuantumKey` |
-| Transport | `transport`, `wsPath`, `wsHost`, `grpcServiceName`, `xhttpMode`, `xhttpExtra`, `finalmask`, `obfsPassword` (Hy2 salamander / gecko), `ssPrefix` (Outline prefix, hex) |
+| Transport | `transport`, `wsPath`, `wsHost`, `grpcServiceName`, `xhttpMode`, `xhttpExtra`, `finalmask`, `obfsPassword` with `obfs` (Hy2 `salamander` / `gecko`) and `geckoPacketSize` (`(min, max)`), `headerType` (TCP header, lower case; `tcpHttpHeader` — TCP with HTTP camouflage), `mux` (`mux=on\|off` of the link), `plugin` (SS SIP003), `ssPrefix` (Outline prefix, hex) |
 | Managed | `rawXrayConfig` — a ready xray JSON from a managed subscription, merged instead of generated |
 | sing-box only | `protocolSettings` (below) |
 | Core | `core` — the pinned core, null = by priority ([vpn_provider](vpn_provider.md#choosing-the-core)) |
@@ -29,7 +29,15 @@ One server. Fields by purpose:
 `naive` (xray cores refuse them with `VpnProtocol.singBoxOnlyReason`). `VpnTransport`: `tcp`, `ws`, `grpc`, `http2`,
 `quic`, `xhttp`, `httpupgrade`, `splithttp`.
 
-`validate()` returns the first problem (empty address, port out of range, missing UUID/password, missing
+**Link fields.** The parser fills every link parameter the builders use; no builder reads `rawUri`. A config stored
+before `headerType`, `plugin`, `mux`, `obfs` and `geckoPacketSize` were fields has no `linkFields` key in its JSON
+(`needsLinkFields`): `VlessParser.withLinkFields` reads its link again when `ConfigNotifier` loads it or takes it from
+a full bundle — the link's fields with the stored id, name, creation time, subscription, pinned core and ping — and
+the next save writes the marker. A link the parser now refuses (an unknown security, transport or obfuscation)
+keeps the stored config with `linkRejection`, not stored, so it is checked again on every load: `validate()` returns
+it and `CoreResolver` gives it no core.
+
+`validate()` returns the first problem (the link's rejection, empty address, port out of range, missing UUID/password, missing
 `protocolSettings` of the right type) or null; `VpnNotifier.connect` calls it before native. `protoTag` is the short
 label in lists (`AWG` for WireGuard with Amnezia parameters).
 

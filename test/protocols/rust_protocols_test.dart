@@ -150,13 +150,8 @@ void main() {
         expectRejected(parse(vmess({'net': net})), 'Transport');
       }
       expectRejected(parse(vmess({'net': 'tcp', 'type': 'http'})), 'headerType');
-      // A config stored before the parser refused unknown tls values and read "TLS" as TLS: it has no transport
-      // security while its link asks for one.
-      final stored = VpnConfig.fromJson({...parse(vmess({})).toJson(), 'security': 'none'});
-      expectRejected(stored.copyWith(rawUri: vmess({'tls': 'reality'})), 'reality');
       for (final tls in ['TLS', 'Tls', ' tls']) {
         expect(parse(vmess({'tls': tls})).security, VpnSecurity.tls, reason: tls);
-        expectRejected(stored.copyWith(rawUri: vmess({'tls': tls})), 'tls="$tls"');
       }
       expectRejected(parse(vmess({'id': 'not-a-uuid'})), 'UUID');
     });

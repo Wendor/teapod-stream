@@ -16,14 +16,17 @@ Multi-line subscription bodies are split and decoded in `SubscriptionService` ([
 | Scheme | Format and notes |
 |---|---|
 | `vless://` | `uuid@host:port?…#name`: `security`, `type`, `path`, `host`, `sni`, `fp`, `alpn`, `flow`, `encryption`, Reality `pbk`/`sid`/`spx`/`pqv`, `ech`, `pinSHA256`, `allowInsecure`/`insecure`, `mode`/`extra` (xhttp), `fm` (finalmask) |
-| `vmess://` | base64 JSON: `ps`, `add`, `port`, `id`, `aid`, `scy`, `net`, `type`, `host`, `path`, `tls`, `sni`, `alpn`, `fp` (`alpn`, `fp` → the model; `scy`, `type` re-read from `rawUri`), … |
+| `vmess://` | base64 JSON: `ps`, `add`, `port`, `id`, `aid`, `scy`, `net`, `type`, `host`, `path`, `tls`, `sni`, `alpn`, `fp` (`scy` → `method`, `type` → `headerType`), … |
 | `trojan://` | `password@host:port`; `security` (tls/reality/none), Reality params, `pinSHA256`, `alpn`, `ech`; the password is percent-decoded. `allowInsecure` is deliberately not read |
 | `ss://` | `base64(method:password)@host:port` or legacy `base64(method:password@host:port)`; Outline `prefix` → `ssPrefix` |
-| `hysteria2://`, `hy2://` | `password@host:port?sni&insecure&obfs&obfs-password&pinSHA256`; `obfs-password` is kept for `obfs=salamander` and `obfs=gecko`; Gecko's `minPacketSize` / `maxPacketSize` (default 512 / 1200, `0 < min ≤ max ≤ 2048`) stay in `rawUri` and are read by `geckoPacketSize()` — a Gecko link without a password or with invalid sizes is rejected; port hopping: a range/list in the authority (`20000-30000`, `443,5000-6000`) or `mport` → `hopPorts`, the first port → `port`; an unparsable port rejects the link, an unparsable `mport` is ignored |
+| `hysteria2://`, `hy2://` | `password@host:port?sni&insecure&obfs&obfs-password&pinSHA256`; `obfs-password` is kept for `obfs=salamander` and `obfs=gecko`; `obfs` → `obfs`; Gecko's `minPacketSize` / `maxPacketSize` (default 512 / 1200, `0 < min ≤ max ≤ 2048`) → `geckoPacketSize` — a Gecko link without a password or with invalid sizes is rejected; port hopping: a range/list in the authority (`20000-30000`, `443,5000-6000`) or `mport` → `hopPorts`, the first port → `port`; an unparsable port rejects the link, an unparsable `mport` is ignored |
 
-`VlessParser.linkParams` / `vmessJson` re-read details that aren't model fields (e.g. TCP `headerType=http`) from
-`rawUri` at build time. `linkMux` reads `mux=on|off` (also `true`/`false`, `1`/`0`) — Mux for this server regardless
-of the global setting ([xray_config_builder](xray_config_builder.md#fragment-noise-mux)).
+Every parameter the builders use is a model field; they never read `rawUri`. VLESS and Trojan `headerType` and VMess
+`type` → `headerType` (lower case, `none` → null); `mux=on|off` (also `true`/`false`, `1`/`0`) on VLESS, Trojan and
+Shadowsocks → `mux` — Mux for this server regardless of the global setting
+([xray_config_builder](xray_config_builder.md#fragment-noise-mux)); Shadowsocks `plugin` → `plugin`, which every core
+refuses. `withLinkFields` reads the link of a config stored before these fields existed again on load
+([models](models.md)): a link it now refuses keeps the config with `linkRejection`, and it doesn't connect.
 
 **Names** come from the fragment: percent-encoded or raw Unicode — `_decodeName` falls back to the raw text when
 `Uri.decodeComponent` throws. IPv6 hosts in brackets are supported.

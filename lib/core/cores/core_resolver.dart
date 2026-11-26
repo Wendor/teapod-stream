@@ -78,6 +78,7 @@ class CoreResolver {
   }
 
   AppMessage? _check(CoreKind kind, VpnConfig config) {
+    if (config.linkRejection case final rejected?) return rejected;
     if (!available.contains(kind)) return unavailableReason;
     if (settings.disabledCores.contains(kind)) return disabledReason;
     final backend = backendFor(kind);

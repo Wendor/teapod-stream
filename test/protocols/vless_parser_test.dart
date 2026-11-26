@@ -180,14 +180,14 @@ void main() {
       test('Salamander and Gecko keep obfs-password; Gecko packet sizes default to 512-1200', () {
         final salamander = VlessParser.parseUri('hy2://pass@h.example:443?obfs=salamander&obfs-password=ob')!;
         expect(salamander.obfsPassword, 'ob');
-        expect(VlessParser.geckoPacketSize(salamander), isNull);
+        expect(salamander.geckoPacketSize, isNull);
         final gecko = VlessParser.parseUri('hy2://pass@h.example:443?obfs=gecko&obfs-password=ob')!;
         expect(gecko.obfsPassword, 'ob');
-        expect(VlessParser.geckoPacketSize(gecko), (512, 1200));
+        expect(gecko.geckoPacketSize, (512, 1200));
         final sized = VlessParser.parseUri(
           'hy2://pass@h.example:443?obfs=gecko&obfs-password=ob&minPacketSize=300&maxPacketSize=2048',
         )!;
-        expect(VlessParser.geckoPacketSize(sized), (300, 2048));
+        expect(sized.geckoPacketSize, (300, 2048));
         expect(
           () => VlessParser.parseUri('hy2://pass@h.example:443?obfs=other&obfs-password=ob'),
           throwsFormatException,
@@ -326,12 +326,112 @@ void main() {
       });
     });
 
+    group('link fields in the model', () {
+      String vmess(Map<String, Object?> fields) =>
+          'vmess://${base64.encode(utf8.encode(jsonEncode({'add': 'h', 'port': '443', 'id': 'u', 'net': 'tcp', ...fields})))}';
+
+      test('headerType, mux, VMess type and scy, Shadowsocks plugin, Hysteria2 obfs', () {
+        final vless = VlessParser.parseUri('vless://u@h:443?type=tcp&headerType=HTTP&mux=on#n')!;
+        expect((vless.headerType, vless.mux, vless.tcpHttpHeader), ('http', true, true));
+        final trojan = VlessParser.parseUri('trojan://p@h:443?headerType=none&mux=off#n')!;
+        expect((trojan.headerType, trojan.mux), (null, false));
+        final vm = VlessParser.parseUri(vmess({'type': 'http', 'scy': 'AES-128-GCM'}))!;
+        expect((vm.headerType, vm.method, vm.mux), ('http', 'aes-128-gcm', null));
+        expect(
+          VlessParser.parseUri('ss://YWVzLTEyOC1nY206cA@h:8388?plugin=obfs-local%3Bobfs%3Dhttp#n')!.plugin,
+          'obfs-local;obfs=http',
+        );
+        final legacy = base64.encode(utf8.encode('aes-128-gcm:p@h:8388?plugin=v2ray-plugin&mux=1'));
+        final ss = VlessParser.parseUri('ss://$legacy#n')!;
+        expect((ss.plugin, ss.mux), ('v2ray-plugin', true));
+        expect(VlessParser.parseUri('ss://YWVzLTEyOC1nY206cA@h:8388#n')!.plugin, isNull);
+        // Outline's prefix is bytes, not UTF-8: it doesn't break reading the other parameters.
+        final outline = VlessParser.parseUri('ss://YWVzLTEyOC1nY206cA@h:8388/?prefix=%FF%16&plugin=p#n')!;
+        expect((outline.ssPrefix, outline.plugin), ('ff16', 'p'));
+        final salamander = VlessParser.parseUri('hy2://p@h:443?obfs=salamander&obfs-password=ob#n')!;
+        expect((salamander.obfs, salamander.geckoPacketSize), ('salamander', null));
+        expect(VlessParser.parseUri('hy2://p@h:443?obfs=none#n')!.obfs, isNull);
+      });
+
+      test('survive a store round trip, which marks the config as read', () {
+        final gecko = VlessParser.parseUri('hy2://p@h:443?obfs=gecko&obfs-password=ob&minPacketSize=300#n')!;
+        final json = gecko.toJson();
+        expect(json['linkFields'], isTrue);
+        final back = VpnConfig.fromJson(jsonDecode(jsonEncode(json)) as Map<String, dynamic>);
+        expect((back.obfs, back.geckoPacketSize, back.needsLinkFields), ('gecko', (300, 1200), false));
+        final vless = VpnConfig.fromJson(VlessParser.parseUri('vless://u@h:443?headerType=http&mux=off#n')!.toJson());
+        expect((vless.headerType, vless.mux), ('http', false));
+      });
+    });
+
     group('Unknown scheme', () {
       test('returns null for unknown protocol', () {
         expect(VlessParser.parseUri('wireguard://some-config'), isNull);
         expect(VlessParser.parseUri(''), isNull);
         expect(VlessParser.parseUri('not-a-uri'), isNull);
       });
+    });
+  });
+
+  group('VlessParser.withLinkFields', () {
+    /// [link] as a version without the link fields stored it: the link fields absent, [overrides] on top.
+    VpnConfig stored(String link, [Map<String, Object?> overrides = const {}]) {
+      final json = VlessParser.parseUri(link)!.toJson()
+        ..removeWhere(
+          (k, _) => const {'headerType', 'plugin', 'mux', 'obfs', 'geckoPacketSize', 'linkFields'}.contains(k),
+        )
+        ..addAll({
+          'id': 'old',
+          'name': 'Renamed',
+          'subscriptionId': 's',
+          'core': 'singBox',
+          'latencyMs': 80,
+          ...overrides,
+        });
+      return VpnConfig.fromJson(json);
+    }
+
+    test('reads the link again, keeping what belongs to the stored config', () {
+      final old = stored('ss://YWVzLTEyOC1nY206cA@h:8388?plugin=obfs-local#n');
+      expect((old.needsLinkFields, old.plugin), (true, null));
+      final read = VlessParser.withLinkFields(old);
+      expect(read.plugin, 'obfs-local');
+      expect(
+        (read.id, read.name, read.subscriptionId, read.core?.name, read.latencyMs, read.createdAt),
+        ('old', 'Renamed', 's', 'singBox', 80, old.createdAt),
+      );
+      expect((read.needsLinkFields, read.toJson()['linkFields']), (false, true));
+      expect(identical(VlessParser.withLinkFields(read), read), isTrue);
+    });
+
+    test('a stored VMess link with " TLS" gets its TLS back', () {
+      final link =
+          'vmess://${base64.encode(utf8.encode(jsonEncode({'add': 'h', 'port': '443', 'id': 'u', 'tls': ' TLS', 'type': 'http'})))}';
+      final read = VlessParser.withLinkFields(stored(link, {'security': 'none'}));
+      expect((read.security, read.headerType), (VpnSecurity.tls, 'http'));
+    });
+
+    test('a stored link the parser now refuses keeps the config, refused with the reason on every load', () {
+      final good = VlessParser.parseUri('vless://u@h:443?security=tls#n')!.toJson();
+      final old = VpnConfig.fromJson({
+        ...good..remove('linkFields'),
+        'security': 'none',
+        'rawUri': 'vless://u@h:443?security=xtls#n',
+      });
+      final read = VlessParser.withLinkFields(old);
+      expect((read.id, read.security), (old.id, VpnSecurity.none));
+      expect('${read.linkRejection}', contains('"xtls"'));
+      expect(read.validate(), same(read.linkRejection));
+      expect(read.needsLinkFields, isTrue);
+      expect(read.toJson().containsKey('linkFields'), isFalse);
+      expect(VpnConfig.fromJson(read.toJson()).needsLinkFields, isTrue);
+    });
+
+    test('a config without a link has nothing to read', () {
+      final json = VlessParser.parseUri('vless://u@h:443#n')!.toJson()
+        ..remove('linkFields')
+        ..remove('rawUri');
+      expect(VpnConfig.fromJson(json).needsLinkFields, isFalse);
     });
   });
 

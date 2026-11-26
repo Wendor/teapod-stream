@@ -1225,16 +1225,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get rustVmessId => 'The VMess id must be a real UUID: the Rust core doesn\'t accept arbitrary strings.';
 
   @override
-  String rustVmessSecurity(String security) {
-    return 'The xray-rust core doesn\'t support VMess with security=$security from the link: TLS and an unencrypted transport are available.';
-  }
-
-  @override
-  String rustVmessTls(String value) {
-    return 'The VMess link sets tls=\"$value\": the parser understands only an exact \"tls\", and the profile would go without TLS. Fix the value in the link.';
-  }
-
-  @override
   String rustSsMethod(String method) {
     return 'The Rust core supports only Shadowsocks 2022 (2022-blake3-aes-128-gcm, 2022-blake3-aes-256-gcm, 2022-blake3-chacha20-poly1305). Method \"$method\" is not supported.';
   }

@@ -82,9 +82,8 @@
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
-            <meta-data
-                android:name="android.service.quicksettings.ACTIVE_TILE"
-                android:value="true" />
+            <!-- Not an active tile: the system asks for the state whenever the tile is shown, so a process killed by
+                 a force stop (no last update) can't leave the tile showing a session that is gone. -->
         </service>
 
         <!-- Auto-start on device boot (when "Start on boot" is enabled in settings) -->

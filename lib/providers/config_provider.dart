@@ -14,6 +14,7 @@ import '../core/services/log_service.dart';
 import 'settings_provider.dart';
 import 'vpn_provider.dart';
 import '../core/models/app_message.dart';
+import '../protocols/xray/vless_parser.dart';
 
 class ConfigState {
   final List<VpnConfig> configs;
@@ -432,8 +433,28 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
 
   /// Imports [bundle]: subscriptions not present yet (by URL) get new ids, configs not present yet (by share link,
   /// else `address:port`) get new ids and their subscription remapped; with no active config the first imported one
-  /// is selected. One commit.
-  Future<ImportConnectionsResult> importBundle(ConnectionsBundle bundle) => _serial(() async {
+  /// is selected. One commit. A compact bundle's share links are parsed into the same commit (an unparsable one is
+  /// skipped); its subscription URLs not present yet are fetched after it, one by one (a failed fetch isn't counted).
+  Future<ImportConnectionsResult> importBundle(ConnectionsBundle bundle) async {
+    final r = await _importBundle(bundle);
+    final have = (state.value?.subscriptions ?? const <Subscription>[]).map((s) => s.url).toSet();
+    var fetched = 0;
+    for (final url in bundle.subscriptionUrls.toSet().difference(have)) {
+      try {
+        await addSubscriptionFromUrl(url);
+        fetched++;
+      } catch (e) {
+        ref.read(logServiceProvider.notifier).addError('Import subscription: $e');
+      }
+    }
+    return ImportConnectionsResult(
+      addedConfigs: r.addedConfigs,
+      addedSubscriptions: r.addedSubscriptions + fetched,
+      skippedConfigs: r.skippedConfigs,
+    );
+  }
+
+  Future<ImportConnectionsResult> _importBundle(ConnectionsBundle bundle) => _serial(() async {
     final current = await _loaded();
     final now = DateTime.now();
     final ts = now.millisecondsSinceEpoch;
@@ -465,8 +486,9 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
 
     String key(VpnConfig c) => c.rawUri ?? '${c.address}:${c.port}';
     final existingKeys = current.configs.map(key).toSet();
+    final parsed = bundle.rawUris.map(VlessParser.parseUri).nonNulls;
     final remapped = [
-      for (final (i, c) in bundle.configs.indexed)
+      for (final (i, c) in [...bundle.configs, ...parsed].indexed)
         c.copyWith(
           id: 'cfg_import_${ts}_${i}_${c.id.hashCode}',
           createdAt: now,
@@ -488,7 +510,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     return ImportConnectionsResult(
       addedConfigs: newConfigs.length,
       addedSubscriptions: newSubscriptions.length,
-      skippedConfigs: remapped.length - newConfigs.length,
+      skippedConfigs: remapped.length - newConfigs.length + bundle.rawUris.length - parsed.length,
     );
   });
 

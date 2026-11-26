@@ -296,34 +296,14 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
         final bundle = result.connectionsBundle!;
         final review = ref.read(configProvider.notifier).reviewBundle(bundle);
         if (!await confirmImportReview(context, review) || !mounted) return;
-        int addedConfigs = 0;
-        int addedSubscriptions = 0;
-        if (bundle.isCompact) {
-          for (final rawUri in bundle.rawUris) {
-            final config = VlessParser.parseUri(rawUri);
-            if (config != null) {
-              await ref.read(configProvider.notifier).addConfig(config);
-              addedConfigs++;
-            }
-          }
-          for (final subUrl in bundle.subscriptionUrls) {
-            try {
-              await ref.read(configProvider.notifier).addSubscriptionFromUrl(subUrl);
-              addedSubscriptions++;
-            } catch (_) {}
-          }
-        } else {
-          final r = await ref.read(configProvider.notifier).importBundle(bundle);
-          addedConfigs = r.addedConfigs;
-          addedSubscriptions = r.addedSubscriptions;
-        }
+        final r = await ref.read(configProvider.notifier).importBundle(bundle);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
                 context.l10n.addImported(
-                  context.l10n.configsCount(addedConfigs),
-                  context.l10n.subscriptionsCount(addedSubscriptions),
+                  context.l10n.configsCount(r.addedConfigs),
+                  context.l10n.subscriptionsCount(r.addedSubscriptions),
                 ),
               ),
               duration: const Duration(seconds: 2),

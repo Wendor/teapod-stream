@@ -81,6 +81,9 @@ text helpers (minimum 11 px). Font scale (`fontScale`) applies through the app's
 - Every visible string through `context.l10n` ([localization](localization.md)).
 - Widgets read providers and call notifier methods; no business logic in widgets (picking a config:
   `VpnNotifier.selectConfig`, [vpn_provider](vpn_provider.md)).
+- A large screen is a folder `screens/<name>/`: the screen and its state in `<name>_screen.dart`, its sections as
+  private widgets in `part` files next to it (`screens/configs/`: `header`, `groups`, `config_row`, `pinned`,
+  `tiles`).
 - UI tests: `test/ui/` — smoke of every screen, interactions ([tests](tests.md)).
 
 ## Related

@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:teapodstream/core/models/subscription.dart';
 import 'package:teapodstream/core/models/app_settings.dart';
 import 'package:teapodstream/ui/screens/add_config_screen.dart';
-import 'package:teapodstream/ui/screens/configs_screen.dart';
+import 'package:teapodstream/ui/screens/configs/configs_screen.dart';
 import 'package:teapodstream/ui/screens/dns_settings_screen.dart';
 import 'package:teapodstream/ui/screens/home_screen.dart';
 import 'package:teapodstream/ui/screens/logs_screen.dart';

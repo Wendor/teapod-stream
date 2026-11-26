@@ -9,7 +9,7 @@ import 'l10n/l10n.dart';
 import 'ui/theme/app_theme.dart';
 import 'ui/theme/app_colors.dart';
 import 'ui/screens/home_screen.dart';
-import 'ui/screens/configs_screen.dart';
+import 'ui/screens/configs/configs_screen.dart';
 import 'ui/screens/routing_screen.dart';
 import 'ui/screens/settings_screen.dart';
 import 'providers/config_provider.dart';

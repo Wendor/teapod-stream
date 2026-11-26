@@ -66,12 +66,13 @@ class SessionSnapshotTest {
     }
 
     @Test
-    fun itestMarkerHasTheSocksLoginOnlyWhenConnected() {
+    fun itestMarkerHasTheSocksLoginAndCoreOnlyWhenConnected() {
         assertEquals(
             mapOf("ev" to "state", "value" to "connected", "t" to 5L,
-                "socksPort" to 2080, "socksUser" to "su", "socksPassword" to "sp"),
+                "socksPort" to 2080, "socksUser" to "su", "socksPassword" to "sp", "core" to "go"),
             connected.itestMarker(5),
         )
+        assertEquals("rust", SessionSnapshot.connected(7, 2080, "su", "sp", 1L, CoreKind.RUST).itestMarker(5)["core"])
         assertEquals(
             mapOf("ev" to "state", "value" to "blocked", "t" to 5L),
             SessionSnapshot(SessionState.BLOCKED, error = "x").itestMarker(5),

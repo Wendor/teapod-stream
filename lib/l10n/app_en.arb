@@ -578,6 +578,15 @@
   },
   "subsHwidHint": "Send the device ID to bind the subscription",
   "commonDefaultLower": "default",
+  "shareProfileText": "Teapod profile: {name}",
+  "@shareProfileText": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "shareLogSubject": "TeapodStream log",
   "logsEmpty": "Log is empty",
   "logsTagline": "LOG · XRAY · TUN2SOCKS",
   "qrCameraError": "Camera error: {error}",

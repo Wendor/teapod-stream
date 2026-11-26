@@ -134,7 +134,7 @@ Typed wrappers for the native calls on `com.teapodstream/vpn` that aren't about 
 
 ## Other
 
-`DeviceService` — ANDROID_ID, model and OS version for HWID, cached in memory per instance (one per container). `third_party_licenses.dart` — license texts for About.
+`ShareService` — writes a file to the cache dir and opens the share sheet: `shareProfile` (`<name>.json`), `shareLog` (the native log masked by `maskLog` into one `teapod_log.txt`, overwritten on every export; false — an empty log). `DeviceService` — ANDROID_ID, model and OS version for HWID, cached in memory per instance (one per container). `third_party_licenses.dart` — license texts for About.
 
 ## Related
 

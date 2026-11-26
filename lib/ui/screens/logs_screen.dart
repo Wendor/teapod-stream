@@ -1,13 +1,9 @@
-import 'dart:convert';
-import 'dart:io';
-
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 import '../../core/models/vpn_log_entry.dart';
 import '../../core/services/log_service.dart';
+import '../../core/services/share_service.dart';
 import '../../providers/config_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../theme/app_colors.dart';
@@ -62,15 +58,6 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
   Future<void> _exportLogs() async {
     final srcPath = await ref.read(nativeLogsProvider).getLogFilePath();
     if (srcPath == null) return;
-    final src = File(srcPath);
-    if (!src.existsSync() || src.lengthSync() == 0) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(context.l10n.logsEmpty), duration: const Duration(seconds: 2)));
-      }
-      return;
-    }
     final configs = ref.read(configProvider).value;
     final settings = ref.read(settingsProvider).value;
     final secrets = logSecrets(
@@ -78,30 +65,11 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
       subscriptions: configs?.subscriptions ?? const [],
       extra: [?settings?.socksUser, ?settings?.socksPassword],
     );
-    // A masked copy in the cache dir (share_plus needs a shareable location), one file overwritten on every export.
-    final tmpDir = await getTemporaryDirectory();
-    final tmp = File('${tmpDir.path}/$_exportName');
-    await tmp.writeAsString(maskLog(utf8.decode(await src.readAsBytes(), allowMalformed: true), secrets: secrets));
-    await _deleteOldExports(tmpDir);
-    await SharePlus.instance.share(
-      ShareParams(
-        files: [XFile(tmp.path, mimeType: 'text/plain')],
-        subject: 'TeapodStream Log',
-      ),
-    );
-  }
-
-  static const _exportName = 'teapod_log.txt';
-
-  /// Copies named `teapod_<date>_<time>.txt` were left in the cache by earlier versions.
-  static Future<void> _deleteOldExports(Directory dir) async {
-    final old = RegExp(r'^teapod_\d{8}_\d{4}\.txt$');
-    try {
-      await for (final f in dir.list()) {
-        if (f is File && old.hasMatch(f.uri.pathSegments.last)) await f.delete();
-      }
-    } on FileSystemException {
-      // Best effort: a copy that can't be deleted must not stop the export.
+    final shared = await ref.read(shareServiceProvider).shareLog(srcPath, secrets);
+    if (!shared && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.l10n.logsEmpty), duration: const Duration(seconds: 2)));
     }
   }
 

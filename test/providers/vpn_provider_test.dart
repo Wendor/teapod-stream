@@ -26,6 +26,9 @@ import 'package:teapodstream/core/models/vpn_log_entry.dart';
 import 'package:teapodstream/core/services/config_storage_service.dart';
 import 'package:teapodstream/core/services/log_service.dart';
 import 'package:teapodstream/core/services/settings_service.dart';
+import 'package:teapodstream/core/services/subscription_service.dart';
+import 'package:teapodstream/core/services/tunnel_socks.dart';
+import 'package:teapodstream/core/models/subscription.dart';
 import 'package:teapodstream/core/models/app_message.dart';
 import 'package:teapodstream/core/models/app_settings.dart';
 import 'package:teapodstream/protocols/xray/xray_engine.dart';
@@ -57,22 +60,29 @@ const _visionRaw =
     '"r.example","port":443,"users":[{"id":"11111111-2222-4333-8444-555555555555",'
     '"encryption":"none","flow":"xtls-rprx-vision"}]}]}}]}';
 
-VpnConfig _cfg(String id, {String? subId, String password = 'p', DateTime? pingedAt, String? rawXray, String? host}) =>
-    VpnConfig(
-      id: id,
-      name: 'n$id',
-      protocol: VpnProtocol.trojan,
-      address: host ?? 'h$id.example',
-      port: 443,
-      uuid: '',
-      password: password,
-      security: VpnSecurity.tls,
-      transport: VpnTransport.tcp,
-      createdAt: DateTime(2026),
-      subscriptionId: subId,
-      lastPingedAt: pingedAt,
-      rawXrayConfig: rawXray,
-    );
+VpnConfig _cfg(
+  String id, {
+  String? subId,
+  String password = 'p',
+  DateTime? pingedAt,
+  String? rawXray,
+  String? host,
+  int port = 443,
+}) => VpnConfig(
+  id: id,
+  name: 'n$id',
+  protocol: VpnProtocol.trojan,
+  address: host ?? 'h$id.example',
+  port: port,
+  uuid: '',
+  password: password,
+  security: VpnSecurity.tls,
+  transport: VpnTransport.tcp,
+  createdAt: DateTime(2026),
+  subscriptionId: subId,
+  lastPingedAt: pingedAt,
+  rawXrayConfig: rawXray,
+);
 
 VpnConfig _vision(String id) => VpnConfig(
   id: id,
@@ -144,6 +154,20 @@ class _RecordingEngine extends XrayEngine {
       quickSaves.add(backend.kind);
 }
 
+class _FakeSubscriptions extends SubscriptionService {
+  final List<VpnConfig> configs;
+  _FakeSubscriptions(this.configs);
+
+  @override
+  Future<SubscriptionFetchResult> fetchSubscription(
+    String url, {
+    String? pinnedCertDer,
+    HwidDeviceInfo? hwid,
+    String? userAgent,
+    TunnelSocks? socks,
+  }) async => SubscriptionFetchResult(configs: configs);
+}
+
 Future<void> _settle() async {
   for (var i = 0; i < 30; i++) {
     await Future<void>.delayed(Duration.zero);
@@ -174,6 +198,8 @@ void main() {
     List<VpnConfig> configs = const [],
     String? activeId,
     List<PinnedRef> pins = const [],
+    List<Subscription> subs = const [],
+    String? activeSubId,
     AppSettings settings = _settings,
     List<Override> overrides = const [],
   }) async {
@@ -183,6 +209,8 @@ void main() {
     final storage = ConfigStorageService();
     await storage.saveConfigs(configs);
     await storage.saveActiveConfigId(activeId);
+    await storage.saveSubscriptions(subs);
+    await storage.saveActiveSubscriptionId(activeSubId);
     await storage.savePins(pins);
     final container = c = ProviderContainer(overrides: overrides);
     // Unfinished fire-and-forget operations (syncActiveSettings) must not
@@ -1339,6 +1367,87 @@ void main() {
       expect(native.named('saveQuickConnect').map((c) => (c.arguments as Map)['xrayConfig'] as String), [
         contains('hb.example'),
       ]);
+    });
+
+    group('the effective config changed while off reaches quick connect', () {
+      final sub = Subscription(id: 's', name: 'S', url: 'https://sub.example/s', createdAt: DateTime(2026));
+      List<String> saved() => [
+        for (final call in native.named('saveQuickConnect')) (call.arguments as Map)['xrayConfig'] as String,
+      ];
+
+      test('a link edit', () async {
+        await boot(configs: [_cfg('a')], activeId: 'a');
+        native.calls.clear();
+        await c.read(configProvider.notifier).updateConfig(_cfg('a', host: 'edited.example'));
+        await _settle();
+        expect(saved(), [contains('edited.example')]);
+      });
+
+      test('a subscription refresh', () async {
+        await boot(
+          configs: [_cfg('a', subId: 's')],
+          subs: [sub],
+          activeSubId: 's',
+          overrides: [
+            subscriptionServiceProvider.overrideWithValue(_FakeSubscriptions([_cfg('fresh', subId: 's')])),
+          ],
+        );
+        native.calls.clear();
+        await c.read(configProvider.notifier).addSubscriptionFromUrl(sub.url);
+        await _settle();
+        expect(saved(), [contains('hfresh.example')]);
+      });
+
+      test('auto mode turned on', () async {
+        await boot(
+          configs: [
+            _cfg('a'),
+            _cfg('b', subId: 's'),
+          ],
+          subs: [sub],
+          activeId: 'a',
+        );
+        native.calls.clear();
+        await c.read(configProvider.notifier).setActiveSubscription('s');
+        await _settle();
+        expect(saved(), [contains('hb.example')]);
+      });
+
+      test('a config connect refuses clears the saved parameters', () async {
+        await boot(configs: [_cfg('a')], activeId: 'a');
+        native.calls.clear();
+        await c.read(configProvider.notifier).updateConfig(_cfg('a', port: 0));
+        await _settle();
+        expect(saved(), isEmpty);
+        expect(native.named('clearQuickConnect'), hasLength(1));
+      });
+
+      test('a ping that changes the best config in auto mode', () async {
+        await boot(
+          configs: [
+            _cfg('a', subId: 's'),
+            _cfg('b', subId: 's'),
+          ],
+          subs: [sub],
+          activeSubId: 's',
+        );
+        native.calls.clear();
+        await c.read(configProvider.notifier).batchUpdatePingResults({
+          'ha.example:443': 300,
+          'hb.example:443': 40,
+        }, DateTime(2026));
+        await _settle();
+        expect(saved(), [contains('hb.example')]);
+
+        // A ping that keeps the best config saves nothing.
+        native.calls.clear();
+        await c.read(configProvider.notifier).batchUpdatePingResults({
+          'ha.example:443': 200,
+          'hb.example:443': 50,
+        }, DateTime(2026, 2));
+        await _settle();
+        expect(saved(), isEmpty);
+      });
     });
 
     test('a server selected while the geosite index loads is saved without missing codes', () async {

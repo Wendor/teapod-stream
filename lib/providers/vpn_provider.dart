@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -117,19 +118,13 @@ class VpnNotifier extends Notifier<VpnState2> {
       ref.read(tunnelSocksProvider.notifier).set(next.tunnelSocks);
       // A session that ended may have run older settings than the current ones: the tile, boot and automation start
       // from the saved parameters, so they are saved again from what would run now.
-      if (_idle(next.connectionState) && prev != null && !_idle(prev.connectionState)) _refreshQuickConnect();
+      if (_idle(next.connectionState) && prev != null && !_idle(prev.connectionState)) _reconcileLater();
     });
-    // The active profile's core changed (priority, disabling, pinning).
-    ref.listen(activeCoreProvider, (prev, next) {
-      if (prev != null && next != null && prev != next && !_profileSwitching) _onCoreChanged();
-    });
-    // Connection settings changed while off: the saved quick-connect parameters follow them (a running session keeps
-    // its own until it ends, above).
-    ref.listen(settingsProvider, (prev, next) {
-      final (a, b) = (prev?.value, next.value);
-      if (a == null || b == null || _profileSwitching) return;
-      // The core part is the core listener's.
-      if (connectionFingerprint(a) != connectionFingerprint(b)) _refreshQuickConnect();
+    // What would run changed (the effective config, the connection settings, the core): while off the saved
+    // quick-connect parameters follow it, a live session no core runs anymore stops. A profile switch reconciles at its
+    // end ([_profileSwitch]): in between the settings and the server belong to neither profile.
+    ref.listen(_quickConnectSourceProvider, (prev, next) {
+      if (prev != null && next != null && prev != next && !_profileSwitching) _reconcileLater();
     });
 
     _eventSub = XrayEngine.events.listen(
@@ -172,7 +167,7 @@ class VpnNotifier extends Notifier<VpnState2> {
         }
         // Native is off now and accepts the save: an earlier one may have been refused while it was stopping (a
         // timed-out connect shows `error` before native stops).
-        if (_idle(session.state)) _refreshQuickConnect();
+        if (_idle(session.state)) _reconcileLater();
       case 'log':
         final level = event['level'] as String? ?? 'info';
         final msg = event['message'] as String? ?? '';
@@ -291,8 +286,7 @@ class VpnNotifier extends Notifier<VpnState2> {
     await Permission.notification.request();
     if (superseded()) return;
 
-    final configState = ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
-    final config = _resolveEffectiveConfig(configState);
+    final config = ref.read(effectiveConfigProvider);
     if (config == null) {
       return fail(const AppMessage(MessageCode.vpnNoConfigSelected));
     }
@@ -386,32 +380,32 @@ class VpnNotifier extends Notifier<VpnState2> {
 
   static bool _idle(VpnState s) => s == VpnState.disconnected || s == VpnState.error;
 
-  /// While off, re-saves (or clears) the quick-connect parameters from the current settings and config.
-  /// Runs after the notification that asked for it: providers aren't read while they rebuild.
-  void _refreshQuickConnect() {
-    // Several asks in one turn (native's off report and the transition it causes) save once.
-    if (_refreshQueued) return;
-    _refreshQueued = true;
+  /// Runs [_reconcile] after the notification that asked for it: providers aren't read while they rebuild. Several
+  /// asks in one turn (native's off report and the transition it causes) run it once.
+  void _reconcileLater() {
+    if (_reconcileQueued) return;
+    _reconcileQueued = true;
     unawaited(
       Future(() async {
-        _refreshQueued = false;
-        if (ref.mounted && _idle(state.connectionState) && !_profileSwitching) await _onCoreChanged();
+        _reconcileQueued = false;
+        if (ref.mounted && !_profileSwitching) await _reconcile();
       }),
     );
   }
 
-  bool _refreshQueued = false;
+  bool _reconcileQueued = false;
 
-  /// The active profile's core changed: disconnect if nothing runs the profile anymore,
-  /// otherwise re-save/clear quick-reconnect.
-  Future<void> _onCoreChanged() async {
+  /// Makes native follow what would run now ([coreSwitchAction]): while off the quick-connect parameters are saved,
+  /// or cleared when no core runs the effective config or it fails validation; a live session no core runs anymore is stopped; a live session
+  /// a core still runs is left to the reconnect banner.
+  Future<void> _reconcile() async {
     // The saved parameters are built as a connect builds them: geosite codes missing from geosite.dat left out.
     await _loadGeosite();
     // A profile switch begun meanwhile has its settings without its server yet; its end reconciles.
     if (!ref.mounted || _profileSwitching) return;
     final settings = ref.read(settingsProvider).value;
     if (settings == null) return;
-    final config = _resolveEffectiveConfig(ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null));
+    final config = ref.read(effectiveConfigProvider);
     final resolution = config == null ? null : ref.read(coreResolverProvider).resolve(config);
     final backend = resolution?.backend;
     final reason = resolution?.reason;
@@ -427,6 +421,9 @@ class VpnNotifier extends Notifier<VpnState2> {
         case CoreSwitchAction.disconnect:
           ref.read(logServiceProvider.notifier).addError('Core: $unsupported');
           await _disconnect(reason: unsupported);
+        // A config connect() refuses ([VpnConfig.validate]) isn't saved either; a live session on it stays.
+        case CoreSwitchAction.saveQuickConnect when config!.validate() != null:
+          await _engine.clearQuickConnect();
         case CoreSwitchAction.saveQuickConnect:
           await _engine.saveQuickConnect(
             config!,
@@ -525,11 +522,9 @@ class VpnNotifier extends Notifier<VpnState2> {
   }
 
   /// Makes the tunnel run the active config: a connect in flight is redone, a live tunnel on another config switches,
-  /// one on this config stays, an idle VPN saves it for quick connect.
+  /// one on this config stays. An idle VPN saves it for quick connect through the source listener.
   Future<void> _followSelection() async {
     if (state.isBusy) return reconnectWithNewConfig();
-    // Off: the tile, boot and automation start the selected config.
-    if (_idle(state.connectionState)) return _onCoreChanged();
     final config = ref.read(effectiveConfigProvider);
     if (state.isConnected && config != null && !runsConfig(config)) await reconnectWithNewConfig();
   }
@@ -569,9 +564,9 @@ class VpnNotifier extends Notifier<VpnState2> {
     try {
       switched = await body();
     } finally {
-      // Settings rebuild lazily: read here, the switch's change reaches the settings listener while it is skipped, and
-      // the idle save below is the only one.
-      ref.read(settingsProvider);
+      // Providers rebuild lazily: read here, the switch's change reaches the source listener while it is skipped, and
+      // the reconciliation below is the only one.
+      ref.read(_quickConnectSourceProvider);
       _profileSwitching = false;
       final core = ref.read(activeCoreProvider);
       final live = switched && (state.isConnected || state.isConnecting);
@@ -580,7 +575,7 @@ class VpnNotifier extends Notifier<VpnState2> {
       } else if (live || core != coreBefore || _idle(state.connectionState)) {
         // Off: the profile's server and connection settings reach the saved quick-connect parameters (the settings
         // listener skips the switch).
-        await _onCoreChanged();
+        await _reconcile();
       }
     }
   }
@@ -597,10 +592,27 @@ class VpnNotifier extends Notifier<VpnState2> {
     await reconnectWithNewConfig();
   }
 
-  VpnConfig? _resolveEffectiveConfig(ConfigState? cs) => cs == null ? null : ref.read(effectiveConfigProvider);
-
   VpnState get connectionState => state.connectionState;
 }
+
+/// What the saved quick-connect parameters are built from: the effective config (its ping results aside) and the
+/// connection settings with the core that runs them. null — settings or configs aren't loaded yet.
+final _quickConnectSourceProvider = Provider<Object?>((ref) {
+  final core = ref.watch(activeCoreProvider);
+  final settings = ref.watch(settingsProvider).value;
+  if (core == null || settings == null) return null;
+  final c = ref.watch(effectiveConfigProvider);
+  return (
+    config: c == null
+        ? null
+        : jsonEncode(
+            c.toJson()
+              ..remove('latencyMs')
+              ..remove('lastPingedAt'),
+          ),
+    connection: connectionFingerprint(settings, core: core.kind),
+  );
+});
 
 final vpnProvider = NotifierProvider<VpnNotifier, VpnState2>(VpnNotifier.new);
 

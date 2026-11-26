@@ -269,7 +269,7 @@ void main() {
     VpnConfig ws(String extra) => VlessParser.parseUri(
       'vless://11111111-2222-4333-8444-555555555555@server.example:443?type=ws&path=%2Fs&security=tls&encryption=none$extra#x',
     )!;
-    expect(SingBoxConfigBuilder.unsupportedReason(ws('&mux=on')), contains('mux=on'));
+    expect('${SingBoxConfigBuilder.unsupportedReason(ws('&mux=on'))}', contains('mux=on'));
     expect(SingBoxConfigBuilder.unsupportedReason(ws('&mux=off')), isNull);
     expect(SingBoxConfigBuilder.unsupportedReason(ws('')), isNull);
   });

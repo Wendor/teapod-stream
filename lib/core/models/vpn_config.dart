@@ -1,8 +1,9 @@
 import 'dart:convert';
 
+import 'app_message.dart';
+
 import 'core_kind.dart';
 import 'protocol_settings.dart';
-import '../../l10n/l10n.dart';
 
 enum VpnProtocol {
   vless('VLESS', 'VLESS'),
@@ -22,7 +23,7 @@ enum VpnProtocol {
   final String shortTag;
 
   /// Why Xray cores refuse protocols that only sing-box has.
-  String get singBoxOnlyReason => L10n.current.coreSingBoxOnly(label);
+  AppMessage get singBoxOnlyReason => AppMessage.l10n((l) => l.coreSingBoxOnly(label));
 
   /// Protocols whose parameters live in [VpnConfig.protocolSettings].
   bool get hasProtocolSettings => this == wireguard || this == ssh || this == naive;
@@ -128,19 +129,19 @@ class VpnConfig {
     _ => protocol.shortTag,
   };
 
-  String? validate() {
+  AppMessage? validate() {
     if (rawXrayConfig != null) return null;
     if (protocol.hasProtocolSettings && protocolSettings?.type != protocol.name) {
-      return L10n.current.validateNoProtocolParams(protocol.label);
+      return AppMessage.l10n((l) => l.validateNoProtocolParams(protocol.label));
     }
-    if (address.isEmpty) return L10n.current.validateEmptyAddress;
-    if (port < 1 || port > 65535) return L10n.current.validateInvalidPort(port);
+    if (address.isEmpty) return AppMessage.l10n((l) => l.validateEmptyAddress);
+    if (port < 1 || port > 65535) return AppMessage.l10n((l) => l.validateInvalidPort(port));
     if (protocol == VpnProtocol.vless || protocol == VpnProtocol.vmess) {
-      if (uuid.isEmpty) return L10n.current.validateEmptyUuid;
+      if (uuid.isEmpty) return AppMessage.l10n((l) => l.validateEmptyUuid);
     }
     if ((protocol == VpnProtocol.shadowsocks || protocol == VpnProtocol.trojan || protocol == VpnProtocol.hysteria2) &&
         (password == null || password!.isEmpty)) {
-      return L10n.current.validateEmptyPassword;
+      return AppMessage.l10n((l) => l.validateEmptyPassword);
     }
     return null;
   }

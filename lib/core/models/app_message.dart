@@ -64,3 +64,14 @@ final class AppMessage implements Exception {
   @override
   int get hashCode => Object.hash(code, arg, text, _pick);
 }
+
+/// A [FormatException] whose message is an app string: [reason] is localized where it is shown; [message] is its
+/// text in the language of the moment (logs, `'$e'`).
+final class ReasonException extends FormatException {
+  ReasonException(this.reason) : super(reason.toString());
+
+  final AppMessage reason;
+
+  /// The reason of [e]: its [reason] when it is one, else its message as text.
+  static AppMessage of(FormatException e) => e is ReasonException ? e.reason : AppMessage.text(e.message);
+}

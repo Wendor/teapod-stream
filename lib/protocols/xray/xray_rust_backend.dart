@@ -32,10 +32,7 @@ class XrayRustBackend implements CoreBackend {
   AppMessage? unavailableReason(CoreFeature feature) => _unsupported[feature];
 
   @override
-  AppMessage? checkConfig(VpnConfig config) => switch (RustConfigBuilder.unsupportedReason(config)) {
-    final r? => AppMessage.text(r),
-    null => null,
-  };
+  AppMessage? checkConfig(VpnConfig config) => RustConfigBuilder.unsupportedReason(config);
 
   @override
   SettingsCheck checkOptions(VpnConfig config, VpnEngineOptions options) {
@@ -95,24 +92,24 @@ class XrayRustBackend implements CoreBackend {
     final fragmentError = _maskError(() => RustConfigBuilder.fragmentMask(config, o.fragment));
     s.drop(
       when: fragmentError != null,
-      warning: AppMessage.l10n((l) => l.rustFragmentDropped(fragmentError ?? '')),
+      warning: AppMessage.l10n((l) => l.rustFragmentDropped(fragmentError?.localize(l) ?? '')),
       fix: (v) => v.copyWith(fragment: v.fragment.copyWith(enabled: false)),
     );
     final noiseError = _maskError(() => RustConfigBuilder.noiseMask(config, o.noise));
     s.drop(
       when: noiseError != null,
-      warning: AppMessage.l10n((l) => l.rustNoiseDropped(noiseError ?? '')),
+      warning: AppMessage.l10n((l) => l.rustNoiseDropped(noiseError?.localize(l) ?? '')),
       fix: (v) => v.copyWith(noise: v.noise.copyWith(enabled: false)),
     );
     return s.result;
   }
 
-  static String? _maskError(void Function() build) {
+  static AppMessage? _maskError(void Function() build) {
     try {
       build();
       return null;
     } on FormatException catch (e) {
-      return e.message;
+      return ReasonException.of(e);
     }
   }
 }

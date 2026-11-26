@@ -47,8 +47,8 @@ void main() {
     expect(r.backend!.kind, CoreKind.singBox);
     expect(r.reason, isNull);
     expect(r.verdicts.first.kind, CoreKind.xrayGo);
-    expect('${r.verdicts.first.reason}', VpnProtocol.wireguard.singBoxOnlyReason);
-    expect('${r.verdicts.last.reason}', VpnProtocol.wireguard.singBoxOnlyReason);
+    expect('${r.verdicts.first.reason}', '${VpnProtocol.wireguard.singBoxOnlyReason}');
+    expect('${r.verdicts.last.reason}', '${VpnProtocol.wireguard.singBoxOnlyReason}');
   });
 
   test('disabled and unavailable cores are skipped with a reason', () {
@@ -105,7 +105,7 @@ void main() {
   test('nothing can run the profile — first reason is reported', () {
     final r = _resolver(disabled: {CoreKind.singBox}).resolve(_cfg(protocol: VpnProtocol.wireguard, settings: _wg));
     expect(r.backend, isNull);
-    expect('${r.reason}', VpnProtocol.wireguard.singBoxOnlyReason);
+    expect('${r.reason}', '${VpnProtocol.wireguard.singBoxOnlyReason}');
   });
 
   test('usable and primary follow order, switches and device', () {

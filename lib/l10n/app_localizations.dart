@@ -2510,24 +2510,6 @@ abstract class AppLocalizations {
   /// **'Empty password'**
   String get validateEmptyPassword;
 
-  /// No description provided for @routingSummaryGlobal.
-  ///
-  /// In en, this message translates to:
-  /// **'Global'**
-  String get routingSummaryGlobal;
-
-  /// No description provided for @routingSummaryBypass.
-  ///
-  /// In en, this message translates to:
-  /// **'Bypass'**
-  String get routingSummaryBypass;
-
-  /// No description provided for @routingSummaryOnly.
-  ///
-  /// In en, this message translates to:
-  /// **'Only'**
-  String get routingSummaryOnly;
-
   /// No description provided for @dnsCustomServer.
   ///
   /// In en, this message translates to:

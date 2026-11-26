@@ -291,8 +291,7 @@ class VpnNotifier extends Notifier<VpnState2> {
       return fail(const AppMessage(MessageCode.vpnNoConfigSelected));
     }
 
-    final validationError = config.validate();
-    if (validationError != null) return fail(AppMessage.text(validationError));
+    if (config.validate() case final invalid?) return fail(invalid);
 
     final settings = ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null) ?? const AppSettings();
 
@@ -332,6 +331,8 @@ class VpnNotifier extends Notifier<VpnState2> {
       _connectedConfig = config;
       if (switching) _connectedAt = null;
       state = state.copyWith(appliedFingerprint: connectionFingerprint(settings, core: backend.kind));
+    } on ReasonException catch (e) {
+      fail(e.reason);
     } on PlatformException catch (e) {
       fail(e.message != null ? AppMessage.text(e.message!) : const AppMessage(MessageCode.vpnConnectError));
     }

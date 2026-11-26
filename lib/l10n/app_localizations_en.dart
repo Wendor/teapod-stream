@@ -1367,15 +1367,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get validateEmptyPassword => 'Empty password';
 
   @override
-  String get routingSummaryGlobal => 'Global';
-
-  @override
-  String get routingSummaryBypass => 'Bypass';
-
-  @override
-  String get routingSummaryOnly => 'Only';
-
-  @override
   String get dnsCustomServer => 'Custom server';
 
   @override

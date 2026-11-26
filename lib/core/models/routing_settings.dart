@@ -1,5 +1,3 @@
-import '../../l10n/l10n.dart';
-
 enum RoutingDirection { global, bypass, onlySelected }
 
 class RoutingSettings {
@@ -93,36 +91,4 @@ class RoutingSettings {
     sites: (json['sites'] as List<dynamic>?)?.cast<String>() ?? [],
     ruServicesEnabled: json['ruServicesEnabled'] as bool? ?? false,
   );
-
-  String get summary {
-    if (direction == RoutingDirection.global && !adBlockEnabled) return L10n.current.routingSummaryGlobal;
-    final parts = <String>[];
-    if (geoEnabled && geoCodes.isNotEmpty) {
-      parts.add(geoCodes.take(2).join(', ') + (geoCodes.length > 2 ? '…' : ''));
-    }
-    if (domainEnabled && domainZones.isNotEmpty) {
-      parts.add(
-        domainZones
-                .take(2)
-                .map((z) {
-                  if (z == 'xn--p1ai') return '.рф';
-                  return z.split('.').length > 2 ? z : '.$z';
-                })
-                .join(', ') +
-            (domainZones.length > 2 ? '…' : ''),
-      );
-    }
-    if (geositeEnabled && geositeCodes.isNotEmpty) {
-      parts.add('geosite:${geositeCodes.length}');
-    }
-    if (sitesEnabled && sites.isNotEmpty) parts.add('sites:${sites.length}');
-    if (ruServicesEnabled) parts.add('RU+');
-    if (bypassLocal) parts.add('LAN');
-    if (adBlockEnabled) parts.add('Ads✗');
-    if (direction == RoutingDirection.global) return parts.join(', ');
-    final prefix = direction == RoutingDirection.bypass
-        ? L10n.current.routingSummaryBypass
-        : L10n.current.routingSummaryOnly;
-    return parts.isEmpty ? prefix : '$prefix: ${parts.join(', ')}';
-  }
 }

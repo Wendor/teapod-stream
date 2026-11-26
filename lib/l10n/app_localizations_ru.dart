@@ -1393,15 +1393,6 @@ class AppLocalizationsRu extends AppLocalizations {
   String get validateEmptyPassword => 'Пустой пароль';
 
   @override
-  String get routingSummaryGlobal => 'Глобальный';
-
-  @override
-  String get routingSummaryBypass => 'Обход';
-
-  @override
-  String get routingSummaryOnly => 'Только';
-
-  @override
   String get dnsCustomServer => 'Свой сервер';
 
   @override

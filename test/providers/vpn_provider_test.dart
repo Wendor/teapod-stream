@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -22,6 +23,7 @@ import 'package:teapodstream/core/models/pinned_ref.dart';
 import 'package:teapodstream/core/services/profile_storage_service.dart';
 import 'package:teapodstream/core/models/profile.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
+import 'package:teapodstream/l10n/l10n.dart';
 import 'package:teapodstream/core/models/vpn_log_entry.dart';
 import 'package:teapodstream/core/services/config_storage_service.dart';
 import 'package:teapodstream/core/services/log_service.dart';
@@ -300,7 +302,10 @@ void main() {
         activeId: 'a',
       );
       await n().connect();
-      expect(st().error, const AppMessage.text('Empty password'));
+      // The stored reason is the app string, localized where it is shown.
+      final ru = lookupAppLocalizations(const Locale('ru'));
+      expect(st().error!.localize(lookupAppLocalizations(const Locale('en'))), 'Empty password');
+      expect(st().error!.localize(ru), ru.validateEmptyPassword);
       expect(native.named('connect'), isEmpty);
     });
 
@@ -530,14 +535,21 @@ void main() {
       );
       await c.read(configProvider.notifier).setActiveConfig('bad');
       await n().reconnectWithNewConfig();
+      final en = lookupAppLocalizations(const Locale('en'));
+      final ru = lookupAppLocalizations(const Locale('ru'));
+      void expectReason() {
+        expect(st().error!.localize(en), en.validateEmptyPassword);
+        expect(st().error!.localize(ru), ru.validateEmptyPassword);
+      }
+
       expect(st().isConnected, isTrue);
-      expect(st().error, const AppMessage.text('Empty password'));
+      expectReason();
       expect(native.named('connect'), hasLength(1));
-      // A stats tick keeps the reason.
+      // A stats tick keeps the reason, still localizable.
       await Future<void>.delayed(const Duration(milliseconds: 1100));
       await _settle();
       expect(stats().uploadBytes, 10);
-      expect(st().error, const AppMessage.text('Empty password'));
+      expectReason();
       c.read(vpnStatsProvider.notifier).pause();
     });
 

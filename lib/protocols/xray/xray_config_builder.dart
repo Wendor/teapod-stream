@@ -1,5 +1,6 @@
 import 'dart:convert';
 import '../../core/interfaces/vpn_engine.dart';
+import '../../core/models/app_message.dart';
 import '../../core/models/vpn_config.dart';
 import '../../core/models/dns_config.dart';
 import '../../core/models/routing_settings.dart';
@@ -9,34 +10,33 @@ import '../../core/constants/xray_defaults.dart';
 import '../../core/models/vpn_log_entry.dart' show LogLevel;
 import '../../core/models/app_settings.dart' show DnsQueryStrategy, TlsFingerprint;
 import 'vless_parser.dart';
-import '../../l10n/l10n.dart';
 import '../../core/services/ip_lookup.dart';
 
 class XrayConfigBuilder {
   /// Profiles xray-core v26 rejects at startup (`PrintRemovedFeatureError`
   /// and a broken pin): without the check they would fail with "xray failed to start" and
   /// end up among urltest candidates. null — the profile builds.
-  static String? unsupportedReason(VpnConfig config) {
+  static AppMessage? unsupportedReason(VpnConfig config) {
     if (config.protocol.hasProtocolSettings) return config.protocol.singBoxOnlyReason;
     if (config.rawXrayConfig != null) return null;
     if (config.transport == VpnTransport.http2 || config.transport == VpnTransport.quic) {
-      return L10n.current.xrayNoH2Quic;
+      return AppMessage.l10n((l) => l.xrayNoH2Quic);
     }
     if (config.protocol == VpnProtocol.shadowsocks &&
         (VlessParser.linkParams(config)['plugin']?.trim().isNotEmpty ?? false)) {
-      return L10n.current.xrayNoSsPlugins;
+      return AppMessage.l10n((l) => l.xrayNoSsPlugins);
     }
     final pin = config.pinSHA256?.trim() ?? '';
     if (pin.isNotEmpty) {
       try {
         certificatePins(pin);
       } on FormatException catch (e) {
-        return e.message;
+        return ReasonException.of(e);
       }
     }
     final tls = config.security == VpnSecurity.tls || config.protocol == VpnProtocol.hysteria2;
     if (tls && config.allowInsecure && pin.isEmpty) {
-      return L10n.current.xrayInsecure;
+      return AppMessage.l10n((l) => l.xrayInsecure);
     }
     return null;
   }
@@ -422,7 +422,7 @@ class XrayConfigBuilder {
       case VpnProtocol.hysteria2:
         return {'version': 2, 'address': config.address, 'port': config.port};
       case VpnProtocol.wireguard || VpnProtocol.ssh || VpnProtocol.naive:
-        throw UnsupportedError(config.protocol.singBoxOnlyReason);
+        throw ReasonException(config.protocol.singBoxOnlyReason);
     }
   }
 
@@ -445,7 +445,7 @@ class XrayConfigBuilder {
         if (bytes.length != 32) throw const FormatException();
         pins.add(bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join());
       } on FormatException {
-        throw FormatException(L10n.current.xrayPinFormat);
+        throw ReasonException(AppMessage.l10n((l) => l.xrayPinFormat));
       }
     }
     return pins.join(',');
@@ -703,7 +703,7 @@ class XrayConfigBuilder {
       return jsonEncode(cfg);
     } catch (e) {
       // Don't pass the config as is: it has server inbounds (0.0.0.0, noauth).
-      throw FormatException(L10n.current.xrayRawJsonParse('$e'));
+      throw ReasonException(AppMessage.l10n((l) => l.xrayRawJsonParse('$e')));
     }
   }
 

@@ -35,7 +35,7 @@ Map<String, dynamic> proxy(Map<String, dynamic> json) =>
     (json['outbounds'] as List).singleWhere((dynamic o) => o['tag'] == 'proxy') as Map<String, dynamic>;
 
 void expectRejected(VpnConfig config, String reason) {
-  expect(RustConfigBuilder.unsupportedReason(config), contains(reason));
+  expect('${RustConfigBuilder.unsupportedReason(config)}', contains(reason));
   expect(() => RustConfigBuilder.build(config, options()), throwsFormatException);
 }
 

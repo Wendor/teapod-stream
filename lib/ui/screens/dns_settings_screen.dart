@@ -66,12 +66,12 @@ class _DnsSettingsScreenState extends ConsumerState<DnsSettingsScreen> {
   Widget build(BuildContext context) {
     final t = Theme.of(context).extension<TeapodTokens>()!;
     final isCustom = _selectedPreset == 'custom';
+    final presets = [
+      ...DnsServerConfig.presets,
+      {'label': context.l10n.dnsCustomServer, 'value': 'custom'},
+    ];
     final currentLabel =
-        DnsServerConfig.presets.firstWhere(
-              (p) => p['value'] == _selectedPreset,
-              orElse: () => {'label': _selectedPreset},
-            )['label']
-            as String? ??
+        presets.firstWhere((p) => p['value'] == _selectedPreset, orElse: () => {'label': _selectedPreset})['label'] ??
         _selectedPreset;
 
     return Scaffold(
@@ -233,7 +233,7 @@ class _DnsSettingsScreenState extends ConsumerState<DnsSettingsScreen> {
                     ),
                   ),
                   SetSectionHeader(t: t, addr: '0x10', label: 'preset'),
-                  for (final p in DnsServerConfig.presets)
+                  for (final p in presets)
                     _DnsPresetRow(
                       t: t,
                       label: p['label'] as String,

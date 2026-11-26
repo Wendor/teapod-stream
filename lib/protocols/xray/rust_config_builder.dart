@@ -4,13 +4,13 @@ import 'dart:math';
 
 import '../../core/constants/routing_defaults.dart';
 import '../../core/interfaces/vpn_engine.dart';
+import '../../core/models/app_message.dart';
 import '../../core/models/routing_settings.dart';
 import '../../core/models/vpn_config.dart';
 import '../../core/models/xray_tuning.dart';
 import 'vless_parser.dart';
 import 'xray_config_builder.dart';
 import '../../core/services/geosite_index.dart';
-import '../../l10n/l10n.dart';
 
 /// Profiles xray-rust 0.8.1 runs through Android TUN: VLESS, Trojan, VMess
 /// AEAD, Shadowsocks 2022 and Hysteria2, assembled from the Go builder's
@@ -44,18 +44,18 @@ class RustConfigBuilder {
 
   static bool supports(VpnConfig config) => unsupportedReason(config) == null;
 
-  static String? unsupportedReason(VpnConfig config) {
+  static AppMessage? unsupportedReason(VpnConfig config) {
     if (config.protocol.hasProtocolSettings) return config.protocol.singBoxOnlyReason;
     if (config.rawXrayConfig != null) {
-      return L10n.current.rustNoRawJson;
+      return AppMessage.l10n((l) => l.rustNoRawJson);
     }
     // Go inserts fm from the link into streamSettings as is; xray-rust accepts
     // only a narrow subset of FinalMask, which this builder assembles itself.
     if (config.finalmask?.isNotEmpty ?? false) {
-      return L10n.current.rustNoFinalmask;
+      return AppMessage.l10n((l) => l.rustNoFinalmask);
     }
     if (config.protocol != VpnProtocol.hysteria2 && (VlessParser.linkMux(config) ?? false)) {
-      return L10n.current.rustLinkMux;
+      return AppMessage.l10n((l) => l.rustLinkMux);
     }
     return switch (config.protocol) {
       VpnProtocol.hysteria2 => _hysteria2UnsupportedReason(config),
@@ -67,50 +67,50 @@ class RustConfigBuilder {
     };
   }
 
-  static String? _vlessUnsupportedReason(VpnConfig config) {
+  static AppMessage? _vlessUnsupportedReason(VpnConfig config) {
     if (config.encryption != null && config.encryption != 'none') {
-      return L10n.current.rustVlessEncryption;
+      return AppMessage.l10n((l) => l.rustVlessEncryption);
     }
     if (!_isUuid(config.uuid)) {
-      return L10n.current.rustVlessUuid;
+      return AppMessage.l10n((l) => l.rustVlessUuid);
     }
     final params = VlessParser.linkParams(config);
     final carrier = _carrierReason(config, declaredTransport: params['type'], headerType: params['headerType']);
     if (carrier != null) return carrier;
     if (config.security != VpnSecurity.tls && config.security != VpnSecurity.reality) {
-      return L10n.current.rustVlessSecurity;
+      return AppMessage.l10n((l) => l.rustVlessSecurity);
     }
     final flow = config.flow ?? '';
     if (flow.isNotEmpty && !visionFlows.contains(flow)) {
-      return L10n.current.rustVlessFlow;
+      return AppMessage.l10n((l) => l.rustVlessFlow);
     }
     // xray-rust 0.8.0 fixed Vision over plain TLS on RAW; on WS,
     // HTTPUpgrade, gRPC and xHTTP the core still rejects Vision without VLESS encryption
     // before connecting, as Xray-core does.
     if (flow.isNotEmpty && config.transport != VpnTransport.tcp) {
-      return L10n.current.rustVision;
+      return AppMessage.l10n((l) => l.rustVision);
     }
     return null;
   }
 
-  static String? _trojanUnsupportedReason(VpnConfig config) {
+  static AppMessage? _trojanUnsupportedReason(VpnConfig config) {
     final password = config.password ?? '';
     if (password.isEmpty || utf8.encode(password).length > 4096) {
-      return L10n.current.rustTrojanPassword;
+      return AppMessage.l10n((l) => l.rustTrojanPassword);
     }
     final params = VlessParser.linkParams(config);
     final carrier = _carrierReason(config, declaredTransport: params['type'], headerType: params['headerType']);
     if (carrier != null) return carrier;
     // xray-rust rejects Trojan without TLS/Reality for a public server.
     if (config.security != VpnSecurity.tls && config.security != VpnSecurity.reality) {
-      return L10n.current.rustTrojanSecurity;
+      return AppMessage.l10n((l) => l.rustTrojanSecurity);
     }
     return null;
   }
 
-  static String? _vmessUnsupportedReason(VpnConfig config) {
+  static AppMessage? _vmessUnsupportedReason(VpnConfig config) {
     if (!_isUuid(config.uuid)) {
-      return L10n.current.rustVmessId;
+      return AppMessage.l10n((l) => l.rustVmessId);
     }
     // aid from the link isn't applied, as in Go: alterId isn't written to the config,
     // the client always speaks VMess AEAD, and an Xray/v2fly 4.28+ server accepts
@@ -121,54 +121,54 @@ class RustConfigBuilder {
     final rawTls = json['tls']?.toString() ?? '';
     final tls = rawTls.trim().toLowerCase();
     if (tls.isNotEmpty && tls != 'tls' && tls != 'none') {
-      return L10n.current.rustVmessSecurity(tls);
+      return AppMessage.l10n((l) => l.rustVmessSecurity(tls));
     }
     // "TLS" or " tls" isn't recognized by the parser either: the profile would hit the TLS port
     // with bare VMess.
     if (tls == 'tls' && config.security != VpnSecurity.tls) {
-      return L10n.current.rustVmessTls(rawTls);
+      return AppMessage.l10n((l) => l.rustVmessTls(rawTls));
     }
     return _carrierReason(config, declaredTransport: json['net']?.toString(), headerType: json['type']?.toString());
   }
 
-  static String? _shadowsocksUnsupportedReason(VpnConfig config) {
+  static AppMessage? _shadowsocksUnsupportedReason(VpnConfig config) {
     final method = config.method ?? '';
     if (!ss2022Methods.contains(method)) {
-      return L10n.current.rustSsMethod(method);
+      return AppMessage.l10n((l) => l.rustSsMethod(method));
     }
     final keys = _ss2022KeyReason(method, config.password ?? '');
     if (keys != null) return keys;
     if (VlessParser.linkParams(config)['plugin']?.trim().isNotEmpty ?? false) {
-      return L10n.current.rustSsPlugin;
+      return AppMessage.l10n((l) => l.rustSsPlugin);
     }
     if (config.ssPrefix?.isNotEmpty ?? false) {
-      return L10n.current.rustSsPrefix;
+      return AppMessage.l10n((l) => l.rustSsPrefix);
     }
     return null;
   }
 
   /// Transport, TCP header and outer TLS/REALITY rules shared by the protocols
   /// on xray-rust's stream carriers (VLESS, Trojan, VMess).
-  static String? _carrierReason(VpnConfig config, {String? declaredTransport, String? headerType}) {
+  static AppMessage? _carrierReason(VpnConfig config, {String? declaredTransport, String? headerType}) {
     final declared = declaredTransport?.trim().toLowerCase() ?? '';
     if (!_transports.contains(config.transport) || (declared.isNotEmpty && !_urlTransports.contains(declared))) {
-      return L10n.current.rustTransport;
+      return AppMessage.l10n((l) => l.rustTransport);
     }
     // The parser doesn't read headerType: without the check TCP with HTTP camouflage would silently
     // go out as bare TCP. xray-rust accepts only header.type none.
     final header = headerType?.trim().toLowerCase() ?? '';
     if (config.transport == VpnTransport.tcp && header.isNotEmpty && header != 'none') {
-      return L10n.current.rustTcpHeader(header);
+      return AppMessage.l10n((l) => l.rustTcpHeader(header));
     }
     if (config.security == VpnSecurity.reality &&
         (config.transport == VpnTransport.ws || config.transport == VpnTransport.httpupgrade)) {
-      return L10n.current.rustReality;
+      return AppMessage.l10n((l) => l.rustReality);
     }
     if (config.security == VpnSecurity.tls && _insecureWithoutPin(config)) {
       return _insecureReason;
     }
     if (config.ech?.isNotEmpty ?? false) {
-      return L10n.current.rustEch;
+      return AppMessage.l10n((l) => l.rustEch);
     }
     return null;
   }
@@ -185,17 +185,17 @@ class RustConfigBuilder {
   /// `shadowsocks2022::Method::new`: colon-separated padded standard base64
   /// keys, each at least the cipher's key length (longer keys are hashed),
   /// at most eight AES identity keys, one ChaCha key, 8192 encoded bytes.
-  static String? _ss2022KeyReason(String method, String password) {
+  static AppMessage? _ss2022KeyReason(String method, String password) {
     final keyLength = method == '2022-blake3-aes-128-gcm' ? 16 : 32;
     final keys = password.split(':');
     final chacha = method == '2022-blake3-chacha20-poly1305';
     if (password.isEmpty || utf8.encode(password).length > 8192 || keys.length > 8 || (chacha && keys.length != 1)) {
-      return chacha ? L10n.current.rustSsOneKey(method) : L10n.current.rustSsMaxKeys(method);
+      return chacha ? AppMessage.l10n((l) => l.rustSsOneKey(method)) : AppMessage.l10n((l) => l.rustSsMaxKeys(method));
     }
     for (final key in keys) {
       final decoded = _strictBase64(key);
       if (decoded == null || decoded.length < keyLength) {
-        return L10n.current.rustSsKey(method, keyLength);
+        return AppMessage.l10n((l) => l.rustSsKey(method, keyLength));
       }
     }
     return null;
@@ -248,7 +248,7 @@ class RustConfigBuilder {
       if (o.geosite?[code] case final e? when e.rustDomains < e.domains) GeositeIndex.baseCode(code),
   }.toList();
 
-  static String get _insecureReason => L10n.current.rustInsecure;
+  static final _insecureReason = AppMessage.l10n((l) => l.rustInsecure);
 
   static bool _hasPin(VpnConfig config) => config.pinSHA256?.trim().isNotEmpty ?? false;
 
@@ -258,31 +258,31 @@ class RustConfigBuilder {
   /// optional FinalMask Salamander and `quicParams.udpHop` in Xray-core
   /// v26.7.28's spelling (the Go builder's `udphop` mask is converted back). Brutal,
   /// bandwidth and other QUIC overrides and sockopt stay rejected by the core.
-  static String? _hysteria2UnsupportedReason(VpnConfig config) {
+  static AppMessage? _hysteria2UnsupportedReason(VpnConfig config) {
     // xray-rust has Salamander only: Gecko and unknown types are refused here, and an empty
     // Salamander password Go would silently drop and connect without obfuscation.
     final obfs = VlessParser.linkParams(config)['obfs']?.trim() ?? '';
     if (obfs.isNotEmpty && obfs != 'none' && obfs != 'salamander') {
-      return L10n.current.rustHy2Obfs(obfs);
+      return AppMessage.l10n((l) => l.rustHy2Obfs(obfs));
     }
     final salamander = config.obfsPassword ?? '';
     if (obfs == 'salamander' && salamander.isEmpty) {
-      return L10n.current.rustSalamanderNoPassword;
+      return AppMessage.l10n((l) => l.rustSalamanderNoPassword);
     }
     if (salamander.isNotEmpty && (utf8.encode(salamander).length < 4 || utf8.encode(salamander).length > 4096)) {
-      return L10n.current.rustSalamanderPassword;
+      return AppMessage.l10n((l) => l.rustSalamanderPassword);
     }
     final hop = config.hopPorts ?? '';
     if (hop.isNotEmpty && _expandedPortCount(hop) > 65535) {
-      return L10n.current.rustPortHopping;
+      return AppMessage.l10n((l) => l.rustPortHopping);
     }
     final auth = config.password ?? '';
     if (auth.isEmpty || utf8.encode(auth).length > 4096 || auth.codeUnits.any((c) => c < 0x20 || c == 0x7f)) {
-      return L10n.current.rustHy2Password;
+      return AppMessage.l10n((l) => l.rustHy2Password);
     }
     if (_insecureWithoutPin(config)) return _insecureReason;
     if (config.ech?.isNotEmpty ?? false) {
-      return L10n.current.rustEch;
+      return AppMessage.l10n((l) => l.rustEch);
     }
     return null;
   }
@@ -300,18 +300,18 @@ class RustConfigBuilder {
 
   static Map<String, dynamic> build(VpnConfig config, VpnEngineOptions options) {
     final reason = unsupportedReason(config);
-    if (reason != null) throw FormatException(reason);
+    if (reason != null) throw ReasonException(reason);
     if (options.proxyOnly) {
-      throw FormatException(L10n.current.rustTunOnly);
+      throw ReasonException(AppMessage.l10n((l) => l.rustTunOnly));
     }
     // Go doesn't apply Mux to Hysteria2 (QUIC multiplexes streams itself),
     // so it doesn't get in the way here either.
     final hysteria2 = config.protocol == VpnProtocol.hysteria2;
     if (options.mux.enabled && !hysteria2) {
-      throw FormatException(L10n.current.rustMux);
+      throw ReasonException(AppMessage.l10n((l) => l.rustMux));
     }
     if (options.mtu != 1500) {
-      throw FormatException(L10n.current.rustMtu);
+      throw ReasonException(AppMessage.l10n((l) => l.rustMtu));
     }
     final fragment = fragmentMask(config, options.fragment);
     final noise = noiseMask(config, options.noise);
@@ -321,9 +321,9 @@ class RustConfigBuilder {
             options.routing.domainEnabled ||
             options.routing.sitesEnabled ||
             options.routing.ruServicesEnabled)) {
-      throw FormatException(L10n.current.rustSniffing);
+      throw ReasonException(AppMessage.l10n((l) => l.rustSniffing));
     }
-    if (domainMatchers(options) > maxDomainMatchers) throw FormatException(L10n.current.rustGeositeLimit);
+    if (domainMatchers(options) > maxDomainMatchers) throw ReasonException(AppMessage.l10n((l) => l.rustGeositeLimit));
 
     // Composed from the Go builder's parts by name; its policy, dialer-out, SOCKS UDP rule and catch-all
     // aren't taken. Native TUN traffic never uses SOCKS.
@@ -503,19 +503,19 @@ class RustConfigBuilder {
       return null;
     }
     if (f.packets.trim() != 'tlshello') {
-      throw FormatException(L10n.current.rustFragmentPackets);
+      throw ReasonException(AppMessage.l10n((l) => l.rustFragmentPackets));
     }
     if (config.security == VpnSecurity.none) return null;
     final length = _range(f.length);
     final delay = _range(f.interval);
     if (length.$2 > 16384) {
-      throw FormatException(L10n.current.rustFragmentLength);
+      throw ReasonException(AppMessage.l10n((l) => l.rustFragmentLength));
     }
     if (delay.$2 > 1000) {
-      throw FormatException(L10n.current.rustFragmentDelay);
+      throw ReasonException(AppMessage.l10n((l) => l.rustFragmentDelay));
     }
     if (config.xhttpExtra?['downloadSettings'] != null) {
-      throw FormatException(L10n.current.rustFragmentXhttp);
+      throw ReasonException(AppMessage.l10n((l) => l.rustFragmentXhttp));
     }
     final settings = <String, dynamic>{'packets': 'tlshello', 'length': f.length.trim(), 'delay': f.interval.trim()};
     // xray-rust drops the connection if the split plan exceeds 4096 chunks or
@@ -538,13 +538,13 @@ class RustConfigBuilder {
     if (!n.enabled || !n.isValid) return null;
     if (config.protocol != VpnProtocol.hysteria2 && !_isXhttpH3(config)) {
       if (config.protocol == VpnProtocol.shadowsocks) {
-        throw FormatException(L10n.current.rustNoiseSs);
+        throw ReasonException(AppMessage.l10n((l) => l.rustNoiseSs));
       }
       return null;
     }
     final delay = n.delay.trim();
     if (_range(delay).$2 > 1000) {
-      throw FormatException(L10n.current.rustNoiseDelay);
+      throw ReasonException(AppMessage.l10n((l) => l.rustNoiseDelay));
     }
     final packet = n.packet.trim();
     final int bytes;
@@ -555,18 +555,18 @@ class RustConfigBuilder {
         bytes = utf8.encode(packet).length;
       case NoiseType.hex:
         if (packet.length.isOdd || !RegExp(r'^[0-9a-fA-F]+$').hasMatch(packet)) {
-          throw FormatException(L10n.current.rustNoiseHex);
+          throw ReasonException(AppMessage.l10n((l) => l.rustNoiseHex));
         }
         bytes = packet.length ~/ 2;
       case NoiseType.base64:
         final decoded = _strictBase64(packet);
         if (decoded == null) {
-          throw FormatException(L10n.current.rustNoiseBase64);
+          throw ReasonException(AppMessage.l10n((l) => l.rustNoiseBase64));
         }
         bytes = decoded.length;
     }
     if (bytes > 4096) {
-      throw FormatException(L10n.current.rustNoisePacket);
+      throw ReasonException(AppMessage.l10n((l) => l.rustNoisePacket));
     }
     return {
       'type': 'noise',

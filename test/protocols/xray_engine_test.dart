@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:teapodstream/core/constants/app_constants.dart';
 import 'package:teapodstream/core/interfaces/vpn_engine.dart';
+import 'package:teapodstream/core/models/app_message.dart';
 import 'package:teapodstream/core/models/heartbeat_settings.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/core/models/vpn_log_entry.dart';
@@ -103,12 +104,9 @@ void main() {
       expect(args.containsKey('ssPrefix'), isFalse);
     });
 
-    test('config that cannot be built becomes UNSUPPORTED_CONFIG', () async {
+    test('config that cannot be built throws its reason; nothing reaches native', () async {
       final bad = VpnConfig.fromJson({..._vless().toJson(), 'rawXrayConfig': '{broken'});
-      await expectLater(
-        XrayEngine().connect(bad, const XrayGoBackend(), _opts),
-        throwsA(isA<PlatformException>().having((e) => e.code, 'code', 'UNSUPPORTED_CONFIG')),
-      );
+      await expectLater(XrayEngine().connect(bad, const XrayGoBackend(), _opts), throwsA(isA<ReasonException>()));
       expect(calls, isEmpty);
     });
 

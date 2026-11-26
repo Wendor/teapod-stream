@@ -1,6 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:teapodstream/core/services/ip_lookup.dart';
+
+import '../../../tool/itest/src/agent_client.dart';
+import '../../../tool/itest/src/device_guard.dart';
 import '../../../tool/itest/src/matrix.dart';
+import '../../../tool/itest/src/probes.dart';
+import 'fake_shell.dart';
 
 AgentConfig cfg(String id, String name, List<String> cores, {String protocol = 'vless'}) =>
     (id: id, name: name, protocol: protocol, host: 'h', port: 1, sub: null, cores: cores);
@@ -71,5 +77,20 @@ void main() {
   test('glob', () {
     expect(globMatch('opt/*/split-*', 'opt/sing-box/split-only-shell'), isTrue);
     expect(globMatch('base/*', 'opt/x'), isFalse);
+  });
+
+  test("the routing pair skips the app's own IP lookup services", () {
+    expect(appLookupHosts, IpLookupSource.hosts.toSet());
+    final shell = FakeShell();
+    final direct = {for (final u in echoMain) u: '198.51.100.1'};
+    final ctx = CaseCtx(
+      AgentClient(shell, const Stream.empty()),
+      Probes(shell),
+      Baseline(direct, null, null),
+      DeviceGuard(shell),
+      '203.0.113.5',
+    );
+    final (a, b) = ctx.pair!;
+    expect([a, b].map((u) => Uri.parse(u).host), everyElement(isNot(isIn(appLookupHosts))));
   });
 }

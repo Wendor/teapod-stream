@@ -89,11 +89,18 @@ class CaseCtx {
   Future<Outcome> directRu() async =>
       classifyDirect(baseline: baseline.directRuIp, observed: await probes.ip(echoRu), egress: egress);
 
-  /// Two distinguishable services for routing rules (a — the rule, b — the rest).
-  (String, String)? get pair => informativeUrls.length < 2 ? null : (informativeUrls[0], informativeUrls[1]);
+  /// Two distinguishable services for routing rules (a — the rule, b — the rest). Not the app's own IP lookup
+  /// services: in `onlySelected` the app sends them through the proxy whatever the rules say.
+  (String, String)? get pair {
+    final urls = informativeUrls.where((u) => !appLookupHosts.contains(Uri.parse(u).host)).toList();
+    return urls.length < 2 ? null : (urls[0], urls[1]);
+  }
 }
 
 typedef Check = Future<Outcome> Function(CaseCtx ctx);
+
+/// Hosts of `IpLookupSource.all` (`lib/core/services/ip_lookup.dart`): `diagnosticRules` route them through the proxy.
+const appLookupHosts = {'ip-api.com', 'ipinfo.io', 'api.ipify.org'};
 
 class MatrixCase {
   final String id;

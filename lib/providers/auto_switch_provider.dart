@@ -41,7 +41,8 @@ class AutoSwitch {
 
       final configState = _ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
       if (configState == null) return;
-      final current = _ref.read(effectiveConfigProvider);
+      // The config that failed is the one the session runs: in auto mode a ping may have moved the effective one.
+      final current = _ref.read(vpnProvider.notifier).runningConfig;
       if (current == null) return;
       await _ref.read(availableCoresProvider.future);
       final candidates = supportedCandidates(

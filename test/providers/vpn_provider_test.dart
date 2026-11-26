@@ -106,6 +106,9 @@ class _Native {
   /// host → latency via `measureOutbound`; null — the server is dead.
   Map<String, int?> outboundMs = {};
 
+  /// Holds `measureOutbound` answers until it completes; null — they come at once.
+  Future<void>? outboundGate;
+
   /// host → TCP ping latency.
   Map<String, int?> pingMs = {};
   Object? Function()? onConnect;
@@ -132,7 +135,8 @@ class _Native {
         return pingMs[(call.arguments as Map)['address']];
       case 'measureOutbound':
         final cfg = (call.arguments as Map)['config'] as String;
-        return outboundMs.entries.where((e) => cfg.contains(e.key)).firstOrNull?.value;
+        final ms = outboundMs.entries.where((e) => cfg.contains(e.key)).firstOrNull?.value;
+        return outboundGate == null ? ms : outboundGate!.then((_) => ms);
       case 'getStats':
         return {'upload': 10, 'download': 20, 'uploadSpeed': 1, 'downloadSpeed': 2};
     }
@@ -1264,17 +1268,49 @@ void main() {
 
     test('a switch is dropped when a profile switch changed the server meanwhile', () async {
       native.outboundMs = {'hc.example': 80};
+      final probe = Completer<void>();
+      native.outboundGate = probe.future;
       await connected(configs: subConfigs, settings: switchOn);
       await n().duringProfileSwitch(() async {
-        // The profile's server is in place before the measurement ends.
         emit({'type': 'tunnel_dead', 'failures': 3});
-        await c.read(configProvider.notifier).setActiveConfig('d');
         await _settle();
+        expect(native.named('measureOutbound'), isNotEmpty); // the failed config is taken: the probes wait
+        await c.read(configProvider.notifier).setActiveConfig('d');
         return true;
       });
       await _settle();
+      expect(native.lastConnect()['xrayConfig'], contains('hd.example'));
+      probe.complete();
+      await _settle();
+      expect(logs().map((l) => l.message), contains('urltest: the server changed meanwhile, no switch'));
       expect(c.read(configProvider).value!.activeConfigId, 'd');
       expect(native.lastConnect()['xrayConfig'], contains('hd.example'));
+    });
+
+    test('the config the session runs is the failed one, also when a ping moved the auto best', () async {
+      native.outboundMs = {'hb.example': 50};
+      await boot(
+        configs: subConfigs,
+        subs: [Subscription(id: 's', name: 'S', url: 'https://sub.example/s', createdAt: DateTime(2026))],
+        activeSubId: 's',
+        settings: switchOn,
+      );
+      await n().connect();
+      emit({'type': 'state', 'value': 'connected', 'socksPort': 1});
+      await _settle();
+      // A ping makes b the auto best; the tunnel keeps running a.
+      await c.read(configProvider.notifier).batchUpdatePingResults({
+        'ha.example:443': 90,
+        'hb.example:443': 10,
+      }, DateTime(2026));
+      await _settle();
+      expect(native.named('connect'), hasLength(1));
+      emit({'type': 'tunnel_dead', 'failures': 3});
+      await _settle();
+      final probed = native.named('measureOutbound').map((m) => (m.arguments as Map)['config'] as String);
+      expect(probed.where((cfg) => cfg.contains('ha.example')), isEmpty);
+      expect(native.named('connect'), hasLength(2));
+      expect(native.lastConnect()['xrayConfig'], contains('hb.example'));
     });
 
     test('pinned source probes only pinned configs', () async {

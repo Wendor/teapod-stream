@@ -1,9 +1,11 @@
 # GeoProvider — geodata
 
-**Files:** `lib/providers/geo_provider.dart`, `GeoPresets` in `lib/core/models/app_settings.dart`
+**Files:** `lib/providers/geo_provider.dart`, `lib/core/services/geodata_service.dart`, `GeoPresets` in
+`lib/core/models/app_settings.dart`
 
-`GeoNotifier` manages `geoip.dat` and `geosite.dat` in `filesDir`, which the cores read for `geoip:` / `geosite:`
-rules and ad blocking.
+`geoip.dat` and `geosite.dat` in `filesDir` are what the cores read for `geoip:` / `geosite:` rules and ad blocking.
+`GeodataService` (`geodataServiceProvider`) does the I/O: whether both files are there, the last download time, the
+download. `GeoNotifier` holds the state and the progress, and picks the tunnel.
 
 State (sealed): `GeoMissing`, `GeoReady(lastUpdated)`, `GeoDownloading(downloaded, total)`, `GeoError(message)` (an `AppMessage`, [localization](localization.md)).
 
@@ -11,7 +13,7 @@ State (sealed): `GeoMissing`, `GeoReady(lastUpdated)`, `GeoDownloading(downloade
   fallback bundled in `assets/binaries/` (put there by `./build.sh binaries` from the Loyalsoldier release pinned in
   `build.sh`, `GEODATA_VERSION` with SHA-256 per file; the monthly update check reports a newer release, and the pin
   is moved by a pull request), then checks again.
-- **`download()`** from `AppSettings.geoipUrl` / `geositeUrl`: HEAD for the total size, both files into `*.tmp`,
+- **`download()`** from `AppSettings.geoipUrl` / `geositeUrl` (`GeodataService.download`): HEAD for the total size, both files into `*.tmp`,
   then an atomic rename — a failure leaves the old files intact. While connected the download goes through the
   tunnel (`TunnelSocks.orDirect`, [services](services.md#tunnelsocks)): the app is excluded from TUN and GitHub's CDN
   may be blocked. Requests go through [AppHttp](services.md#apphttp). Timeouts: 15 s for HEAD, 30 s for the response

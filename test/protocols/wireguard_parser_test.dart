@@ -127,7 +127,7 @@ void main() {
     expect(VlessParser.parseUri(_link)?.protocol, VpnProtocol.wireguard);
     expect(VlessParser.parseUri(_link.replaceFirst('wireguard://', 'wg://'))?.protocol, VpnProtocol.wireguard);
     expect(VlessParser.parseUri(_conf)?.protocol, VpnProtocol.wireguard);
-    expect(VlessParser.parseUri('$_conf\n[Peer]\nPublicKey = x\n'), isNull);
+    expect(() => VlessParser.parseUri('$_conf\n[Peer]\nPublicKey = x\n'), throwsFormatException);
   });
 
   test('sing-box endpoint', () {

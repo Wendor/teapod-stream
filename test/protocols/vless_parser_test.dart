@@ -188,7 +188,10 @@ void main() {
           'hy2://pass@h.example:443?obfs=gecko&obfs-password=ob&minPacketSize=300&maxPacketSize=2048',
         )!;
         expect(VlessParser.geckoPacketSize(sized), (300, 2048));
-        expect(VlessParser.parseUri('hy2://pass@h.example:443?obfs=other&obfs-password=ob')!.obfsPassword, isNull);
+        expect(
+          () => VlessParser.parseUri('hy2://pass@h.example:443?obfs=other&obfs-password=ob'),
+          throwsFormatException,
+        );
       });
 
       test('a Gecko link without a password or with invalid packet sizes is not imported', () {
@@ -262,6 +265,64 @@ void main() {
           expect(config.hopPorts, isNull, reason: uri);
           expect(config.validate(), isNull, reason: uri);
         }
+      });
+    });
+
+    group('values that change the connection', () {
+      String vmess(Map<String, Object?> fields) =>
+          'vmess://${base64.encode(utf8.encode(jsonEncode({'add': 'h', 'port': '443', 'id': 'u', 'net': 'tcp', ...fields})))}';
+
+      test('VLESS security: known values in any case, anything else refused naming the value', () {
+        for (final (value, security) in [
+          (null, VpnSecurity.none),
+          ('', VpnSecurity.none),
+          ('none', VpnSecurity.none),
+          ('TLS', VpnSecurity.tls),
+          ('Reality', VpnSecurity.reality),
+        ]) {
+          final query = value == null ? '' : '?security=$value';
+          expect(VlessParser.parseUri('vless://u@h:443$query#n')!.security, security, reason: value);
+        }
+        for (final value in ['xtls', 'tsl']) {
+          expect(
+            () => VlessParser.parseUri('vless://u@h:443?security=$value#n'),
+            throwsA(isA<FormatException>().having((e) => e.message, 'message', contains('"$value"'))),
+          );
+        }
+      });
+
+      test('VMess tls: "", none and tls in any case; anything else refused', () {
+        expect(VlessParser.parseUri(vmess({}))!.security, VpnSecurity.none);
+        expect(VlessParser.parseUri(vmess({'tls': 'none'}))!.security, VpnSecurity.none);
+        expect(VlessParser.parseUri(vmess({'tls': ' TLS'}))!.security, VpnSecurity.tls);
+        expect(() => VlessParser.parseUri(vmess({'tls': 'reality'})), throwsFormatException);
+        expect(() => VlessParser.parseUri(vmess({'tls': 'xtls'})), throwsFormatException);
+      });
+
+      test('an unknown transport is refused; raw is TCP', () {
+        expect(VlessParser.parseUri('vless://u@h:443?type=raw#n')!.transport, VpnTransport.tcp);
+        expect(VlessParser.parseUri('vless://u@h:443#n')!.transport, VpnTransport.tcp);
+        expect(
+          () => VlessParser.parseUri('vless://u@h:443?security=tls&type=kcp#n'),
+          throwsA(isA<FormatException>().having((e) => e.message, 'message', contains('"kcp"'))),
+        );
+        expect(() => VlessParser.parseUri('trojan://p@h:443?type=kcp#n'), throwsFormatException);
+        expect(() => VlessParser.parseUri(vmess({'net': 'kcp'})), throwsFormatException);
+      });
+
+      test('an unknown Hysteria2 obfs is refused; none is no obfuscation', () {
+        expect(VlessParser.parseUri('hy2://p@h:443?obfs=none#n')!.obfsPassword, isNull);
+        expect(
+          () => VlessParser.parseUri('hy2://p@h:443?obfs=other&obfs-password=x#n'),
+          throwsA(isA<FormatException>().having((e) => e.message, 'message', contains('"other"'))),
+        );
+      });
+
+      test('VMess fp and alpn are read', () {
+        final c = VlessParser.parseUri(vmess({'tls': 'tls', 'fp': 'chrome', 'alpn': 'h2,http/1.1'}))!;
+        expect((c.fingerprint, c.alpn), ('chrome', 'h2,http/1.1'));
+        final bare = VlessParser.parseUri(vmess({'fp': '', 'alpn': 3}))!;
+        expect((bare.fingerprint, bare.alpn), (null, null));
       });
     });
 

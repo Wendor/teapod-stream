@@ -1547,6 +1547,24 @@ class AppLocalizationsRu extends AppLocalizations {
       'Xray-core больше не поддерживает allowInsecure: укажи pinSHA256 сертификата сервера или используй действительный сертификат.';
 
   @override
+  String get xrayNoSsPlugins => 'Плагины Shadowsocks (SIP003, plugin=…) недоступны в ядре Xray-core.';
+
+  @override
+  String linkUnknownSecurity(String value) {
+    return 'Неизвестное шифрование в ссылке: «$value».';
+  }
+
+  @override
+  String linkUnknownTransport(String value) {
+    return 'Неизвестный транспорт в ссылке: «$value».';
+  }
+
+  @override
+  String linkUnknownObfs(String value) {
+    return 'Неизвестная обфускация Hysteria2 в ссылке: «$value». Поддерживаются salamander, gecko.';
+  }
+
+  @override
   String get xrayPinFormat => 'pinSHA256 должен быть SHA-256 сертификата: 64 hex-символа или base64 от 32 байт.';
 
   @override

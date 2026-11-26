@@ -14,7 +14,6 @@ import '../core/services/log_service.dart';
 import 'settings_provider.dart';
 import 'vpn_provider.dart';
 import '../core/models/app_message.dart';
-import '../protocols/parsers/wireguard_parser.dart';
 import '../protocols/xray/vless_parser.dart';
 
 class ConfigState {
@@ -289,10 +288,10 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
       _mutate((s) => s.copyWith(configs: [for (final c in s.configs) c.id == updated.id ? updated : c]));
 
   /// Replaces config [id]'s link with [link] ([ConfigState.withEditedLink]). false — [link] isn't a link the app reads;
-  /// a WireGuard `.conf` it can't accept throws [FormatException] with the reason, as on adding.
+  /// a link it reads but refuses throws [VlessParser.parseUri]'s [FormatException] with the reason, as on adding.
   Future<bool> editLink(String id, String link) async {
     final text = link.trim();
-    final parsed = WireGuardParser.isConf(text) ? WireGuardParser.parseConf(text) : VlessParser.parseUri(text);
+    final parsed = VlessParser.parseUri(text);
     if (parsed == null) return false;
     await _mutate((s) => s.withEditedLink(id, parsed.copyWith(rawUri: parsed.rawUri ?? text)));
     return true;
@@ -521,7 +520,16 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
 
     String key(VpnConfig c) => c.rawUri ?? c.endpoint;
     final existingKeys = current.configs.map(key).toSet();
-    final parsed = bundle.rawUris.map(VlessParser.parseUri).nonNulls;
+    // A refused link (FormatException) is skipped like an unreadable one and counted in skippedConfigs.
+    VpnConfig? parse(String uri) {
+      try {
+        return VlessParser.parseUri(uri);
+      } on FormatException {
+        return null;
+      }
+    }
+
+    final parsed = bundle.rawUris.map(parse).nonNulls.toList();
     final remapped = [
       for (final (i, c) in [...bundle.configs, ...parsed].indexed)
         c.copyWith(

@@ -3,7 +3,12 @@
 **Files:** `lib/protocols/xray/vless_parser.dart`, `lib/protocols/parsers/` (WireGuard, AmneziaVPN, SSH, Naive)
 
 `VlessParser.parseUri(uri)` turns one link into a `VpnConfig` (null if it can't), dispatching non-xray schemes to
-the parsers in `lib/protocols/parsers/`. `rawUri` keeps the original link for export and to detect edits.
+the parsers in `lib/protocols/parsers/`. A value that changes how the connection works and that the parser doesn't
+know is refused, not replaced by a default: `parseUri` throws a `FormatException` naming it — VLESS `security`
+(`none`/empty, `tls`, `reality`, any case), VMess `tls` (empty, `none`, `tls`), the transport `type`/`net`
+(`tcp`/`raw`/empty, `ws`, `grpc`, `h2`/`http`, `quic`, `xhttp`, `httpupgrade`, `splithttp`), Hysteria2 `obfs`
+(empty, `none`, `salamander`, `gecko`), and a WireGuard `.conf` the WireGuard parser rejects. AddConfigScreen and the
+link editor show the message; a subscription or bundle skips such a link like an unreadable one. `rawUri` keeps the original link for export and to detect edits.
 Multi-line subscription bodies are split and decoded in `SubscriptionService` ([services](services.md)).
 
 ## Xray protocols
@@ -11,7 +16,7 @@ Multi-line subscription bodies are split and decoded in `SubscriptionService` ([
 | Scheme | Format and notes |
 |---|---|
 | `vless://` | `uuid@host:port?…#name`: `security`, `type`, `path`, `host`, `sni`, `fp`, `alpn`, `flow`, `encryption`, Reality `pbk`/`sid`/`spx`/`pqv`, `ech`, `pinSHA256`, `allowInsecure`/`insecure`, `mode`/`extra` (xhttp), `fm` (finalmask) |
-| `vmess://` | base64 JSON: `ps`, `add`, `port`, `id`, `aid`, `scy`, `net`, `type`, `host`, `path`, `tls`, `sni`, `alpn`, `fp`, … |
+| `vmess://` | base64 JSON: `ps`, `add`, `port`, `id`, `aid`, `scy`, `net`, `type`, `host`, `path`, `tls`, `sni`, `alpn`, `fp` (`alpn`, `fp` → the model; `scy`, `type` re-read from `rawUri`), … |
 | `trojan://` | `password@host:port`; `security` (tls/reality/none), Reality params, `pinSHA256`, `alpn`, `ech`; the password is percent-decoded. `allowInsecure` is deliberately not read |
 | `ss://` | `base64(method:password)@host:port` or legacy `base64(method:password@host:port)`; Outline `prefix` → `ssPrefix` |
 | `hysteria2://`, `hy2://` | `password@host:port?sni&insecure&obfs&obfs-password&pinSHA256`; `obfs-password` is kept for `obfs=salamander` and `obfs=gecko`; Gecko's `minPacketSize` / `maxPacketSize` (default 512 / 1200, `0 < min ≤ max ≤ 2048`) stay in `rawUri` and are read by `geckoPacketSize()` — a Gecko link without a password or with invalid sizes is rejected; port hopping: a range/list in the authority (`20000-30000`, `443,5000-6000`) or `mport` → `hopPorts`, the first port → `port`; an unparsable port rejects the link, an unparsable `mport` is ignored |

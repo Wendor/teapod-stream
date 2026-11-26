@@ -136,9 +136,9 @@ void main() {
       () => RustConfigBuilder.buildProbe(profiles['ss2022']!, options(noise: const NoiseSettings(enabled: true))),
       throwsFormatException,
     );
-    final kcpVmess = parse(
-      'vmess://${base64.encode(utf8.encode(jsonEncode({'add': 'vmess.example', 'port': '443', 'id': uuid, 'aid': '0', 'net': 'kcp', 'tls': 'tls'})))}',
+    final quicVmess = parse(
+      'vmess://${base64.encode(utf8.encode(jsonEncode({'add': 'vmess.example', 'port': '443', 'id': uuid, 'aid': '0', 'net': 'quic', 'tls': 'tls'})))}',
     );
-    expect(() => RustConfigBuilder.buildProbe(kcpVmess, options()), throwsFormatException);
+    expect(() => RustConfigBuilder.buildProbe(quicVmess, options()), throwsFormatException);
   });
 }

@@ -87,7 +87,6 @@ void main() {
       expectRejected(parse(trojan('tcp', 'none')), 'TLS or Reality');
       expectRejected(parse(trojan('ws', 'reality')), 'Reality');
       expectRejected(parse(trojan('quic', 'tls')), 'Transport');
-      expectRejected(parse(trojan('kcp', 'tls')), 'Transport');
       expectRejected(parse(trojan('tcp', 'tls', '&headerType=http')), 'headerType');
       expectRejected(parse(trojan('tcp', 'tls', '&ech=AEX%2B')), 'ECH');
       expectRejected(parse('trojan://${'p' * 4097}@trojan.example:443?security=tls&sni=cover.example'), '4096');
@@ -147,17 +146,17 @@ void main() {
     });
 
     test('rejects unsupported VMess link fields', () {
-      for (final net in ['kcp', 'quic', 'h2']) {
+      for (final net in ['quic', 'h2']) {
         expectRejected(parse(vmess({'net': net})), 'Transport');
       }
       expectRejected(parse(vmess({'net': 'tcp', 'type': 'http'})), 'headerType');
-      // The parser maps every tls value but "tls" to no transport security.
-      expectRejected(parse(vmess({'tls': 'reality'})), 'reality');
-      // "TLS" or " tls" would silently go to the TLS port as plain VMess.
+      // A config stored before the parser refused unknown tls values and read "TLS" as TLS: it has no transport
+      // security while its link asks for one.
+      final stored = VpnConfig.fromJson({...parse(vmess({})).toJson(), 'security': 'none'});
+      expectRejected(stored.copyWith(rawUri: vmess({'tls': 'reality'})), 'reality');
       for (final tls in ['TLS', 'Tls', ' tls']) {
-        final config = parse(vmess({'tls': tls}));
-        expect(config.security, VpnSecurity.none, reason: tls);
-        expectRejected(config, 'tls="$tls"');
+        expect(parse(vmess({'tls': tls})).security, VpnSecurity.tls, reason: tls);
+        expectRejected(stored.copyWith(rawUri: vmess({'tls': tls})), 'tls="$tls"');
       }
       expectRejected(parse(vmess({'id': 'not-a-uuid'})), 'UUID');
     });

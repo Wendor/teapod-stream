@@ -1718,11 +1718,11 @@ abstract class AppLocalizations {
   /// **'Read-only'**
   String get profilesReadonly;
 
-  /// No description provided for @profilesInvalidFormat.
+  /// No description provided for @bundleInvalid.
   ///
   /// In en, this message translates to:
-  /// **'Invalid format'**
-  String get profilesInvalidFormat;
+  /// **'Invalid format: {detail}'**
+  String bundleInvalid(String detail);
 
   /// No description provided for @commonImport.
   ///

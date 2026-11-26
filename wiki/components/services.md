@@ -67,7 +67,7 @@ by design.
 | geodata (`GeodataService`, from `GeoNotifier`) | `orDirect` | 30 s, 200 MB per file |
 | update check, APK (`UpdateService`) | when connected, no direct retry | defaults; APK: 30 s idle, 500 MB for the whole file, a resumed part included |
 | IP lookup (`IpLookup.lookupThrough`, from `IpInfoNotifier`) | always (it asks for the tunnel's exit) | 64 KB |
-| deep link and profile bundles (`DeeplinkRouter.fetchBundle`) | `orDirect` | https only, 1 MB |
+| deep link and profile bundles (`BundleLoader.fetch`) | `orDirect` | https only, 1 MB |
 
 ## TunnelSocks
 
@@ -119,8 +119,9 @@ cancel — hung forever). Both go through [AppHttp](#apphttp) and the tunnel whe
 
 ## Deep links
 
-`DeeplinkRouter.parse` / `fetchFromUrl` and `DeeplinkHandler.handleUri` (dialogs, import) — [profiles](profiles.md#bundles-and-deep-links).
-`DeeplinkRouter.fetchBundle` downloads a bundle for a deep link and for `ProfileNotifier.refreshProfile` ([AppHttp](#apphttp)).
+`DeeplinkRouter.parse` reads a link; `BundleLoader` returns the bundle it carries or downloads it, and loads pasted
+profiles and profile refreshes ([AppHttp](#apphttp)); `DeeplinkHandler.handleUri` shows the dialogs and imports —
+[profiles](profiles.md#bundles-and-deep-links).
 
 ## PlatformService
 

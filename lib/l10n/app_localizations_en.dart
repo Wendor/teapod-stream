@@ -892,7 +892,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profilesReadonly => 'Read-only';
 
   @override
-  String get profilesInvalidFormat => 'Invalid format';
+  String bundleInvalid(String detail) {
+    return 'Invalid format: $detail';
+  }
 
   @override
   String get commonImport => 'Import';

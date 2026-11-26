@@ -1,17 +1,40 @@
-import 'dart:convert';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/models/profile.dart';
 import '../core/models/profile_bundle.dart';
 import '../core/models/connections_bundle.dart';
+import '../core/models/app_message.dart';
 import '../core/models/import_review.dart';
+import '../core/services/bundle_loader.dart';
 import '../core/services/deeplink_router.dart';
 import '../core/services/profile_storage_service.dart';
 import '../core/services/settings_service.dart';
 import '../core/models/app_settings.dart';
 import 'config_provider.dart';
 import 'vpn_provider.dart';
+
+/// Bundle downloads go through the tunnel when it is up.
+final bundleLoaderProvider = Provider<BundleLoader>((ref) => BundleLoader(() => ref.read(tunnelSocksProvider)));
+
+/// How [ProfileNotifier.refreshProfile] ended.
+sealed class ProfileRefresh {
+  const ProfileRefresh();
+}
+
+final class ProfileRefreshed extends ProfileRefresh {
+  const ProfileRefreshed();
+}
+
+/// The user declined the review: nothing applied.
+final class ProfileRefreshDeclined extends ProfileRefresh {
+  const ProfileRefreshDeclined();
+}
+
+final class ProfileRefreshFailed extends ProfileRefresh {
+  const ProfileRefreshFailed(this.reason);
+
+  final AppMessage reason;
+}
 
 class ProfileState {
   final List<Profile> profiles;
@@ -255,29 +278,27 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
   );
 
   /// Downloads the profile from [url] and applies it. When it changes traffic settings or adds subscriptions,
-  /// [confirm] is asked first; declined — nothing is applied and the result is null.
-  Future<String?> refreshProfile(
+  /// [confirm] is asked first; declined — nothing is applied.
+  Future<ProfileRefresh> refreshProfile(
     String profileId,
     String url, {
     Future<bool> Function(ImportReview review)? confirm,
   }) async {
-    if (_current == null) return null;
+    const gone = ProfileRefreshFailed(AppMessage(MessageCode.profileUpdateError));
+    if (_current == null) return gone;
 
-    ProfileBundle bundle;
-    try {
-      final response = await DeeplinkRouter.fetchBundle(Uri.parse(url), socks: ref.read(tunnelSocksProvider));
-      if (response.statusCode != 200) return null;
-
-      bundle = ProfileBundle.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
-    } catch (e) {
-      return null;
-    }
+    final uri = Uri.tryParse(url);
+    final load = uri == null
+        ? const BundleFailed(AppMessage(MessageCode.bundleFetchFailed))
+        : await ref.read(bundleLoaderProvider).fetch(uri, DeeplinkType.profile);
+    if (load is! ProfileLoaded) return ProfileRefreshFailed(load is BundleFailed ? load.reason : gone.reason);
+    final bundle = load.bundle;
 
     if (confirm != null) {
       final existing = _current?.profiles.where((p) => p.id == profileId).firstOrNull;
-      if (existing == null) return null;
+      if (existing == null) return gone;
       final review = _review(bundle, existing.settings);
-      if (!review.isEmpty && !await confirm(review)) return null;
+      if (!review.isEmpty && !await confirm(review)) return const ProfileRefreshDeclined();
     }
 
     // The download took a while: merge into the latest state (a switch may have run meanwhile).
@@ -296,7 +317,7 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
       if (profileId == current.activeProfileId) await _legacy.mirrorNative(updated.settings);
       return updated;
     });
-    if (updated == null) return null;
+    if (updated == null) return gone;
 
     if (bundle.hasConnections) {
       await ref
@@ -310,7 +331,7 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
           );
     }
 
-    return profileId;
+    return const ProfileRefreshed();
   }
 }
 

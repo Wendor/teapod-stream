@@ -1,8 +1,5 @@
-import 'dart:convert';
 import '../models/profile_bundle.dart';
 import '../models/connections_bundle.dart';
-import 'app_http.dart';
-import 'tunnel_socks.dart';
 
 enum DeeplinkType { profile, connections }
 
@@ -97,34 +94,6 @@ class DeeplinkRouter {
     }
   }
 
-  /// A bundle is a small JSON document.
-  static const maxBundleBytes = 1024 * 1024;
-
-  /// Fetch data from a URL-based deeplink result: https only, through [socks] when the tunnel is up.
-  ///
-  /// Returns the parsed bundle or null on failure.
-  static Future<Object?> fetchFromUrl(DeeplinkParseResult result, {TunnelSocks? socks}) async {
-    if (result.source != DeeplinkSource.url || result.urlValue == null) return null;
-
-    try {
-      final response = await fetchBundle(Uri.parse(result.urlValue!), socks: socks);
-      if (response.statusCode != 200) return null;
-
-      switch (result.type) {
-        case DeeplinkType.profile:
-          return ProfileBundle.fromJson(_parseJson(response.body));
-        case DeeplinkType.connections:
-          return ConnectionsBundle.fromJson(_parseJson(response.body));
-      }
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// GET of a profile or connections bundle (deep link, profile refresh): https only, [maxBundleBytes].
-  static Future<AppHttpResponse> fetchBundle(Uri url, {TunnelSocks? socks}) =>
-      TunnelSocks.orDirect(socks, (s) => AppHttp.get(url, socks: s, httpsOnly: true, maxBytes: maxBundleBytes));
-
   static DeeplinkType? _parseType(String raw) {
     switch (raw) {
       case 'profile':
@@ -134,10 +103,5 @@ class DeeplinkRouter {
       default:
         return null;
     }
-  }
-
-  static Map<String, dynamic> _parseJson(String body) {
-    final decoded = jsonDecode(body);
-    return decoded as Map<String, dynamic>;
   }
 }

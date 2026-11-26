@@ -914,7 +914,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get profilesReadonly => 'Только чтение';
 
   @override
-  String get profilesInvalidFormat => 'Неверный формат';
+  String bundleInvalid(String detail) {
+    return 'Неверный формат: $detail';
+  }
 
   @override
   String get commonImport => 'Импортировать';

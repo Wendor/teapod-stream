@@ -271,7 +271,7 @@
   "profilesImportHint": "Вставьте ссылку (teapod://...) или JSON профиля",
   "profilesSwitchAfterImport": "Переключиться после импорта",
   "profilesReadonly": "Только чтение",
-  "profilesInvalidFormat": "Неверный формат",
+  "bundleInvalid": "Неверный формат: {detail}",
   "commonImport": "Импортировать",
   "profilesExportUpper": "ЭКСПОРТ",
   "profilesCopyLink": "Копировать ссылку",

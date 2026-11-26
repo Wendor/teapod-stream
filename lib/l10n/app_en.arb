@@ -463,7 +463,14 @@
   "profilesImportHint": "Paste a link (teapod://...) or profile JSON",
   "profilesSwitchAfterImport": "Switch after import",
   "profilesReadonly": "Read-only",
-  "profilesInvalidFormat": "Invalid format",
+  "bundleInvalid": "Invalid format: {detail}",
+  "@bundleInvalid": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
   "commonImport": "Import",
   "profilesExportUpper": "EXPORT",
   "profilesCopyLink": "Copy link",

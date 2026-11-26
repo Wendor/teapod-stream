@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:teapodstream/protocols/xray/xray_config_builder.dart';
 import 'package:teapodstream/protocols/xray/vless_parser.dart';
+import 'package:teapodstream/core/models/app_message.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/core/models/routing_settings.dart';
 import 'package:teapodstream/core/interfaces/vpn_engine.dart';
@@ -297,7 +298,10 @@ void main() {
     test('refuses a balancer or outbound with two spellings of a key it reads', () {
       final raw = rawManaged();
       (((raw['routing'] as Map)['balancers'] as List).first as Map)['Selector'] = ['t'];
-      expect(() => merge(raw), throwsFormatException);
+      expect(
+        () => merge(raw),
+        throwsA(isA<ReasonException>().having((e) => '${e.reason}', 'reason', contains('(selector, Selector)'))),
+      );
       final outbound = rawManaged();
       ((outbound['outbounds'] as List).first as Map)['TAG'] = 'other';
       expect(() => merge(outbound), throwsFormatException);

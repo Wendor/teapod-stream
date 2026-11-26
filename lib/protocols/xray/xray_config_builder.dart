@@ -693,6 +693,8 @@ class XrayConfigBuilder {
       }
 
       return jsonEncode(cfg);
+    } on ReasonException {
+      rethrow;
     } catch (e) {
       // Don't pass the config as is: it has server inbounds (0.0.0.0, noauth).
       throw ReasonException(AppMessage.l10n((l) => l.xrayRawJsonParse('$e')));
@@ -819,7 +821,7 @@ class XrayConfigBuilder {
   };
 
   /// The keys of a managed config the builder reads, in the spelling it reads them: xray decodes keys in any letter
-  /// case, so `Tag` is a tag. Two spellings of one key in an object are refused (a [FormatException]): which one xray
+  /// case, so `Tag` is a tag. Two spellings of one key in an object are refused (a [ReasonException]): which one xray
   /// takes is not the builder's to guess, and a guess could put an injected freedom into a balancer.
   static void _canonicalKeys(Map<String, dynamic> cfg) {
     void canonical(Map<String, dynamic> object, List<String> keys) {
@@ -828,7 +830,10 @@ class XrayConfigBuilder {
           for (final k in object.keys)
             if (k.toLowerCase() == key.toLowerCase()) k,
         ];
-        if (spellings.length > 1) throw FormatException('conflicting keys ${spellings.join(', ')}');
+        if (spellings.length > 1) {
+          final keys = spellings.join(', ');
+          throw ReasonException(AppMessage.l10n((l) => l.xrayRawConflictingKeys(keys)));
+        }
         if (spellings case [final k] when k != key) object[key] = object.remove(k);
       }
     }

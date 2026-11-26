@@ -235,6 +235,10 @@ server dial timeout 10 s.
 `dataExtractionRules` exclude everything. `FileProvider` for update APKs, limited to `filesDir/updates/`. The VPN service is not exported; the
 activity, tile and command receiver are (the receiver checks `automationEnabled`).
 
+Flutter renders with Skia (`EnableImpeller=false`): Impeller's Vulkan backend crashes the process in the Adreno driver
+when the activity is destroyed over a live engine (a new task, a swipe from recents), and the VPN service lives in the
+same process. In release builds the engine ignores the `ImpellerBackend=opengles` choice, so Impeller is off as a whole.
+
 The battery-optimization exemption prompt is shown once per install, on the first connect while the app is
 optimized (`battery_prompt_shown` in `vpn_prefs`); Settings → Battery optimization opens it again
 (`openBatteryOptimizationSettings`: the prompt while optimized, the system list once exempt).

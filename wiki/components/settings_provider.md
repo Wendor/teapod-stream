@@ -8,9 +8,18 @@ The settings in force are the active profile's ([profiles](profiles.md)): stored
 `SettingsNotifier` (`AsyncNotifier<AppSettings>`) derives them from `profileProvider` (synchronously once it is
 loaded, so a reader right after a save sees the saved value) and writes through
 `ProfileNotifier.updateActiveSettings`: one queue with the other profile writes, a read-only profile refuses there.
-`save(settings)` goes to the profile active when it was called (the settings were built from that profile's);
-`toggleExcludedPackage` and `cleanGhostPackages` (drops uninstalled apps from the split tunneling lists) apply their
-change to the settings current when they run, so two quick ones both land.
+Widgets send a change, not settings: `edit((s) => s.copyWith(...))` applies it to the settings current when the write
+runs, so a write queued in between (another field, `cleanGhostPackages`) survives; it goes to the profile active when
+it was called. `save(settings)` replaces them whole, for flows that built all of them.
+`toggleExcludedPackage` and `cleanGhostPackages` (drops uninstalled apps from the split tunneling lists) are changes
+too, so two quick ones both land.
+
+**Text fields** (`SetNumField`, `SetCredField` in `settings_shared.dart`) save once per edit — on submit, on focus loss
+and when the screen closes with the field focused — not per key: every write stores the whole profile list and mirrors
+the native flags. **Limits** are named in the models (`SettingLimits`): `AppSettings.socksPortLimits` (1024–65535),
+`mtuLimits` (576–9000, as native `ConnectionParams`), `obsProbeIntervalLimits` (0–86400 s),
+`MuxSettings.concurrencyLimits` (1–1024), `HeartbeatSettings.failureThresholdLimits` (1–10); the screens clamp a typed
+value to them and `fromJson` clamps a stored or imported one.
 
 **Native flags.** `BootReceiver` reads `flutter.auto_start_on_boot`, `XrayVpnService` `flutter.automation_enabled`
 from SharedPreferences: `SettingsService.mirrorNative` writes both after every change of the active settings (a save,

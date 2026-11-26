@@ -3,6 +3,7 @@ import 'core_kind.dart';
 import 'dns_config.dart';
 import 'heartbeat_settings.dart';
 import 'routing_settings.dart';
+import 'setting_limits.dart';
 import 'vpn_log_entry.dart';
 import 'xray_tuning.dart';
 
@@ -64,6 +65,12 @@ class GeoPresets {
 }
 
 class AppSettings {
+  static const SettingLimits socksPortLimits = (min: 1024, max: 65535);
+
+  /// The same limits as native (`ConnectionParams.fromJson`).
+  static const SettingLimits mtuLimits = (min: 576, max: 9000);
+  static const SettingLimits obsProbeIntervalLimits = (min: 0, max: 86400);
+
   final int socksPort;
   final LogLevel logLevel;
   final Set<String> excludedPackages;
@@ -324,7 +331,7 @@ class AppSettings {
   static AppSettings fromJson(Map<String, dynamic> json) {
     final routingJson = json['routing'] as Map<String, dynamic>?;
     return AppSettings(
-      socksPort: json['socksPort'] as int? ?? AppConstants.defaultSocksPort,
+      socksPort: socksPortLimits.clamp(json['socksPort'] as int? ?? AppConstants.defaultSocksPort),
       logLevel: LogLevel.values.firstWhere((e) => e.name == json['logLevel'], orElse: () => LogLevel.info),
       excludedPackages: (json['excludedPackages'] as List<dynamic>?)?.cast<String>().toSet() ?? {},
       includedPackages: (json['includedPackages'] as List<dynamic>?)?.cast<String>().toSet() ?? {},
@@ -354,11 +361,11 @@ class AppSettings {
       geoipUrl: json['geoipUrl'] as String? ?? GeoPresets.defaultGeoipUrl,
       geositeUrl: json['geositeUrl'] as String? ?? GeoPresets.defaultGeositeUrl,
       sniffingEnabled: json['sniffingEnabled'] as bool? ?? true,
-      mtu: json['mtu'] as int? ?? 1500,
+      mtu: mtuLimits.clamp(json['mtu'] as int? ?? 1500),
       subAutoRefresh: json['subAutoRefresh'] as bool? ?? false,
       subAutoRefreshHours: json['subAutoRefreshHours'] as int? ?? 6,
       subUserAgent: json['subUserAgent'] as String? ?? '',
-      obsProbeIntervalSec: json['obsProbeIntervalSec'] as int? ?? 600,
+      obsProbeIntervalSec: obsProbeIntervalLimits.clamp(json['obsProbeIntervalSec'] as int? ?? 600),
       dnsQueryStrategy: DnsQueryStrategy.values.firstWhere(
         (e) => e.name == json['dnsQueryStrategy'],
         orElse: () => DnsQueryStrategy.ipv4Only,

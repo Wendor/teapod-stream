@@ -473,6 +473,15 @@ void main() {
       expect((await profiles.loadProfiles()).single.settings.mtu, 1350);
     });
 
+    test('two queued edits to different fields both survive', () async {
+      await boot();
+      final sn = c.read(settingsProvider.notifier);
+      // Both issued before either is written: a whole-settings save built from the same snapshot would drop the first.
+      await Future.wait([sn.edit((s) => s.copyWith(mtu: 1400)), sn.edit((s) => s.copyWith(socksPort: 2000))]);
+      final stored = await storedSettings();
+      expect((stored.mtu, stored.socksPort), (1400, 2000));
+    });
+
     test('readonly profile blocks saving', () async {
       await boot(
         stored: [profile('ro', settings: _local).copyWith(readonly: true)],

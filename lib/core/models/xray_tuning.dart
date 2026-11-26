@@ -1,3 +1,5 @@
+import 'setting_limits.dart';
+
 /// A `from-to` range that xray parses with `ParseRangeString`.
 final _rangeRe = RegExp(r'^\s*(\d+)\s*-\s*(\d+)\s*$');
 
@@ -105,12 +107,15 @@ enum XudpUdp443 { reject, allow, skip }
 
 /// Multiplexing several connections into one (xray `mux`).
 class MuxSettings {
+  /// Limits of [concurrency] and [xudpConcurrency].
+  static const SettingLimits concurrencyLimits = (min: 1, max: 1024);
+
   final bool enabled;
 
-  /// Number of TCP substreams in one connection, 1–1024.
+  /// Number of TCP substreams in one connection, within [concurrencyLimits].
   final int concurrency;
 
-  /// Number of XUDP substreams, 1–1024. Responsible for UDP over mux.
+  /// Number of XUDP substreams, within [concurrencyLimits]. Responsible for UDP over mux.
   final int xudpConcurrency;
 
   final XudpUdp443 xudpProxyUDP443;
@@ -139,8 +144,8 @@ class MuxSettings {
 
   static MuxSettings fromJson(Map<String, dynamic> json) => MuxSettings(
     enabled: json['enabled'] as bool? ?? false,
-    concurrency: json['concurrency'] as int? ?? 8,
-    xudpConcurrency: json['xudpConcurrency'] as int? ?? 16,
+    concurrency: concurrencyLimits.clamp(json['concurrency'] as int? ?? 8),
+    xudpConcurrency: concurrencyLimits.clamp(json['xudpConcurrency'] as int? ?? 16),
     xudpProxyUDP443: XudpUdp443.values.firstWhere(
       (e) => e.name == json['xudpProxyUDP443'],
       orElse: () => XudpUdp443.reject,

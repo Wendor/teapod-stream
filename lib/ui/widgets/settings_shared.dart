@@ -196,41 +196,86 @@ class SetInlineField extends StatelessWidget {
   }
 }
 
-// ── Cred text field ───────────────────────────────────────────────
+// ── Text fields that save once per edit ──────────────────────────
 
-class SetCredField extends StatelessWidget {
+/// A settings text field that hands its text to [onCommit] once per edit — on submit, when it loses focus and when it
+/// goes away (the screen closed with the keyboard up) — and only when the text changed since the last commit. Each
+/// commit writes the whole profile list, so not on every key.
+class _CommitField extends StatefulWidget {
+  final TeapodTokens t;
   final TextEditingController controller;
   final bool enabled;
   final String hint;
+  final void Function(String) onCommit;
+  final double width;
+  final double fontSize;
+  final TextAlign textAlign;
   final bool obscureText;
-  final void Function(String) onChanged;
-  final TeapodTokens t;
+  final bool digitsOnly;
 
-  const SetCredField({
-    super.key,
+  const _CommitField({
+    required this.t,
     required this.controller,
     required this.enabled,
     required this.hint,
-    required this.onChanged,
-    required this.t,
+    required this.onCommit,
+    required this.width,
+    required this.fontSize,
+    required this.textAlign,
     this.obscureText = false,
+    this.digitsOnly = false,
   });
 
   @override
+  State<_CommitField> createState() => _CommitFieldState();
+}
+
+class _CommitFieldState extends State<_CommitField> {
+  final _focus = FocusNode();
+  late String _committed;
+
+  @override
+  void initState() {
+    super.initState();
+    _committed = widget.controller.text;
+    _focus.addListener(() {
+      if (!_focus.hasFocus) _commit();
+    });
+  }
+
+  @override
+  void dispose() {
+    _commit();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  void _commit() {
+    final text = widget.controller.text;
+    if (text == _committed) return;
+    _committed = text;
+    widget.onCommit(text);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final t = widget.t;
     return SizedBox(
-      width: 140,
+      width: widget.width,
       child: TextField(
-        controller: controller,
-        enabled: enabled,
-        obscureText: obscureText,
-        textAlign: TextAlign.end,
-        onChanged: onChanged,
+        controller: widget.controller,
+        focusNode: _focus,
+        enabled: widget.enabled,
+        obscureText: widget.obscureText,
+        textAlign: widget.textAlign,
+        keyboardType: widget.digitsOnly ? TextInputType.number : null,
+        inputFormatters: widget.digitsOnly ? [FilteringTextInputFormatter.digitsOnly] : null,
+        onSubmitted: (_) => _commit(),
         onEditingComplete: () => FocusScope.of(context).unfocus(),
-        style: AppTheme.mono(size: 12, color: t.text),
+        style: AppTheme.mono(size: widget.fontSize, color: t.text),
         decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: AppTheme.mono(size: 11, color: t.textMuted),
+          hintText: widget.hint,
+          hintStyle: AppTheme.mono(size: widget.fontSize - 1, color: t.textMuted),
           contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           isDense: true,
           enabledBorder: OutlineInputBorder(
@@ -251,14 +296,46 @@ class SetCredField extends StatelessWidget {
   }
 }
 
-// ── Compact numeric text field (port, MTU, intervals) ────────────
+/// Text setting (credentials, ranges, URL); [onCommit] once per edit.
+class SetCredField extends StatelessWidget {
+  final TextEditingController controller;
+  final bool enabled;
+  final String hint;
+  final bool obscureText;
+  final void Function(String) onCommit;
+  final TeapodTokens t;
 
+  const SetCredField({
+    super.key,
+    required this.controller,
+    required this.enabled,
+    required this.hint,
+    required this.onCommit,
+    required this.t,
+    this.obscureText = false,
+  });
+
+  @override
+  Widget build(BuildContext context) => _CommitField(
+    t: t,
+    controller: controller,
+    enabled: enabled,
+    hint: hint,
+    onCommit: onCommit,
+    width: 140,
+    fontSize: 12,
+    textAlign: TextAlign.end,
+    obscureText: obscureText,
+  );
+}
+
+/// Compact numeric setting (port, MTU, intervals); [onCommit] once per edit.
 class SetNumField extends StatelessWidget {
   final TeapodTokens t;
   final TextEditingController controller;
   final bool enabled;
   final String hint;
-  final void Function(String) onChanged;
+  final void Function(String) onCommit;
 
   const SetNumField({
     super.key,
@@ -266,43 +343,21 @@ class SetNumField extends StatelessWidget {
     required this.controller,
     required this.enabled,
     required this.hint,
-    required this.onChanged,
+    required this.onCommit,
   });
 
   @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 90,
-      child: TextField(
-        controller: controller,
-        enabled: enabled,
-        textAlign: TextAlign.center,
-        keyboardType: TextInputType.number,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        onChanged: onChanged,
-        onEditingComplete: () => FocusScope.of(context).unfocus(),
-        style: AppTheme.mono(size: 13, color: t.text),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: AppTheme.mono(size: 12, color: t.textMuted),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          isDense: true,
-          enabledBorder: OutlineInputBorder(
-            borderSide: BorderSide(color: t.line),
-            borderRadius: BorderRadius.zero,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderSide: BorderSide(color: t.accent),
-            borderRadius: BorderRadius.zero,
-          ),
-          disabledBorder: OutlineInputBorder(
-            borderSide: BorderSide(color: t.lineSoft),
-            borderRadius: BorderRadius.zero,
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => _CommitField(
+    t: t,
+    controller: controller,
+    enabled: enabled,
+    hint: hint,
+    onCommit: onCommit,
+    width: 90,
+    fontSize: 13,
+    textAlign: TextAlign.center,
+    digitsOnly: true,
+  );
 }
 
 // ── Segmented square selector ─────────────────────────────────────

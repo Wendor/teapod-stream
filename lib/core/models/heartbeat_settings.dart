@@ -1,3 +1,5 @@
+import 'setting_limits.dart';
+
 /// What checks that the tunnel is alive.
 enum HeartbeatProbe {
   /// Local socket → SOCKS5 → xray → HTTP request to [HeartbeatSettings.url].
@@ -50,9 +52,11 @@ enum HeartbeatTarget {
 }
 
 class HeartbeatSettings {
+  static const SettingLimits failureThresholdLimits = (min: 1, max: 10);
+
   final HeartbeatProbe probe;
 
-  /// How many consecutive failures before [failAction] fires, 1–10.
+  /// How many consecutive failures before [failAction] fires, within [failureThresholdLimits].
   final int failureThreshold;
 
   final HeartbeatFailAction failAction;
@@ -103,7 +107,7 @@ class HeartbeatSettings {
 
   static HeartbeatSettings fromJson(Map<String, dynamic> json) => HeartbeatSettings(
     probe: HeartbeatProbe.values.firstWhere((e) => e.name == json['probe'], orElse: () => HeartbeatProbe.socks),
-    failureThreshold: json['failureThreshold'] as int? ?? 3,
+    failureThreshold: failureThresholdLimits.clamp(json['failureThreshold'] as int? ?? 3),
     // Before 1.6.4: action = reconnect | urltest, source = subscription | pinned | all.
     failAction: HeartbeatFailAction.values.firstWhere(
       (e) => e.name == json['failAction'],

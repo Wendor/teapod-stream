@@ -40,7 +40,7 @@ internal class Heartbeat(private val host: Host) {
     /// (off the main thread) and reconnect only if the probe fails.
     fun probeOnWake() {
         if (!host.tunMode || !host.running) return
-        val lastRx = host.core.lastRxActivityMs()
+        val lastRx = lastRxOrStart()
         if (lastRx <= 0) return
         val idleSec = (System.currentTimeMillis() - lastRx) / 1000
         if (idleSec < HeartbeatPolicy.TUN_STALL_TIMEOUT_MS / 1000) return
@@ -69,8 +69,16 @@ internal class Heartbeat(private val host: Host) {
         }.also { it.isDaemon = true; it.start() }
     }
 
+    /// When the heartbeat started: the idle baseline until the first proxy payload reaches an app
+    /// (the core's stamp is 0 until then). Not receive activity — [isTunRxFresh] ignores it.
+    @Volatile private var startedAt = 0L
+
+    /// The last proxy payload to an app, else the heartbeat's start.
+    private fun lastRxOrStart(): Long = host.core.lastRxActivityMs().takeIf { it > 0 } ?: startedAt
+
     fun start(isReconnect: Boolean) {
         host.log("info", "startHeartbeat (isReconnect=$isReconnect)")
+        startedAt = System.currentTimeMillis()
         thread?.interrupt()
         val policy = HeartbeatPolicy(threshold, switchConfig, isReconnect)
         current = policy
@@ -113,7 +121,7 @@ internal class Heartbeat(private val host: Host) {
                         }
                     }
                     if (host.tunMode) {
-                        val lastRx = host.core.lastRxActivityMs()
+                        val lastRx = lastRxOrStart()
                         if (lastRx > 0) {
                             val now = System.currentTimeMillis()
                             if (!apply(policy.onTunIdle(now - lastRx, { host.core.activeConnections() }, { isTunRxFresh() }, now))) break

@@ -143,13 +143,20 @@ class HeartbeatPolicy(
             return Action.Warn("Heartbeat failing but TUN traffic is alive, skipping reconnect")
         }
         if (switchConfig) {
-            if (now - lastSwitchAt >= SWITCH_COOLDOWN_MS || lastSwitchAt == 0L) {
+            if (lastSwitchAt == 0L) {
                 lastSwitchAt = now
                 failures = 0
                 return Action.SwitchConfig(count, "$reason (failures: $count) → picking another config")
             }
-            // Flutter didn't switch within the cooldown (app killed / no live candidates):
-            // a plain reconnect of the current server.
+            // Flutter has the cooldown to switch: a check exhausted again meanwhile (the pile-up one runs every
+            // interval) waits instead of reconnecting under it.
+            if (now - lastSwitchAt < SWITCH_COOLDOWN_MS) {
+                return Action.Note("$reason (failures: $count), waiting for the config switch")
+            }
+            // No switch within the cooldown (app killed / no live candidate): a plain reconnect of the current
+            // server; the next exhaustion asks Flutter again.
+            lastSwitchAt = 0L
+            failures = 0
             return Action.Reconnect("$reason (failures: $count), no switch within the switchConfig cooldown")
         }
         return Action.Reconnect("$reason (failures: $count)")

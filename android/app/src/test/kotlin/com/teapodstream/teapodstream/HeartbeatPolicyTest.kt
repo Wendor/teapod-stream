@@ -104,10 +104,12 @@ class HeartbeatPolicyTest {
         val first = p.fail(now = t0)
         assertEquals(Action.SwitchConfig(1, "Heartbeat failed (failures: 1) → picking another config"), first)
         assertEquals(0, p.failures())
-        // Flutter didn't switch: within the cooldown — a plain reconnect.
-        assertTrue(p.fail(now = t0 + 10_000) is Action.Reconnect)
-        // After the cooldown — asked again.
-        assertTrue(p.fail(now = t0 + 10_000 + HeartbeatPolicy.SWITCH_COOLDOWN_MS) is Action.SwitchConfig)
+        // Exhausted again within the cooldown: Flutter still has time, nothing is done.
+        assertTrue(p.fail(now = t0 + 10_000) is Action.Note)
+        // Flutter didn't switch within the cooldown — a plain reconnect...
+        assertTrue(p.fail(now = t0 + HeartbeatPolicy.SWITCH_COOLDOWN_MS) is Action.Reconnect)
+        // ...and the next exhaustion asks Flutter again.
+        assertTrue(p.fail(now = t0 + HeartbeatPolicy.SWITCH_COOLDOWN_MS + 10_000) is Action.SwitchConfig)
     }
 
     @Test
@@ -124,6 +126,9 @@ class HeartbeatPolicyTest {
         val conns = HeartbeatPolicy.TUN_CONN_LEAK_THRESHOLD + 1
         val switching = policy(switchConfig = true)
         assertTrue(switching.onTun(running = true, activeConns = conns, rxFresh = { false }, now = t0) is Action.SwitchConfig)
+        // The pile-up check runs every interval: within the cooldown it waits for the switch, no reconnect.
+        val next = switching.onTun(running = true, activeConns = conns, rxFresh = { false }, now = t0 + HeartbeatPolicy.INTERVAL_MS)
+        assertTrue(next is Action.Note)
         // The reconnect mode reconnects, as before.
         assertTrue(policy().onTun(running = true, activeConns = conns, rxFresh = { false }, now = t0) is Action.Reconnect)
     }

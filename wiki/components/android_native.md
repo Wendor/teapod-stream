@@ -171,9 +171,11 @@ and applies its actions. A failure below the threshold is retried twice, 3 s apa
   request line carries the URL's raw, still-encoded path; it offers user/password only when the session has SOCKS credentials, and fails at once if the inbound demands them
   without any); `xrayDelay` — measured
   inside the core (also used for a custom `https://` URL); `passive` — none.
-- **Passive success:** if an app received payload from the proxy within the last 15 s (`GetTunLastRxActivityMs`; the
-  stack's own ACK/RST to connection attempts and DNS answers don't count, so a dead server isn't taken for a live one), the tunnel is
-  alive and the radio isn't woken.
+- **Passive success:** if TUN activity is fresh (the last 15 s), the tunnel is alive and the radio isn't woken. The
+  activity (`VpnCore.lastRxActivityMs`): for the teapod-tun2socks cores (xray Go, sing-box) — payload from the proxy
+  delivered to an app (`GetTunLastRxActivityMs`; the stack's own ACK/RST to connection attempts and DNS answers don't
+  count, so a dead server isn't taken for a live one); for xray-rust — its own value, which also counts accepted TCP
+  uploads. Until the first such payload the stall checks measure idle time from the heartbeat's start.
 - **Warm-up** after a reconnect: probes every 15 s, failures don't count until the first success, hard limit 30 s
   (outbounds connect lazily; DNS + TLS on fresh LTE can be slow).
 - **Exhausted** (the threshold, or a TUN stall): proxy payload to an app within the last 15 s (`isTunRxFresh`, whatever the probe cadence; re-checked for a stall) → keep the session (the probe can land on a dead balancer detour); otherwise: `reconnect` → `reconnectInternal()`; `switchConfig` → `tunnel_dead`

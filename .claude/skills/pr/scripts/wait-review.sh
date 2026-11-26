@@ -4,7 +4,8 @@
 # CodeRabbit reviewed the head commit, and every unresolved CodeRabbit thread someone replied to has its answer
 # (a reply, or a 🚀 / 👍 reaction on the last comment: CodeRabbit accepts a reply that way) — or has gone unanswered for WAIT_REVIEW_IDLE minutes (default 10): CodeRabbit sometimes answers two threads in
 # one of them and never comes back to the other, so waiting longer only burns time.
-# Exit codes: 0 ready, 1 a check failed, 2 CodeRabbit skipped the head commit, 3 timed out.
+# Exit codes: 0 ready, 1 a check failed, 2 CodeRabbit skipped the head commit (ACCEPTED first when it already accepted
+# every fix: then go straight to the approval), 3 timed out.
 set -uo pipefail
 n=${1:?usage: wait-review.sh <pr> [minutes]}
 deadline=$(( $(date +%s) + ${2:-40} * 60 ))
@@ -76,6 +77,26 @@ while :; do
   if [ -n "$head" ] && [ "$covered" != unknown ] && [ "$running" = 0 ] && [ -n "$coderabbit" ]; then
     if [ "$covered" != "$head" ]; then
       echo "SKIPPED: CodeRabbit finished without reviewing ${head:0:7} (rate limit, paused reviews, or nothing to review)."
+      # The usual case after a round of fixes: CodeRabbit already accepted every reply (🚀 / 👍) or resolved the
+      # thread. Then its review of the fix commit adds nothing — don't wait out a rate limit for it.
+      total=$(gh api graphql -F n="$n" -f query='query($n:Int!){repository(owner:"Wendor",name:"teapod-stream"){
+        pullRequest(number:$n){reviewThreads(first:100){nodes{comments(first:1){nodes{author{login}}}}}}}}' \
+        --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.comments.nodes[0].author.login == "coderabbitai")]
+          | length' 2>/dev/null || echo "")
+      if open=$(threads) && [ -n "$total" ] && [ "$total" -gt 0 ]; then
+        pending=$(awk -F'\t' '$2 == "coderabbitai" && $6 != 1' <<< "$open" | sed '/^$/d' | wc -l | tr -d ' ')
+        if [ "$pending" = 0 ]; then
+          accepted=$(awk -F'\t' '$2 == "coderabbitai" && $6 == 1' <<< "$open" | cut -f1,4 | sed '/^$/d')
+          echo "ACCEPTED: every CodeRabbit thread ($total) is resolved or its last reply has CodeRabbit's 🚀 / 👍."
+          if [ -n "$accepted" ]; then
+            echo "Resolve these accepted threads first:"
+            sed 's/^/  /' <<< "$accepted"
+          fi
+          echo "Next: don't wait for its review of ${head:0:7} and don't post '@coderabbitai review' — check that"
+          echo "nothing else is left (review bodies: outside-diff, nitpicks), then ask for the approval review and merge."
+          exit 2
+        fi
+      fi
       # A rate limit names its wait ("Please wait **12 minutes and 5 seconds** ...") in the comment it last updated:
       # the time it accepts a request again is that update plus the wait.
       retry=$(gh api --paginate "repos/$repo/issues/$n/comments" --jq '.[]

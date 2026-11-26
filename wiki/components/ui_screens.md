@@ -84,7 +84,7 @@ text helpers (minimum 11 px). Font scale (`fontScale`) applies through the app's
 - A large screen is a folder `screens/<name>/`: the screen and its state in `<name>_screen.dart`, its sections as
   private widgets in `part` files next to it (`screens/configs/`: `header`, `groups`, `config_row`, `pinned`,
   `tiles`; `screens/routing/`: `controls`, `picker`, `geo`; `screens/settings/`:
-  `header`, `rows`, `core_order`, `appearance`, `update`).
+  `header`, `rows`, `core_order`, `appearance`, `update`; `screens/home/`: `header`, `power`, `ticks`, `metrics`).
 - UI tests: `test/ui/` — smoke of every screen, interactions ([tests](tests.md)).
 
 ## Related

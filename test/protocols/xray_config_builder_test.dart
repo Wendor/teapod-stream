@@ -290,8 +290,17 @@ void main() {
       (raw['outbounds'] as List).add({'Tag': 'free', 'Protocol': 'freedom'});
       final cfg = merge(raw);
       final merged = ((cfg['routing'] as Map)['balancers'] as List).first as Map;
-      expect(merged['FallbackTag'], 'c1-a');
-      expect(merged.containsKey('fallbackTag'), isFalse);
+      expect(merged['fallbackTag'], 'c1-a');
+      expect(merged.containsKey('FallbackTag'), isFalse);
+    });
+
+    test('refuses a balancer or outbound with two spellings of a key it reads', () {
+      final raw = rawManaged();
+      (((raw['routing'] as Map)['balancers'] as List).first as Map)['Selector'] = ['t'];
+      expect(() => merge(raw), throwsFormatException);
+      final outbound = rawManaged();
+      ((outbound['outbounds'] as List).first as Map)['TAG'] = 'other';
+      expect(() => merge(outbound), throwsFormatException);
     });
 
     test('keeps fallbackTag pointing to non-freedom outbound', () {
@@ -525,6 +534,25 @@ void main() {
       expect(selector(all), ['node', 'teapod-direct-east', 'teapod-blackhole-west']);
       expect(privateTag(all), XrayConfigBuilder.directTag);
       expect(selector(all).whereType<String>().any(privateTag(all).startsWith), isFalse);
+      // Untagged outbounds aren't balanced: an empty tag isn't a candidate, and with none tagged the selector
+      // matches nothing (xray refuses an empty list) while the injected tag stays out of it.
+      final untagged = merge({
+        'outbounds': [
+          {'tag': '', 'protocol': 'vless'},
+          {'protocol': 'vless'},
+        ],
+        'routing': {
+          'balancers': [
+            {
+              'tag': 'lb',
+              'selector': [''],
+            },
+          ],
+        },
+      });
+      expect(selector(untagged), hasLength(1));
+      expect(selector(untagged).single, isNot(''));
+      expect(privateTag(untagged), XrayConfigBuilder.directTag);
 
       // Xray reads `Tag` / `Protocol` as tag / protocol: a server direct freedom written so is used, and a tag taken
       // so isn't added a second time.

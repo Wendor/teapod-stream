@@ -32,6 +32,8 @@ VpnConfig _cfg(
   String? rawUri,
   String? rawXrayConfig,
   Map<String, dynamic>? finalmask,
+  String? headerType,
+  String? plugin,
 }) => VpnConfig(
   id: 'id',
   name: 'n',
@@ -63,6 +65,8 @@ VpnConfig _cfg(
   rawUri: rawUri,
   rawXrayConfig: rawXrayConfig,
   finalmask: finalmask,
+  headerType: headerType,
+  plugin: plugin,
 );
 
 const _opts = VpnEngineOptions(socksPort: 10808, socksUser: 'u', socksPassword: 'p');
@@ -264,7 +268,7 @@ void main() {
         "The XHTTP transport isn't available in the sing-box core.",
       );
       expect(
-        reason(_cfg(VpnProtocol.vless, rawUri: 'vless://u@h:1?type=tcp&headerType=http#n')),
+        reason(_cfg(VpnProtocol.vless, headerType: 'http')),
         "TCP with HTTP obfuscation isn't available in the sing-box core.",
       );
       expect(
@@ -287,7 +291,7 @@ void main() {
 
     test('Shadowsocks plugin and method', () {
       expect(
-        reason(_cfg(VpnProtocol.shadowsocks, method: 'aes-128-gcm', rawUri: 'ss://x@h:1?plugin=obfs-local#n')),
+        reason(_cfg(VpnProtocol.shadowsocks, method: 'aes-128-gcm', plugin: 'obfs-local')),
         "Shadowsocks plugins aren't available in the sing-box core.",
       );
       expect(

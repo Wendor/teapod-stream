@@ -9,7 +9,6 @@ import '../../core/constants/routing_defaults.dart';
 import '../../core/constants/xray_defaults.dart';
 import '../../core/models/vpn_log_entry.dart' show LogLevel;
 import '../../core/models/app_settings.dart' show DnsQueryStrategy, TlsFingerprint;
-import 'vless_parser.dart';
 import '../../core/services/ip_lookup.dart';
 
 class XrayConfigBuilder {
@@ -22,8 +21,7 @@ class XrayConfigBuilder {
     if (config.transport == VpnTransport.http2 || config.transport == VpnTransport.quic) {
       return AppMessage.l10n((l) => l.xrayNoH2Quic);
     }
-    if (config.protocol == VpnProtocol.shadowsocks &&
-        (VlessParser.linkParams(config)['plugin']?.trim().isNotEmpty ?? false)) {
+    if (config.protocol == VpnProtocol.shadowsocks && config.plugin != null) {
       return AppMessage.l10n((l) => l.xrayNoSsPlugins);
     }
     final pin = config.pinSHA256?.trim() ?? '';
@@ -317,10 +315,10 @@ class XrayConfigBuilder {
 
   /// Mux is useless over hysteria2 (QUIC multiplexes itself). The global setting skips xhttp: it has
   /// its own xmux, and Xray's xhttp inbounds refuse TCP inside Mux. `mux=on|off` in the link
-  /// overrides both for one server ([VlessParser.linkMux]).
+  /// overrides both for one server ([VpnConfig.mux]).
   static bool _muxApplies(VpnConfig config, VpnEngineOptions options) {
     if (config.protocol == VpnProtocol.hysteria2) return false;
-    return VlessParser.linkMux(config) ?? (options.mux.enabled && config.transport != VpnTransport.xhttp);
+    return config.mux ?? (options.mux.enabled && config.transport != VpnTransport.xhttp);
   }
 
   /// TCP_USER_TIMEOUT: a connection where DPI silently drops packets breaks after
@@ -459,7 +457,7 @@ class XrayConfigBuilder {
     if (config.protocol == VpnProtocol.hysteria2) {
       final salamander = config.obfsPassword?.isNotEmpty ?? false;
       // Gecko is Xray's salamander mask with a packetSize range.
-      final gecko = VlessParser.geckoPacketSize(config);
+      final gecko = config.geckoPacketSize;
       final hopping = config.hopPorts?.isNotEmpty ?? false;
       return {
         'network': 'hysteria',
@@ -519,7 +517,7 @@ class XrayConfigBuilder {
           // The Xray-core key is echConfigList; the old echSettings was silently ignored.
           if (config.ech != null && config.ech!.isNotEmpty) 'echConfigList': config.ech,
         },
-      if (_tcpHttpHeader(config))
+      if (config.tcpHttpHeader)
         'tcpSettings': {
           'header': {
             'type': 'http',
@@ -554,18 +552,6 @@ class XrayConfigBuilder {
         },
       if (config.finalmask != null && config.finalmask!.isNotEmpty) 'finalmask': config.finalmask,
     };
-  }
-
-  /// TCP with HTTP camouflage (`headerType=http`, `type` for VMess). [VpnConfig] has no
-  /// such fields — we read the original link. Without the header the server drops the connection.
-  static bool _tcpHttpHeader(VpnConfig config) {
-    if (config.transport != VpnTransport.tcp || config.protocol == VpnProtocol.hysteria2) {
-      return false;
-    }
-    final type = config.protocol == VpnProtocol.vmess
-        ? VlessParser.vmessJson(config)['type']?.toString()
-        : VlessParser.linkParams(config)['headerType'];
-    return type?.trim().toLowerCase() == 'http';
   }
 
   static List<String> _csv(String value, {String? fallback}) {

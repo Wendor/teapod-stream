@@ -2282,18 +2282,6 @@ abstract class AppLocalizations {
   /// **'The VMess id must be a real UUID: the Rust core doesn\'t accept arbitrary strings.'**
   String get rustVmessId;
 
-  /// No description provided for @rustVmessSecurity.
-  ///
-  /// In en, this message translates to:
-  /// **'The xray-rust core doesn\'t support VMess with security={security} from the link: TLS and an unencrypted transport are available.'**
-  String rustVmessSecurity(String security);
-
-  /// No description provided for @rustVmessTls.
-  ///
-  /// In en, this message translates to:
-  /// **'The VMess link sets tls=\"{value}\": the parser understands only an exact \"tls\", and the profile would go without TLS. Fix the value in the link.'**
-  String rustVmessTls(String value);
-
   /// No description provided for @rustSsMethod.
   ///
   /// In en, this message translates to:

@@ -1251,16 +1251,6 @@ class AppLocalizationsRu extends AppLocalizations {
   String get rustVmessId => 'id VMess должен быть настоящим UUID: Rust-ядро не принимает произвольные строки.';
 
   @override
-  String rustVmessSecurity(String security) {
-    return 'VMess с security=$security из ссылки ядро xray-rust не поддерживает: доступны TLS и транспорт без шифрования.';
-  }
-
-  @override
-  String rustVmessTls(String value) {
-    return 'VMess-ссылка задаёт tls=«$value»: парсер понимает только точное «tls», и профиль ушёл бы без TLS. Исправь значение в ссылке.';
-  }
-
-  @override
   String rustSsMethod(String method) {
     return 'Rust-ядро поддерживает только Shadowsocks 2022 (2022-blake3-aes-128-gcm, 2022-blake3-aes-256-gcm, 2022-blake3-chacha20-poly1305). Метод «$method» не поддерживается.';
   }

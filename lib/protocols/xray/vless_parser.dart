@@ -107,6 +107,8 @@ class VlessParser {
         finalmask: _parseExtra(params['fm']),
         alpn: params['alpn'],
         ech: params['ech'],
+        headerType: _headerType(params['headerType']),
+        mux: _mux(params['mux']),
         createdAt: DateTime.now(),
         rawUri: uri,
       );
@@ -150,6 +152,8 @@ class VlessParser {
         wsHost: json['host'] as String?,
         grpcServiceName: json['path'] as String?,
         alterId: json['aid']?.toString() ?? '0',
+        method: _nonEmpty(json['scy'])?.toLowerCase(),
+        headerType: _headerType(json['type']?.toString()),
         xhttpMode: json['mode'] as String?,
         xhttpExtra: json['extra'] is Map<String, dynamic> ? json['extra'] as Map<String, dynamic> : null,
         fingerprint: _nonEmpty(json['fp']),
@@ -219,6 +223,8 @@ class VlessParser {
         xhttpExtra: _parseExtra(params['extra']),
         alpn: params['alpn'],
         ech: params['ech'],
+        headerType: _headerType(params['headerType']),
+        mux: _mux(params['mux']),
         createdAt: DateTime.now(),
         rawUri: uri,
       );
@@ -285,6 +291,7 @@ class VlessParser {
         (host, port) = _parseHostPort(hostPortClean, 8388);
       }
 
+      final params = queryStr.isEmpty ? const <String, String>{} : Uri.splitQueryString(queryStr);
       // Parse Outline prefix bytes (raw percent-encoded bytes, not UTF-8 characters)
       String? ssPrefix;
       if (queryStr.isNotEmpty) {
@@ -313,6 +320,8 @@ class VlessParser {
         security: VpnSecurity.none,
         transport: VpnTransport.tcp,
         ssPrefix: ssPrefix,
+        plugin: _nonEmpty(params['plugin']),
+        mux: _mux(params['mux']),
         createdAt: DateTime.now(),
         rawUri: uri,
       );
@@ -372,7 +381,8 @@ class VlessParser {
         throw ReasonException(AppMessage.l10n((l) => l.linkUnknownObfs(obfs)));
       }
       final obfsPassword = obfs == 'salamander' || obfs == 'gecko' ? params['obfs-password'] : null;
-      if (obfs == 'gecko' && ((obfsPassword?.isEmpty ?? true) || geckoSizes(params) == null)) return null;
+      final gecko = obfs == 'gecko' ? geckoSizes(params) : null;
+      if (obfs == 'gecko' && ((obfsPassword?.isEmpty ?? true) || gecko == null)) return null;
       final allowInsecure = _parseInsecure(params);
       final pinSHA256 = params['pinSHA256'];
 
@@ -390,6 +400,8 @@ class VlessParser {
         pinSHA256: pinSHA256,
         sni: params['sni'],
         obfsPassword: obfsPassword,
+        obfs: obfs == 'salamander' || obfs == 'gecko' ? obfs : null,
+        geckoPacketSize: gecko,
         hopPorts: hopPorts,
         createdAt: DateTime.now(),
         rawUri: uri,
@@ -469,6 +481,19 @@ class VlessParser {
   /// A non-empty string value of a JSON field, else null.
   static String? _nonEmpty(Object? value) => value is String && value.trim().isNotEmpty ? value.trim() : null;
 
+  /// `headerType` in lower case; null — none.
+  static String? _headerType(String? value) => switch (value?.trim().toLowerCase()) {
+    null || '' || 'none' => null,
+    final type => type,
+  };
+
+  /// `mux=on|off`; null — no parameter or an unknown value.
+  static bool? _mux(String? value) => switch (value?.trim().toLowerCase()) {
+    'on' || 'true' || '1' => true,
+    'off' || 'false' || '0' => false,
+    _ => null,
+  };
+
   static VpnSecurity _parseSecurity(String s) => switch (s.trim().toLowerCase()) {
     '' || 'none' => VpnSecurity.none,
     'tls' => VpnSecurity.tls,
@@ -503,13 +528,6 @@ class VlessParser {
     }
   }
 
-  /// Gecko packet sizes `(min, max)` of a Hysteria2 profile imported with `obfs=gecko`; null for Salamander
-  /// or no obfuscation.
-  static (int, int)? geckoPacketSize(VpnConfig config) {
-    final params = linkParams(config);
-    return params['obfs']?.trim() == 'gecko' ? geckoSizes(params) : null;
-  }
-
   /// `minPacketSize` / `maxPacketSize` of a Gecko link, 512 / 1200 when absent (the Hysteria defaults); null when
   /// not numbers or outside `0 < min <= max <= 2048` (both cores refuse such a config).
   static (int, int)? geckoSizes(Map<String, String> params) {
@@ -524,49 +542,30 @@ class VlessParser {
     return (min, max);
   }
 
-  /// Query parameters of the profile's original link, including the base64 body of SIP002
-  /// `ss://BASE64#name`. Empty if there's no link or it's unreadable. Needed by
-  /// builders for fields [VpnConfig] doesn't have (headerType, obfs, plugin).
-  static Map<String, String> linkParams(VpnConfig config) {
-    final raw = config.rawUri;
-    if (raw == null) return const {};
-    final hash = raw.indexOf('#');
-    var main = hash >= 0 ? raw.substring(0, hash) : raw;
-    if (config.protocol == VpnProtocol.shadowsocks && !main.contains('@')) {
-      try {
-        main = utf8.decode(base64Decode(_padBase64(main.substring(5))));
-      } catch (_) {
-        return const {};
-      }
-    }
-    final query = main.indexOf('?');
-    if (query < 0) return const {};
+  /// [stored] with what the parser reads from its [VpnConfig.rawUri] today, when it was stored before the model had
+  /// all of it ([VpnConfig.needsLinkFields]): the link read again, keeping the id, name, creation time, subscription,
+  /// pinned core and ping. A link the parser now refuses keeps the stored config with the reason in
+  /// [VpnConfig.linkRejection]; an unreadable one keeps it as it is.
+  static VpnConfig withLinkFields(VpnConfig stored) {
+    if (!stored.needsLinkFields) return stored;
+    final VpnConfig? parsed;
     try {
-      return Uri.splitQueryString(main.substring(query + 1));
-    } catch (_) {
-      return const {};
+      parsed = parseUri(stored.rawUri!);
+    } on FormatException catch (e) {
+      return stored.copyWith(linkRejection: ReasonException.of(e));
     }
-  }
-
-  /// `mux=on` / `mux=off` in the link: Mux for this server regardless of the global setting,
-  /// over xhttp too (a server behind a GET-only CDN pads the download with Mux frames).
-  /// null — no parameter or an unknown value.
-  static bool? linkMux(VpnConfig config) => switch (linkParams(config)['mux']?.trim().toLowerCase()) {
-    'on' || 'true' || '1' => true,
-    'off' || 'false' || '0' => false,
-    _ => null,
-  };
-
-  /// JSON body of `vmess://BASE64(JSON)` the profile was read from.
-  static Map<String, dynamic> vmessJson(VpnConfig config) {
-    final raw = config.rawUri;
-    if (raw == null || !raw.startsWith('vmess://')) return const {};
-    try {
-      final json = jsonDecode(utf8.decode(base64Decode(_padBase64(raw.substring('vmess://'.length)))));
-      return json is Map<String, dynamic> ? json : const {};
-    } catch (_) {
-      return const {};
-    }
+    if (parsed == null || parsed.protocol != stored.protocol) return stored;
+    final samePing = parsed.endpoint == stored.endpoint;
+    return parsed.copyWith(
+      id: stored.id,
+      name: stored.name,
+      createdAt: stored.createdAt,
+      subscriptionId: stored.subscriptionId,
+      core: stored.core,
+      latencyMs: samePing ? stored.latencyMs : null,
+      lastPingedAt: samePing ? stored.lastPingedAt : null,
+      rawUri: stored.rawUri,
+    );
   }
 
   static String _padBase64(String s) {

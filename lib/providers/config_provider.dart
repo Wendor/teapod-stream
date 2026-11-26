@@ -245,7 +245,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
 
   @override
   Future<ConfigState> build() async {
-    final configs = await _storage.loadConfigs();
+    final configs = (await _storage.loadConfigs()).map(VlessParser.withLinkFields).toList();
     final activeId = await _storage.loadActiveConfigId();
     final activeSubId = await _storage.loadActiveSubscriptionId();
     final subs = await _storage.loadSubscriptions();
@@ -531,7 +531,7 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
 
     final parsed = bundle.rawUris.map(parse).nonNulls.toList();
     final remapped = [
-      for (final (i, c) in [...bundle.configs, ...parsed].indexed)
+      for (final (i, c) in [...bundle.configs.map(VlessParser.withLinkFields), ...parsed].indexed)
         c.copyWith(
           id: 'cfg_import_${ts}_${i}_${c.id.hashCode}',
           createdAt: now,

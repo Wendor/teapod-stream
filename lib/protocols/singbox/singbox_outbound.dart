@@ -1,7 +1,6 @@
 import '../../core/interfaces/vpn_engine.dart';
 import '../../core/models/protocol_settings.dart';
 import '../../core/models/vpn_config.dart';
-import '../xray/vless_parser.dart';
 
 /// Proxy outbound (or endpoint) in sing-box 1.14 format; the tag is always `proxy`.
 abstract final class SingBoxOutbound {
@@ -103,7 +102,7 @@ abstract final class SingBoxOutbound {
 
   static Map<String, dynamic> _hysteria2(VpnConfig config, VpnEngineOptions options) {
     final hop = config.hopPorts?.trim() ?? '';
-    final gecko = VlessParser.geckoPacketSize(config);
+    final gecko = config.geckoPacketSize;
     return {
       'type': 'hysteria2',
       'tag': tag,

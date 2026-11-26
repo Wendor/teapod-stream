@@ -67,7 +67,7 @@ and security (`tls` with `serverName`, `fingerprint`, `alpn`, `echConfigList`; `
   first), then `salamander` with `obfsPassword` (for Gecko plus `packetSize: "min-max"`, Xray's Gecko form). **SNI is mandatory**: the hysteria dialer doesn't pass the
   destination to `GetTLSConfig()`, so an empty `serverName` became the literal `hysteria`; the builder uses the
   address when `sni` is empty.
-- **TCP HTTP header** (`headerType=http`) is read from `rawUri` into `tcpSettings.header`.
+- **TCP HTTP header** (`VpnConfig.tcpHttpHeader`) → `tcpSettings.header`.
 - `sockopt.tcpUserTimeout: 30000` (not Hysteria2; on `dialer-out` when it is used): a connection whose packets DPI
   drops breaks after 30 s instead of hanging until `tcp_retries2`.
 
@@ -78,7 +78,7 @@ and security (`tls` with `serverName`, `fingerprint`, `alpn`, `echConfigList`; `
   works on the TCP leg (not Hysteria2), noise on UDP (Hysteria2, QUIC); port 53 isn't noised.
 - Mux (`_muxApplies`): never for Hysteria2 (QUIC multiplexes itself). The global switch skips xhttp: it has its own
   xmux, and Xray's xhttp inbounds refuse TCP inside Mux. `mux=on` / `mux=off` in the link
-  (`VlessParser.linkMux`) overrides the switch for one server, xhttp included: a server behind a GET-only CDN that
+  (`VpnConfig.mux`) overrides the switch for one server, xhttp included: a server behind a GET-only CDN that
   buffers responses pads the download with Mux KeepAlive frames, so the client must use Mux. With
   `xtls-rprx-vision` TCP Mux is forced off (`concurrency: -1`) — the server breaks Mux connections carrying TCP;
   only XUDP stays.

@@ -531,6 +531,23 @@ void main() {
     });
   });
 
+  group('link fields of configs stored before the model had them', () {
+    VpnConfig legacy(String id, String link) =>
+        VpnConfig.fromJson({..._cfg(id, rawUri: link).toJson()..remove('linkFields')});
+
+    test('are read from the link on load and in a full bundle', () async {
+      await boot(configs: [legacy('a', 'trojan://p@h:443?headerType=http&mux=on#a')]);
+      expect((s().configs.single.headerType, s().configs.single.mux), ('http', true));
+      final r = await n().importBundle(
+        ConnectionsBundle(exportedAt: DateTime(2026), configs: [legacy('b', 'trojan://p@b.example:443?mux=off#b')]),
+      );
+      expect(r.addedConfigs, 1);
+      expect(s().configs.last.mux, false);
+      final saved = await storage.loadConfigs();
+      expect(saved.map((c) => c.needsLinkFields), [false, false]);
+    });
+  });
+
   group('importBundle', () {
     test('review lists hosts of new subscriptions, full and compact', () async {
       await boot(subs: [_sub('k', url: 'https://known.example/s')]);

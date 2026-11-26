@@ -52,9 +52,14 @@ class HeartbeatPolicy(
 
     /// TUN mode only: tun2socks state before probing. The SOCKS probe bypasses the TUN, so it
     /// passes even when tun2socks crashed or leaks connections (stale TIME_WAIT / CLOSE_WAIT
-    /// entries in gVisor); a reconnect resets both.
-    @Synchronized fun onTun(running: Boolean, activeConns: Long): Action = when {
+    /// entries in gVisor); a reconnect resets both. Too many connections while apps get no
+    /// payload ([rxFresh] false) is a dead upstream piling up attempts, not a leak: it is
+    /// exhaustion, so `switchConfig` applies (a plain reconnect every interval would restart
+    /// the warm-up and keep the failures from ever counting).
+    @Synchronized fun onTun(running: Boolean, activeConns: Long, rxFresh: () -> Boolean, now: Long): Action = when {
         !running -> Action.Reconnect("tun2socks not running")
+        activeConns > TUN_CONN_LEAK_THRESHOLD && !rxFresh() ->
+            exhausted(threshold, "No answers with activeConns=$activeConns", rxFresh = false, now = now)
         activeConns > TUN_CONN_LEAK_THRESHOLD -> Action.Reconnect("gVisor connection leak detected (activeConns=$activeConns)")
         else -> Action.None
     }

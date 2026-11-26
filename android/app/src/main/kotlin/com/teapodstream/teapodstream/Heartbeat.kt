@@ -86,7 +86,7 @@ internal class Heartbeat(private val host: Host) {
                     val port = XrayVpnService.snapshot.socksPort
                     if (port <= 0) continue
                     // Skip in proxy-only mode: tun2socks is intentionally not started.
-                    if (host.tunMode && !apply(policy.onTun(host.core.isTunRunning(), host.core.activeConnections()))) break
+                    if (host.tunMode && !apply(policy.onTun(host.core.isTunRunning(), host.core.activeConnections(), { isTunRxFresh() }, System.currentTimeMillis()))) break
 
                     // Data reached the TUN within the last interval — the tunnel is
                     // demonstrably alive, no need to burn a radio round-trip on an

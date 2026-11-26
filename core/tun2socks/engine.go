@@ -785,7 +785,7 @@ func (a *udpActivity) deadline() time.Time {
 	return a.base.Add(time.Duration(a.last.Load()) + udpIdleTimeout)
 }
 
-// engineRx (may be nil) is stamped on every reply delivered to the app: the engine's liveness signal.
+// engineRx (may be nil) is stamped on every reply delivered to the app, DNS (port 53) aside: the engine's liveness signal.
 func pipeUDP(gonetConn net.Conn, assoc *UDPAssociation, dstIP net.IP, dstPort int, mtu int, engineRx *atomic.Int64) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -880,7 +880,8 @@ func pipeUDP(gonetConn net.Conn, assoc *UDPAssociation, dstIP net.IP, dstPort in
 			if _, err := gonetConn.Write(payload); err != nil {
 				return
 			}
-			if engineRx != nil {
+			// A DNS answer may come from the core's cache or a direct resolver: no proof the server lives.
+			if engineRx != nil && dstPort != 53 {
 				engineRx.Store(time.Now().UnixMilli())
 			}
 			act.touch()

@@ -113,9 +113,19 @@ class HeartbeatPolicyTest {
     @Test
     fun deadOrLeakingTunReconnects() {
         val p = policy()
-        assertTrue(p.onTun(running = false, activeConns = 0) is Action.Reconnect)
-        assertTrue(p.onTun(running = true, activeConns = HeartbeatPolicy.TUN_CONN_LEAK_THRESHOLD + 1) is Action.Reconnect)
-        assertEquals(Action.None, p.onTun(running = true, activeConns = HeartbeatPolicy.TUN_CONN_LEAK_THRESHOLD))
+        val fresh = { true }
+        assertTrue(p.onTun(running = false, activeConns = 0, rxFresh = fresh, now = t0) is Action.Reconnect)
+        assertTrue(p.onTun(running = true, activeConns = HeartbeatPolicy.TUN_CONN_LEAK_THRESHOLD + 1, rxFresh = fresh, now = t0) is Action.Reconnect)
+        assertEquals(Action.None, p.onTun(running = true, activeConns = HeartbeatPolicy.TUN_CONN_LEAK_THRESHOLD, rxFresh = fresh, now = t0))
+    }
+
+    @Test
+    fun pileUpWithoutAnswersIsExhaustionSoSwitchConfigApplies() {
+        val conns = HeartbeatPolicy.TUN_CONN_LEAK_THRESHOLD + 1
+        val switching = policy(switchConfig = true)
+        assertTrue(switching.onTun(running = true, activeConns = conns, rxFresh = { false }, now = t0) is Action.SwitchConfig)
+        // The reconnect mode reconnects, as before.
+        assertTrue(policy().onTun(running = true, activeConns = conns, rxFresh = { false }, now = t0) is Action.Reconnect)
     }
 
     @Test

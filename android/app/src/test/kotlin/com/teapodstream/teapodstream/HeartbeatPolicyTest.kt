@@ -113,6 +113,26 @@ class HeartbeatPolicyTest {
     }
 
     @Test
+    fun freshTrafficSettlesAPendingSwitch() {
+        val p = policy(threshold = 1, switchConfig = true)
+        assertTrue(p.fail(now = t0) is Action.SwitchConfig)
+        assertTrue(p.fail(now = t0 + 10_000, rxFresh = true) is Action.Warn)
+        // A later, separate exhaustion asks Flutter again instead of the fallback reconnect.
+        assertTrue(p.fail(now = t0 + HeartbeatPolicy.SWITCH_COOLDOWN_MS + 10_000) is Action.SwitchConfig)
+    }
+
+    @Test
+    fun warmupLimitWaitsForAPendingSwitch() {
+        val p = policy(switchConfig = true, isReconnect = true)
+        val conns = HeartbeatPolicy.TUN_CONN_LEAK_THRESHOLD + 1
+        assertTrue(p.onTun(running = true, activeConns = conns, rxFresh = { false }, now = t0) is Action.SwitchConfig)
+        // The warm-up limit (30 s) falls inside the switch cooldown (45 s): no reconnect under it.
+        assertTrue(p.fail(now = t0 + HeartbeatPolicy.WARMUP_TIMEOUT_MS) is Action.Note)
+        // After the cooldown the warm-up limit applies.
+        assertTrue(p.fail(now = t0 + HeartbeatPolicy.SWITCH_COOLDOWN_MS) is Action.Reconnect)
+    }
+
+    @Test
     fun deadOrLeakingTunReconnects() {
         val p = policy()
         val fresh = { true }

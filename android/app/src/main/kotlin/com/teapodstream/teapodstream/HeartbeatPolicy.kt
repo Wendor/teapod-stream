@@ -114,7 +114,10 @@ class HeartbeatPolicy(
         }
         noInternetStreak = 0
         if (!warmupDone) {
-            if (warmupDeadline == 0L || now < warmupDeadline) return Action.Note("Heartbeat warmup probe failed: $error")
+            // A config switch asked for meanwhile (the pile-up check) has its cooldown: the warm-up limit doesn't cut it.
+            if (warmupDeadline == 0L || now < warmupDeadline || switchPending(now)) {
+                return Action.Note("Heartbeat warmup probe failed: $error")
+            }
             return Action.Reconnect("Heartbeat warmup timed out (${WARMUP_TIMEOUT_MS / 1000} s)")
         }
         failures++
@@ -140,6 +143,7 @@ class HeartbeatPolicy(
         // real traffic flows: if the TUN saw data within the last interval, keep the session.
         if (rxFresh) {
             failures = 0
+            lastSwitchAt = 0L // data flows: an earlier switch request is settled
             return Action.Warn("Heartbeat failing but TUN traffic is alive, skipping reconnect")
         }
         if (switchConfig) {
@@ -150,7 +154,7 @@ class HeartbeatPolicy(
             }
             // Flutter has the cooldown to switch: a check exhausted again meanwhile (the pile-up one runs every
             // interval) waits instead of reconnecting under it.
-            if (now - lastSwitchAt < SWITCH_COOLDOWN_MS) {
+            if (switchPending(now)) {
                 return Action.Note("$reason (failures: $count), waiting for the config switch")
             }
             // No switch within the cooldown (app killed / no live candidate): a plain reconnect of the current
@@ -161,6 +165,8 @@ class HeartbeatPolicy(
         }
         return Action.Reconnect("$reason (failures: $count)")
     }
+
+    private fun switchPending(now: Long) = lastSwitchAt != 0L && now - lastSwitchAt < SWITCH_COOLDOWN_MS
 
     companion object {
         const val INTERVAL_MS = 15_000L

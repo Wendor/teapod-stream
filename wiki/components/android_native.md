@@ -178,11 +178,11 @@ and applies its actions. A failure below the threshold is retried twice, 3 s apa
   uploads. Until the first such payload the stall checks measure idle time from the heartbeat's start.
 - **Warm-up** after a reconnect: probes every 15 s, failures don't count until the first success, hard limit 30 s
   (outbounds connect lazily; DNS + TLS on fresh LTE can be slow).
-- **Exhausted** (the threshold, or a TUN stall): proxy payload to an app within the last 15 s (`isTunRxFresh`, whatever the probe cadence; re-checked for a stall) → keep the session (the probe can land on a dead balancer detour); otherwise: `reconnect` → `reconnectInternal()`; `switchConfig` → `tunnel_dead`
-  event to Flutter ([vpn_provider](vpn_provider.md)); if nothing happens within 45 s (app killed, no live candidate) →
-  plain reconnect.
-- **Watchdogs:** no proxy payload to apps for 120 s with ≥ 2 active connections → exhausted (a warning from 60 s, once a minute); more than 200 active tun2socks
-  connections → reconnect when apps still get answers (a gVisor state leak), otherwise exhausted (a dead upstream
+- **Exhausted** (the threshold, or a TUN stall): TUN activity (above) within the last 15 s (`isTunRxFresh`, whatever the probe cadence; re-checked for a stall) → keep the session (the probe can land on a dead balancer detour) and drop a pending config switch; otherwise: `reconnect` → `reconnectInternal()`; `switchConfig` → `tunnel_dead`
+  event to Flutter ([vpn_provider](vpn_provider.md)); while it is pending (45 s) neither another exhaustion nor the
+  warm-up limit reconnects; if nothing happens within 45 s (app killed, no live candidate) → plain reconnect.
+- **Watchdogs:** no TUN activity for 120 s with ≥ 2 active connections → exhausted (a warning from 60 s, once a minute); more than 200 active tun2socks
+  connections → reconnect when TUN activity is fresh (a gVisor state leak), otherwise exhausted (a dead upstream
   piling up attempts — `switchConfig` applies); on screen-on / Doze exit a TUN idle ≥ 120 s triggers a probe, not a
   blind reconnect (idle ≠ dead); ≥ 3 skipped probes for lack of internet, then a failure → reconnect at once.
 - The SOCKS probe bypasses gVisor, so it can pass while app connections hang — that's what the watchdogs and the

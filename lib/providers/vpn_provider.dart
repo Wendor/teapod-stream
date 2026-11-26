@@ -582,11 +582,11 @@ class VpnNotifier extends Notifier<VpnState2> {
     return run;
   }
 
-  /// Runs a profile switch ([body] returns false — nothing switched), then makes the VPN follow the
-  /// final state: a profile no core runs disconnects (as a core change does), a live tunnel is
-  /// rebuilt if stale, a core change suppressed meanwhile is handled, an idle VPN saves the quick-connect parameters.
   /// Switches to profile [id]; the VPN follows once its settings and server are in place, also when restoring the
   /// server failed: the profile is already switched, and a retry can't — it is active.
+  Future<void> switchProfile(String id) =>
+      duringProfileSwitch(() => ref.read(profileProvider.notifier).switchProfile(id));
+
   /// Adds [bundle]'s profile and its connections (`ProfileNotifier.importBundle`), then switches to it when
   /// [switchTo]; returns its id.
   Future<String?> importProfile(
@@ -602,9 +602,9 @@ class VpnNotifier extends Notifier<VpnState2> {
     return id;
   }
 
-  Future<void> switchProfile(String id) =>
-      duringProfileSwitch(() => ref.read(profileProvider.notifier).switchProfile(id));
-
+  /// Runs a profile switch ([body] returns false — nothing switched), then makes the VPN follow the
+  /// final state: a profile no core runs disconnects (as a core change does), a live tunnel is
+  /// rebuilt if stale, a core change suppressed meanwhile is handled, an idle VPN saves the quick-connect parameters.
   Future<void> duringProfileSwitch(Future<bool> Function() body) => _queued(() => _profileSwitch(body));
 
   Future<void> _profileSwitch(Future<bool> Function() body) async {

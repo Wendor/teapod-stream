@@ -1,8 +1,8 @@
 import 'package:uuid/uuid.dart';
 
+import '../../core/models/app_message.dart';
 import '../../core/models/protocol_settings.dart';
 import '../../core/models/vpn_config.dart';
-import '../../l10n/l10n.dart';
 
 /// WireGuard: `wireguard://` / `wg://` links and wg-quick `.conf` text (one peer).
 abstract final class WireGuardParser {
@@ -16,9 +16,9 @@ abstract final class WireGuardParser {
     final sections = _sections(text);
     final interfaces = sections.where((s) => s.name == 'interface').toList();
     final peers = sections.where((s) => s.name == 'peer').toList();
-    if (interfaces.length != 1) throw FormatException(L10n.current.wgOneInterface);
-    if (peers.isEmpty) throw FormatException(L10n.current.wgNoPeer);
-    if (peers.length > 1) throw FormatException(L10n.current.wgOnePeer(peers.length));
+    if (interfaces.length != 1) throw ReasonException(AppMessage.l10n((l) => l.wgOneInterface));
+    if (peers.isEmpty) throw ReasonException(AppMessage.l10n((l) => l.wgNoPeer));
+    if (peers.length > 1) throw ReasonException(AppMessage.l10n((l) => l.wgOnePeer(peers.length)));
     final iface = interfaces.single.values;
     final peer = peers.single.values;
     final (host, port) = _endpoint(_required(peer, 'endpoint', 'Endpoint'));
@@ -161,7 +161,7 @@ abstract final class WireGuardParser {
   }
 
   static String _required(Map<String, String> values, String key, String label) =>
-      _nonEmpty(values[key]) ?? (throw FormatException(L10n.current.wgMissingKey(label)));
+      _nonEmpty(values[key]) ?? (throw ReasonException(AppMessage.l10n((l) => l.wgMissingKey(label))));
 
   static String? _nonEmpty(String? v) => (v == null || v.trim().isEmpty) ? null : v.trim();
 
@@ -190,7 +190,7 @@ abstract final class WireGuardParser {
   /// `host:port` or `[v6]:port`.
   static (String, int) _endpoint(String value) {
     final match = RegExp(r'^\[(.+)\]:(\d+)$').firstMatch(value) ?? RegExp(r'^([^:]+):(\d+)$').firstMatch(value);
-    if (match == null) throw FormatException(L10n.current.wgInvalidEndpoint(value));
+    if (match == null) throw ReasonException(AppMessage.l10n((l) => l.wgInvalidEndpoint(value)));
     return (match.group(1)!, int.parse(match.group(2)!));
   }
 

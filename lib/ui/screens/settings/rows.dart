@@ -126,9 +126,8 @@ class _ProfilesRow extends ConsumerWidget {
 String _dnsLabel(AppSettings settings) {
   if (settings.dnsPreset == 'custom') return settings.customDnsAddress;
   return DnsServerConfig.presets.firstWhere(
-            (p) => p['value'] == settings.dnsPreset,
-            orElse: () => {'label': settings.dnsPreset},
-          )['label']
-          as String? ??
+        (p) => p['value'] == settings.dnsPreset,
+        orElse: () => {'label': settings.dnsPreset},
+      )['label'] ??
       settings.dnsPreset;
 }

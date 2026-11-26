@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/services.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/interfaces/vpn_engine.dart';
+import '../../core/models/app_message.dart';
 import '../../core/models/vpn_config.dart';
 import '../../core/models/vpn_log_entry.dart';
 import '../../core/cores/core_backend.dart';
@@ -26,6 +27,8 @@ class XrayEngine {
     final String xrayConfig;
     try {
       xrayConfig = backend.buildConfig(config, options);
+    } on ReasonException {
+      rethrow; // an app string: the caller keeps it localizable
     } on FormatException catch (e) {
       throw PlatformException(code: 'UNSUPPORTED_CONFIG', message: e.message);
     } on StateError catch (e) {

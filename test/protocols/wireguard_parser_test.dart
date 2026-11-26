@@ -223,13 +223,13 @@ void main() {
     test('sing-box rejects AWG settings the endpoint cannot apply', () {
       final weak = WireGuardParser.parseConf(awg3.replaceFirst('S3 = 16', 'S3 = 8'));
       expect(
-        SingBoxConfigBuilder.unsupportedReason(weak),
+        '${SingBoxConfigBuilder.unsupportedReason(weak)}',
         'AmneziaWG: header protection requires S1–S4 of at least 12.',
       );
       final reserved = WireGuardParser.parseUri(
         WireGuardParser.toUri(WireGuardParser.parseConf(awg1)).replaceFirst('#', '&reserved=1,2,3#'),
       )!;
-      expect(SingBoxConfigBuilder.unsupportedReason(reserved), "AmneziaWG doesn't support reserved.");
+      expect('${SingBoxConfigBuilder.unsupportedReason(reserved)}', "AmneziaWG doesn't support reserved.");
       expect(SingBoxConfigBuilder.unsupportedReason(WireGuardParser.parseConf(awg3)), isNull);
     });
   });

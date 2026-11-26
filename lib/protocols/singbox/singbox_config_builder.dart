@@ -1,13 +1,13 @@
 import 'dart:convert';
 
 import '../../core/interfaces/vpn_engine.dart';
+import '../../core/models/app_message.dart';
 import '../../core/models/protocol_settings.dart';
 import '../../core/models/vpn_config.dart';
 import '../../core/models/vpn_log_entry.dart';
 import '../xray/vless_parser.dart';
 import 'singbox_outbound.dart';
 import 'singbox_route.dart';
-import '../../l10n/l10n.dart';
 
 /// sing-box 1.14 config for a profile and app settings.
 abstract final class SingBoxConfigBuilder {
@@ -74,45 +74,45 @@ abstract final class SingBoxConfigBuilder {
   }
 
   /// null — the profile runs on sing-box; otherwise the reason.
-  static String? unsupportedReason(VpnConfig config) {
-    if (config.rawXrayConfig != null) return L10n.current.singboxNoRawConfig;
+  static AppMessage? unsupportedReason(VpnConfig config) {
+    if (config.rawXrayConfig != null) return AppMessage.l10n((l) => l.singboxNoRawConfig);
     if (config.transport == VpnTransport.xhttp || config.transport == VpnTransport.splithttp) {
-      return L10n.current.singboxNoXhttp;
+      return AppMessage.l10n((l) => l.singboxNoXhttp);
     }
     if ((config.xhttpExtra?.isNotEmpty ?? false) || (config.finalmask?.isNotEmpty ?? false)) {
-      return L10n.current.singboxNoXrayExtra;
+      return AppMessage.l10n((l) => l.singboxNoXrayExtra);
     }
     if (config.protocol != VpnProtocol.hysteria2 && (VlessParser.linkMux(config) ?? false)) {
-      return L10n.current.singboxLinkMux;
+      return AppMessage.l10n((l) => l.singboxLinkMux);
     }
     if (config.pinSHA256?.trim().isNotEmpty ?? false) {
-      return L10n.current.singboxNoCertPin;
+      return AppMessage.l10n((l) => l.singboxNoCertPin);
     }
     switch (config.protocol) {
       case VpnProtocol.vless:
         final encryption = config.encryption?.trim() ?? '';
-        if (encryption.isNotEmpty && encryption != 'none') return L10n.current.singboxNoVlessEncryption;
+        if (encryption.isNotEmpty && encryption != 'none') return AppMessage.l10n((l) => l.singboxNoVlessEncryption);
         final flow = config.flow?.trim() ?? '';
-        if (flow.isNotEmpty && flow != 'xtls-rprx-vision') return L10n.current.singboxFlow(flow);
+        if (flow.isNotEmpty && flow != 'xtls-rprx-vision') return AppMessage.l10n((l) => l.singboxFlow(flow));
       case VpnProtocol.shadowsocks:
         if (VlessParser.linkParams(config)['plugin']?.trim().isNotEmpty ?? false) {
-          return L10n.current.singboxNoSsPlugins;
+          return AppMessage.l10n((l) => l.singboxNoSsPlugins);
         }
         final method = config.method ?? 'chacha20-ietf-poly1305';
-        if (!ssMethods.contains(method)) return L10n.current.singboxSsMethod(method);
+        if (!ssMethods.contains(method)) return AppMessage.l10n((l) => l.singboxSsMethod(method));
       case VpnProtocol.vmess || VpnProtocol.trojan || VpnProtocol.hysteria2:
         break;
       case VpnProtocol.wireguard || VpnProtocol.ssh || VpnProtocol.naive:
         if (config.validate() case final error?) return error;
         if (config.protocolSettings case WireGuardSettings(:final amnezia?, :final reserved)) {
-          if (reserved?.isNotEmpty ?? false) return L10n.current.singboxAwgReserved;
+          if (reserved?.isNotEmpty ?? false) return AppMessage.l10n((l) => l.singboxAwgReserved);
           final paddings = [amnezia.s1, amnezia.s2, amnezia.s3, amnezia.s4];
           if ((amnezia.headerProtectionKey?.isNotEmpty ?? false) && paddings.any((s) => (s ?? 0) < 12)) {
-            return L10n.current.singboxAwgHeaders;
+            return AppMessage.l10n((l) => l.singboxAwgHeaders);
           }
         }
     }
-    if (_tcpHttpHeader(config)) return L10n.current.singboxNoTcpHttp;
+    if (_tcpHttpHeader(config)) return AppMessage.l10n((l) => l.singboxNoTcpHttp);
     return null;
   }
 

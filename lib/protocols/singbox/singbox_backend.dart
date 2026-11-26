@@ -30,10 +30,7 @@ class SingBoxBackend implements CoreBackend {
   AppMessage? unavailableReason(CoreFeature feature) => _unsupported[feature];
 
   @override
-  AppMessage? checkConfig(VpnConfig config) => switch (SingBoxConfigBuilder.unsupportedReason(config)) {
-    final r? => AppMessage.text(r),
-    null => null,
-  };
+  AppMessage? checkConfig(VpnConfig config) => SingBoxConfigBuilder.unsupportedReason(config);
 
   @override
   SettingsCheck checkOptions(VpnConfig config, VpnEngineOptions options) => (

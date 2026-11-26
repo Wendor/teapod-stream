@@ -300,7 +300,7 @@ void main() {
         activeId: 'a',
       );
       await n().connect();
-      expect(st().error, const AppMessage.text('Empty password'));
+      expect('${st().error}', 'Empty password');
       expect(native.named('connect'), isEmpty);
     });
 
@@ -531,13 +531,13 @@ void main() {
       await c.read(configProvider.notifier).setActiveConfig('bad');
       await n().reconnectWithNewConfig();
       expect(st().isConnected, isTrue);
-      expect(st().error, const AppMessage.text('Empty password'));
+      expect('${st().error}', 'Empty password');
       expect(native.named('connect'), hasLength(1));
       // A stats tick keeps the reason.
       await Future<void>.delayed(const Duration(milliseconds: 1100));
       await _settle();
       expect(stats().uploadBytes, 10);
-      expect(st().error, const AppMessage.text('Empty password'));
+      expect('${st().error}', 'Empty password');
       c.read(vpnStatsProvider.notifier).pause();
     });
 

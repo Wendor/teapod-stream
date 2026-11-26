@@ -155,13 +155,13 @@ void main() {
     };
     for (final entry in cases.entries) {
       final config = hy2(entry.key);
-      expect(RustConfigBuilder.unsupportedReason(config), contains(entry.value), reason: entry.key);
+      expect('${RustConfigBuilder.unsupportedReason(config)}', contains(entry.value), reason: entry.key);
       expect(() => RustConfigBuilder.build(config, options()), throwsFormatException);
     }
     final tooManyPorts = VlessParser.parseUri('hy2://s3cret@hy.example:1-65535,1-2/?sni=cover.example')!;
-    expect(RustConfigBuilder.unsupportedReason(tooManyPorts), contains('65535'));
+    expect('${RustConfigBuilder.unsupportedReason(tooManyPorts)}', contains('65535'));
     final longAuth = VlessParser.parseUri('hy2://${'a' * 4097}@hy.example:443')!;
-    expect(RustConfigBuilder.unsupportedReason(longAuth), contains('4096'));
+    expect('${RustConfigBuilder.unsupportedReason(longAuth)}', contains('4096'));
   });
 
   test('Mux and fragmentation do not apply to Hysteria2; noise follows Salamander', () {

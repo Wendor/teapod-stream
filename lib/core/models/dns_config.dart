@@ -1,5 +1,3 @@
-import '../../l10n/l10n.dart';
-
 /// DNS operating mode
 enum DnsMode {
   proxy, // DNS queries go through the proxy server
@@ -70,8 +68,8 @@ class DnsServerConfig {
     fallbackIp: '94.140.14.14',
   );
 
-  /// All preset servers for the UI
-  static List<Map<String, dynamic>> get presets => [
+  /// The preset servers for the UI; the custom server (`custom`) is added there with a localized label.
+  static const List<Map<String, String>> presets = [
     {'label': 'Cloudflare (UDP)', 'value': 'cf_udp'},
     {'label': 'Cloudflare (DoH)', 'value': 'cf_doh'},
     {'label': 'Cloudflare (DoT)', 'value': 'cf_dot'},
@@ -82,7 +80,6 @@ class DnsServerConfig {
     {'label': 'Quad9 (DoH)', 'value': 'quad9_doh'},
     {'label': 'AdGuard (UDP)', 'value': 'adguard_udp'},
     {'label': 'AdGuard (DoH)', 'value': 'adguard_doh'},
-    {'label': L10n.current.dnsCustomServer, 'value': 'custom'},
   ];
 
   static DnsServerConfig fromPreset(String preset, {String? customAddress, DnsType? customType}) {

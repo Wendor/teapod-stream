@@ -248,7 +248,7 @@ void main() {
   });
 
   group('unsupportedReason', () {
-    String? reason(VpnConfig c) => SingBoxConfigBuilder.unsupportedReason(c);
+    String? reason(VpnConfig c) => SingBoxConfigBuilder.unsupportedReason(c)?.toString();
 
     test('supported profile', () {
       expect(reason(_cfg(VpnProtocol.vless, flow: 'xtls-rprx-vision', encryption: 'none')), isNull);

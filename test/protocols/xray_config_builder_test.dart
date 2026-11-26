@@ -634,9 +634,15 @@ void main() {
     }
 
     test('profiles with removed features are reported, not started', () {
-      expect(XrayConfigBuilder.unsupportedReason(link('hy2://pw@h:443?insecure=1#n')), contains('allowInsecure'));
-      expect(XrayConfigBuilder.unsupportedReason(link('vless://u@h:443?security=tls&type=h2#n')), contains('HTTP/2'));
-      expect(XrayConfigBuilder.unsupportedReason(link('vless://u@h:443?security=tls&type=quic#n')), contains('QUIC'));
+      expect('${XrayConfigBuilder.unsupportedReason(link('hy2://pw@h:443?insecure=1#n'))}', contains('allowInsecure'));
+      expect(
+        '${XrayConfigBuilder.unsupportedReason(link('vless://u@h:443?security=tls&type=h2#n'))}',
+        contains('HTTP/2'),
+      );
+      expect(
+        '${XrayConfigBuilder.unsupportedReason(link('vless://u@h:443?security=tls&type=quic#n'))}',
+        contains('QUIC'),
+      );
       expect(XrayConfigBuilder.unsupportedReason(link('vless://u@h:443?security=tls&pinSHA256=zz#n')), isNotNull);
       expect(XrayConfigBuilder.unsupportedReason(link('vless://u@h:443?security=tls&type=ws#n')), isNull);
     });
@@ -644,7 +650,7 @@ void main() {
     test('a Shadowsocks link with a plugin is refused, as the other cores do', () {
       const key = 'Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpwdw';
       expect(
-        XrayConfigBuilder.unsupportedReason(link('ss://$key@h:8388/?plugin=obfs-local%3Bobfs%3Dhttp#n')),
+        '${XrayConfigBuilder.unsupportedReason(link('ss://$key@h:8388/?plugin=obfs-local%3Bobfs%3Dhttp#n'))}',
         contains('plugin'),
       );
       expect(XrayConfigBuilder.unsupportedReason(link('ss://$key@h:8388#n')), isNull);

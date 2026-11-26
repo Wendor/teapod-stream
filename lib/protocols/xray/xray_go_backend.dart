@@ -20,10 +20,7 @@ class XrayGoBackend implements CoreBackend {
   AppMessage? unavailableReason(CoreFeature feature) => null;
 
   @override
-  AppMessage? checkConfig(VpnConfig config) => switch (XrayConfigBuilder.unsupportedReason(config)) {
-    final r? => AppMessage.text(r),
-    null => null,
-  };
+  AppMessage? checkConfig(VpnConfig config) => XrayConfigBuilder.unsupportedReason(config);
 
   @override
   SettingsCheck checkOptions(VpnConfig config, VpnEngineOptions options) =>

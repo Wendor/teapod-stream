@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:uuid/uuid.dart';
+import '../../core/models/app_message.dart';
 import '../../core/models/vpn_config.dart';
-import '../../l10n/l10n.dart';
 import '../parsers/amnezia_key_parser.dart';
 import '../parsers/naive_parser.dart';
 import '../parsers/ssh_parser.dart';
@@ -18,25 +18,10 @@ Map<String, dynamic>? _parseExtra(String? raw) {
   }
 }
 
-/// A link of a known scheme with a value that changes how the connection works and that the app doesn't know: refused
-/// rather than replaced by a default (a VLESS link with an unknown security would otherwise go out in cleartext).
-class _Rejected implements Exception {
-  final String message;
-  const _Rejected(this.message);
-}
-
 class VlessParser {
   /// The config of link [uri]; null — not a link the app reads. A link it reads but refuses (an unknown security,
-  /// transport or obfuscation; a broken WireGuard `.conf`) throws [FormatException] naming the reason.
+  /// transport or obfuscation; a broken WireGuard `.conf`) throws a [ReasonException] naming the reason.
   static VpnConfig? parseUri(String uri) {
-    try {
-      return _parse(uri);
-    } on _Rejected catch (e) {
-      throw FormatException(e.message);
-    }
-  }
-
-  static VpnConfig? _parse(String uri) {
     uri = uri.trim();
     // Chat/Markdown exports may escape URI punctuation. Only undo the
     // punctuation escapes, preserving percent-encoded path/query values.
@@ -125,7 +110,7 @@ class VlessParser {
         createdAt: DateTime.now(),
         rawUri: uri,
       );
-    } on _Rejected {
+    } on ReasonException {
       rethrow;
     } catch (_) {
       return null;
@@ -148,7 +133,7 @@ class VlessParser {
       final security = switch ((json['tls'] as String? ?? '').trim().toLowerCase()) {
         '' || 'none' => VpnSecurity.none,
         'tls' => VpnSecurity.tls,
-        final other => throw _Rejected(L10n.current.linkUnknownSecurity(other)),
+        final other => throw ReasonException(AppMessage.l10n((l) => l.linkUnknownSecurity(other))),
       };
 
       return VpnConfig(
@@ -172,7 +157,7 @@ class VlessParser {
         createdAt: DateTime.now(),
         rawUri: uri,
       );
-    } on _Rejected {
+    } on ReasonException {
       rethrow;
     } catch (_) {
       return null;
@@ -237,7 +222,7 @@ class VlessParser {
         createdAt: DateTime.now(),
         rawUri: uri,
       );
-    } on _Rejected {
+    } on ReasonException {
       rethrow;
     } catch (_) {
       return null;
@@ -331,7 +316,7 @@ class VlessParser {
         createdAt: DateTime.now(),
         rawUri: uri,
       );
-    } on _Rejected {
+    } on ReasonException {
       rethrow;
     } catch (_) {
       return null;
@@ -384,7 +369,7 @@ class VlessParser {
       // password or with invalid packet sizes is an import error: the server drops unobfuscated packets.
       final obfs = params['obfs']?.trim() ?? '';
       if (!const {'', 'none', 'salamander', 'gecko'}.contains(obfs)) {
-        throw _Rejected(L10n.current.linkUnknownObfs(obfs));
+        throw ReasonException(AppMessage.l10n((l) => l.linkUnknownObfs(obfs)));
       }
       final obfsPassword = obfs == 'salamander' || obfs == 'gecko' ? params['obfs-password'] : null;
       if (obfs == 'gecko' && ((obfsPassword?.isEmpty ?? true) || geckoSizes(params) == null)) return null;
@@ -409,7 +394,7 @@ class VlessParser {
         createdAt: DateTime.now(),
         rawUri: uri,
       );
-    } on _Rejected {
+    } on ReasonException {
       rethrow;
     } catch (_) {
       return null;
@@ -488,7 +473,7 @@ class VlessParser {
     '' || 'none' => VpnSecurity.none,
     'tls' => VpnSecurity.tls,
     'reality' => VpnSecurity.reality,
-    _ => throw _Rejected(L10n.current.linkUnknownSecurity(s)),
+    _ => throw ReasonException(AppMessage.l10n((l) => l.linkUnknownSecurity(s))),
   };
 
   static VpnTransport _parseTransport(String s) {
@@ -514,7 +499,7 @@ class VlessParser {
       case 'splithttp':
         return VpnTransport.splithttp;
       default:
-        throw _Rejected(L10n.current.linkUnknownTransport(s));
+        throw ReasonException(AppMessage.l10n((l) => l.linkUnknownTransport(s)));
     }
   }
 

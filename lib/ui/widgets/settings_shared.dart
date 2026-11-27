@@ -10,7 +10,6 @@ import '../theme/app_theme.dart';
 import 'pressable.dart';
 import 'tap_target.dart';
 import '../../l10n/l10n.dart';
-import 'one_line.dart';
 
 /// Applies [change] to the settings from a screen ([SettingsNotifier.edit]): in a read-only profile shows a snackbar
 /// instead of a silent no-op.
@@ -412,10 +411,11 @@ class SetSegSquare extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Each segment draws its own border, so the 48 dp tap height around it stays transparent. On its own line and still
-    // too wide (the largest text scale), the whole selector shrinks to fit.
-    return OneLine(
-      Row(
+    // Each segment draws its own border, so the 48 dp tap height around it stays transparent. The labels are capped
+    // at 1.5× so the selector fits on its own line at the largest text scale; the tap targets are not scaled.
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.5,
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: opts.asMap().entries.map((e) {
           final idx = e.key;

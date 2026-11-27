@@ -225,7 +225,8 @@ class _SubGroup extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(height: 2),
-                              Row(
+                              // A Wrap: at a large text scale the refresh time and the expiry go to the next line.
+                              Wrap(
                                 children: [
                                   Text('cnt=${configs.length}', style: AppTheme.mono(size: 10, color: t.textMuted)),
                                   Text(

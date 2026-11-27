@@ -15,7 +15,7 @@ class _UpdateChannelSegment extends ConsumerWidget {
       locked: false,
       onChanged: (v) async {
         final ch = v == 'stable' ? UpdateChannel.stable : UpdateChannel.beta;
-        await ref.read(settingsProvider.notifier).save(settings.copyWith(updateChannel: ch));
+        await ref.read(settingsProvider.notifier).edit((c) => c.copyWith(updateChannel: ch));
         ref.read(updateProvider.notifier).checkForUpdate();
       },
     );

@@ -16,6 +16,7 @@ import 'package:teapodstream/providers/update_provider.dart';
 import 'package:teapodstream/ui/screens/network_settings_screen.dart';
 import 'package:teapodstream/ui/screens/routing/routing_screen.dart';
 import 'package:teapodstream/ui/screens/settings/settings_screen.dart';
+import 'package:teapodstream/ui/screens/subscription_settings_screen.dart';
 import 'package:teapodstream/ui/screens/whats_new_screen.dart';
 import 'package:teapodstream/ui/widgets/settings_shared.dart';
 
@@ -69,6 +70,30 @@ void main() {
       // The last enabled core can't be turned off.
       expect(_settings(c).disabledCores, {CoreKind.singBox, CoreKind.xrayGo});
       expect(find.text('At least one core must stay enabled'), findsOneWidget);
+      await unmount(tester, c);
+    });
+
+    testWidgets('taps before a rebuild each apply to the current order and switches', (tester) async {
+      await setUpScreenTest();
+      final c = await pumpScreen(tester, const SettingsScreen());
+      await tester.ensureVisible(find.bySemanticsLabel('move sing-box up'));
+      await settle(tester);
+      // No pump between the taps: both still see the rendered order [Go, sing-box, Rust].
+      await tester.tap(find.bySemanticsLabel('move xray-rust up'));
+      await tester.tap(find.bySemanticsLabel('move xray-rust up'));
+      await settle(tester);
+      expect(_settings(c).coreOrder, [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox]);
+
+      Finder switchOf(CoreKind k) =>
+          find.descendant(of: find.byKey(ValueKey(k)), matching: find.byType(SetSquareSwitch));
+      await tester.ensureVisible(switchOf(CoreKind.xrayGo));
+      await tester.tap(switchOf(CoreKind.singBox));
+      await settle(tester);
+      // Two cores left, both switched off before a rebuild: the second must not disable the last one.
+      await tester.tap(switchOf(CoreKind.xrayGo));
+      await tester.tap(switchOf(CoreKind.xrayRust));
+      await settle(tester);
+      expect(_settings(c).disabledCores.length, 2);
       await unmount(tester, c);
     });
 
@@ -217,6 +242,26 @@ void main() {
     });
   });
 
+  group('subscription settings', () {
+    testWidgets('the User-Agent field saves once per edit', (tester) async {
+      await setUpScreenTest();
+      final c = await pumpScreen(tester, const SubscriptionSettingsScreen(breadcrumbParent: 'settings'));
+      var writes = 0;
+      c.listen(profileProvider, (_, _) => writes++);
+      final field = find.byType(TextField).last;
+      for (final typed in ['a', 'ag', 'agent']) {
+        await tester.enterText(field, typed);
+        await tester.pump();
+      }
+      expect(writes, 0);
+      FocusManager.instance.primaryFocus?.unfocus();
+      await settle(tester);
+      expect(writes, 1);
+      expect((await storedSettings()).subUserAgent, 'agent');
+      await unmount(tester, c);
+    });
+  });
+
   group('routing', () {
     testWidgets('toggles are saved; ad block is locked without geo data', (tester) async {
       await setUpScreenTest();
@@ -227,6 +272,21 @@ void main() {
       expect(_settings(c).routing.ruServicesEnabled, isTrue);
       await _tapRow(tester, 'Ad blocking');
       expect(_settings(c).routing.adBlockEnabled, isFalse);
+      await unmount(tester, c);
+    });
+
+    testWidgets('two taps before a rebuild both land: changes apply to the current settings', (tester) async {
+      await setUpScreenTest();
+      final c = await pumpScreen(tester, const RoutingScreen());
+      for (final title in ['Kill Switch', 'Russian services']) {
+        await tester.scrollUntilVisible(find.text(title), 200, scrollable: find.byType(Scrollable).first);
+      }
+      // No pump between the taps: both rows still hold the same rendered settings.
+      await tester.tap(find.text('Kill Switch'));
+      await tester.tap(find.text('Russian services'));
+      await settle(tester);
+      final stored = await storedSettings();
+      expect((stored.killSwitchEnabled, stored.routing.ruServicesEnabled), (true, true));
       await unmount(tester, c);
     });
 

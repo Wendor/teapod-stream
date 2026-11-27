@@ -59,16 +59,10 @@ class RoutingScreen extends ConsumerWidget {
             sniffingEnabled: settings.sniffingEnabled,
             splitTunnelHint: _splitHint(context.l10n, settings),
             killSwitchEnabled: settings.killSwitchEnabled,
-            onUpdate: (r) {
-              saveSettings(context, ref, settings.copyWith(routing: r));
-            },
-            onUpdateSniffing: (v) {
-              saveSettings(context, ref, settings.copyWith(sniffingEnabled: v));
-            },
-            onUpdateKillSwitch: (v) {
-              saveSettings(context, ref, settings.copyWith(killSwitchEnabled: v));
-            },
-            onUpdateGeo: (ip, site) => saveSettings(context, ref, settings.copyWith(geoipUrl: ip, geositeUrl: site)),
+            onUpdate: (change) => saveSettings(context, ref, (c) => c.copyWith(routing: change(c.routing))),
+            onUpdateSniffing: (v) => saveSettings(context, ref, (c) => c.copyWith(sniffingEnabled: v)),
+            onUpdateKillSwitch: (v) => saveSettings(context, ref, (c) => c.copyWith(killSwitchEnabled: v)),
+            onUpdateGeo: (ip, site) => saveSettings(context, ref, (c) => c.copyWith(geoipUrl: ip, geositeUrl: site)),
           ),
         ),
       ),
@@ -86,7 +80,9 @@ class _RoutingBody extends StatelessWidget {
   final bool sniffingEnabled;
   final String splitTunnelHint;
   final bool killSwitchEnabled;
-  final void Function(RoutingSettings) onUpdate;
+
+  /// A change to the routing settings current when it is written.
+  final void Function(RoutingSettings Function(RoutingSettings current)) onUpdate;
   final void Function(bool) onUpdateSniffing;
   final void Function(bool) onUpdateKillSwitch;
   final void Function(String geoipUrl, String geositeUrl) onUpdateGeo;
@@ -219,7 +215,7 @@ class _RoutingBody extends StatelessWidget {
                   hint: l.routingLocalNetworksHint,
                   value: routing.bypassLocal,
                   locked: false,
-                  onChange: (v) => onUpdate(routing.copyWith(bypassLocal: v)),
+                  onChange: (v) => onUpdate((r) => r.copyWith(bypassLocal: v)),
                 ),
                 // GeoIP
                 _ToggleWithChips(
@@ -229,12 +225,11 @@ class _RoutingBody extends StatelessWidget {
                   enabled: routing.geoEnabled,
                   locked: geoMissing,
                   hint: geoHint,
-                  onToggle: (v) => onUpdate(routing.copyWith(geoEnabled: v)),
+                  onToggle: (v) => onUpdate((r) => r.copyWith(geoEnabled: v)),
                   chips: routing.geoCodes,
                   onRemove: geoMissing
                       ? null
-                      : (code) =>
-                            onUpdate(routing.copyWith(geoCodes: routing.geoCodes.where((c) => c != code).toList())),
+                      : (code) => onUpdate((r) => r.copyWith(geoCodes: r.geoCodes.where((c) => c != code).toList())),
                   onAdd: geoMissing ? null : () => _showCountryPicker(context),
                   addLabel: '+ ${l.routingAddRegion}',
                 ),
@@ -256,14 +251,13 @@ class _RoutingBody extends StatelessWidget {
                   locked: domainLocked,
                   hint: !sniffingEnabled ? sniffHint : null,
                   last: true,
-                  onToggle: (v) => onUpdate(routing.copyWith(domainEnabled: v)),
+                  onToggle: (v) => onUpdate((r) => r.copyWith(domainEnabled: v)),
                   chips: routing.domainZones.map(_formatDomainLabel).toList(),
                   chipKeys: routing.domainZones,
                   onRemove: domainLocked
                       ? null
-                      : (zone) => onUpdate(
-                          routing.copyWith(domainZones: routing.domainZones.where((z) => z != zone).toList()),
-                        ),
+                      : (zone) =>
+                            onUpdate((r) => r.copyWith(domainZones: r.domainZones.where((z) => z != zone).toList())),
                   onAdd: domainLocked ? null : () => _showDomainPicker(context),
                   addLabel: '+ ${l.routingAddSuffix}',
                 ),
@@ -278,13 +272,12 @@ class _RoutingBody extends StatelessWidget {
                   locked: geositeLocked,
                   hint: !sniffingEnabled ? sniffHint : geoHint,
                   last: false,
-                  onToggle: (v) => onUpdate(routing.copyWith(geositeEnabled: v)),
+                  onToggle: (v) => onUpdate((r) => r.copyWith(geositeEnabled: v)),
                   chips: routing.geositeCodes,
                   onRemove: geositeLocked
                       ? null
-                      : (code) => onUpdate(
-                          routing.copyWith(geositeCodes: routing.geositeCodes.where((c) => c != code).toList()),
-                        ),
+                      : (code) =>
+                            onUpdate((r) => r.copyWith(geositeCodes: r.geositeCodes.where((c) => c != code).toList())),
                   onAdd: geositeLocked ? null : () => _showGeositePicker(context),
                   addLabel: '+ ${l.routingAddCategory}',
                 ),
@@ -299,11 +292,11 @@ class _RoutingBody extends StatelessWidget {
                   locked: domainLocked,
                   hint: !sniffingEnabled ? sniffHint : null,
                   last: true,
-                  onToggle: (v) => onUpdate(routing.copyWith(sitesEnabled: v)),
+                  onToggle: (v) => onUpdate((r) => r.copyWith(sitesEnabled: v)),
                   chips: routing.sites,
                   onRemove: domainLocked
                       ? null
-                      : (site) => onUpdate(routing.copyWith(sites: routing.sites.where((s) => s != site).toList())),
+                      : (site) => onUpdate((r) => r.copyWith(sites: r.sites.where((s) => s != site).toList())),
                   onAdd: domainLocked ? null : () => _showSitesPicker(context),
                   addLabel: '+ ${l.routingAddSite}',
                 ),
@@ -317,7 +310,7 @@ class _RoutingBody extends StatelessWidget {
                 hint: geoHint ?? 'geosite:category-ads-all + geosite:win-spy → block',
                 value: routing.adBlockEnabled,
                 locked: geoMissing,
-                onChange: (v) => onUpdate(routing.copyWith(adBlockEnabled: v)),
+                onChange: (v) => onUpdate((r) => r.copyWith(adBlockEnabled: v)),
               ),
               _RowToggle(
                 t: t,
@@ -325,7 +318,7 @@ class _RoutingBody extends StatelessWidget {
                 hint: l.routingRuServicesHint,
                 value: routing.ruServicesEnabled,
                 locked: false,
-                onChange: (v) => onUpdate(routing.copyWith(ruServicesEnabled: v)),
+                onChange: (v) => onUpdate((r) => r.copyWith(ruServicesEnabled: v)),
               ),
               _RowToggle(
                 t: t,
@@ -436,7 +429,7 @@ class _RoutingBody extends StatelessWidget {
               t: t,
               title: 'GEO IP · ${ctx.l10n.routingRegions}',
               onDone: () {
-                onUpdate(routing.copyWith(geoCodes: selected.toList()));
+                onUpdate((r) => r.copyWith(geoCodes: selected.toList()));
                 Navigator.pop(ctx);
               },
               child: ListView(
@@ -538,7 +531,7 @@ class _RoutingBody extends StatelessWidget {
               t: t,
               title: 'DOMAIN · ${ctx.l10n.routingSuffixes}',
               onDone: () {
-                onUpdate(routing.copyWith(domainZones: selected.toList()));
+                onUpdate((r) => r.copyWith(domainZones: selected.toList()));
                 Navigator.pop(ctx);
               },
               child: ListView(
@@ -636,7 +629,7 @@ class _RoutingBody extends StatelessWidget {
               t: t,
               title: 'SITES · ${ctx.l10n.routingSites}',
               onDone: () {
-                onUpdate(routing.copyWith(sites: selected.toList()));
+                onUpdate((r) => r.copyWith(sites: selected.toList()));
                 Navigator.pop(ctx);
               },
               child: ListView(
@@ -752,7 +745,7 @@ class _RoutingBody extends StatelessWidget {
               t: t,
               title: 'GEOSITE · ${ctx.l10n.routingCategories}',
               onDone: () {
-                onUpdate(routing.copyWith(geositeCodes: selected.toList()));
+                onUpdate((r) => r.copyWith(geositeCodes: selected.toList()));
                 Navigator.pop(ctx);
               },
               child: ListView(

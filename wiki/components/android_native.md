@@ -30,6 +30,7 @@ back. It keeps working when the Flutter UI is gone (tile, boot, Tasker, service 
 | `PrefixTcpProxy.kt` | local TCP proxy for Shadowsocks `?prefix=` (Outline) |
 | `SessionReconciler.kt` | the one desired session state (`Desired.Off(attempt)` / `Desired.On(request, id)`) and the thread that brings the session to it: commands, `onRevoke`, reconnects and retries only replace it (`set`, or `replace` while an expected state is still wanted); a run loops the pure `nextAction(desired, actual)` (stop / close the sink / start / settled) through `SessionDriver` |
 | `HeartbeatPolicy.kt` | the heartbeat's decisions, pure and JVM-tested: observations (probe ok / failed, no direct internet, dead or leaking tun2socks, TUN idle, warm-up deadline) → an action (none, log, retry now, reconnect, ask Flutter to switch); the thread in `Heartbeat` only probes and applies it |
+| `TunSpec.kt` | what the TUN is built with, pure and JVM-tested: session name, MTU, random addresses, routes, DNS, the allowed or disallowed apps; the service only passes it to `VpnService.Builder` (skipping apps that aren't installed) and calls `establish()` |
 | `StartFailurePolicy.kt` | what a stop and a failed start leave, pure and JVM-tested: `stop` (kill switch, reconnecting, whether the stop allows a sink, a TUN held → keep the TUN, the final state), `startFailure` (kill switch, reconnect, a previous TUN, a new TUN held, still wanted / replaced by a start / by an off, attempts → restore the previous TUN, retry, the stop's flags, whether the error is reported); `stopVpn` and `startVpn`'s failure path only apply them |
 | `NetworkChangePolicy.kt` | network-change scheduling, pure and JVM-tested: an event and the time since connect → a plan (delay, check the network or reconnect); when the plan fires → reconnect or not |
 | `SocksHttpProbe.kt` | the heartbeat's `socks` probe: SOCKS5 handshake and an HTTP GET over raw sockets, probe-URL parsing |
@@ -91,8 +92,8 @@ desired state its session was started for (`connectedDesired`), and a start repl
   for, cancelled from the notification or the tile, gets its answer. Calls `ServiceNotifications.foreground()` first —
   it may arrive via `startForegroundService` into a fresh process.
 
-**Starting.** `Builder.establish()` → TUN (random `10.x.x.x/32`, IPv4 default route; IPv6 only with `ipv6Enabled`;
-MTU from settings) → `VpnCore.start` → `setConnected()`: publishes the `connected` snapshot (SOCKS credentials,
+**Starting.** `TunSpec.of` → `Builder.establish()` → TUN (random `10.x.x.x/32`, IPv4 default route; IPv6 only with
+`ipv6Enabled`; MTU from settings; the split-tunneling app lists) → `VpnCore.start` → `setConnected()`: publishes the `connected` snapshot (SOCKS credentials,
 `connectedAtMs`), notification.
 
 **Failure reason.** A failed start passes its reason to `stopVpn(error = …)`; the `error`/`blocked` snapshot carries it

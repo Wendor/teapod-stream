@@ -77,8 +77,9 @@ class XrayVpnService : VpnService() {
 
 
         /** Extracts the bundled geoip.dat / geosite.dat that are missing from filesDir. The copy goes to
-         *  `<name>.bundled` and is renamed into place only when complete, so neither a failed copy nor a geodata
-         *  download landing at the same path meanwhile leaves a truncated or deleted file. False when one failed;
+         *  `<name>.bundled` and is hard-linked into place only when complete; a link never replaces an existing
+         *  file, so neither a failed copy nor a geodata download landing at the same path meanwhile is truncated,
+         *  deleted or overwritten. False when one failed;
          *  the next call tries again. Synchronized: the channel (on the I/O pool) and startVpn both call it. */
         @Synchronized
         fun prepareBinaries(context: android.content.Context): Boolean {
@@ -92,11 +93,17 @@ class XrayVpnService : VpnService() {
                 try {
                     val input = try { assets.open("binaries/$name") } catch (e: Exception) { assets.open("flutter_assets/assets/binaries/$name") }
                     input.use { i -> part.outputStream().use { o -> i.copyTo(o) } }
-                    // A download that finished meanwhile is newer than the bundled copy: keep it.
-                    if (file.exists()) part.delete() else if (!part.renameTo(file)) throw java.io.IOException("rename $name")
+                    // link(2) never replaces: a download that landed at the destination meanwhile is newer than
+                    // the bundled copy and stays (EEXIST).
+                    try {
+                        android.system.Os.link(part.path, file.path)
+                    } catch (e: android.system.ErrnoException) {
+                        if (e.errno != android.system.OsConstants.EEXIST) throw e
+                    }
                 } catch (e: Exception) {
-                    part.delete()
                     ok = false
+                } finally {
+                    part.delete()
                 }
             }
             return ok

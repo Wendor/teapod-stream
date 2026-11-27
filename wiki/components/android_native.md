@@ -190,10 +190,12 @@ and applies its actions; it reads the session (parameters, SOCKS port and login,
 
 ## Split tunneling and owner validation
 
-`allExcept` → `addDisallowedApplication`, `onlySelected` → `addAllowedApplication` (the app itself is always outside
-the tunnel). On top, tun2socks checks each new flow's owner UID (`getConnectionOwnerUid`) via `TunOwnerPolicy`
+`allExcept` → `addDisallowedApplication`, `onlySelected` → `addAllowedApplication` (the app itself is outside the
+tunnel). `onlySelected` with no installed selected app allows none, and Android then applies the VPN to every app,
+this one included: traffic stays in the tunnel, the owner check below is off (no listed UID), and the service logs a
+warning. On top, tun2socks checks each new flow's owner UID (`getConnectionOwnerUid`) via `TunOwnerPolicy`
 (shared by all cores): UID `-1` is either tethering or an excluded app that bound a socket to `tun0`
-(`SO_BINDTODEVICE`) — indistinguishable. So `-1` is always blocked in `onlySelected`, and in `allExcept` when the
+(`SO_BINDTODEVICE`) — indistinguishable. So `-1` is blocked in `onlySelected` (with at least one selected app installed), and in `allExcept` when the
 exclusion list is non-empty and `allowTethering` is off. Exception: DNS to the TUN DNS address on port 53 (on Android
 10 resolver sockets belong to netd). A lookup that throws (`SecurityException` while the service is not the active
 VPN, a binder error) counts as UID `-1`: refused wherever `-1` is, allowed elsewhere. Such refusals are counted, and

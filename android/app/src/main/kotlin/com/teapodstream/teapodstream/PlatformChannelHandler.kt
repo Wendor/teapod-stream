@@ -75,7 +75,7 @@ internal class PlatformChannelHandler(
             return
         }
         val packageName = activity.packageName
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !activity.packageManager.canRequestPackageInstalls()) {
+        if (!activity.packageManager.canRequestPackageInstalls()) {
             activity.startActivity(
                 Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))
             )
@@ -154,9 +154,8 @@ internal class BatteryOptimization(private val activity: Activity) {
     }
 
     /** The exemption prompt while the app is optimized; the system list (to revert it) once it is exempt.
-     *  False when there is nothing to open (before Android 6) or the launch failed. */
+     *  False when the launch failed. */
     fun openSettings(): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return false
         val intent = if (ignoring()) {
             Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
         } else {
@@ -170,7 +169,7 @@ internal class BatteryOptimization(private val activity: Activity) {
         }
     }
 
-    private fun ignoring(): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
+    private fun ignoring(): Boolean =
         (activity.getSystemService(Activity.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(activity.packageName)
 
     private companion object {

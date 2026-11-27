@@ -103,14 +103,11 @@ class _CoreSheet extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: SetSegSquare(
-                  t: t,
-                  value: config.core?.name ?? '',
-                  opts: [('', context.l10n.coreAuto), for (final k in pinOptions) (k.name, k.shortLabel)],
-                  onChanged: pin,
-                ),
+              child: SetSegSquare(
+                t: t,
+                value: config.core?.name ?? '',
+                opts: [('', context.l10n.coreAuto), for (final k in pinOptions) (k.name, k.shortLabel)],
+                onChanged: pin,
               ),
             ),
           ),

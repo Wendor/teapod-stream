@@ -509,6 +509,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String geoChecksumMismatch(String file) {
+    return '$file doesn\'t match the checksum published next to it; the old geo databases are kept';
+  }
+
+  @override
   String get geoDownload => 'DOWNLOAD';
 
   @override

@@ -151,6 +151,7 @@
   "commonDone": "ГОТОВО",
   "geoNotLoaded": "Geo-базы не загружены",
   "geoHttpStatus": "Сервер геобаз ответил HTTP {status}",
+  "geoChecksumMismatch": "{file} не совпадает с опубликованной контрольной суммой; оставлены прежние геобазы",
   "geoDownload": "ЗАГРУЗИТЬ",
   "geoLoaded": "Geo-базы загружены",
   "geoUpdate": "ОБНОВИТЬ",

@@ -1,5 +1,6 @@
 import 'dart:isolate';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/models/app_settings.dart';
 import '../core/services/geodata_service.dart';
 import '../core/services/geosite_index.dart';
 import '../core/services/tunnel_socks.dart';
@@ -31,34 +32,81 @@ class GeoError extends GeoState {
 class GeoNotifier extends Notifier<GeoState> {
   GeodataService get _service => ref.read(geodataServiceProvider);
 
+  /// A download is running: it owns the `.tmp` files, the geodata files and the state until it ends.
+  var _downloading = false;
+
+  /// Bumped when a download starts: a [check] that began before it publishes nothing.
+  var _epoch = 0;
+
+  /// The check running now; a download waits for it, so the bundled-copy extraction never overlaps the install.
+  Future<void>? _checking;
+
   @override
   GeoState build() {
     Future.microtask(check);
     return GeoMissing();
   }
 
-  Future<void> check() async {
+  /// Whether the files are there (extracting the bundled copy if not). Does nothing during a download; a call during a
+  /// check joins it; a check that a download overtook neither extracts nor publishes.
+  Future<void> check() {
+    if (_downloading) return Future.value();
+    // Calls during a check join it: one extraction at a time, and the download waits for the one that runs.
+    if (_checking case final running?) return running;
+    final run = _check(_epoch);
+    _checking = run;
+    return run.whenComplete(() {
+      if (identical(_checking, run)) _checking = null;
+    });
+  }
+
+  Future<void> _check(int epoch) async {
+    bool stale() => _downloading || epoch != _epoch;
     try {
       final platform = ref.read(platformServiceProvider);
       final dir = await platform.filesDir();
-      if (dir.isEmpty) return;
+      if (dir.isEmpty || stale()) return;
       final missing = !_service.present(dir);
       // Try to extract the bundled fallback from assets.
       if (missing) await platform.prepareBinaries();
+      if (stale()) return;
       if (_service.present(dir)) {
         final lastUpdated = await _service.lastUpdated();
+        if (stale()) return;
         if (missing) ref.invalidate(geositeIndexProvider);
         state = GeoReady(lastUpdated: lastUpdated);
       } else {
         state = GeoMissing();
       }
     } catch (_) {
-      state = GeoMissing();
+      if (!stale()) state = GeoMissing();
     }
   }
 
+  /// One download at a time: a second call while one runs (the button is still shown until the first await) returns
+  /// at once — both would write the same `.tmp` files. A check running when it starts is finished first and
+  /// discarded.
   Future<void> download() async {
-    final settings = await ref.read(settingsProvider.future);
+    if (_downloading) return;
+    _downloading = true;
+    _epoch++;
+    state = GeoDownloading(downloaded: 0, total: -1);
+    try {
+      await _checking;
+      await _download();
+    } finally {
+      _downloading = false;
+    }
+  }
+
+  Future<void> _download() async {
+    final AppSettings settings;
+    try {
+      settings = await ref.read(settingsProvider.future);
+    } catch (e) {
+      state = GeoError(AppMessage.text('$e'));
+      return;
+    }
     final String dir;
     try {
       dir = await ref.read(platformServiceProvider).filesDir();
@@ -71,7 +119,6 @@ class GeoNotifier extends Notifier<GeoState> {
       return;
     }
 
-    state = GeoDownloading(downloaded: 0, total: -1);
     try {
       // GitHub CDN is often blocked — with the VPN connected we download through the tunnel (#150).
       final finished = await TunnelSocks.orDirect(

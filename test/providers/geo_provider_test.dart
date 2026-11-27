@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -5,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:teapodstream/core/crypto/sha256.dart';
 import 'package:teapodstream/core/models/app_message.dart';
 import 'package:teapodstream/core/constants/app_constants.dart';
 import 'package:teapodstream/core/services/geodata_service.dart';
@@ -26,12 +28,21 @@ void main() {
   late ProviderContainer c;
   final calls = <String>[];
 
+  /// When set, the next `getFilesDir` waits for it (once).
+  Completer<void>? holdFilesDir;
+
   setUp(() async {
     dir = Directory.systemTemp.createTempSync('geo');
     filesDir = dir.path;
     calls.clear();
+    holdFilesDir = null;
     messenger.setMockMethodCallHandler(_channel, (call) async {
       calls.add(call.method);
+      if (call.method == 'getFilesDir' && holdFilesDir != null) {
+        final hold = holdFilesDir!;
+        holdFilesDir = null;
+        await hold.future;
+      }
       return call.method == 'getFilesDir' ? filesDir : null;
     });
     SharedPreferences.setMockInitialValues({});
@@ -96,19 +107,38 @@ void main() {
       );
     }
 
-    test('downloads both files from the configured URLs', () async {
+    String hex(String s) => sha256(s.codeUnits).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+
+    /// Serves `IPDATA` / `SITEDATA!` and, next to them, the `.sha256sum` files from [sums] (404 when absent).
+    void serveGeo(Map<String, String> sums, {List<String>? requested}) {
+      server.handler = (r) async {
+        requested?.add('${r.method} ${r.uri}');
+        final path = r.uri.path;
+        final body = path.endsWith('.sha256sum') ? sums[path] : (path.endsWith('ip.dat') ? 'IPDATA' : 'SITEDATA!');
+        if (body == null) r.response.statusCode = HttpStatus.notFound;
+        r.response.contentLength = body?.length ?? 0;
+        if (r.method != 'HEAD' && body != null) r.response.write(body);
+        await r.response.close();
+      };
+    }
+
+    test('downloads both files from the configured URLs and checks their published sums', () async {
       final requested = <String>[];
       final states = <GeoState>[];
       c.listen(geoProvider, (_, s) => states.add(s));
-      server.handler = (r) async {
-        requested.add('${r.method} ${r.uri}');
-        final body = r.uri.path.endsWith('ip.dat') ? 'IPDATA' : 'SITEDATA!';
-        r.response.contentLength = body.length;
-        if (r.method != 'HEAD') r.response.write(body);
-        await r.response.close();
-      };
+      serveGeo({
+        '/ip.dat.sha256sum': '${hex('IPDATA')}  geoip.dat\n',
+        '/site.dat.sha256sum': hex('SITEDATA!').toUpperCase(),
+      }, requested: requested);
       await download();
-      expect(requested, ['HEAD /ip.dat', 'HEAD /site.dat', 'GET /ip.dat', 'GET /site.dat']);
+      expect(requested, [
+        'HEAD /ip.dat',
+        'HEAD /site.dat',
+        'GET /ip.dat',
+        'GET /ip.dat.sha256sum',
+        'GET /site.dat',
+        'GET /site.dat.sha256sum',
+      ]);
       expect(File('${dir.path}/geoip.dat').readAsStringSync(), 'IPDATA');
       expect(File('${dir.path}/geosite.dat').readAsStringSync(), 'SITEDATA!');
       expect(File('${dir.path}/geoip.dat.tmp').existsSync(), isFalse);
@@ -130,6 +160,144 @@ void main() {
       expect(s, isA<GeoError>());
       expect('${(s as GeoError).message}', 'The geo database server answered HTTP 404');
       expect(File('${dir.path}/geoip.dat').readAsStringSync(), 'old');
+    });
+
+    test('a file that does not match its published sum keeps both old files and reports it', () async {
+      File('${dir.path}/geoip.dat').writeAsStringSync('old ip');
+      File('${dir.path}/geosite.dat').writeAsStringSync('old site');
+      serveGeo({'/ip.dat.sha256sum': hex('IPDATA'), '/site.dat.sha256sum': hex('tampered')});
+      await download();
+      final s = c.read(geoProvider);
+      expect(s, isA<GeoError>());
+      expect(
+        '${(s as GeoError).message}',
+        "geosite.dat doesn't match the checksum published next to it; the old geo databases are kept",
+      );
+      expect(File('${dir.path}/geoip.dat').readAsStringSync(), 'old ip');
+      expect(File('${dir.path}/geosite.dat').readAsStringSync(), 'old site');
+      expect(dir.listSync().where((f) => f.path.endsWith('.tmp')), isEmpty);
+    });
+
+    test('a rename that fails after the first one puts the old files back', () async {
+      File('${dir.path}/geoip.dat').writeAsStringSync('old ip');
+      // A non-empty directory in geosite.dat's place: the geoip rename succeeds, the geosite one fails.
+      File('${dir.path}/geosite.dat/keep').createSync(recursive: true);
+      serveGeo({});
+      await download();
+      expect(c.read(geoProvider), isA<GeoError>());
+      expect(File('${dir.path}/geoip.dat').readAsStringSync(), 'old ip');
+      expect(File('${dir.path}/geosite.dat/keep').existsSync(), isTrue);
+      expect(dir.listSync().where((f) => f.path.endsWith('.tmp') || f.path.endsWith('.bak')), isEmpty);
+    });
+
+    test('a source without sums (404) or with something else in them is not checked', () async {
+      serveGeo({'/site.dat.sha256sum': '<html>not found</html>'});
+      await download();
+      expect(c.read(geoProvider), isA<GeoReady>());
+      expect(File('${dir.path}/geosite.dat').readAsStringSync(), 'SITEDATA!');
+    });
+
+    test('a big 404 page or a non-UTF-8 body for the sum is not checked, not an error', () async {
+      server.handler = (r) async {
+        final path = r.uri.path;
+        if (path == '/ip.dat.sha256sum') {
+          r.response.statusCode = HttpStatus.notFound;
+          r.response.write('x' * 20000);
+        } else if (path == '/site.dat.sha256sum') {
+          r.response.add([0xff, 0xfe, 0x00, 0x80]);
+        } else if (r.method != 'HEAD') {
+          r.response.write('x');
+        }
+        await r.response.close();
+      };
+      await download();
+      expect(c.read(geoProvider), isA<GeoReady>());
+    });
+
+    test('a second download while one runs does nothing', () async {
+      final gets = <String>[];
+      server.handler = (r) async {
+        if (r.method == 'GET') gets.add(r.uri.path);
+        if (r.method != 'HEAD' && !r.uri.path.endsWith('.sha256sum')) r.response.write('x');
+        if (r.uri.path.endsWith('.sha256sum')) r.response.statusCode = HttpStatus.notFound;
+        await r.response.close();
+      };
+      await start();
+      final notifier = c.read(geoProvider.notifier);
+      await HttpOverrides.runWithHttpOverrides(
+        () => Future.wait([notifier.download(), notifier.download()]),
+        RedirectHttpOverrides(server.port),
+      );
+      expect(gets.where((p) => p == '/ip.dat'), hasLength(1));
+      expect(c.read(geoProvider), isA<GeoReady>());
+    });
+
+    test('a 404 sum declaring more than the default body limit is not checked', () async {
+      server.handler = (r) async {
+        if (r.uri.path.endsWith('.sha256sum')) {
+          r.response.statusCode = HttpStatus.notFound;
+          r.response.contentLength = 11 * 1024 * 1024;
+          // Headers out, then the connection breaks off: the client stops at the status, the body is never read.
+          final socket = await r.response.detachSocket();
+          socket.add([0x78]);
+          await socket.flush();
+          socket.destroy();
+          return;
+        } else if (r.method != 'HEAD') {
+          r.response.write('x');
+        }
+        await r.response.close();
+      };
+      await download();
+      expect(c.read(geoProvider), isA<GeoReady>());
+    });
+
+    test(
+      'a check overtaken by a download neither extracts the bundled copy nor publishes; one download runs',
+      () async {
+        final gets = <String>[];
+        server.handler = (r) async {
+          if (r.method == 'GET') gets.add(r.uri.path);
+          if (r.uri.path.endsWith('.sha256sum')) {
+            r.response.statusCode = HttpStatus.notFound;
+          } else if (r.method != 'HEAD') {
+            r.response.write('x');
+          }
+          await r.response.close();
+        };
+        await start();
+        calls.clear();
+        final notifier = c.read(geoProvider.notifier);
+        final states = <GeoState>[];
+        c.listen(geoProvider, (_, s) => states.add(s));
+        await HttpOverrides.runWithHttpOverrides(() async {
+          final hold = holdFilesDir = Completer<void>();
+          final checking = notifier.check(); // waits in getFilesDir; no files: it would extract and publish GeoMissing
+          final first = notifier.download(); // waits for the check
+          final second = notifier.download(); // returns at once
+          hold.complete();
+          await Future.wait([checking, first, second]);
+        }, RedirectHttpOverrides(server.port));
+        expect(calls, isNot(contains('prepareBinaries')));
+        expect(states.whereType<GeoMissing>(), isEmpty);
+        expect(gets.where((p) => p == '/ip.dat'), hasLength(1));
+        expect(gets.where((p) => p == '/site.dat'), hasLength(1));
+        expect(c.read(geoProvider), isA<GeoReady>());
+      },
+    );
+
+    test('a failed sum request is an error, not a skipped check', () async {
+      File('${dir.path}/geoip.dat').writeAsStringSync('old ip');
+      server.handler = (r) async {
+        if (r.uri.path.endsWith('.sha256sum')) r.response.statusCode = HttpStatus.badGateway;
+        if (r.method != 'HEAD' && !r.uri.path.endsWith('.sha256sum')) r.response.write('x');
+        await r.response.close();
+      };
+      await download();
+      final s = c.read(geoProvider);
+      expect('${(s as GeoError).message}', 'The geo database server answered HTTP 502');
+      expect(File('${dir.path}/geoip.dat').readAsStringSync(), 'old ip');
+      expect(dir.listSync().where((f) => f.path.endsWith('.tmp')), isEmpty);
     });
 
     test('files over the default body limit report their size', () async {
@@ -188,6 +356,35 @@ void main() {
       expect((c.read(geoProvider) as GeoReady).lastUpdated, _FakeGeodata.finished);
     });
 
+    test('overlapping checks are one: the download waits for the extraction that runs', () async {
+      await start();
+      calls.clear();
+      final notifier = c.read(geoProvider.notifier);
+      final hold = holdFilesDir = Completer<void>();
+      final first = notifier.check(); // waits in getFilesDir
+      final second = notifier.check(); // joins the first
+      final downloading = notifier.download(); // waits for that one check
+      hold.complete();
+      await Future.wait([first, second, downloading]);
+      expect(calls.where((m) => m == 'getFilesDir'), hasLength(2), reason: 'one check, one download');
+      expect(fake.calls, hasLength(1));
+      expect(c.read(geoProvider), isA<GeoReady>());
+    });
+
+    test('a check overtaken by a failed download leaves the error', () async {
+      await start();
+      fake.filesThere = true;
+      final hold = fake.holdLastUpdated = Completer<void>();
+      final notifier = c.read(geoProvider.notifier);
+      final checking = notifier.check(); // waits in lastUpdated
+      await Future<void>.delayed(Duration.zero);
+      fake.error = Exception('HTTP 503');
+      final downloading = notifier.download(); // waits for the check, then fails
+      hold.complete();
+      await Future.wait([checking, downloading]);
+      expect((c.read(geoProvider) as GeoError).message, const AppMessage.text('HTTP 503'));
+    });
+
     test('a failed download is the error and no ready state', () async {
       await start();
       fake.error = Exception('HTTP 503');
@@ -213,8 +410,16 @@ class _FakeGeodata extends GeodataService {
   @override
   bool present(String dir) => filesThere;
 
+  /// When set, the next [lastUpdated] waits for it (once).
+  Completer<void>? holdLastUpdated;
+
   @override
-  Future<DateTime?> lastUpdated() async => finished;
+  Future<DateTime?> lastUpdated() async {
+    final hold = holdLastUpdated;
+    holdLastUpdated = null;
+    await hold?.future;
+    return finished;
+  }
 
   @override
   Future<DateTime> download({

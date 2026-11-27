@@ -33,4 +33,30 @@ void main() {
       '60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54',
     );
   });
+
+  test('Sha256 fed in pieces equals the hash of the whole, across block boundaries', () {
+    final data = List<int>.generate(300, (i) => i * 7 & 0xff);
+    for (final cut in [0, 1, 55, 56, 63, 64, 65, 119, 128, 299, 300]) {
+      final hasher = Sha256()
+        ..add(data.sublist(0, cut))
+        ..add(const [])
+        ..add(data.sublist(cut));
+      expect(hasher.close(), sha256(data), reason: 'cut at $cut');
+    }
+    final million = Sha256();
+    final chunk = utf8.encode('a' * 4097);
+    for (var left = 1000000; left > 0; left -= chunk.length) {
+      million.add(left >= chunk.length ? chunk : chunk.sublist(0, left));
+    }
+    expect(
+      million.close().map((b) => b.toRadixString(16).padLeft(2, '0')).join(),
+      'cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0',
+    );
+  });
+
+  test('a closed Sha256 takes no more data', () {
+    final hasher = Sha256()..close();
+    expect(() => hasher.add([1]), throwsStateError);
+    expect(hasher.close, throwsStateError);
+  });
 }

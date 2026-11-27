@@ -998,6 +998,12 @@ abstract class AppLocalizations {
   /// **'The geo database server answered HTTP {status}'**
   String geoHttpStatus(int status);
 
+  /// No description provided for @geoChecksumMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'{file} doesn\'t match the checksum published next to it; the old geo databases are kept'**
+  String geoChecksumMismatch(String file);
+
   /// No description provided for @geoDownload.
   ///
   /// In en, this message translates to:

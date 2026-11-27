@@ -301,6 +301,14 @@
       }
     }
   },
+  "geoChecksumMismatch": "{file} doesn't match the checksum published next to it; the old geo databases are kept",
+  "@geoChecksumMismatch": {
+    "placeholders": {
+      "file": {
+        "type": "String"
+      }
+    }
+  },
   "geoDownload": "DOWNLOAD",
   "geoLoaded": "Geo databases downloaded",
   "geoUpdate": "UPDATE",

@@ -16,7 +16,7 @@ State (sealed): `GeoMissing`, `GeoReady(lastUpdated)`, `GeoDownloading(downloade
 - **`download()`** (one at a time: a second call while one runs returns at once; a check running when it starts is finished first and discarded, so the bundled-copy extraction never overlaps the install; `check()` does nothing during a download) from `AppSettings.geoipUrl` / `geositeUrl` (`GeodataService.download`): HEAD for the total size, both files into `*.tmp`
   (hashed as they arrive, `Sha256` in `lib/core/crypto/sha256.dart`), each checked against the SHA-256 its source
   publishes next to it (`<url>.sha256sum`: Loyalsoldier, runetfreedom and v2fly do), then renamed over the old files
-  only when both arrived and matched. A failure or mismatch (`geoChecksumMismatch`) leaves both old files intact. No
+  only when both arrived and matched; the old files are copied to `*.bak` until both renames succeed and put back if one fails. A failure, mismatch (`geoChecksumMismatch`) or failed rename leaves both old files intact. No
   sum file (404, whatever its error page) or one whose first bytes aren't in `sha256sum` form (read as ASCII) — a
   custom source — means no check; any other status for it is an
   error, so a failed request never skips the check. `releases/latest` links resolve per request: a release published

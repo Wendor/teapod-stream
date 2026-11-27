@@ -11,7 +11,7 @@ import 'tunnel_socks.dart';
 /// `geoip.dat` / `geosite.dat` in the app's files directory: whether they are there, when they were last downloaded,
 /// and the download itself. Both files go to `.tmp` files first and replace the old ones only when both arrived and
 /// match the SHA-256 their source publishes next to them (`<url>.sha256sum`, as the default sources do): a failed or
-/// mismatched download keeps both old files.
+/// mismatched download, or a failed rename, keeps both old files.
 class GeodataService {
   const GeodataService();
 
@@ -56,9 +56,7 @@ class GeodataService {
           throw ReasonException(AppMessage.l10n((l) => l.geoChecksumMismatch(files[i])));
         }
       }
-      for (final (i, name) in files.indexed) {
-        await tmps[i].rename('$dir/$name');
-      }
+      await _install(dir, tmps);
     } finally {
       for (final tmp in tmps) {
         if (tmp.existsSync()) await tmp.delete();
@@ -67,6 +65,35 @@ class GeodataService {
     final now = DateTime.now();
     await (await SharedPreferences.getInstance()).setInt(_kLastUpdated, now.millisecondsSinceEpoch);
     return now;
+  }
+
+  /// Renames [tmps] over [files] in [dir]: both or neither. The old files are copied to `.bak` first (a copy, not a
+  /// move: the files stay in place for a core starting meanwhile) and put back when a rename fails.
+  static Future<void> _install(String dir, List<File> tmps) async {
+    final backups = <String, File>{};
+    try {
+      for (final name in files) {
+        final old = File('$dir/$name');
+        if (old.existsSync()) backups['$dir/$name'] = await old.copy('$dir/$name.bak');
+      }
+      for (final (i, name) in files.indexed) {
+        await tmps[i].rename('$dir/$name');
+      }
+    } catch (_) {
+      // A backup that can't be put back stays as `.bak` rather than being lost; the next install overwrites it.
+      for (final MapEntry(key: path, value: backup) in backups.entries) {
+        try {
+          await backup.rename(path);
+        } catch (_) {}
+      }
+      rethrow;
+    }
+    // Installed: a backup left behind is only a stray file, overwritten by the next install.
+    for (final backup in backups.values) {
+      try {
+        await backup.delete();
+      } catch (_) {}
+    }
   }
 
   Future<int> _contentLength(String url, TunnelSocks? socks) async {

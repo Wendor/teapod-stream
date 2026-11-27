@@ -178,6 +178,18 @@ void main() {
       expect(dir.listSync().where((f) => f.path.endsWith('.tmp')), isEmpty);
     });
 
+    test('a rename that fails after the first one puts the old files back', () async {
+      File('${dir.path}/geoip.dat').writeAsStringSync('old ip');
+      // A non-empty directory in geosite.dat's place: the geoip rename succeeds, the geosite one fails.
+      File('${dir.path}/geosite.dat/keep').createSync(recursive: true);
+      serveGeo({});
+      await download();
+      expect(c.read(geoProvider), isA<GeoError>());
+      expect(File('${dir.path}/geoip.dat').readAsStringSync(), 'old ip');
+      expect(File('${dir.path}/geosite.dat/keep').existsSync(), isTrue);
+      expect(dir.listSync().where((f) => f.path.endsWith('.tmp') || f.path.endsWith('.bak')), isEmpty);
+    });
+
     test('a source without sums (404) or with something else in them is not checked', () async {
       serveGeo({'/site.dat.sha256sum': '<html>not found</html>'});
       await download();

@@ -9,12 +9,15 @@ import (
 // start replaces the running instance and opens the new one on its own goroutine; stop closes it.
 // A stop that comes before that goroutine runs cancels the start: the instance it would open
 // would have no reference left to close it, holding the SOCKS port and its upstream connections.
+// A start waits for a stop in progress, also one another caller began: the instance being closed
+// may still hold the SOCKS port the new one needs.
 type coreSlot[T any] struct {
 	name  string        // log prefix
 	close func(T) error // releases an opened instance
 
-	mu  sync.Mutex // guards run itself; coreRun.mu guards its fields
-	run *coreRun[T]
+	life sync.Mutex // held through a whole stop and through a start's replacement of the run
+	mu   sync.Mutex // guards run itself; coreRun.mu guards its fields
+	run  *coreRun[T]
 }
 
 type coreRun[T any] struct {
@@ -38,12 +41,13 @@ func (s *coreSlot[T]) current() *coreRun[T] {
 // start stops the running instance, then opens a new one with open on a new goroutine. cb gets
 // 0 once it runs, or -1 with open's error or the cancellation.
 func (s *coreSlot[T]) start(cb statusCallback, open func() (T, error)) {
-	s.stop()
-
+	s.life.Lock()
+	s.stopLocked()
 	run := &coreRun[T]{cb: cb}
 	s.mu.Lock()
 	s.run = run
 	s.mu.Unlock()
+	s.life.Unlock()
 
 	go func() {
 		run.mu.Lock()
@@ -73,6 +77,12 @@ func (s *coreSlot[T]) start(cb statusCallback, open func() (T, error)) {
 
 // stop closes the running instance; a start in progress finishes first.
 func (s *coreSlot[T]) stop() {
+	s.life.Lock()
+	defer s.life.Unlock()
+	s.stopLocked()
+}
+
+func (s *coreSlot[T]) stopLocked() {
 	s.mu.Lock()
 	run := s.run
 	s.run = nil

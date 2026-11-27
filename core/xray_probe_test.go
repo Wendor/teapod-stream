@@ -1,8 +1,11 @@
 package teapodcore
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -15,6 +18,7 @@ func TestMeasureOutboundDelayEndsAtItsDeadline(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer silent.Close()
+	var accepted atomic.Int32
 	var held []net.Conn
 	go func() {
 		for {
@@ -22,6 +26,7 @@ func TestMeasureOutboundDelayEndsAtItsDeadline(t *testing.T) {
 			if err != nil {
 				return
 			}
+			accepted.Add(1)
 			held = append(held, conn) // accepted, never answered
 		}
 	}()
@@ -38,5 +43,12 @@ func TestMeasureOutboundDelayEndsAtItsDeadline(t *testing.T) {
 	}
 	if elapsed := time.Since(started); elapsed > 3*time.Second {
 		t.Fatalf("probe took %v, deadline %v", elapsed, probeTimeout)
+	}
+	// It got as far as the server and ended because of the deadline, not an early failure.
+	if accepted.Load() == 0 {
+		t.Fatal("the probe never reached the server")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("error %v, want the deadline", err)
 	}
 }

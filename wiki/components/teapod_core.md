@@ -42,7 +42,8 @@ RustCore:          TUN fd → xray-rust → server
 
 - xray and sing-box share one lifecycle (`coreSlot` in `core_slot.go`): a start stops the previous instance first and
   opens the new one on its own goroutine, which checks it is still the current start, so a concurrent stop can't leave
-  an orphan holding the SOCKS port; a stop or a reader (`QueryXrayStats`, `Measure*Delay`) waits for a start in
+  an orphan holding the SOCKS port; a start waits for a stop in progress (also one another caller began — Kotlin's
+  stop deadline can leave it running), since the closing instance may still hold the port; a stop or a reader (`QueryXrayStats`, `Measure*Delay`) waits for a start in
   progress. A failed xray start closes the instance (`startXrayInstance`, also for `MeasureOutboundDelay`): xray starts
   features in order without rollback, so the inbounds already listening would keep the port.
 - Delay measurement: `http.Transport` over `core.Dial` (sing-box: the `proxy` outbound's dialer), 2 attempts with

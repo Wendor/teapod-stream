@@ -135,3 +135,36 @@ func TestCoreSlotStopDuringOpenClosesTheOpenedInstance(t *testing.T) {
 		t.Fatalf("opened %d, closed %d, want 1 and 1", c.opened.Load(), c.closed.Load())
 	}
 }
+
+// A start while another caller's stop is still closing the instance opens the new one only after
+// that close returned: the old instance may still hold the port.
+func TestCoreSlotStartWaitsForAStopInProgress(t *testing.T) {
+	var opened atomic.Int32
+	closing, release := make(chan struct{}), make(chan struct{})
+	s := &coreSlot[int32]{name: "test", close: func(int32) error {
+		close(closing)
+		<-release
+		return nil
+	}}
+	s.start(nil, func() (int32, error) { return opened.Add(1), nil })
+	waitFor(t, func() bool { _, ok := s.get(); return ok })
+
+	go s.stop()
+	<-closing
+	started := make(chan struct{})
+	go func() {
+		s.start(nil, func() (int32, error) { return opened.Add(1), nil })
+		close(started)
+	}()
+	select {
+	case <-started:
+		t.Fatal("start returned while the previous instance was closing")
+	case <-time.After(20 * time.Millisecond):
+	}
+	if opened.Load() != 1 {
+		t.Fatalf("opened %d before the close returned, want 1", opened.Load())
+	}
+	close(release)
+	<-started
+	waitFor(t, func() bool { inst, ok := s.get(); return ok && inst == 2 })
+}

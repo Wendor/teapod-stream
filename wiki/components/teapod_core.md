@@ -40,11 +40,19 @@ RustCore:          TUN fd → xray-rust → server
 
 ## Behaviour worth knowing
 
-- `StartXray` stops the previous instance first; the start goroutine checks it is still the current instance, so a
-  concurrent `StopXray` can't leave an orphan holding the SOCKS port. A failed start closes the instance: xray starts
+- xray and sing-box share one lifecycle (`coreSlot` in `core_slot.go`): a start or stop swaps the current run in one
+  step, so whoever replaces a run closes it and racing calls leave no orphan holding the SOCKS port. A stop closes its
+  run before it returns; a start returns at once, and its goroutine closes the replaced run, waits until every earlier
+  close has finished (the closing instance may still hold the port — also one Kotlin's stop deadline left running) and
+  opens only if its run is still current, so a hung close holds only that open and a stop meanwhile cancels it. A
+  reader (`QueryXrayStats`, `Measure*Delay`) waits for an open in progress. Each start reports one outcome to its
+  callback: 0 once running (and 0 again when it is closed), or a single -1 — a failed open, or cancelled before it
+  opened, also when the stop came during the open (the opened instance is closed at once; never a 0, which Kotlin
+  reads as a started core). A failed xray start closes the instance (`startXrayInstance`, also for `MeasureOutboundDelay`): xray starts
   features in order without rollback, so the inbounds already listening would keep the port.
-- Delay measurement: `http.Transport` over `core.Dial`, 2 attempts with keep-alive (an attempt counts only when the
-  whole body was read), `CloseIdleConnections` on exit
+- Delay measurement: `http.Transport` over `core.Dial` (sing-box: the `proxy` outbound's dialer), 2 attempts with
+  keep-alive (an attempt counts only when the whole body was read), both under one 12 s deadline (`probeTimeout`) for
+  the running and the temporary instances alike, `CloseIdleConnections` on exit
   (an idle connection keeps the outbound session and the server connection alive). Temporary instances don't register
   the global log handler — otherwise the main instance stopped logging.
 - The console log writer writes to stdout only without a `LogListener` (no duplicate logcat lines).

@@ -7,11 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"path/filepath"
-	"sync"
-	"time"
 
 	box "github.com/sagernet/sing-box"
 	C "github.com/sagernet/sing-box/constant"
@@ -28,23 +25,16 @@ import (
 // boxProxyTag — tag of the proxy outbound/endpoint in the sing-box config (contract with Dart).
 const boxProxyTag = "proxy"
 
-type boxEngine struct {
-	mu       sync.Mutex
+// boxCore is a started sing-box instance and the cancel of its context.
+type boxCore struct {
 	instance *box.Box
 	cancel   context.CancelFunc
-	cb       XrayCallback
 }
 
-var (
-	boxMu  sync.Mutex
-	boxEng *boxEngine
-)
-
-func currentBox() *boxEngine {
-	boxMu.Lock()
-	defer boxMu.Unlock()
-	return boxEng
-}
+var boxSlot = &coreSlot[boxCore]{name: "sing-box", close: func(c boxCore) error {
+	defer c.cancel()
+	return c.instance.Close()
+}}
 
 // boxLogWriter passes sing-box logs to LogListener (format — boxLogLine); the core prefix
 // is added by Kotlin.
@@ -93,75 +83,23 @@ func newBox(config string, dataDir string, logs bool) (*box.Box, context.CancelF
 // StartBox starts sing-box with the provided JSON config. dataDir holds
 // geoip.dat/geosite.dat. A running instance is stopped first.
 func StartBox(config string, dataDir string, cb XrayCallback) {
-	StopBox()
-
-	eng := &boxEngine{cb: cb}
-	boxMu.Lock()
-	boxEng = eng
-	boxMu.Unlock()
-
-	go func() {
-		eng.mu.Lock()
-		defer eng.mu.Unlock()
-
-		// See StartXray: StopBox may have taken eng.mu earlier and not found the instance.
-		if currentBox() != eng {
-			if cb != nil {
-				cb.OnStatus(-1, "start cancelled: core was stopped")
-			}
-			return
-		}
-
+	boxSlot.start(cb, func() (boxCore, error) {
 		inst, cancel, err := newBox(config, dataDir, true)
-		if err == nil {
-			if err = inst.Start(); err != nil {
-				_ = inst.Close()
-				cancel()
-				err = fmt.Errorf("startup failed: %w", err)
-			}
-		}
 		if err != nil {
-			log.Printf("[sing-box] %v", err)
-			if cb != nil {
-				cb.OnStatus(-1, err.Error())
-			}
-			return
+			return boxCore{}, err
 		}
-
-		eng.instance = inst
-		eng.cancel = cancel
-		if cb != nil {
-			cb.OnStatus(0, "Started successfully, running")
+		if err := inst.Start(); err != nil {
+			_ = inst.Close()
+			cancel()
+			return boxCore{}, fmt.Errorf("startup failed: %w", err)
 		}
-	}()
+		return boxCore{instance: inst, cancel: cancel}, nil
+	})
 }
 
 // StopBox stops sing-box and releases all resources.
 func StopBox() {
-	boxMu.Lock()
-	eng := boxEng
-	boxEng = nil
-	boxMu.Unlock()
-	if eng == nil {
-		return
-	}
-
-	eng.mu.Lock()
-	defer eng.mu.Unlock()
-
-	if eng.instance != nil {
-		if err := eng.instance.Close(); err != nil {
-			log.Printf("[sing-box] shutdown error: %v", err)
-		}
-		eng.instance = nil
-	}
-	if eng.cancel != nil {
-		eng.cancel()
-		eng.cancel = nil
-	}
-	if eng.cb != nil {
-		eng.cb.OnStatus(0, "Core stopped")
-	}
+	boxSlot.stop()
 }
 
 // GetBoxVersion returns the sing-box version string.
@@ -186,21 +124,15 @@ func boxProxyDial(inst *box.Box) (func(ctx context.Context, network, addr string
 
 // MeasureBoxDelay measures latency through the running sing-box instance.
 func MeasureBoxDelay(url string) (int64, error) {
-	eng := currentBox()
-	if eng == nil {
+	c, ok := boxSlot.get()
+	if !ok {
 		return -1, errors.New("sing-box not running")
 	}
-	eng.mu.Lock()
-	inst := eng.instance
-	eng.mu.Unlock()
-	if inst == nil {
-		return -1, errors.New("sing-box instance not ready")
-	}
-	dial, err := boxProxyDial(inst)
+	dial, err := boxProxyDial(c.instance)
 	if err != nil {
 		return -1, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
 	defer cancel()
 	return measureDelayVia(ctx, dial, url)
 }
@@ -221,7 +153,7 @@ func MeasureBoxOutboundDelay(config string, dataDir string, url string) (int64, 
 	if err != nil {
 		return -1, err
 	}
-	ctx, cancelProbe := context.WithTimeout(context.Background(), 12*time.Second)
+	ctx, cancelProbe := context.WithTimeout(context.Background(), probeTimeout)
 	defer cancelProbe()
 	return measureDelayVia(ctx, dial, url)
 }

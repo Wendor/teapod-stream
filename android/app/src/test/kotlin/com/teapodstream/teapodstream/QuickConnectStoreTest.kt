@@ -22,10 +22,9 @@ class QuickConnectStoreTest {
 
     @Test
     fun savedConnectionRoundTripsWithoutTempFiles() {
-        store.save("{config}", params, "u", "p")
+        store.save("{config}", params)
         assertEquals("{config}", store.config())
         assertEquals(params, store.params())
-        assertEquals("u" to "p", store.credentials())
         assertTrue(dir.listFiles()!!.none { it.name.endsWith(".tmp") })
     }
 
@@ -42,11 +41,11 @@ class QuickConnectStoreTest {
 
     @Test
     fun theTileNameIsReplacedWithTheSessionOrKept() {
-        store.save("{a}", params, "u", "p", tileName = "Oslo")
+        store.save("{a}", params, tileName = "Oslo")
         assertEquals("Oslo", store.tileName())
-        store.save("{b}", params, "u", "p")
+        store.save("{b}", params)
         assertEquals("a reconnect keeps the name", "Oslo", store.tileName())
-        store.save("{c}", params, "u", "p", tileName = "")
+        store.save("{c}", params, tileName = "")
         assertNull(store.tileName())
     }
 
@@ -54,7 +53,7 @@ class QuickConnectStoreTest {
     fun aLegacyNameIsTakenOnlyByAStoredConfigWithoutAName() {
         store.adoptLegacyTileName("Old")
         assertNull("no config to name", store.tileName())
-        store.save("{a}", params, "u", "p", tileName = "")
+        store.save("{a}", params, tileName = "")
         store.adoptLegacyTileName(" ")
         assertNull("blank", store.tileName())
         store.adoptLegacyTileName("Old")
@@ -65,7 +64,7 @@ class QuickConnectStoreTest {
 
     @Test
     fun aLegacyNameThatCantBeWrittenIsDropped() {
-        store.save("{a}", params, "u", "p", tileName = "")
+        store.save("{a}", params, tileName = "")
         File(dir, QuickConnectStore.TILE_NAME).mkdir()
         File(dir, "${QuickConnectStore.TILE_NAME}/x").writeText("")
         store.adoptLegacyTileName("Old") // doesn't throw
@@ -74,41 +73,16 @@ class QuickConnectStoreTest {
 
     @Test
     fun anInterruptedSaveLeavesNoOldName() {
-        store.save("{a}", params, "u", "p", tileName = "Berlin")
+        store.save("{a}", params, tileName = "Berlin")
         File(dir, QuickConnectStore.PARAMS).delete()
         File(dir, QuickConnectStore.PARAMS).mkdir()
         File(dir, "${QuickConnectStore.PARAMS}/x").writeText("")
-        assertTrue(runCatching { store.save("{b}", params, "u", "p", tileName = "Oslo") }.isFailure)
+        assertTrue(runCatching { store.save("{b}", params, tileName = "Oslo") }.isFailure)
         assertNull(store.tileName())
     }
 
     @Test
-    fun aLoginThatCantBeRemovedFailsTheClear() {
-        store.save("{config}", params, "u", "p")
-        dir.setWritable(false)
-        try {
-            assertTrue(runCatching { store.clearCredentials() }.isFailure)
-        } finally {
-            dir.setWritable(true)
-        }
-        store.clearCredentials()
-        assertNull(store.credentials())
-    }
-
-    @Test
-    fun aLoginThatCantBeRemovedKeepsTheOldConfig() {
-        store.save("{old}", params, "old-u", "old-p")
-        // A non-empty directory under the login's name: it can't be removed, so the config isn't replaced.
-        store.clearCredentials()
-        File(dir, QuickConnectStore.CREDENTIALS).mkdir()
-        File(dir, "${QuickConnectStore.CREDENTIALS}/x").writeText("")
-        assertTrue(runCatching { store.save("{new}", params.copy(engine = CoreKind.GO), "u", "p") }.isFailure)
-        assertEquals("{old}", store.config())
-        assertEquals("the params stay with the config", params, store.params())
-    }
-
-    @Test
-    fun concurrentReplacementsNeverPairOneConfigWithAnothersParamsOrLogin() {
+    fun concurrentReplacementsNeverPairOneConfigWithAnothersParams() {
         val go = java.util.concurrent.CountDownLatch(1)
         val writing = java.util.concurrent.atomic.AtomicInteger(2)
         val seen = java.util.concurrent.CountDownLatch(1)
@@ -121,7 +95,7 @@ class QuickConnectStoreTest {
                     repeat(500) { i ->
                         // The last replacement waits for the reader's first session, so a read always overlaps one.
                         if (i == 499) check(seen.await(10, java.util.concurrent.TimeUnit.SECONDS)) { "no session read" }
-                        own.save("c-$w-$i", params.copy(socksPort = w * 1000 + i), "u-$w-$i", "p")
+                        own.save("c-$w-$i", params.copy(socksPort = w * 1000 + i))
                     }
                 } finally {
                     writing.decrementAndGet()
@@ -140,7 +114,7 @@ class QuickConnectStoreTest {
                 checked++
                 seen.countDown()
                 val (w, i) = r.config.removePrefix("c-").split("-").map(String::toInt)
-                if (r.socksUser != "u-$w-$i" && r.socksUser != "from-${r.config}") mismatches += "${r.config}/${r.socksUser}"
+                if (r.socksUser != "from-${r.config}") mismatches += "${r.config}/${r.socksUser}"
                 if (r.params.socksPort != w * 1000 + i) mismatches += "${r.config}/port ${r.params.socksPort}"
             }
         }
@@ -157,55 +131,42 @@ class QuickConnectStoreTest {
         // A non-empty directory under the target name: the rename fails.
         File(dir, QuickConnectStore.PARAMS).mkdir()
         File(dir, "${QuickConnectStore.PARAMS}/x").writeText("")
-        assertTrue(runCatching { store.save("{config}", params, "u", "p") }.isFailure)
+        assertTrue(runCatching { store.save("{config}", params) }.isFailure)
         assertTrue(dir.listFiles()!!.none { it.name.endsWith(".tmp") })
     }
 
     @Test
     fun paramsThatCantBeWrittenLeaveNothingToQuickStart() {
-        store.save("{old}", params, "old-u", "old-p")
+        store.save("{old}", params)
         File(dir, QuickConnectStore.PARAMS).delete()
         File(dir, QuickConnectStore.PARAMS).mkdir()
         File(dir, "${QuickConnectStore.PARAMS}/x").writeText("")
-        assertTrue(runCatching { store.save("{new}", params.copy(engine = CoreKind.GO), "u", "p") }.isFailure)
+        assertTrue(runCatching { store.save("{new}", params.copy(engine = CoreKind.GO)) }.isFailure)
         assertNull("the old config doesn't stay with other params", store.config())
         assertNull(store.quickStart(fromConfig))
     }
 
     @Test
-    fun quickStartPrefersTheStoredLogin() {
-        store.save("{config}", params, "u", "p")
-        assertEquals(StartRequest("{config}", params, "u", "p", attempt = 0, reconnect = true), store.quickStart(fromConfig))
+    fun quickStartTakesTheLoginFromTheConfig() {
+        store.save("{config}", params)
+        assertEquals(
+            StartRequest("{config}", params, "cfg-user({config},box)", "cfg-pass", attempt = 0, reconnect = true),
+            store.quickStart(fromConfig),
+        )
         // The tile's name comes with the config it names, so the session's save writes it back unchanged.
-        store.save("{config}", params, "u", "p", tileName = "Oslo")
+        store.save("{config}", params, tileName = "Oslo")
         assertEquals("Oslo", store.quickStart(fromConfig)!!.configName)
     }
 
     @Test
-    fun withoutAStoredLoginTheConfigsOneIsUsed() {
-        store.save("{config}", params, "u", "p")
-        store.clearCredentials()
-        val request = store.quickStart(fromConfig)!!
-        assertEquals("cfg-user({config},box)" to "cfg-pass", request.socksUser to request.socksPassword)
-    }
-
-    @Test
-    fun aBrokenLoginFileFallsBackToTheConfig() {
-        store.save("{config}", params, "u", "p")
-        File(dir, QuickConnectStore.CREDENTIALS).writeText("{not json")
-        assertNull(store.credentials())
+    fun theLoginFileOfOlderVersionsIsRemovedAndNotRead() {
+        File(dir, QuickConnectStore.LEGACY_CREDENTIALS).writeText("{\"user\":\"old\",\"pass\":\"old\"}")
+        store.save("{config}", params)
+        assertFalse(File(dir, QuickConnectStore.LEGACY_CREDENTIALS).exists())
+        File(dir, QuickConnectStore.LEGACY_CREDENTIALS).writeText("{\"user\":\"old\",\"pass\":\"old\"}")
         assertEquals("cfg-pass", store.quickStart(fromConfig)!!.socksPassword)
-    }
-
-    @Test
-    fun aLoginWithMissingFieldsFallsBackToTheConfig() {
-        store.save("{config}", params, "u", "p")
-        for (json in listOf("{}", "{\"user\":\"u\"}", "{\"user\":\"u\",\"pass\":1}")) {
-            File(dir, QuickConnectStore.CREDENTIALS).writeText(json)
-            assertNull(json, store.credentials())
-        }
-        File(dir, QuickConnectStore.CREDENTIALS).writeText("{\"user\":\"\",\"pass\":\"\"}")
-        assertEquals("empty strings are kept", "" to "", store.credentials())
+        store.clear()
+        assertFalse(File(dir, QuickConnectStore.LEGACY_CREDENTIALS).exists())
     }
 
     @Test
@@ -214,19 +175,18 @@ class QuickConnectStoreTest {
         store.saveParams(params)
         assertNull("no config", store.quickStart(fromConfig))
         store.clear()
-        store.save("{config}", params, "u", "p")
+        store.save("{config}", params)
         File(dir, QuickConnectStore.PARAMS).delete()
         assertNull("no params", store.quickStart(fromConfig))
     }
 
     @Test
     fun clearRemovesTheConnectionButKeepsTheOffFlag() {
-        store.save("{config}", params, "u", "p")
+        store.save("{config}", params)
         store.setUserOff(true)
         store.clear()
         assertNull(store.config())
         assertNull(store.params())
-        assertNull(store.credentials())
         assertTrue(store.userOff())
         store.setUserOff(false)
         assertFalse(store.userOff())
@@ -234,10 +194,9 @@ class QuickConnectStoreTest {
 
     @Test
     fun aSecondSaveReplacesTheFirst() {
-        store.save("{one}", params, "u1", "p1")
-        store.save("{two}", params.copy(engine = CoreKind.RUST), "u2", "p2")
+        store.save("{one}", params)
+        store.save("{two}", params.copy(engine = CoreKind.RUST))
         assertEquals("{two}", store.config())
         assertEquals(CoreKind.RUST, store.params()!!.engine)
-        assertEquals("u2" to "p2", store.credentials())
     }
 }

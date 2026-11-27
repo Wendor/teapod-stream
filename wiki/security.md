@@ -48,8 +48,8 @@ says how, and what counts.
 | SOCKS user / password | in the profile's settings (encrypted); `socks_user_v2`, `socks_password_v2` (encrypted) only read by the settings migration | SENSITIVE |
 | HWID cache | `cached_device_id`, `cached_device_info` (encrypted) | SENSITIVE |
 | Settings (ports, DNS, split tunneling, kill switch, …) | in the active profile (`profiles_v1`, encrypted); `auto_start_on_boot` and `automation_enabled` mirrored to SharedPreferences for native code; the per-key SharedPreferences of before are only read by the migration | PUBLIC |
-| Core config | `filesDir/xray_config.json` through `QuickConnectStore` | SECRET, process-private |
-| Quick-reconnect parameters | `filesDir/last_connection_meta.json` (no SOCKS credentials), `socks_creds.json`, `tile_config_name.txt` (the config name the tile shows), `user_disconnected.flag` — all through `QuickConnectStore` | SENSITIVE, process-private |
+| Core config | `filesDir/xray_config.json` through `QuickConnectStore`; carries the session's SOCKS login, the only place a quick start reads it from (a manual login is also kept in the profile settings) | SECRET, process-private |
+| Quick-reconnect parameters | `filesDir/last_connection_meta.json` (no SOCKS credentials), `tile_config_name.txt` (the config name the tile shows), `user_disconnected.flag` — all through `QuickConnectStore` | SENSITIVE, process-private |
 | Logs | `filesDir/vpn_log.txt` (+ `.prev`) | SENSITIVE: core warnings and errors carry server and destination addresses, `debug` adds access lines; masked on export |
 | Exported log | `cacheDir/teapod_log.txt` | masked, overwritten by the next export |
 

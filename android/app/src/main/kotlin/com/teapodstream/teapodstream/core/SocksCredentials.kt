@@ -3,26 +3,35 @@ package com.teapodstream.teapodstream.core
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Login/password of the `socks-in` SOCKS inbound from the saved core config; ("", "") — none. */
+/**
+ * Login/password of the SOCKS inbound in the saved core config — the only place the quick start reads it from;
+ * ("", "") — none. The inbound tagged `socks-in`, else the first SOCKS one: a managed config keeps the server's tag
+ * (or `socks`) for it.
+ */
 object SocksCredentials {
     private const val INBOUND_TAG = "socks-in"
 
-    /** xray: `inbounds[tag=socks-in].settings.accounts[0].user/pass`. */
-    fun xray(config: String): Pair<String, String> = first(config) { inbound ->
+    /** xray: `inbounds[socks].settings.accounts[0].user/pass`. */
+    fun xray(config: String): Pair<String, String> = first(config, { it.optString("protocol") == "socks" }) { inbound ->
         inbound.optJSONObject("settings")?.optJSONArray("accounts")?.optJSONObject(0)
             ?.let { it.optString("user", "") to it.optString("pass", "") }
     }
 
-    /** sing-box: `inbounds[tag=socks-in].users[0].username/password`. */
-    fun singBox(config: String): Pair<String, String> = first(config) { inbound ->
+    /** sing-box: `inbounds[socks].users[0].username/password`. */
+    fun singBox(config: String): Pair<String, String> =
+        first(config, { it.optString("type") in setOf("socks", "mixed") }) { inbound ->
         inbound.optJSONArray("users")?.optJSONObject(0)
             ?.let { it.optString("username", "") to it.optString("password", "") }
     }
 
-    private fun first(config: String, read: (JSONObject) -> Pair<String, String>?): Pair<String, String> = try {
+    private fun first(
+        config: String,
+        isSocks: (JSONObject) -> Boolean,
+        read: (JSONObject) -> Pair<String, String>?,
+    ): Pair<String, String> = try {
         val inbounds = JSONObject(config).optJSONArray("inbounds") ?: JSONArray()
-        (0 until inbounds.length()).map { inbounds.getJSONObject(it) }
-            .firstOrNull { it.optString("tag") == INBOUND_TAG }?.let(read) ?: ("" to "")
+        val all = (0 until inbounds.length()).mapNotNull { inbounds.optJSONObject(it) }
+        (all.firstOrNull { it.optString("tag") == INBOUND_TAG } ?: all.firstOrNull(isSocks))?.let(read) ?: ("" to "")
     } catch (_: Exception) {
         "" to ""
     }

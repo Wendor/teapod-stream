@@ -417,6 +417,7 @@ class SetSegSquare extends StatelessWidget {
         final side = BorderSide(color: t.line);
         return TapTarget(
           onTap: locked ? () => showReadonlySnack(context) : () => onChanged(val),
+          selected: active,
           minWidth: 0,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),

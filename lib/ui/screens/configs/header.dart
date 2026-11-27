@@ -19,8 +19,18 @@ class _CfgHeaderStrip extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text('teapod.stream // configs', style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+          // The caption gives way: the 48 dp ping target and the total keep their width on a narrow screen.
+          Flexible(
+            child: Text(
+              'teapod.stream // configs',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1),
+            ),
+          ),
+          const SizedBox(width: 12),
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               if (isPinging)
                 SizedBox(width: 12, height: 12, child: CircularProgressIndicator(color: t.accent, strokeWidth: 1.2))

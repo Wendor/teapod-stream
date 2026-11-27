@@ -13,6 +13,7 @@ import 'package:teapodstream/ui/screens/routing/routing_screen.dart';
 import 'package:teapodstream/ui/screens/settings/settings_screen.dart';
 import 'package:teapodstream/ui/screens/split_tunnel_screen.dart';
 import 'package:teapodstream/ui/screens/subscription_settings_screen.dart';
+import 'package:teapodstream/ui/widgets/breadcrumb_bar.dart';
 
 import '../helpers/ui_harness.dart';
 
@@ -44,6 +45,10 @@ void main() {
       final c = await pumpScreen(tester, e.value());
       await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
       await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+      // The guideline skips nodes touching the screen's edge: the full-width breadcrumb is measured directly.
+      for (final bar in find.byType(BreadcrumbBar).evaluate()) {
+        expect(bar.size!.height, greaterThanOrEqualTo(kMinInteractiveDimension));
+      }
       await unmount(tester, c);
       handle.dispose();
     });

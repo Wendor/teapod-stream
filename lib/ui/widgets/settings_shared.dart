@@ -10,6 +10,7 @@ import '../theme/app_theme.dart';
 import 'pressable.dart';
 import 'tap_target.dart';
 import '../../l10n/l10n.dart';
+import 'one_line.dart';
 
 /// Applies [change] to the settings from a screen ([SettingsNotifier.edit]): in a read-only profile shows a snackbar
 /// instead of a silent no-op.
@@ -411,35 +412,38 @@ class SetSegSquare extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Each segment draws its own border, so the 48 dp tap height around it stays transparent.
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: opts.asMap().entries.map((e) {
-        final idx = e.key;
-        final (val, lab) = e.value;
-        final active = value == val;
-        final side = BorderSide(color: t.line);
-        return TapTarget(
-          onTap: locked ? () => showReadonlySnack(context) : () => onChanged(val),
-          selected: active,
-          minWidth: 0,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            constraints: const BoxConstraints(minWidth: kMinInteractiveDimension),
-            alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: active ? t.accentSoft : Colors.transparent,
-              border: Border(top: side, bottom: side, right: side, left: idx == 0 ? side : BorderSide.none),
-            ),
-            child: AnimatedDefaultTextStyle(
+    // Each segment draws its own border, so the 48 dp tap height around it stays transparent. On its own line and still
+    // too wide (the largest text scale), the whole selector shrinks to fit.
+    return OneLine(
+      Row(
+        mainAxisSize: MainAxisSize.min,
+        children: opts.asMap().entries.map((e) {
+          final idx = e.key;
+          final (val, lab) = e.value;
+          final active = value == val;
+          final side = BorderSide(color: t.line);
+          return TapTarget(
+            onTap: locked ? () => showReadonlySnack(context) : () => onChanged(val),
+            selected: active,
+            minWidth: 0,
+            child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              style: AppTheme.mono(size: 11, color: active ? t.accent : t.textDim, letterSpacing: 0.5),
-              child: Text(lab),
+              constraints: const BoxConstraints(minWidth: kMinInteractiveDimension),
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: active ? t.accentSoft : Colors.transparent,
+                border: Border(top: side, bottom: side, right: side, left: idx == 0 ? side : BorderSide.none),
+              ),
+              child: AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 200),
+                style: AppTheme.mono(size: 11, color: active ? t.accent : t.textDim, letterSpacing: 0.5),
+                child: Text(lab),
+              ),
             ),
-          ),
-        );
-      }).toList(),
+          );
+        }).toList(),
+      ),
     );
   }
 }

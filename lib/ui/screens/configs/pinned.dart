@@ -24,8 +24,9 @@ class _PinnedGroup extends StatelessWidget {
       backgroundColor: t.bg,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
       builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        // A list, not a column: at a large text scale the menu scrolls instead of being cut off.
+        child: ListView(
+          shrinkWrap: true,
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
@@ -71,7 +72,7 @@ class _PinnedGroup extends StatelessWidget {
             children: [
               SizedBox(
                 width: 32,
-                child: Text('[★]', style: AppTheme.mono(size: 10, color: t.accent)),
+                child: OneLine(Text('[★]', style: AppTheme.mono(size: 10, color: t.accent))),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -149,7 +150,7 @@ class _LostPinRow extends StatelessWidget {
             children: [
               SizedBox(
                 width: 32,
-                child: Text(hexAddr, style: AppTheme.mono(size: 10, color: t.textMuted)),
+                child: OneLine(Text(hexAddr, style: AppTheme.mono(size: 10, color: t.textMuted))),
               ),
               const SizedBox(width: 10),
               Container(

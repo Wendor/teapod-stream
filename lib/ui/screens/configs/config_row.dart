@@ -67,7 +67,7 @@ class _ConfigRow extends StatelessWidget {
                 children: [
                   SizedBox(
                     width: 32,
-                    child: Text(hexAddr, style: AppTheme.mono(size: 10, color: t.textMuted)),
+                    child: OneLine(Text(hexAddr, style: AppTheme.mono(size: 10, color: t.textMuted))),
                   ),
                   const SizedBox(width: 10),
                   Container(

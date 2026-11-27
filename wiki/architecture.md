@@ -103,7 +103,7 @@ except `switchConfig`, where native asks Flutter (`tunnel_dead`) to pick another
 
 ```
 lib/
-├── app.dart, main.dart       shell, startup
+├── app.dart, main.dart       shell (startup steps: providers/app_lifecycle_provider.dart)
 ├── core/
 │   ├── constants/            channel names, ports, xray and routing defaults
 │   ├── cores/                CoreBackend, CoreResolver, engine options, sanitizer, core switching

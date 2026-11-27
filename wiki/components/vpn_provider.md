@@ -150,7 +150,7 @@ by then the session runs another config. In auto mode with the best candidate in
 auto mode stays: the subscription's ping results become the measurement, by config (`setLatencies`) — a config that
 didn't answer or wasn't probed (the dead one, other configs with the `pinned` source) has none until the next ping —
 so its best is the live config. Otherwise the best becomes the active config, as a selection makes it. A live session is
-then rebuilt on the chosen config. One run at a time; logged with `source: urltest`. The app shell creates it at start; it listens to the events itself.
+then rebuilt on the chosen config. One run at a time; logged with `source: urltest`. `appLifecycleProvider.start()` creates it; it listens to the events itself.
 
 ## Lifecycle
 
@@ -159,10 +159,10 @@ then rebuilt on the chosen config. One run at a time; logged with `source: urlte
   `appliedFingerprint` once profiles and cores are loaded (otherwise the banner would show falsely). The SOCKS login
   and `connectedAtMs` (the duration timer keeps the real start) come with the snapshot; `ipInfoProvider` reads them
   from the notifier.
-- **Start** — `build` runs the sync (`synced` completes after it, also on failure); the app shell restores the log
+- **Start** — `build` runs the sync (`synced` completes after it, also on failure); `appLifecycleProvider.start()` restores the log
   file (`nativeLogsProvider.restore`: resyncs `logsEnabled`, `getLogs`) and, after `synced`, runs
   `ConfigNotifier.refreshStaleIfDue()`.
-- **Resume** (`app.dart`) — the sync, then `refreshStaleIfDue()` (only now `tunnelSocksProvider` knows a VPN started
+- **Resume** (`appLifecycleProvider.resumed()`) — the sync, then `refreshStaleIfDue()` (only now `tunnelSocksProvider` knows a VPN started
   from the tile, so subscriptions go through the tunnel); the stats polling resumes.
 
 ## Stats (`vpnStatsProvider`)

@@ -104,7 +104,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   hasUpdate: hasUpdate,
                   version: version,
                   coreVersions: _coreVersions,
-                  onUpdate: (s) => ref.read(settingsProvider.notifier).save(s),
+                  onUpdate: (change) => ref.read(settingsProvider.notifier).edit(change),
                 ),
               ),
             ),
@@ -125,7 +125,9 @@ class _SettingsBody extends StatelessWidget {
 
   /// Core versions by `CoreKind.versionKey`; null — not loaded yet.
   final Map<String, String>? coreVersions;
-  final void Function(AppSettings) onUpdate;
+
+  /// A change to the settings current when it is written.
+  final void Function(AppSettings Function(AppSettings current)) onUpdate;
 
   const _SettingsBody({
     required this.settings,
@@ -184,7 +186,7 @@ class _SettingsBody extends StatelessWidget {
               hint: l.settingsAutoConnectHint,
               value: s.autoConnect,
               locked: locked,
-              onChange: (v) => onUpdate(s.copyWith(autoConnect: v)),
+              onChange: (v) => onUpdate((c) => c.copyWith(autoConnect: v)),
             ),
             SetRowToggle(
               t: t,
@@ -192,7 +194,7 @@ class _SettingsBody extends StatelessWidget {
               hint: l.settingsStartOnBootHint,
               value: s.autoStartOnBoot,
               locked: locked,
-              onChange: (v) => onUpdate(s.copyWith(autoStartOnBoot: v)),
+              onChange: (v) => onUpdate((c) => c.copyWith(autoStartOnBoot: v)),
             ),
             SetRowToggle(
               t: t,
@@ -200,7 +202,7 @@ class _SettingsBody extends StatelessWidget {
               hint: l.settingsAutomationHint,
               value: s.automationEnabled,
               locked: locked,
-              onChange: (v) => onUpdate(s.copyWith(automationEnabled: v)),
+              onChange: (v) => onUpdate((c) => c.copyWith(automationEnabled: v)),
             ),
             SetRowToggle(
               t: t,
@@ -208,7 +210,7 @@ class _SettingsBody extends StatelessWidget {
               hint: l.settingsNotificationHint,
               value: s.showNotification,
               locked: locked,
-              onChange: (v) => onUpdate(s.copyWith(showNotification: v)),
+              onChange: (v) => onUpdate((c) => c.copyWith(showNotification: v)),
             ),
             SetRowChev(
               t: t,

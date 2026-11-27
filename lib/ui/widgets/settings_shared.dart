@@ -10,10 +10,11 @@ import '../theme/app_theme.dart';
 import 'pressable.dart';
 import '../../l10n/l10n.dart';
 
-/// Saves settings from a screen: in a read-only profile shows a snackbar instead of a silent no-op.
-void saveSettings(BuildContext context, WidgetRef ref, AppSettings settings) {
+/// Applies [change] to the settings from a screen ([SettingsNotifier.edit]): in a read-only profile shows a snackbar
+/// instead of a silent no-op.
+void saveSettings(BuildContext context, WidgetRef ref, AppSettings Function(AppSettings current) change) {
   if (ref.read(profileProvider).value?.isReadonly == true) return showReadonlySnack(context);
-  ref.read(settingsProvider.notifier).save(settings);
+  ref.read(settingsProvider.notifier).edit(change);
 }
 
 /// The "profile is read-only" snackbar — shared by all locked rows.
@@ -304,6 +305,9 @@ class SetCredField extends StatelessWidget {
   final bool obscureText;
   final void Function(String) onCommit;
   final TeapodTokens t;
+  final double width;
+  final double fontSize;
+  final TextAlign textAlign;
 
   const SetCredField({
     super.key,
@@ -313,6 +317,9 @@ class SetCredField extends StatelessWidget {
     required this.onCommit,
     required this.t,
     this.obscureText = false,
+    this.width = 140,
+    this.fontSize = 12,
+    this.textAlign = TextAlign.end,
   });
 
   @override
@@ -322,9 +329,9 @@ class SetCredField extends StatelessWidget {
     enabled: enabled,
     hint: hint,
     onCommit: onCommit,
-    width: 140,
-    fontSize: 12,
-    textAlign: TextAlign.end,
+    width: width,
+    fontSize: fontSize,
+    textAlign: textAlign,
     obscureText: obscureText,
   );
 }

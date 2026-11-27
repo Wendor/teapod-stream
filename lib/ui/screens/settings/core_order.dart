@@ -7,7 +7,9 @@ class _CoreOrderList extends ConsumerStatefulWidget {
   final AppSettings settings;
   final Map<String, String>? versions;
   final bool locked;
-  final void Function(AppSettings) onUpdate;
+
+  /// A change to the settings current when it is written.
+  final void Function(AppSettings Function(AppSettings current)) onUpdate;
 
   const _CoreOrderList({
     required this.t,
@@ -49,16 +51,14 @@ class _CoreOrderListState extends ConsumerState<_CoreOrderList> {
         return;
       }
       widget.onUpdate(
-        settings.copyWith(
-          disabledCores: on ? ({...settings.disabledCores}..remove(k)) : {...settings.disabledCores, k},
-        ),
+        (c) => c.copyWith(disabledCores: on ? ({...c.disabledCores}..remove(k)) : {...c.disabledCores, k}),
       );
     }
 
     void moveUp(int i) {
       final next = [...order];
       next.insert(i - 1, next.removeAt(i));
-      widget.onUpdate(settings.copyWith(coreOrder: List.unmodifiable(next)));
+      widget.onUpdate((c) => c.copyWith(coreOrder: List.unmodifiable(next)));
       setState(() => _moved = order[i]);
       _movedTimer?.cancel();
       _movedTimer = Timer(const Duration(milliseconds: 700), () {

@@ -26,20 +26,13 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
   bool _hideSystemApps = true;
   bool _ghostsCleaned = false;
 
-  void _togglePackage(String pkg, bool isOnlySelected) {
-    final settings = ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
-    if (settings == null) return;
-
-    if (isOnlySelected) {
-      final newIncluded = Set<String>.from(settings.includedPackages);
-      newIncluded.contains(pkg) ? newIncluded.remove(pkg) : newIncluded.add(pkg);
-      saveSettings(context, ref, settings.copyWith(includedPackages: newIncluded));
-    } else {
-      final newExcluded = Set<String>.from(settings.excludedPackages);
-      newExcluded.contains(pkg) ? newExcluded.remove(pkg) : newExcluded.add(pkg);
-      saveSettings(context, ref, settings.copyWith(excludedPackages: newExcluded));
-    }
-  }
+  /// Toggles [pkg] in the list the mode uses, as it is when the write runs.
+  void _togglePackage(String pkg, bool isOnlySelected) => saveSettings(context, ref, (c) {
+    Set<String> toggled(Set<String> set) => set.contains(pkg) ? ({...set}..remove(pkg)) : {...set, pkg};
+    return isOnlySelected
+        ? c.copyWith(includedPackages: toggled(c.includedPackages))
+        : c.copyWith(excludedPackages: toggled(c.excludedPackages));
+  });
 
   Future<bool> _confirmTethering(TeapodTokens t) async {
     final ok = await showDialog<bool>(
@@ -118,7 +111,7 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
               value: settings?.splitTunnelingEnabled ?? false,
               onChange: (v) {
                 if (settings != null) {
-                  saveSettings(context, ref, settings.copyWith(splitTunnelingEnabled: v));
+                  saveSettings(context, ref, (c) => c.copyWith(splitTunnelingEnabled: v));
                 }
               },
             ),
@@ -144,7 +137,7 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
                           GestureDetector(
                             onTap: () {
                               if (settings != null) {
-                                saveSettings(context, ref, settings.copyWith(vpnMode: mode));
+                                saveSettings(context, ref, (c) => c.copyWith(vpnMode: mode));
                               }
                             },
                             child: Container(
@@ -179,7 +172,7 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
                 onChange: (v) async {
                   if (v && !await _confirmTethering(t)) return;
                   if (!context.mounted) return;
-                  saveSettings(context, ref, settings.copyWith(allowTethering: v));
+                  saveSettings(context, ref, (c) => c.copyWith(allowTethering: v));
                 },
               ),
               if (settings.allowTethering)

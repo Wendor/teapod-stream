@@ -10,6 +10,7 @@ import '../../providers/settings_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/breadcrumb_bar.dart';
+import '../widgets/dialog_parts.dart';
 import '../widgets/hero_panel.dart';
 import '../widgets/settings_shared.dart';
 import '../../l10n/l10n.dart';
@@ -39,18 +40,11 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: t.bgElev,
-        title: Text(context.l10n.splitTethering, style: AppTheme.sans(size: 16, color: t.text)),
-        content: Text(context.l10n.splitTetheringWarning, style: AppTheme.sans(size: 13, color: t.textDim)),
+        title: Text(context.l10n.splitTethering),
+        content: Text(context.l10n.splitTetheringWarning),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(context.l10n.commonCancel, style: AppTheme.mono(size: 12, color: t.textDim)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(context.l10n.commonEnable, style: AppTheme.mono(size: 12, color: t.danger)),
-          ),
+          const DialogCancel(result: false),
+          DialogAction(context.l10n.commonEnable, danger: true, onPressed: () => Navigator.pop(ctx, true)),
         ],
       ),
     );

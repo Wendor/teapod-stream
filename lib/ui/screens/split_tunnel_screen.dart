@@ -112,12 +112,16 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
             ),
             // ── Mode selector ─────────────────────────────────────
             Container(
+              width: double.infinity,
               padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
               decoration: BoxDecoration(
                 border: Border(bottom: BorderSide(color: t.lineSoft)),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                runSpacing: 8,
                 children: [
                   Text(context.l10n.splitVpnMode, style: AppTheme.sans(size: 14, color: t.text)),
                   SetSegSquare(

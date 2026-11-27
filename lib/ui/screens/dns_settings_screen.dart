@@ -177,12 +177,16 @@ class _DnsSettingsScreenState extends ConsumerState<DnsSettingsScreen> {
                 children: [
                   SetSectionHeader(t: t, addr: '0x05', label: 'mode'),
                   Container(
+                    width: double.infinity,
                     padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
                     decoration: BoxDecoration(
                       border: Border(bottom: BorderSide(color: t.lineSoft)),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    child: Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 12,
+                      runSpacing: 8,
                       children: [
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -205,12 +209,16 @@ class _DnsSettingsScreenState extends ConsumerState<DnsSettingsScreen> {
                     ),
                   ),
                   Container(
+                    width: double.infinity,
                     padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
                     decoration: BoxDecoration(
                       border: Border(bottom: BorderSide(color: t.lineSoft)),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    child: Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 12,
+                      runSpacing: 8,
                       children: [
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,

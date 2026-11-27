@@ -204,12 +204,16 @@ class SetInlineField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final row = Container(
+      width: double.infinity,
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: t.lineSoft)),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 12,
+        runSpacing: 8,
         children: [
           Text(label, style: AppTheme.sans(size: 14, color: t.text)),
           child,

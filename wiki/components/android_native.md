@@ -23,7 +23,7 @@ back. It keeps working when the Flutter UI is gone (tile, boot, Tasker, service 
 | `core/` | `VpnCore` and its implementations (below), `TunOwnerPolicy`, `SocksCredentials`, `ProxyRedirect` |
 | `VpnEventStreamHandler.kt` | EventChannel (`com.teapodstream/vpn/events`) singleton |
 | `ConnectionParams.kt` | the session parameters (everything but the config and the SOCKS login): one JSON form for the `ACTION_CONNECT` Intent (`EXTRA_PARAMS`) and the stored parameters; `fromJson` holds every default and limit (MTU 576–9000, heartbeat threshold 1–10) and parses the choices into enums once (`VpnMode`, `HeartbeatProbe`, `HeartbeatAction`, `CoreKind`; JSON keeps their ids; missing or unknown → the default, unknown with a logcat line), `fromArgs` maps Flutter's `connect` / `saveQuickConnect` arguments through it |
-| `QuickConnectStore.kt` | the quick-reconnect data in `filesDir`, its only reader and writer: the core config (`xray_config.json`), `ConnectionParams` (`last_connection_meta.json`), the SOCKS login (`socks_creds.json`), the tile's config name (`tile_config_name.txt`) and the user-off flag (`user_disconnected.flag`); writes go through a temp file and a rename. `quickStart()` builds the `StartRequest` (config, params, SOCKS login — the stored one, else read from the config — the Flutter `attempt` it answers, 0 for a native start, `reconnect` and the tile's config name — Flutter's, or the stored one read with the config — which the session's save writes back with it) that `startVpn(request)` takes |
+| `QuickConnectStore.kt` | the quick-reconnect data in `filesDir`, its only reader and writer: the core config (`xray_config.json`), `ConnectionParams` (`last_connection_meta.json`), the tile's config name (`tile_config_name.txt`) and the user-off flag (`user_disconnected.flag`); writes go through a temp file and a rename. `quickStart()` builds the `StartRequest` (config, params, the SOCKS login read from the config — its only stored copy, the inbound tagged `socks-in` or else the first SOCKS one, as a managed config keeps the server's tag (`SocksCredentials`) — the Flutter `attempt` it answers, 0 for a native start, `reconnect` and the tile's config name — Flutter's, or the stored one read with the config — which the session's save writes back with it) that `startVpn(request)` takes |
 | `VpnTileService.kt` | Quick Settings tile; not an active tile — the system asks for its state whenever it is shown, so a force-stopped process leaves no stale "connected" |
 | `BootReceiver.kt` | auto-start after boot (`autoStartOnBoot`, a saved config, not after an explicit disconnect) |
 | `VpnCommandReceiver.kt` | Tasker/automation broadcasts `com.teapodstream.CONNECT` / `DISCONNECT`; ignored unless `automationEnabled` |
@@ -67,9 +67,9 @@ desired state its session was started for (`connectedDesired`), and a start repl
 
 - **`ACTION_CONNECT`** (from Flutter): only the notification type is taken before the state is set (when no session runs);
   `startVpn(StartRequest)` takes the parameters (`useParams`: the heartbeat, tethering and notification settings are
-  read from them) once it owns the session, and stores them, the config it runs and its SOCKS login together with the
-  tile's config name, then refreshes the tile (`QuickConnectStore.save`: one step under a lock shared with the activity's save and the quick-start read; the old login and
-  config are removed first, so an interrupted save leaves nothing to quick-start rather than a mix of two connections; a failed save is logged
+  read from them) once it owns the session, and stores them, the config it runs (with its SOCKS login) together with the
+  tile's config name, then refreshes the tile (`QuickConnectStore.save`: one step under a lock shared with the activity's save and the quick-start read; the old
+  config is removed first (and a `socks_creds.json` left by older versions), so an interrupted save leaves nothing to quick-start rather than a mix of two connections; a failed save is logged
   and costs only the quick start, not the session). Before the old session stops, `sessionAttempt` takes Flutter's
   connect attempt (`EXTRA_ATTEMPT`), and every snapshot the session
   publishes carries it as `attempt` (quick starts reset it to 0 — untagged); if a session is running this is a **hot

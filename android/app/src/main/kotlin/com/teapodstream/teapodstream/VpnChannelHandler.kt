@@ -221,7 +221,7 @@ internal class QuickConnectRequests(
             return store.locked {
                 if (sessionStarts() != seen) return@locked false
                 admitted = true
-                store.save(args.config, args.params, args.socksUser, args.socksPassword, tileName = args.configName ?: "")
+                store.save(args.config, args.params, tileName = args.configName ?: "")
                 true
             }
         } finally {

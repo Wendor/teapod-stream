@@ -426,12 +426,12 @@ class XrayVpnService : VpnService() {
                 xrayConfig
             }
 
-            // For a quick start (tile, boot, reconnect): the params, the config, its SOCKS login and the tile's name
+            // For a quick start (tile, boot, reconnect): the params, the config (with its SOCKS login) and the tile's name
             // together (a quick start's name was read with its config). A failed save costs the quick start, not this
             // session. Saved on a reconnect too: the config it runs may differ from the stored one (a new prefix
             // proxy port).
             try {
-                store.save(finalConfig, request.params, socksUser, socksPassword, tileName = request.configName ?: "")
+                store.save(finalConfig, request.params, tileName = request.configName ?: "")
             } catch (e: Exception) {
                 log("warning", "Quick-connect data not saved: ${e.message}")
             } finally {
@@ -742,11 +742,6 @@ class XrayVpnService : VpnService() {
             }
 
             if (!core.borrowsTunFd) core.stop()
-
-            // Clean up saved credentials on explicit disconnect
-            if (explicit) {
-                try { store.clearCredentials() } catch (e: Exception) { log("warning", "clearing socks_creds: ${e.message}") }
-            }
 
             if (keepTunAsSink) {
                 if (reconnecting) {

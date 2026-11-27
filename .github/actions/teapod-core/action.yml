@@ -22,13 +22,13 @@ runs:
       run: echo "key=$(git rev-parse --short=12 HEAD:core)" >> "$GITHUB_OUTPUT"
 
     - id: cache
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: core/outputs/teapod-core-${{ steps.key.outputs.key }}.aar
         key: teapod-core-${{ steps.key.outputs.key }}
 
     - if: steps.cache.outputs.cache-hit != 'true'
-      uses: actions/setup-go@v7
+      uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
       with:
         go-version-file: core/go.mod
         cache-dependency-path: core/go.sum

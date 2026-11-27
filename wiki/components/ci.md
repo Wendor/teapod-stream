@@ -8,6 +8,10 @@ merge ref, i.e. its earlier runs) is searched first, then the PR's base branch a
 that changes the Gradle files thus usually starts from an earlier cache; with no visible Gradle cache it starts empty.
 A cache saved by a PR run is visible only to later runs of that PR; one saved on `master` is visible to every branch.
 
+Every third-party action is pinned by commit SHA, its release tag in a comment
+(`uses: actions/checkout@<sha> # v7.0.1`): a moved tag can't change what runs with the release secrets. A newer
+release is reported by the monthly update check and bumped by hand (new SHA and comment).
+
 ## `ci.yml` — checks
 
 On push to `master` and on pull requests (not on every branch push: with an open PR that ran everything twice).
@@ -49,7 +53,8 @@ CodeRabbit (`.coderabbit.yaml`) reviews every non-draft PR; its guidelines are `
 On the 1st of every month (and by hand). `.github/scripts/check-updates.sh` compares what the build pins with the
 latest upstream releases: xray-core (a release newer than the pinned commit), sing-box and xray-rust-mobile, the
 bundled geodata (`GEODATA_VERSION` in `build.sh`), Go,
-Flutter, AGP, Kotlin, Gradle, the direct Go modules of `core/` and the direct Dart packages. If anything is behind,
+Flutter, AGP, Kotlin, Gradle, the direct Go modules of `core/`, the direct Dart packages and the GitHub Actions
+pinned in `.github/`. If anything is behind,
 it opens the issue `[ai] deps: monthly update check` (labels `ai`, `dependencies`), written as an *Agent task* with a
 table of versions, or rewrites the body of the one already open. The maintainer hands it to an agent; closing the
 issue lets the next run open a new one. The script runs locally the same way (needs `gh`, `go`, `flutter`, and

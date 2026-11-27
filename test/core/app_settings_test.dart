@@ -75,6 +75,15 @@ const _custom = AppSettings(
 );
 
 void main() {
+  test('fromJson clamps numeric fields to the model limits', () {
+    final low = AppSettings.fromJson({'socksPort': 80, 'mtu': 100, 'obsProbeIntervalSec': -5});
+    expect((low.socksPort, low.mtu, low.obsProbeIntervalSec), (1024, 576, 0));
+    final high = AppSettings.fromJson({'socksPort': 70000, 'mtu': 20000, 'obsProbeIntervalSec': 100000});
+    expect((high.socksPort, high.mtu, high.obsProbeIntervalSec), (65535, 9000, 86400));
+    final inRange = AppSettings.fromJson({'socksPort': 2000, 'mtu': 1400, 'obsProbeIntervalSec': 60});
+    expect((inRange.socksPort, inRange.mtu, inRange.obsProbeIntervalSec), (2000, 1400, 60));
+  });
+
   group('AppSettings', () {
     test('custom settings differ from defaults in every field', () {
       final defaults = const AppSettings().toJson();

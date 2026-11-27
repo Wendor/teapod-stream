@@ -170,6 +170,38 @@ void main() {
       await unmount(tester, c);
     });
 
+    testWidgets('a text field saves once per edit, clamped to the model limits', (tester) async {
+      await setUpScreenTest();
+      final c = await pumpScreen(tester, const NetworkSettingsScreen());
+      await _tapRow(tester, 'Random port');
+      var writes = 0;
+      c.listen(profileProvider, (_, _) => writes++);
+      final port = find.widgetWithText(TextField, '10808');
+      for (final typed in ['8', '80']) {
+        await tester.enterText(port, typed);
+        await tester.pump();
+      }
+      expect(writes, 0, reason: 'nothing is saved while typing');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await settle(tester);
+      expect(writes, 1);
+      expect(_settings(c).socksPort, AppSettings.socksPortLimits.min);
+      expect((await storedSettings()).socksPort, 1024);
+      await unmount(tester, c);
+    });
+
+    testWidgets('an edit still in a focused field is saved when the screen closes', (tester) async {
+      await setUpScreenTest();
+      final c = await pumpScreen(tester, const NetworkSettingsScreen());
+      await _tapRow(tester, 'Random port');
+      await tester.enterText(find.widgetWithText(TextField, '10808'), '20000');
+      await tester.pump();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 1));
+      expect((await storedSettings()).socksPort, 20000);
+      c.dispose();
+    });
+
     testWidgets('readonly profile locks the toggles', (tester) async {
       await setUpScreenTest();
       await ProfileStorageService().saveProfiles([

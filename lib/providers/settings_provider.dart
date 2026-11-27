@@ -18,10 +18,15 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
     return next.then((s) => s.activeSettings);
   }
 
-  /// [settings] were built from the ones shown: they go to the profile active now, even if a switch runs first.
-  Future<void> save(AppSettings settings) => ref
+  /// Applies [change] to the settings current when the write runs — not to the ones a widget last rendered, so a
+  /// write queued in between (another field, [cleanGhostPackages]) survives. The change belongs to the profile
+  /// active now: it goes there even if a switch runs first. A readonly profile keeps its settings.
+  Future<void> edit(AppSettings Function(AppSettings current) change) => ref
       .read(profileProvider.notifier)
-      .updateActiveSettings((_) => settings, profileId: ref.read(profileProvider).value?.activeProfileId);
+      .updateActiveSettings(change, profileId: ref.read(profileProvider).value?.activeProfileId);
+
+  /// Replaces the settings as a whole (a flow that built all of them); a widget changing fields uses [edit].
+  Future<void> save(AppSettings settings) => edit((_) => settings);
 
   Future<void> cleanGhostPackages(Set<String> installedPackages) => _update((current) {
     final newIncluded = current.includedPackages.intersection(installedPackages);

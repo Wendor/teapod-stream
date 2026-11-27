@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -27,12 +28,21 @@ void main() {
   late ProviderContainer c;
   final calls = <String>[];
 
+  /// When set, the next `getFilesDir` waits for it (once).
+  Completer<void>? holdFilesDir;
+
   setUp(() async {
     dir = Directory.systemTemp.createTempSync('geo');
     filesDir = dir.path;
     calls.clear();
+    holdFilesDir = null;
     messenger.setMockMethodCallHandler(_channel, (call) async {
       calls.add(call.method);
+      if (call.method == 'getFilesDir' && holdFilesDir != null) {
+        final hold = holdFilesDir!;
+        holdFilesDir = null;
+        await hold.future;
+      }
       return call.method == 'getFilesDir' ? filesDir : null;
     });
     SharedPreferences.setMockInitialValues({});
@@ -206,6 +216,59 @@ void main() {
         () => Future.wait([notifier.download(), notifier.download()]),
         RedirectHttpOverrides(server.port),
       );
+      expect(gets.where((p) => p == '/ip.dat'), hasLength(1));
+      expect(c.read(geoProvider), isA<GeoReady>());
+    });
+
+    test('a 404 sum declaring more than the default body limit is not checked', () async {
+      server.handler = (r) async {
+        if (r.uri.path.endsWith('.sha256sum')) {
+          r.response.statusCode = HttpStatus.notFound;
+          r.response.contentLength = 11 * 1024 * 1024;
+          // Headers out, then the connection breaks off: the client stops at the status, the body is never read.
+          final socket = await r.response.detachSocket();
+          socket.add([0x78]);
+          await socket.flush();
+          socket.destroy();
+          return;
+        } else if (r.method != 'HEAD') {
+          r.response.write('x');
+        }
+        await r.response.close();
+      };
+      await download();
+      expect(c.read(geoProvider), isA<GeoReady>());
+    });
+
+    test('a check that ends during a download neither replaces its state nor lets a second one start', () async {
+      final gets = <String>[];
+      final release = Completer<void>();
+      server.handler = (r) async {
+        if (r.method == 'GET') gets.add(r.uri.path);
+        if (r.method == 'GET' && r.uri.path == '/ip.dat') await release.future;
+        if (r.uri.path.endsWith('.sha256sum')) {
+          r.response.statusCode = HttpStatus.notFound;
+        } else if (r.method != 'HEAD') {
+          r.response.write('x');
+        }
+        await r.response.close();
+      };
+      await start();
+      final notifier = c.read(geoProvider.notifier);
+      await HttpOverrides.runWithHttpOverrides(() async {
+        final hold = holdFilesDir = Completer<void>();
+        final checking = notifier.check(); // waits in getFilesDir
+        final first = notifier.download();
+        while (!gets.contains('/ip.dat')) {
+          await Future<void>.delayed(const Duration(milliseconds: 5));
+        }
+        hold.complete();
+        await checking; // no files yet: it would publish GeoMissing
+        expect(c.read(geoProvider), isA<GeoDownloading>());
+        await notifier.download(); // returns at once
+        release.complete();
+        await first;
+      }, RedirectHttpOverrides(server.port));
       expect(gets.where((p) => p == '/ip.dat'), hasLength(1));
       expect(c.read(geoProvider), isA<GeoReady>());
     });

@@ -32,13 +32,19 @@ class GeoError extends GeoState {
 class GeoNotifier extends Notifier<GeoState> {
   GeodataService get _service => ref.read(geodataServiceProvider);
 
+  /// A download is running: it owns the `.tmp` files and the state until it ends — [check] stays out of both.
+  var _downloading = false;
+
   @override
   GeoState build() {
     Future.microtask(check);
     return GeoMissing();
   }
 
+  /// Whether the files are there (extracting the bundled copy if not). Does nothing during a download, and a check
+  /// that a download overtook publishes nothing.
   Future<void> check() async {
+    if (_downloading) return;
     try {
       final platform = ref.read(platformServiceProvider);
       final dir = await platform.filesDir();
@@ -48,20 +54,30 @@ class GeoNotifier extends Notifier<GeoState> {
       if (missing) await platform.prepareBinaries();
       if (_service.present(dir)) {
         final lastUpdated = await _service.lastUpdated();
+        if (_downloading) return;
         if (missing) ref.invalidate(geositeIndexProvider);
         state = GeoReady(lastUpdated: lastUpdated);
-      } else {
+      } else if (!_downloading) {
         state = GeoMissing();
       }
     } catch (_) {
-      state = GeoMissing();
+      if (!_downloading) state = GeoMissing();
     }
   }
 
   /// One download at a time: a second call while one runs (the button is still shown until the first await) returns
   /// at once — both would write the same `.tmp` files.
   Future<void> download() async {
-    if (state is GeoDownloading) return;
+    if (_downloading) return;
+    _downloading = true;
+    try {
+      await _download();
+    } finally {
+      _downloading = false;
+    }
+  }
+
+  Future<void> _download() async {
     state = GeoDownloading(downloaded: 0, total: -1);
     final AppSettings settings;
     try {

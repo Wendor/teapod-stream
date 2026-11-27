@@ -116,6 +116,9 @@ class GeodataService {
       socks: socks,
       timeout: const Duration(seconds: 30),
       idleTimeout: const Duration(seconds: 30),
+      // No size limit before the status: a 404 page of any declared size means "no sum". Of a 200 body only
+      // [_sumPrefix] bytes are ever read.
+      maxBytes: 1 << 62,
     );
     try {
       final status = resp.statusCode;

@@ -14,7 +14,7 @@ copies of `Theme` would not see each other.
 
 ```
 TeapodApp (app.dart) → _TeapodMaterialApp (theme, locale, text scale; builder sets L10n.current)
-└── _AppShell — tabs via tabIndexProvider, custom bottom bar
+└── _AppShell — tabs via tabIndexProvider, custom bottom bar (its settings tab shows the update badge from updateProvider)
     ├── 0 HomeScreen
     ├── 1 ConfigsScreen      → AddConfigScreen → QrScanScreen
     ├── 2 RoutingScreen      → SplitTunnelScreen

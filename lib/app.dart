@@ -127,9 +127,6 @@ class _AppShellState extends ConsumerState<_AppShell> with WidgetsBindingObserve
   Widget build(BuildContext context) {
     // Its listeners (new configs pinged, the chart on the home tab) live as long as the shell.
     ref.watch(appLifecycleProvider);
-    final updateState = ref.watch(updateProvider);
-    final hasUpdate =
-        updateState is UpdateAvailable || updateState is UpdateDownloading || updateState is UpdateDownloaded;
 
     final currentIndex = ref.watch(tabIndexProvider);
     // The system bars follow the theme: the framework applies the region's style when it changes, not on every build.
@@ -146,7 +143,6 @@ class _AppShellState extends ConsumerState<_AppShell> with WidgetsBindingObserve
         body: IndexedStack(index: currentIndex, children: _pages),
         bottomNavigationBar: _ConsoleTabBar(
           currentIndex: currentIndex,
-          hasUpdateBadge: hasUpdate,
           onTap: (i) => ref.read(tabIndexProvider.notifier).set(i),
         ),
       ),
@@ -158,15 +154,16 @@ class _AppShellState extends ConsumerState<_AppShell> with WidgetsBindingObserve
 
 class _ConsoleTabBar extends ConsumerWidget {
   final int currentIndex;
-  final bool hasUpdateBadge;
   final void Function(int) onTap;
 
-  const _ConsoleTabBar({required this.currentIndex, required this.hasUpdateBadge, required this.onTap});
+  const _ConsoleTabBar({required this.currentIndex, required this.onTap});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context).extension<TeapodTokens>()!;
 
+    final update = ref.watch(updateProvider);
+    final hasUpdateBadge = update is UpdateAvailable || update is UpdateDownloading || update is UpdateDownloaded;
     final l = context.l10n;
     final items = [
       _TabItem(icon: _TabIcon.shield, label: 'VPN'),

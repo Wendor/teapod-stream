@@ -9,6 +9,9 @@ import (
 	"time"
 )
 
+// probeTimeout bounds a whole delay probe (both attempts); a variable for the tests.
+var probeTimeout = 12 * time.Second
+
 // measureDelayVia — an HTTP probe through dial: the best of two attempts, ms.
 func measureDelayVia(ctx context.Context, dial func(ctx context.Context, network, addr string) (net.Conn, error), url string) (int64, error) {
 	tr := &http.Transport{

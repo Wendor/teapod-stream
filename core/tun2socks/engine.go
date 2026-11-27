@@ -62,7 +62,7 @@ const (
 	// 3 goroutines, kept alive for up to udpIdleTimeout. Unlike TCP, the UDP forwarder
 	// has no built-in backlog, so a QUIC-heavy or misbehaving app fanning out to many
 	// destinations could otherwise exhaust the process fd limit within seconds
-	// (the src-only validation cache makes each new flow essentially free to admit).
+	// (the validator verdict cache makes a repeated 5-tuple essentially free to admit).
 	maxUDPConns = 512
 )
 

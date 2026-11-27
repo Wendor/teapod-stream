@@ -8,20 +8,16 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	coreapplog "github.com/xtls/xray-core/app/log"
 	corecommlog "github.com/xtls/xray-core/common/log"
-	corenet "github.com/xtls/xray-core/common/net"
 	corefilesystem "github.com/xtls/xray-core/common/platform/filesystem"
-	"github.com/xtls/xray-core/common/serial"
 	core "github.com/xtls/xray-core/core"
 	corestats "github.com/xtls/xray-core/features/stats"
 	coreserial "github.com/xtls/xray-core/infra/conf/serial"
@@ -63,29 +59,20 @@ type TunValidator interface {
 
 // --- INTERNAL XRAY STATE ---
 
-type xrayEngine struct {
-	mu           sync.Mutex
+// xrayCore is a started xray instance.
+type xrayCore struct {
 	instance     *core.Instance
 	statsManager corestats.Manager
-	isRunning    bool
-	cb           XrayCallback
 }
 
+var xray = &coreSlot[xrayCore]{name: "xray", close: func(c xrayCore) error { return c.instance.Close() }}
+
 var (
-	// xrayMu guards the xray pointer itself; xrayEngine.mu guards its fields.
-	xrayMu          sync.Mutex
-	xray            *xrayEngine
 	tun2socksMu     sync.Mutex
 	tun2socksEngine *tun2socks.TeapodTun2socks
 	logListenerMu   sync.Mutex
 	logListener     LogListener
 )
-
-func currentXray() *xrayEngine {
-	xrayMu.Lock()
-	defer xrayMu.Unlock()
-	return xray
-}
 
 // --- XRAY: INTERNAL HELPERS ---
 
@@ -184,94 +171,29 @@ func RegisterVpnProtector(p VpnProtector) {
 // If xray is already running it is stopped first, so the callback
 // is always tied to the current call.
 func StartXray(config string, cb XrayCallback) {
-	StopXray()
-
 	registerLogHandler()
-
-	eng := &xrayEngine{cb: cb}
-	xrayMu.Lock()
-	xray = eng
-	xrayMu.Unlock()
-
-	go func() {
-		eng.mu.Lock()
-		defer eng.mu.Unlock()
-
-		// StopXray could take eng.mu before this goroutine: it found no instance and
-		// returned, so a core started now would be orphaned — never closed, holding
-		// the SOCKS port and its upstream connections.
-		if currentXray() != eng {
-			if cb != nil {
-				cb.OnStatus(-1, "start cancelled: core was stopped")
-			}
-			return
-		}
-
+	xray.start(cb, func() (xrayCore, error) {
 		log.Println("[xray] initializing core...")
 		cfg, err := coreserial.LoadJSONConfig(strings.NewReader(config))
 		if err != nil {
-			log.Printf("[xray] config error: %v", err)
-			if cb != nil {
-				cb.OnStatus(-1, fmt.Sprintf("config error: %v", err))
-			}
-			return
+			return xrayCore{}, fmt.Errorf("config error: %w", err)
 		}
-
 		inst, err := core.New(cfg)
 		if err != nil {
-			log.Printf("[xray] core init failed: %v", err)
-			if cb != nil {
-				cb.OnStatus(-1, fmt.Sprintf("init failed: %v", err))
-			}
-			return
+			return xrayCore{}, fmt.Errorf("init failed: %w", err)
 		}
-
-		eng.statsManager, _ = inst.GetFeature(corestats.ManagerType()).(corestats.Manager)
-
 		log.Println("[xray] starting core...")
 		if err := startXrayInstance(inst); err != nil {
-			log.Printf("[xray] startup failed: %v", err)
-			if cb != nil {
-				cb.OnStatus(-1, fmt.Sprintf("startup failed: %v", err))
-			}
-			return
+			return xrayCore{}, fmt.Errorf("startup failed: %w", err)
 		}
-
-		eng.instance = inst
-		eng.isRunning = true
-
-		log.Println("[xray] started successfully")
-		if cb != nil {
-			cb.OnStatus(0, "Started successfully, running")
-		}
-	}()
+		stats, _ := inst.GetFeature(corestats.ManagerType()).(corestats.Manager)
+		return xrayCore{instance: inst, statsManager: stats}, nil
+	})
 }
 
 // StopXray stops xray-core and releases all resources.
 func StopXray() {
-	xrayMu.Lock()
-	eng := xray
-	xray = nil
-	xrayMu.Unlock()
-	if eng == nil {
-		return
-	}
-
-	eng.mu.Lock()
-	defer eng.mu.Unlock()
-
-	if eng.instance != nil {
-		if err := eng.instance.Close(); err != nil {
-			log.Printf("[xray] shutdown error: %v", err)
-		}
-		eng.instance = nil
-	}
-	eng.isRunning = false
-	eng.statsManager = nil
-
-	if eng.cb != nil {
-		eng.cb.OnStatus(0, "Core stopped")
-	}
+	xray.stop()
 }
 
 // DumpGoroutines returns stack traces of all goroutines (diagnostics of hangs:
@@ -295,15 +217,9 @@ func GetXrayVersion() string {
 // QueryXrayStats returns and resets the traffic counter for the given outbound
 // tag and direction ("uplink" or "downlink").
 func QueryXrayStats(tag string, direct string) int64 {
-	eng := currentXray()
-	if eng == nil {
-		return 0
-	}
-	eng.mu.Lock()
-	sm := eng.statsManager
-	eng.mu.Unlock()
-
-	if sm == nil {
+	c, ok := xray.get()
+	sm := c.statsManager
+	if !ok || sm == nil {
 		return 0
 	}
 	counter := sm.GetCounter(fmt.Sprintf("outbound>>>%s>>>traffic>>>%s", tag, direct))
@@ -316,64 +232,13 @@ func QueryXrayStats(tag string, direct string) int64 {
 // MeasureXrayDelay measures latency through the running xray instance.
 // Returns milliseconds, or -1 on error.
 func MeasureXrayDelay(url string) (int64, error) {
-	eng := currentXray()
-	if eng == nil {
+	c, ok := xray.get()
+	if !ok {
 		return -1, errors.New("xray not running")
 	}
-	eng.mu.Lock()
-	inst := eng.instance
-	eng.mu.Unlock()
-
-	if inst == nil {
-		return -1, errors.New("xray instance not ready")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
 	defer cancel()
-	return measureDelay(ctx, inst, url)
-}
-
-// MeasureOutboundDelay starts a temporary xray instance with the given config
-// to measure latency without affecting the running session.
-func MeasureOutboundDelay(config string, url string) (int64, error) {
-	cfg, err := coreserial.LoadJSONConfig(strings.NewReader(config))
-	if err != nil {
-		return -1, fmt.Errorf("config load error: %w", err)
-	}
-
-	cfg.Inbound = nil
-	var essential []*serial.TypedMessage
-	for _, app := range cfg.App {
-		switch app.Type {
-		// No xray.app.log.Config: log.New registers the instance as the global
-		// handler, and after Close the handler is inactive — the running VPN core
-		// would stop logging until its next start.
-		case "xray.app.proxyman.OutboundConfig",
-			"xray.app.dispatcher.Config":
-			essential = append(essential, app)
-		}
-	}
-	cfg.App = essential
-
-	inst, err := core.New(cfg)
-	if err != nil {
-		return -1, fmt.Errorf("instance creation failed: %w", err)
-	}
-	if err := inst.Start(); err != nil {
-		return -1, fmt.Errorf("startup failed: %w", err)
-	}
-	defer inst.Close()
-	return measureDelay(context.Background(), inst, url)
-}
-
-// measureDelay measures HTTP round-trip latency through a running core instance.
-func measureDelay(ctx context.Context, inst *core.Instance, url string) (int64, error) {
-	return measureDelayVia(ctx, func(ctx context.Context, network, addr string) (net.Conn, error) {
-		dest, err := corenet.ParseDestination(fmt.Sprintf("%s:%s", network, addr))
-		if err != nil {
-			return nil, err
-		}
-		return core.Dial(ctx, inst, dest)
-	}, url)
+	return measureDelay(ctx, c.instance, url)
 }
 
 // --- INTERNAL TUN2SOCKS WRAPPERS ---
@@ -390,6 +255,12 @@ func (w *tunValidatorWrapper) Validate(srcIP string, srcPort int, dstIP string, 
 }
 
 // --- PUBLIC API: TUN2SOCKS ---
+
+// The validator's verdict cache (per 5-tuple): entries and how long a verdict holds, in seconds.
+const (
+	validatorCacheSize       = 1000
+	validatorCacheTTLSeconds = 300
+)
 
 // StartTun2Socks starts the TUN-to-SOCKS bridge.
 //
@@ -416,14 +287,19 @@ func StartTun2Socks(tunFD int64, mtu int64, socksPort int64, socksUser string, s
 	tun2socksMu.Unlock()
 
 	v := &tunValidatorWrapper{validator: validator}
-	return eng.Start(tunFD, mtu, "127.0.0.1", socksPort, socksUser, socksPass, allowICMP, blockQuic, 1000, 300, v)
+	return eng.Start(tunFD, mtu, "127.0.0.1", socksPort, socksUser, socksPass, allowICMP, blockQuic, validatorCacheSize, validatorCacheTTLSeconds, v)
+}
+
+// currentTun2Socks returns the TUN bridge, nil before the first StartTun2Socks.
+func currentTun2Socks() *tun2socks.TeapodTun2socks {
+	tun2socksMu.Lock()
+	defer tun2socksMu.Unlock()
+	return tun2socksEngine
 }
 
 // StopTun2Socks gracefully shuts down the TUN bridge.
 func StopTun2Socks() {
-	tun2socksMu.Lock()
-	eng := tun2socksEngine
-	tun2socksMu.Unlock()
+	eng := currentTun2Socks()
 	if eng != nil {
 		eng.Stop()
 	}
@@ -431,9 +307,7 @@ func StopTun2Socks() {
 
 // IsTunRunning reports whether the TUN bridge is active.
 func IsTunRunning() bool {
-	tun2socksMu.Lock()
-	eng := tun2socksEngine
-	tun2socksMu.Unlock()
+	eng := currentTun2Socks()
 	return eng != nil && eng.IsRunning()
 }
 
@@ -441,9 +315,7 @@ func IsTunRunning() bool {
 // through tun2socks. A sustained spike (e.g. >200) after hours of uptime indicates
 // a gVisor connection leak that requires a reconnect.
 func TunActiveConnections() int64 {
-	tun2socksMu.Lock()
-	eng := tun2socksEngine
-	tun2socksMu.Unlock()
+	eng := currentTun2Socks()
 	if eng == nil {
 		return 0
 	}
@@ -454,9 +326,7 @@ func TunActiveConnections() int64 {
 // (active connections, gVisor TCP counters, channel queue depth, byte counters, cache size).
 // Log it via Kotlin's log() so the line ends up in vpn_log.txt and the Flutter UI.
 func GetTunStatsLine() string {
-	tun2socksMu.Lock()
-	eng := tun2socksEngine
-	tun2socksMu.Unlock()
+	eng := currentTun2Socks()
 	if eng == nil {
 		return ""
 	}
@@ -466,9 +336,7 @@ func GetTunStatsLine() string {
 // GetTunDiagnostics returns a JSON snapshot of the tunnel state (health metrics,
 // failure counters, per-connection activity table). Empty string if not running.
 func GetTunDiagnostics() string {
-	tun2socksMu.Lock()
-	eng := tun2socksEngine
-	tun2socksMu.Unlock()
+	eng := currentTun2Socks()
 	if eng == nil {
 		return ""
 	}
@@ -477,9 +345,7 @@ func GetTunDiagnostics() string {
 
 // GetTunCacheSize returns the number of entries in the validator's LRU cache.
 func GetTunCacheSize() int64 {
-	tun2socksMu.Lock()
-	eng := tun2socksEngine
-	tun2socksMu.Unlock()
+	eng := currentTun2Socks()
 	if eng == nil {
 		return 0
 	}
@@ -488,9 +354,7 @@ func GetTunCacheSize() int64 {
 
 // SetTunLogEnabled toggles verbose logging inside the TUN bridge.
 func SetTunLogEnabled(enabled bool) {
-	tun2socksMu.Lock()
-	eng := tun2socksEngine
-	tun2socksMu.Unlock()
+	eng := currentTun2Socks()
 	if eng != nil {
 		eng.SetLogEnabled(enabled)
 	}
@@ -498,9 +362,7 @@ func SetTunLogEnabled(enabled bool) {
 
 // GetTunUploadBytes returns total bytes sent from device to the internet.
 func GetTunUploadBytes() int64 {
-	tun2socksMu.Lock()
-	eng := tun2socksEngine
-	tun2socksMu.Unlock()
+	eng := currentTun2Socks()
 	if eng == nil {
 		return 0
 	}
@@ -509,9 +371,7 @@ func GetTunUploadBytes() int64 {
 
 // GetTunDownloadBytes returns total bytes received from the internet to device.
 func GetTunDownloadBytes() int64 {
-	tun2socksMu.Lock()
-	eng := tun2socksEngine
-	tun2socksMu.Unlock()
+	eng := currentTun2Socks()
 	if eng == nil {
 		return 0
 	}
@@ -522,9 +382,7 @@ func GetTunDownloadBytes() int64 {
 // payload from the proxy delivered to an app (see TeapodTun2socks.GetLastRxActivityMs).
 // Returns 0 if tun2socks is not running or nothing has been written yet.
 func GetTunLastRxActivityMs() int64 {
-	tun2socksMu.Lock()
-	eng := tun2socksEngine
-	tun2socksMu.Unlock()
+	eng := currentTun2Socks()
 	if eng == nil {
 		return 0
 	}
@@ -536,9 +394,7 @@ func GetTunLastRxActivityMs() int64 {
 // Call on network-change events to prevent stale connections from surviving a
 // physical network switch. Returns the number of connections closed.
 func ForceTunCloseAllConnections() int64 {
-	tun2socksMu.Lock()
-	eng := tun2socksEngine
-	tun2socksMu.Unlock()
+	eng := currentTun2Socks()
 	if eng == nil {
 		return 0
 	}

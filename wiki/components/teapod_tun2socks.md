@@ -21,7 +21,8 @@ TUN fd → tunReadLoop ─┬─ ICMP echo / QUIC reject (answered locally)
 ## API
 
 `Start(tunFD, mtu, socksHost, socksPort, user, pass, allowICMP, blockQuic, cacheCapacity, cacheTTLSeconds, validator)`
-returns an error string (empty = OK). Works on a `dup` of the fd — `Stop()` closes only its copy, which is what lets
+returns an error string (empty = OK); `StartTun2Socks` passes a 1000-entry cache with a 300 s TTL
+(`validatorCacheSize`, `validatorCacheTTLSeconds`). Works on a `dup` of the fd — `Stop()` closes only its copy, which is what lets
 the app reuse the TUN fd across reconnects. Also: `Stop`, `IsRunning`, `CacheSize`, `SetLogEnabled`,
 `GetUpload/DownloadBytes`, `GetActiveConnections` (TCP + UDP), `GetLastRxActivityMs` (last payload from the proxy delivered to an app, TCP or UDP — not the stack's own ACK/RST, not DNS answers),
 `ForceCloseAllConnections` (gVisor side of all TCP and UDP flows), `GetStatsLine`, `GetDiagnostics` (JSON with the

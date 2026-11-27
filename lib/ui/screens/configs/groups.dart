@@ -264,11 +264,10 @@ class _SubGroup extends StatelessWidget {
                   ],
                   // Repeats the name's toggle for TalkBack, so it stays out of the semantics tree.
                   ExcludeSemantics(
-                    child: TapTarget(
-                      onTap: onToggle,
-                      minWidth: 0,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(4, 0, 20, 0),
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: TapTarget(
+                        onTap: onToggle,
                         child: Icon(
                           isExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
                           size: 16,

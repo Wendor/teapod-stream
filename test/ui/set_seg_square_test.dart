@@ -10,7 +10,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   // The subscription interval: five segments in a label + selector row on a 280 dp screen at the largest text scale.
-  Future<void> pump(WidgetTester tester, void Function(String) onChanged) async {
+  Future<void> pump(WidgetTester tester, void Function(String) onChanged, {bool intrinsic = false}) async {
     tester.view.physicalSize = const Size(280, 600);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -25,14 +25,17 @@ void main() {
         home: MediaQuery(
           data: const MediaQueryData(size: Size(280, 600), textScaler: TextScaler.linear(2.0)),
           child: Scaffold(
-            body: SetInlineField(
-              t: t,
-              label: 'Interval',
-              child: SetSegSquare(
+            body: _maybeIntrinsic(
+              intrinsic,
+              SetInlineField(
                 t: t,
-                value: '1',
-                opts: const [('1', '1 h'), ('3', '3 h'), ('6', '6 h'), ('12', '12 h'), ('24', '24 h')],
-                onChanged: onChanged,
+                label: 'Interval',
+                child: SetSegSquare(
+                  t: t,
+                  value: '1',
+                  opts: const [('1', '1 h'), ('3', '3 h'), ('6', '6 h'), ('12', '12 h'), ('24', '24 h')],
+                  onChanged: onChanged,
+                ),
               ),
             ),
           ),
@@ -50,11 +53,22 @@ void main() {
     expect(tester.takeException(), isNull);
     for (final label in ['1 h', '24 h']) {
       final target = find.ancestor(of: find.text(label), matching: find.byType(Semantics)).first;
-      expect(tester.getSize(target).height, greaterThanOrEqualTo(kMinInteractiveDimension));
+      final size = tester.getSize(target);
+      expect(size.height, greaterThanOrEqualTo(kMinInteractiveDimension));
+      expect(size.width, greaterThanOrEqualTo(kMinInteractiveDimension));
     }
     await tester.ensureVisible(find.text('24 h'));
     await tester.pump();
     await tester.tap(find.text('24 h'));
     expect(picked, '24');
   });
+
+  testWidgets('it lays out under a parent that asks for intrinsic sizes', (tester) async {
+    await pump(tester, (_) {}, intrinsic: true);
+    expect(tester.takeException(), isNull);
+    expect(find.text('24 h'), findsOneWidget);
+  });
 }
+
+/// An `IntrinsicHeight` around [child] when [on]: a parent that queries the selector's intrinsic size.
+Widget _maybeIntrinsic(bool on, Widget child) => on ? IntrinsicHeight(child: child) : child;

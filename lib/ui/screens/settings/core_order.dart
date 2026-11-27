@@ -50,16 +50,26 @@ class _CoreOrderListState extends ConsumerState<_CoreOrderList> {
           ..showSnackBar(SnackBar(content: Text(context.l10n.settingsCoreLastEnabled)));
         return;
       }
-      widget.onUpdate(
-        (c) => c.copyWith(disabledCores: on ? ({...c.disabledCores}..remove(k)) : {...c.disabledCores, k}),
-      );
+      widget.onUpdate((c) {
+        if (on) return c.copyWith(disabledCores: {...c.disabledCores}..remove(k));
+        final disabled = {...c.disabledCores, k};
+        // Checked again on the settings it writes to: taps queued before a rebuild must not disable every core.
+        if (!c.coreOrder.any((o) => available.contains(o) && !disabled.contains(o))) return c;
+        return c.copyWith(disabledCores: disabled);
+      });
     }
 
     void moveUp(int i) {
-      final next = [...order];
-      next.insert(i - 1, next.removeAt(i));
-      widget.onUpdate((c) => c.copyWith(coreOrder: List.unmodifiable(next)));
-      setState(() => _moved = order[i]);
+      final k = order[i];
+      // Moved within the order it writes to: taps queued before a rebuild each move from the previous result.
+      widget.onUpdate((c) {
+        final j = c.coreOrder.indexOf(k);
+        if (j <= 0) return c;
+        final next = [...c.coreOrder]..insert(j - 1, k);
+        next.removeAt(j + 1);
+        return c.copyWith(coreOrder: List.unmodifiable(next));
+      });
+      setState(() => _moved = k);
       _movedTimer?.cancel();
       _movedTimer = Timer(const Duration(milliseconds: 700), () {
         if (mounted) setState(() => _moved = null);

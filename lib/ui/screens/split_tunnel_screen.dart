@@ -26,10 +26,11 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
   bool _hideSystemApps = true;
   bool _ghostsCleaned = false;
 
-  /// Toggles [pkg] in the list the mode uses, as it is when the write runs.
-  void _togglePackage(String pkg, bool isOnlySelected) => saveSettings(context, ref, (c) {
+  /// Toggles [pkg] in the list the mode uses — both as they are when the write runs, so a tap before the settings
+  /// load (or before a mode change shows) goes to the right list.
+  void _togglePackage(String pkg) => saveSettings(context, ref, (c) {
     Set<String> toggled(Set<String> set) => set.contains(pkg) ? ({...set}..remove(pkg)) : {...set, pkg};
-    return isOnlySelected
+    return c.vpnMode == VpnMode.onlySelected
         ? c.copyWith(includedPackages: toggled(c.includedPackages))
         : c.copyWith(excludedPackages: toggled(c.excludedPackages));
   });
@@ -281,7 +282,7 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
                         app: app,
                         isSelected: isSelected,
                         isOnlySelected: isOnlySelected,
-                        onToggle: () => _togglePackage(app.packageName, isOnlySelected),
+                        onToggle: () => _togglePackage(app.packageName),
                       );
                     },
                   );

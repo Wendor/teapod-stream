@@ -73,6 +73,30 @@ void main() {
       await unmount(tester, c);
     });
 
+    testWidgets('taps before a rebuild each apply to the current order and switches', (tester) async {
+      await setUpScreenTest();
+      final c = await pumpScreen(tester, const SettingsScreen());
+      await tester.ensureVisible(find.bySemanticsLabel('move sing-box up'));
+      await settle(tester);
+      // No pump between the taps: both still see the rendered order [Go, sing-box, Rust].
+      await tester.tap(find.bySemanticsLabel('move xray-rust up'));
+      await tester.tap(find.bySemanticsLabel('move xray-rust up'));
+      await settle(tester);
+      expect(_settings(c).coreOrder, [CoreKind.xrayRust, CoreKind.xrayGo, CoreKind.singBox]);
+
+      Finder switchOf(CoreKind k) =>
+          find.descendant(of: find.byKey(ValueKey(k)), matching: find.byType(SetSquareSwitch));
+      await tester.ensureVisible(switchOf(CoreKind.xrayGo));
+      await tester.tap(switchOf(CoreKind.singBox));
+      await settle(tester);
+      // Two cores left, both switched off before a rebuild: the second must not disable the last one.
+      await tester.tap(switchOf(CoreKind.xrayGo));
+      await tester.tap(switchOf(CoreKind.xrayRust));
+      await settle(tester);
+      expect(_settings(c).disabledCores.length, 2);
+      await unmount(tester, c);
+    });
+
     testWidgets('licenses row opens the license page', (tester) async {
       await setUpScreenTest();
       final c = await pumpScreen(tester, const SettingsScreen());

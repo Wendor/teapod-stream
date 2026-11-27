@@ -188,7 +188,9 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
               ),
             ),
             // ── Hide system apps toggle ────────────────────────────
-            GestureDetector(
+            SetToggleRow(
+              value: _hideSystemApps,
+              checkbox: true,
               onTap: () => setState(() => _hideSystemApps = !_hideSystemApps),
               child: Container(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
@@ -295,7 +297,9 @@ class _AppRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final iconAsync = ref.watch(appIconProvider(app.packageName));
 
-    return GestureDetector(
+    return SetToggleRow(
+      value: isSelected,
+      checkbox: true,
       onTap: onToggle,
       child: Container(
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),

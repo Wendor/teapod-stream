@@ -153,7 +153,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
                         ),
                         if (_clipboardSuggestion != null) ...[
                           const SizedBox(height: 10),
-                          GestureDetector(
+                          TapTarget(
                             onTap: () {
                               final text = _clipboardSuggestion!;
                               setState(() {
@@ -196,10 +196,9 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
                         Row(
                           children: [
                             Expanded(
-                              child: GestureDetector(
+                              child: TapTarget(
                                 onTap: _loading ? null : _pasteFromClipboard,
                                 child: Container(
-                                  constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
                                   padding: const EdgeInsets.symmetric(vertical: 13),
                                   decoration: BoxDecoration(border: Border.all(color: t.line)),
                                   child: Row(
@@ -218,10 +217,9 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
                             ),
                             const SizedBox(width: 10),
                             Expanded(
-                              child: GestureDetector(
+                              child: TapTarget(
                                 onTap: _loading ? null : _import,
                                 child: Container(
-                                  constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
                                   padding: const EdgeInsets.symmetric(vertical: 13),
                                   color: t.accent,
                                   child: Row(

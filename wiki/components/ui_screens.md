@@ -93,8 +93,11 @@ text helpers (minimum 11 px). Font scale (`fontScale`) applies through the app's
 - Every tap target is at least 48 dp on each side and an icon-only one has a label: `TapTarget`
   (`widgets/tap_target.dart`) puts a transparent 48 dp area around a smaller visual, dims it while pressed and
   carries the TalkBack label; a row that toggles as a whole is one target announced as a switch (`SetToggleRow`; its
-  `SetSquareSwitch` is then only the visual). `test/ui/accessibility_test.dart` checks the main screens with
-  `androidTapTargetGuideline` and `labeledTapTargetGuideline`.
+  `SetSquareSwitch` is then only the visual) or, with `checkbox: true`, as a checkbox. A full-width row is a
+  `Pressable` at least 48 dp high; a segment of a full-width selector is a `Pressable` marked `selected`. No bare
+  `GestureDetector` for a tap target outside these widgets. A dense `TextField` in a dialog or a sheet gets
+  `InputDecoration.constraints` of 48 dp. `test/ui/accessibility_test.dart` checks the main screens, a subscription
+  group, the profile dialog and the server sheet with `androidTapTargetGuideline` and `labeledTapTargetGuideline`.
 - UI tests: `test/ui/` — smoke of every screen, interactions ([tests](tests.md)).
 
 ## Related

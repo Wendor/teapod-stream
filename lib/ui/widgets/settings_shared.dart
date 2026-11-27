@@ -119,14 +119,18 @@ class SetSquareSwitch extends StatelessWidget {
 class SetToggleRow extends StatelessWidget {
   final bool value;
   final VoidCallback? onTap;
+
+  /// The row's visual is a checkbox: announced as checked / not checked rather than as a switch.
+  final bool checkbox;
   final Widget child;
 
-  const SetToggleRow({super.key, required this.value, required this.onTap, required this.child});
+  const SetToggleRow({super.key, required this.value, required this.onTap, this.checkbox = false, required this.child});
 
   @override
   Widget build(BuildContext context) => MergeSemantics(
     child: Semantics(
-      toggled: value,
+      toggled: checkbox ? null : value,
+      checked: checkbox ? value : null,
       child: Pressable(onTap: onTap, child: child),
     ),
   );

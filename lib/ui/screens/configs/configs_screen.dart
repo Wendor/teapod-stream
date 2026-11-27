@@ -21,6 +21,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/hero_panel.dart';
 import '../../widgets/pressable.dart';
 import '../../widgets/untrusted_cert_dialog.dart';
+import '../../widgets/settings_shared.dart' show SetToggleRow;
 import '../../widgets/tap_target.dart';
 import '../add_config_screen.dart';
 import '../subscription_settings_screen.dart';
@@ -509,7 +510,12 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
             controller: controller,
             maxLines: 5,
             keyboardType: TextInputType.multiline,
-            decoration: const InputDecoration(hintText: 'vless://...', border: OutlineInputBorder(), isDense: true),
+            decoration: const InputDecoration(
+              hintText: 'vless://...',
+              border: OutlineInputBorder(),
+              isDense: true,
+              constraints: BoxConstraints(minHeight: kMinInteractiveDimension),
+            ),
           ),
         ),
         actions: [
@@ -623,6 +629,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
               hintText: 'https://...',
               border: OutlineInputBorder(),
               isDense: true,
+              constraints: BoxConstraints(minHeight: kMinInteractiveDimension),
             ),
           ),
         ),

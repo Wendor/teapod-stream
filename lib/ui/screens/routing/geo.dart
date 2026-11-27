@@ -91,7 +91,7 @@ class _GeoActionRow extends StatelessWidget {
             child: Text(label, style: AppTheme.sans(size: 13, color: labelColor ?? t.text)),
           ),
           const SizedBox(width: 12),
-          GestureDetector(
+          TapTarget(
             onTap: onTap,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -156,12 +156,13 @@ class _GeoSourceSheetState extends State<_GeoSourceSheet> {
         children: [
           Text('GEO.DATA // SOURCE', style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
           const SizedBox(height: 16),
+          // The presets' 48 dp tap targets space the runs.
           Wrap(
             spacing: 8,
-            runSpacing: 8,
             children: [
               for (final preset in GeoPresets.all)
-                GestureDetector(
+                TapTarget(
+                  selected: currentName == preset.name,
                   onTap: () => setState(() {
                     _geoipUrl = preset.geoipUrl;
                     _geositeUrl = preset.geositeUrl;
@@ -182,7 +183,8 @@ class _GeoSourceSheetState extends State<_GeoSourceSheet> {
                     ),
                   ),
                 ),
-              GestureDetector(
+              TapTarget(
+                selected: currentName == GeoPresets.custom,
                 onTap: () => setState(() {
                   _geoipUrl = _geoipCtrl.text.trim().isNotEmpty ? _geoipCtrl.text.trim() : 'custom';
                   _geositeUrl = _geositeCtrl.text.trim().isNotEmpty ? _geositeCtrl.text.trim() : 'custom';
@@ -252,7 +254,7 @@ class _GeoSourceSheetState extends State<_GeoSourceSheet> {
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
-            child: GestureDetector(
+            child: TapTarget(
               onTap: () {
                 widget.onSave(_geoipUrl, _geositeUrl);
                 Navigator.pop(context);

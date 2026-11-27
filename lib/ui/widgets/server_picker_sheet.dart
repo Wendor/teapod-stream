@@ -8,6 +8,7 @@ import '../../providers/config_provider.dart';
 import '../../providers/vpn_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
+import 'pressable.dart';
 
 /// Bottom sheet for quick server switching: pins on top, then groups.
 /// Picking one while the VPN is connected reconnects automatically.
@@ -118,9 +119,8 @@ class _PickerRow extends StatelessWidget {
 
   Widget _buildRow(BuildContext context) {
     final ping = config.latencyMs;
-    return GestureDetector(
+    return Pressable(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
       child: Container(
         decoration: BoxDecoration(
           color: isActive ? t.accentFade : Colors.transparent,

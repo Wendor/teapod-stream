@@ -67,36 +67,40 @@ class _ModeSelector extends StatelessWidget {
             final (dir, lab, sub) = e.value;
             final active = routing.direction == dir;
             return Expanded(
-              child: GestureDetector(
-                onTap: locked ? null : () => onUpdate((r) => r.copyWith(direction: dir)),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
-                  decoration: BoxDecoration(
-                    color: active ? t.accentSoft : Colors.transparent,
-                    border: Border(right: idx < opts.length - 1 ? BorderSide(color: t.line) : BorderSide.none),
-                  ),
-                  child: Stack(
-                    children: [
-                      if (active) ...[
-                        Positioned(top: -1, left: -1, child: _NotchTick(color: t.accent, topLeft: true)),
-                        Positioned(bottom: -1, right: -1, child: _NotchTick(color: t.accent, topLeft: false)),
-                      ],
-                      Column(
-                        children: [
-                          Text(
-                            lab,
-                            style: AppTheme.mono(size: 12, color: active ? t.accent : t.text, letterSpacing: 1),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            sub,
-                            style: AppTheme.mono(size: 9, color: t.textMuted, letterSpacing: 0.5),
-                            textAlign: TextAlign.center,
-                          ),
+              child: Semantics(
+                button: true,
+                selected: active,
+                child: Pressable(
+                  onTap: locked ? null : () => onUpdate((r) => r.copyWith(direction: dir)),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+                    decoration: BoxDecoration(
+                      color: active ? t.accentSoft : Colors.transparent,
+                      border: Border(right: idx < opts.length - 1 ? BorderSide(color: t.line) : BorderSide.none),
+                    ),
+                    child: Stack(
+                      children: [
+                        if (active) ...[
+                          Positioned(top: -1, left: -1, child: _NotchTick(color: t.accent, topLeft: true)),
+                          Positioned(bottom: -1, right: -1, child: _NotchTick(color: t.accent, topLeft: false)),
                         ],
-                      ),
-                    ],
+                        Column(
+                          children: [
+                            Text(
+                              lab,
+                              style: AppTheme.mono(size: 12, color: active ? t.accent : t.text, letterSpacing: 1),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              sub,
+                              style: AppTheme.mono(size: 9, color: t.textMuted, letterSpacing: 0.5),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -182,9 +186,9 @@ class _ToggleWithChips extends StatelessWidget {
           if (enabled) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+              // The chips' 48 dp tap targets space the runs.
               child: Wrap(
                 spacing: 6,
-                runSpacing: 6,
                 children: [
                   for (var i = 0; i < chips.length; i++)
                     _SquareChip(
@@ -294,8 +298,9 @@ class _SquareChip extends StatelessWidget {
         : t.textDim;
     final bgColor = active ? t.accentSoft : Colors.transparent;
 
-    return GestureDetector(
+    return TapTarget(
       onTap: onTap,
+      selected: active,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(

@@ -16,6 +16,7 @@ import '../widgets/hero_panel.dart';
 import '../widgets/reconnect_banner.dart';
 import '../widgets/settings_shared.dart';
 import '../../l10n/l10n.dart';
+import '../widgets/tap_target.dart';
 
 /// Expert network settings: SOCKS, TUN, TLS fingerprint, observatory.
 class NetworkSettingsScreen extends ConsumerStatefulWidget {
@@ -383,7 +384,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                               ),
                             ),
                             const SizedBox(width: 16),
-                            GestureDetector(
+                            TapTarget(
                               onTap: locked
                                   ? () => showReadonlySnack(context)
                                   : () => _showFingerprintPicker(context, s),
@@ -763,7 +764,7 @@ class _PickerRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 16),
-          GestureDetector(
+          TapTarget(
             onTap: locked ? () => showReadonlySnack(context) : onTap,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

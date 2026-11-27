@@ -8,8 +8,10 @@ import '../../../core/models/app_settings.dart' show AppSettings, GeoPresets, Vp
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/hero_panel.dart';
+import '../../widgets/pressable.dart';
 import '../../widgets/reconnect_banner.dart';
 import '../../widgets/settings_shared.dart' show SetRowChev, SetSquareSwitch, SetToggleRow, saveSettings;
+import '../../widgets/tap_target.dart';
 import '../split_tunnel_screen.dart';
 import '../../../l10n/l10n.dart';
 
@@ -331,7 +333,7 @@ class _RoutingBody extends StatelessWidget {
 
               // 0x60 GEO.DATA
               _SectionHeader(t: t, addr: '0x60', label: 'geo.data'),
-              GestureDetector(
+              Pressable(
                 onTap: () => showModalBottomSheet<void>(
                   context: context,
                   isScrollControlled: true,

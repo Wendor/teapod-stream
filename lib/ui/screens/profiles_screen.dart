@@ -14,6 +14,8 @@ import '../theme/app_colors.dart';
 import '../widgets/import_review.dart';
 import '../widgets/breadcrumb_bar.dart';
 import '../widgets/hero_panel.dart';
+import '../widgets/pressable.dart';
+import '../widgets/settings_shared.dart' show SetToggleRow;
 import '../widgets/tap_target.dart';
 import '../../l10n/l10n.dart';
 
@@ -179,6 +181,7 @@ void _profShowCreateDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
                 hintStyle: AppTheme.mono(size: 12, color: t.textMuted),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 isDense: true,
+                constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
                 enabledBorder: OutlineInputBorder(
                   borderSide: BorderSide(color: t.line),
                   borderRadius: BorderRadius.zero,
@@ -190,14 +193,19 @@ void _profShowCreateDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
               ),
             ),
             const SizedBox(height: 14),
-            GestureDetector(
+            SetToggleRow(
+              value: copyFromCurrent,
+              checkbox: true,
               onTap: () => setState(() => copyFromCurrent = !copyFromCurrent),
-              child: Row(
-                children: [
-                  _CheckBox(t: t, value: copyFromCurrent),
-                  const SizedBox(width: 10),
-                  Text(context.l10n.profilesCopyCurrent, style: AppTheme.mono(size: 11, color: t.text)),
-                ],
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
+                child: Row(
+                  children: [
+                    _CheckBox(t: t, value: copyFromCurrent),
+                    const SizedBox(width: 10),
+                    Text(context.l10n.profilesCopyCurrent, style: AppTheme.mono(size: 11, color: t.text)),
+                  ],
+                ),
               ),
             ),
           ],
@@ -250,6 +258,7 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
                 hintStyle: AppTheme.mono(size: 10, color: t.textMuted),
                 contentPadding: const EdgeInsets.all(10),
                 isDense: true,
+                constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
                 enabledBorder: OutlineInputBorder(
                   borderSide: BorderSide(color: t.line),
                   borderRadius: BorderRadius.zero,
@@ -261,25 +270,35 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
               ),
             ),
             const SizedBox(height: 14),
-            GestureDetector(
+            SetToggleRow(
+              value: switchTo,
+              checkbox: true,
               onTap: () => setState(() => switchTo = !switchTo),
-              child: Row(
-                children: [
-                  _CheckBox(t: t, value: switchTo),
-                  const SizedBox(width: 10),
-                  Text(context.l10n.profilesSwitchAfterImport, style: AppTheme.mono(size: 11, color: t.text)),
-                ],
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
+                child: Row(
+                  children: [
+                    _CheckBox(t: t, value: switchTo),
+                    const SizedBox(width: 10),
+                    Text(context.l10n.profilesSwitchAfterImport, style: AppTheme.mono(size: 11, color: t.text)),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 8),
-            GestureDetector(
+            SetToggleRow(
+              value: makeReadonly,
+              checkbox: true,
               onTap: () => setState(() => makeReadonly = !makeReadonly),
-              child: Row(
-                children: [
-                  _CheckBox(t: t, value: makeReadonly),
-                  const SizedBox(width: 10),
-                  Text(context.l10n.profilesReadonly, style: AppTheme.mono(size: 11, color: t.text)),
-                ],
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
+                child: Row(
+                  children: [
+                    _CheckBox(t: t, value: makeReadonly),
+                    const SizedBox(width: 10),
+                    Text(context.l10n.profilesReadonly, style: AppTheme.mono(size: 11, color: t.text)),
+                  ],
+                ),
               ),
             ),
           ],
@@ -399,6 +418,7 @@ void _showRenameDialog(BuildContext context, WidgetRef ref, Profile profile, Tea
         decoration: InputDecoration(
           contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           isDense: true,
+          constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
           enabledBorder: OutlineInputBorder(
             borderSide: BorderSide(color: t.line),
             borderRadius: BorderRadius.zero,
@@ -572,7 +592,7 @@ class _ProfileCard extends StatelessWidget {
     final borderColor = isActive ? t.accent : t.line;
     final hexAddr = '0x${addr.toString().padLeft(2, '0')}';
 
-    return GestureDetector(
+    return Pressable(
       onTap: onTap,
       onLongPress: onActions,
       child: Container(
@@ -717,7 +737,7 @@ class _ActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Pressable(
       onTap: onTap,
       child: Container(
         width: double.infinity,
@@ -743,7 +763,7 @@ class _ExportRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Pressable(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),

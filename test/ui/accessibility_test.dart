@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:teapodstream/core/models/app_settings.dart';
+import 'package:teapodstream/core/models/subscription.dart';
 import 'package:teapodstream/ui/screens/add_config_screen.dart';
 import 'package:teapodstream/ui/screens/configs/configs_screen.dart';
 import 'package:teapodstream/ui/screens/dns_settings_screen.dart';
@@ -53,4 +54,49 @@ void main() {
       handle.dispose();
     });
   }
+
+  Future<void> expectGuidelines(WidgetTester tester) async {
+    await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+    await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+  }
+
+  testWidgets('configs: a subscription group meets the guidelines', (tester) async {
+    final handle = tester.ensureSemantics();
+    await setUpScreenTest(
+      configs: [
+        testConfig('1'),
+        testConfig('2', subId: 's'),
+      ],
+      subscriptions: [
+        Subscription(id: 's', name: 'S', url: 'https://subs.example/x', createdAt: DateTime(2026), announce: 'News'),
+      ],
+    );
+    final c = await pumpScreen(tester, const ConfigsScreen());
+    await expectGuidelines(tester);
+    await unmount(tester, c);
+    handle.dispose();
+  });
+
+  testWidgets('profiles: the create dialog meets the guidelines', (tester) async {
+    final handle = tester.ensureSemantics();
+    await setUpScreenTest();
+    final c = await pumpScreen(tester, const ProfilesScreen());
+    await tester.tap(find.byIcon(Icons.add_rounded));
+    await settle(tester);
+    expect(find.byType(Dialog), findsOneWidget);
+    await expectGuidelines(tester);
+    await unmount(tester, c);
+    handle.dispose();
+  });
+
+  testWidgets('home: the server picker sheet meets the guidelines', (tester) async {
+    final handle = tester.ensureSemantics();
+    await setUpScreenTest(configs: [testConfig('1'), testConfig('2')], activeId: '1');
+    final c = await pumpScreen(tester, const HomeScreen());
+    await tester.tap(find.bySemanticsLabel(RegExp('change server')));
+    await settle(tester);
+    await expectGuidelines(tester);
+    await unmount(tester, c);
+    handle.dispose();
+  });
 }

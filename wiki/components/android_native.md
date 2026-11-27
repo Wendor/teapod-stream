@@ -74,7 +74,7 @@ desired state its session was started for (`connectedDesired`), and a start repl
   and costs only the quick start, not the session). Before the old session stops, `sessionAttempt` takes Flutter's
   connect attempt (`EXTRA_ATTEMPT`), and every snapshot the session
   publishes carries it as `attempt` (quick starts reset it to 0 — untagged); if a session is running this is a **hot
-  switch** — `stopVpn(reconnecting=true)` keeps TUN as a sink until the new session is up, no leak window.
+  switch** — `stopVpn(mayKeepSink = true, reconnecting = true)` keeps TUN as a sink until the new session is up, no leak window.
 - **`ACTION_CONNECT_QUICK`** (tile, the `blocked` notification, boot) and the START_STICKY restart
   start from one request, `QuickConnectStore.quickStart()` (so do reconnects and retries; without a stored one they
   reuse the session's own request). `ACTION_CONNECT_QUICK` is ignored while a session is wanted and running or being
@@ -119,7 +119,7 @@ phantom connection, and the heartbeat's own tun2socks check stays as a fallback.
 
 ## Kill switch and reconnect
 
-- **TUN fd reuse.** `stopVpn(reconnecting=true)` keeps TUN open, and `startVpn` of a request with `reconnect = true`
+- **TUN fd reuse.** `stopVpn(mayKeepSink = true, reconnecting = true)` keeps TUN open, and `startVpn` of a request with `reconnect = true`
   whose `ConnectionParams` are the ones the TUN was built with (`tunParams`) passes the **same fd** to the core
   instead of a new `establish()` (tun2socks works on its own `dup`). No new VPN network agent, so no system "VPN
   active" notification on Android 15/16 and no connectivity flap for apps; traffic during the reconnect goes into the

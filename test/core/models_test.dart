@@ -11,8 +11,9 @@ void main() {
     expect(HeartbeatSettings.fromJson({'failureThreshold': 0}).failureThreshold, 1);
     expect(HeartbeatSettings.fromJson({'failureThreshold': 50}).failureThreshold, 10);
     expect(HeartbeatSettings.fromJson({'failureThreshold': 4}).failureThreshold, 4);
-    final low = MuxSettings.fromJson({'concurrency': 0, 'xudpConcurrency': -1});
-    expect((low.concurrency, low.xudpConcurrency), (1, 1));
+    // Below 1 are xray sentinels (Mux off for TCP / UDP, UDP the TCP way): kept as stored.
+    final sentinels = MuxSettings.fromJson({'concurrency': -1, 'xudpConcurrency': 0});
+    expect((sentinels.concurrency, sentinels.xudpConcurrency), (-1, 0));
     final high = MuxSettings.fromJson({'concurrency': 5000, 'xudpConcurrency': 2000});
     expect((high.concurrency, high.xudpConcurrency), (1024, 1024));
   });

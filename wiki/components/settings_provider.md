@@ -19,7 +19,8 @@ and when the screen closes with the field focused — not per key: every write s
 the native flags. **Limits** are named in the models (`SettingLimits`): `AppSettings.socksPortLimits` (1024–65535),
 `mtuLimits` (576–9000, as native `ConnectionParams`), `obsProbeIntervalLimits` (0–86400 s),
 `MuxSettings.concurrencyLimits` (1–1024), `HeartbeatSettings.failureThresholdLimits` (1–10); the screens clamp a typed
-value to them and `fromJson` clamps a stored or imported one.
+value to them and `fromJson` clamps a stored or imported one — except a Mux concurrency below 1, an xray sentinel
+(negative: Mux off for TCP / UDP; `xudpConcurrency: 0`: UDP the TCP way), which is kept as stored.
 
 **Native flags.** `BootReceiver` reads `flutter.auto_start_on_boot`, `XrayVpnService` `flutter.automation_enabled`
 from SharedPreferences: `SettingsService.mirrorNative` writes both after every change of the active settings (a save,

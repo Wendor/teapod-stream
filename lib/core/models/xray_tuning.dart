@@ -107,8 +107,15 @@ enum XudpUdp443 { reject, allow, skip }
 
 /// Multiplexing several connections into one (xray `mux`).
 class MuxSettings {
-  /// Limits of [concurrency] and [xudpConcurrency].
+  /// Limits of [concurrency] and [xudpConcurrency] that the settings screen enters.
   static const SettingLimits concurrencyLimits = (min: 1, max: 1024);
+
+  /// A stored value below 1 is an xray sentinel and is kept (a negative one turns Mux off for TCP or UDP,
+  /// `xudpConcurrency: 0` sends UDP the TCP way); only the upper limit applies.
+  static int _stored(Object? json, int fallback) {
+    final n = json as int? ?? fallback;
+    return n < concurrencyLimits.min ? n : concurrencyLimits.clamp(n);
+  }
 
   final bool enabled;
 
@@ -144,8 +151,8 @@ class MuxSettings {
 
   static MuxSettings fromJson(Map<String, dynamic> json) => MuxSettings(
     enabled: json['enabled'] as bool? ?? false,
-    concurrency: concurrencyLimits.clamp(json['concurrency'] as int? ?? 8),
-    xudpConcurrency: concurrencyLimits.clamp(json['xudpConcurrency'] as int? ?? 16),
+    concurrency: _stored(json['concurrency'], 8),
+    xudpConcurrency: _stored(json['xudpConcurrency'], 16),
     xudpProxyUDP443: XudpUdp443.values.firstWhere(
       (e) => e.name == json['xudpProxyUDP443'],
       orElse: () => XudpUdp443.reject,

@@ -20,6 +20,7 @@ import 'providers/theme_provider.dart';
 import 'providers/locale_provider.dart';
 import 'ui/deeplink_handler.dart';
 import 'protocols/xray/xray_engine.dart';
+import 'ui/theme/app_text_scaler.dart';
 import 'itest/itest_agent.dart';
 import 'itest/itest_protocol.dart';
 
@@ -61,7 +62,7 @@ class _TeapodMaterialApp extends ConsumerWidget {
       builder: (ctx, child) {
         L10n.current = ctx.l10n;
         return MediaQuery(
-          data: MediaQuery.of(ctx).copyWith(textScaler: TextScaler.linear(fontScale)),
+          data: MediaQuery.of(ctx).copyWith(textScaler: appTextScaler(MediaQuery.textScalerOf(ctx), fontScale)),
           child: child!,
         );
       },

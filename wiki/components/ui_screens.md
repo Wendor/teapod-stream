@@ -79,7 +79,9 @@ anyway ([profiles](profiles.md)).
 
 `lib/ui/theme/`: `AppTheme.build(brightness, accent)` with the `TeapodTokens` extension (`bg`, `bgElev`, `bgSunken`,
 `accent`, `accentSoft`, `text`, `textDim`, `textMuted`, `line`, `lineSoft`, `danger`); `AppTheme.mono` / `sans`
-text helpers (minimum 11 px). Font scale (`fontScale`) applies through the app's `textScaler`.
+text helpers (minimum 11 px). Text follows the system font size: the app's `textScaler` is the system one (Android's font size and accessibility
+scaling) times the app's font setting (`fontScale`: 1.0 or 1.2), capped at 2.0 (`appTextScaler`,
+`theme/app_text_scaler.dart`). Layouts at large sizes are checked on a device: the test font is wider than the real ones.
 
 ## Conventions
 

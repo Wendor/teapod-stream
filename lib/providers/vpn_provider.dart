@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -25,7 +26,9 @@ import 'profile_provider.dart';
 import 'vpn_session.dart';
 import '../core/models/app_message.dart';
 
-class VpnState2 {
+/// What [vpnProvider] publishes: the connection state with its reason and, while connected, the session's SOCKS
+/// endpoint and the fingerprint of the settings it runs with.
+class VpnStatus {
   final VpnState connectionState;
   final AppMessage? error;
 
@@ -39,7 +42,7 @@ class VpnState2 {
   /// null — no active connection or the fingerprint is unknown.
   final String? appliedFingerprint;
 
-  const VpnState2({
+  const VpnStatus({
     this.connectionState = VpnState.disconnected,
     this.error,
     this.connectedAt,
@@ -61,8 +64,8 @@ class VpnState2 {
       isConnected && activeSocksPort > 0 ? TunnelSocks(activeSocksPort, activeSocksUser, activeSocksPassword) : null;
 
   /// The fingerprint; the connection state and its reason come only from [VpnSession.view].
-  VpnState2 copyWith({String? appliedFingerprint}) {
-    return VpnState2(
+  VpnStatus copyWith({String? appliedFingerprint}) {
+    return VpnStatus(
       connectionState: connectionState,
       error: error,
       connectedAt: connectedAt,
@@ -92,7 +95,7 @@ class TunnelSocksNotifier extends Notifier<TunnelSocks?> {
   }
 }
 
-class VpnNotifier extends Notifier<VpnState2> {
+class VpnNotifier extends Notifier<VpnStatus> {
   late final XrayEngine _engine;
 
   StreamSubscription<dynamic>? _eventSub;
@@ -113,7 +116,7 @@ class VpnNotifier extends Notifier<VpnState2> {
       state.isConnected && _connectedConfig?.id == c.id && _connectedConfig?.rawUri == c.rawUri;
 
   @override
-  VpnState2 build() {
+  VpnStatus build() {
     _engine = ref.read(xrayEngineProvider);
     listenSelf((prev, next) {
       ref.read(tunnelSocksProvider.notifier).set(next.tunnelSocks);
@@ -153,7 +156,7 @@ class VpnNotifier extends Notifier<VpnState2> {
       }
     });
 
-    return const VpnState2();
+    return const VpnStatus();
   }
 
   void _handleEvent(Map<String, dynamic> event) {
@@ -208,7 +211,7 @@ class VpnNotifier extends Notifier<VpnState2> {
       _connectedAt = null;
       _connectedConfig = null;
     }
-    state = VpnState2(
+    state = VpnStatus(
       connectionState: v.state,
       error: v.error,
       connectedAt: connected ? _connectedAt : null,
@@ -605,6 +608,7 @@ class VpnNotifier extends Notifier<VpnState2> {
   /// Runs a profile switch ([body] returns false — nothing switched), then makes the VPN follow the
   /// final state: a profile no core runs disconnects (as a core change does), a live tunnel is
   /// rebuilt if stale, a core change suppressed meanwhile is handled, an idle VPN saves the quick-connect parameters.
+  @visibleForTesting
   Future<void> duringProfileSwitch(Future<bool> Function() body) => _queued(() => _profileSwitch(body));
 
   Future<void> _profileSwitch(Future<bool> Function() body) async {
@@ -664,7 +668,7 @@ final _quickConnectSourceProvider = Provider<Object?>((ref) {
   );
 });
 
-final vpnProvider = NotifierProvider<VpnNotifier, VpnState2>(VpnNotifier.new);
+final vpnProvider = NotifierProvider<VpnNotifier, VpnStatus>(VpnNotifier.new);
 
 // Convenience selector for connection state
 final vpnConnectionStateProvider = Provider<VpnState>((ref) {
@@ -681,7 +685,7 @@ final pendingReconnectProvider = Provider<bool>(
   ),
 );
 
-bool _settingsStale(VpnState2 vpn, AppSettings? s, ({CoreKind? kind})? core) {
+bool _settingsStale(VpnStatus vpn, AppSettings? s, ({CoreKind? kind})? core) {
   if (!vpn.isConnected || vpn.appliedFingerprint == null || s == null) return false;
   return connectionFingerprint(s, core: core?.kind) != vpn.appliedFingerprint;
 }

@@ -11,7 +11,7 @@ below). Reconnects on
 network change and heartbeat failure happen **natively** ([android_native](android_native.md)); Flutter only mirrors
 them.
 
-## State: `VpnState2`
+## State: `VpnStatus`
 
 | Field | Meaning |
 |---|---|
@@ -169,8 +169,9 @@ then rebuilt on the chosen config. One run at a time; logged with `source: urlte
 
 `VpnStatsNotifier` follows `connected`: `getStats` every second while connected, the duration from `connectedAt`;
 reset when the session ends; a late answer after a drop is ignored. `pause()` / `resume()` from the app's lifecycle
-(no per-second channel calls in the background). The chart's `getStatsHistory` is pulled only while the Home tab is
-visible (`setChartVisible`), incrementally by `(epoch, seq)`: a continuation is appended, anything else reloads the
+(no per-second channel calls in the background). The chart's history comes only while the Home tab is visible
+(`setChartVisible`): in the same `getStats` call (with `epoch` / `since`), and by `getStatsHistory` for the immediate
+catch-up when the polling starts or the tab shows; incrementally by `(epoch, seq)`: a continuation is appended, anything else reloads the
 buffer (at most 300 points); `statsHistory` events go the same way.
 
 ## Ping

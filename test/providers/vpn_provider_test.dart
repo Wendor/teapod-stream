@@ -141,7 +141,23 @@ class _Native {
         final ms = outboundMs.entries.where((e) => cfg.contains(e.key)).firstOrNull?.value;
         return outboundGate == null ? ms : outboundGate!.then((_) => ms);
       case 'getStats':
-        return {'upload': 10, 'download': 20, 'uploadSpeed': 1, 'downloadSpeed': 2};
+        final args = call.arguments as Map?;
+        return {
+          'upload': 10,
+          'download': 20,
+          'uploadSpeed': 1,
+          'downloadSpeed': 2,
+          if (args != null)
+            'history': {
+              'epoch': 1,
+              'seq': 1,
+              'from': args['since'],
+              'full': args['epoch'] != 1,
+              'history': [
+                {'timestamp': 0, 'uploadSpeed': 5, 'downloadSpeed': 6},
+              ],
+            },
+        };
     }
     return null;
   }
@@ -189,7 +205,7 @@ void main() {
 
   VpnNotifier n() => c.read(vpnProvider.notifier);
   VpnStats stats() => c.read(vpnStatsProvider);
-  VpnState2 st() => c.read(vpnProvider);
+  VpnStatus st() => c.read(vpnProvider);
   List<VpnLogEntry> logs() => c.read(logServiceProvider);
   void emit(Map<String, Object?> event) => native.sink!.success(event);
 
@@ -1783,6 +1799,19 @@ void main() {
       expect(stats().uploadBytes, 10);
       expect(stats().downloadSpeedBps, 2);
       c.read(vpnStatsProvider.notifier).pause();
+    });
+
+    test('with the chart on screen a tick is one call that also carries the history', () async {
+      await connected();
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+      await _settle();
+      c.read(vpnStatsProvider.notifier).pause();
+      final polls = native.named('getStats');
+      expect(polls, isNotEmpty);
+      expect(polls.first.arguments, {'epoch': -1, 'since': 0});
+      expect(stats().speedHistory.map((p) => p.uploadSpeed), [5]);
+      // Only the catch-up when the polling started asks for the history on its own.
+      expect(native.named('getStatsHistory'), hasLength(1));
     });
 
     test("a session connecting in the background doesn't start the stats polling", () async {

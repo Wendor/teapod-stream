@@ -50,7 +50,7 @@ class _HeaderStrip extends StatelessWidget {
 
 class _HeroPanel extends StatelessWidget {
   final TeapodTokens t;
-  final VpnState2 vpnState;
+  final VpnStatus vpnState;
   final String protoLabel;
   final int? pingMs;
   final bool canToggle;
@@ -119,7 +119,7 @@ class _HeroPanel extends StatelessWidget {
 
 class _StateInfo extends ConsumerWidget {
   final TeapodTokens t;
-  final VpnState2 vpnState;
+  final VpnStatus vpnState;
   final int? pingMs;
 
   const _StateInfo({required this.t, required this.vpnState, this.pingMs});

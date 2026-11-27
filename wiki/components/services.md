@@ -97,7 +97,9 @@ app itself is excluded from the VPN, so without it the app's own requests would 
 
 ## LogService
 
-`Notifier<List<VpnLogEntry>>` over a ring buffer of `AppConstants.maxLogEntries` (1000). `add`, `addInfo/Warning/
+`Notifier<List<VpnLogEntry>>` keeping the newest `AppConstants.maxLogEntries` (1000) in an append-only array of
+twice that size: a line costs O(1), each published list is a view nothing writes into again (a full array moves the
+kept entries to a new one). `add`, `addInfo/Warning/
 Error/Debug`, `loadFromEntries` (restores the native `vpn_log.txt` on start), `clear`. The native side writes the
 file; when `logsEnabled` is off it writes only warnings and errors.
 

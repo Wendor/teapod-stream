@@ -1,48 +1,74 @@
+import 'dart:collection';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../constants/app_constants.dart';
 import '../models/subscription.dart';
 import '../models/vpn_config.dart';
 import '../models/vpn_log_entry.dart';
 
-class _CircularBuffer {
-  final List<VpnLogEntry?> _buffer;
-  int _head = 0;
-  int _count = 0;
+/// The newest [capacity] entries in an append-only array of twice that size. [view] is O(1) and never changes: later
+/// appends write past its end, and when the array is full the kept entries move to a new one.
+class _LogBuffer {
+  final int capacity;
+  List<VpnLogEntry?> _items;
+  int _start = 0;
+  int _end = 0;
 
-  _CircularBuffer(int capacity) : _buffer = List<VpnLogEntry?>.filled(capacity, null);
+  _LogBuffer(this.capacity) : _items = List<VpnLogEntry?>.filled(capacity * 2, null);
 
   void add(VpnLogEntry entry) {
-    _buffer[_head] = entry;
-    _head = (_head + 1) % _buffer.length;
-    if (_count < _buffer.length) _count++;
+    if (_end == _items.length) {
+      _items = List<VpnLogEntry?>.filled(capacity * 2, null)..setRange(0, _end - _start, _items, _start);
+      _end -= _start;
+      _start = 0;
+    }
+    _items[_end++] = entry;
+    if (_end - _start > capacity) _start++;
   }
 
   void clear() {
-    _head = 0;
-    _count = 0;
-    _buffer.fillRange(0, _buffer.length, null);
+    _items = List<VpnLogEntry?>.filled(capacity * 2, null);
+    _start = 0;
+    _end = 0;
   }
 
-  List<VpnLogEntry> toList() {
-    if (_count < _buffer.length) {
-      return _buffer.whereType<VpnLogEntry>().toList();
-    }
-    return List.generate(_buffer.length, (i) => _buffer[(_head + i) % _buffer.length]!);
-  }
+  List<VpnLogEntry> get view => _LogView(_items, _start, _end);
 }
 
+/// Entries [_start]..[_end] of an array nothing writes there any more.
+class _LogView extends ListBase<VpnLogEntry> {
+  final List<VpnLogEntry?> _items;
+  final int _start;
+  final int _end;
+
+  _LogView(this._items, this._start, this._end);
+
+  @override
+  int get length => _end - _start;
+
+  @override
+  set length(int _) => throw UnsupportedError('The log is read-only');
+
+  @override
+  VpnLogEntry operator [](int index) => _items[_start + RangeError.checkValidIndex(index, this)]!;
+
+  @override
+  void operator []=(int index, VpnLogEntry value) => throw UnsupportedError('The log is read-only');
+}
+
+/// The log lines shown in the app. Every change publishes a new list; a line costs O(1), not a copy of the buffer.
 class LogService extends Notifier<List<VpnLogEntry>> {
-  late final _CircularBuffer _buffer;
+  late final _LogBuffer _buffer;
 
   @override
   List<VpnLogEntry> build() {
-    _buffer = _CircularBuffer(AppConstants.maxLogEntries);
-    return [];
+    _buffer = _LogBuffer(AppConstants.maxLogEntries);
+    return const [];
   }
 
   void add(VpnLogEntry entry) {
     _buffer.add(entry);
-    state = _buffer.toList();
+    state = _buffer.view;
   }
 
   void addInfo(String message, {String? source}) => add(VpnLogEntry.info(message, source: source));
@@ -58,12 +84,12 @@ class LogService extends Notifier<List<VpnLogEntry>> {
     for (final e in entries) {
       _buffer.add(e);
     }
-    state = _buffer.toList();
+    state = _buffer.view;
   }
 
   void clear() {
     _buffer.clear();
-    state = [];
+    state = const [];
   }
 }
 

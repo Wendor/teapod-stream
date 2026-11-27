@@ -42,15 +42,13 @@ internal class VpnChannelHandler(
         },
         // The same map as the `state` event: Flutter parses both with one parser
         "getState" to { _, result -> result.success(XrayVpnService.snapshot.toMap()) },
-        "getStats" to { _, result -> result.success(SessionStats.get()) },
-        "getStatsHistory" to { call, result ->
-            result.success(
-                SessionStats.history(
-                    call.argument<Int>("epoch") ?: -1,
-                    (call.argument<Number>("since") ?: 0).toLong(),
-                )
-            )
+        // With `epoch`, also the chart history after `since` in `history`: the home tab's poll is one call a second.
+        "getStats" to { call, result ->
+            val stats: MutableMap<String, Any> = SessionStats.get().toMutableMap()
+            call.argument<Int>("epoch")?.let { stats["history"] = history(it, call) }
+            result.success(stats)
         },
+        "getStatsHistory" to { call, result -> result.success(history(call.argument<Int>("epoch") ?: -1, call)) },
         "getTunnelDiag" to { _, result -> result.success(VpnCores.get(XrayVpnService.snapshot.core).diagnostics()) },
         "ping" to { call, result ->
             val address = call.argument<String>("address") ?: ""
@@ -168,6 +166,10 @@ internal class VpnChannelHandler(
         }
         work.answer(result, ChannelWork.quickConnect) { quickConnect.save(args, seen) }
     }
+
+    /** The chart points after the call's `since` of [epoch] ([SessionStats.history]). */
+    private fun history(epoch: Int, call: MethodCall) =
+        SessionStats.history(epoch, (call.argument<Number>("since") ?: 0).toLong())
 
     private fun sessionRunning() =
         XrayVpnService.snapshot.state !in setOf(SessionState.DISCONNECTED, SessionState.ERROR)

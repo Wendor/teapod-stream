@@ -36,6 +36,20 @@ void main() {
     expect(m.last, '${n - 1}');
   });
 
+  test('a published list never changes, however many lines come after it', () {
+    log().addInfo('first');
+    final early = c.read(logServiceProvider);
+    for (var i = 0; i < 3 * AppConstants.maxLogEntries; i++) {
+      log().addInfo('$i');
+    }
+    expect(early.map((e) => e.message), ['first']);
+    expect(() => early[0] = VpnLogEntry.info('x'), throwsUnsupportedError);
+    final m = messages();
+    expect(m, hasLength(AppConstants.maxLogEntries));
+    expect(m.last, '${3 * AppConstants.maxLogEntries - 1}');
+    expect(m.first, '${2 * AppConstants.maxLogEntries}');
+  });
+
   test('loadFromEntries replaces content', () {
     log().addInfo('old');
     log().loadFromEntries([VpnLogEntry.info('a'), VpnLogEntry.info('b')]);

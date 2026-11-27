@@ -203,6 +203,18 @@ void main() {
       expect((await XrayEngine().getStats()).upload, 0);
     });
 
+    test('getStats asks for the history only when told to and returns it', () async {
+      reply = (_) => {
+        'upload': 1,
+        'history': {'epoch': 2},
+      };
+      expect((await XrayEngine().getStats(history: (epoch: 3, since: 7))).history, {'epoch': 2});
+      expect(calls.last.arguments, {'epoch': 3, 'since': 7});
+      reply = (_) => {'upload': 1};
+      expect((await XrayEngine().getStats()).history, isNull);
+      expect(calls.last.arguments, isNull);
+    });
+
     test('getStatsHistory passes epoch and since', () async {
       reply = (_) => {'epoch': 1};
       expect(await XrayEngine().getStatsHistory(3, 7), {'epoch': 1});

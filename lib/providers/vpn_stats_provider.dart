@@ -6,8 +6,8 @@ import '../core/models/vpn_stats.dart';
 import '../protocols/xray/xray_engine.dart';
 import 'vpn_provider.dart';
 
-/// Traffic of the running session: `getStats` every second while connected (paused in the background) and the
-/// chart's speed history, pulled only while the home tab shows it. Reset when the session ends.
+/// Traffic of the running session: `getStats` every second while connected (paused in the background), carrying the
+/// chart's speed history while the home tab shows it — one channel call per tick. Reset when the session ends.
 class VpnStatsNotifier extends Notifier<VpnStats> {
   late XrayEngine _engine;
   Timer? _poller;
@@ -74,9 +74,11 @@ class VpnStatsNotifier extends Notifier<VpnStats> {
       _poller = Timer.periodic(const Duration(seconds: 1), (_) async {
         if (!_connected) return;
         try {
-          _apply(await _engine.getStats());
-          // History is needed only for the chart
-          if (_chartVisible) await _pullHistory();
+          // History is needed only for the chart; it comes in the same call. Not while a catch-up is in flight.
+          final withHistory = _chartVisible && !_historyFetching;
+          final s = await _engine.getStats(history: withHistory ? (epoch: _historyEpoch, since: _historySeq) : null);
+          _apply(s);
+          if (s.history case final history?) _applyHistory(history);
         } catch (_) {}
       });
     }
@@ -96,7 +98,7 @@ class VpnStatsNotifier extends Notifier<VpnStats> {
     if (visible && _connected) _pullHistory().ignore();
   }
 
-  void _apply(({int upload, int download, int uploadSpeed, int downloadSpeed}) s) {
+  void _apply(({int upload, int download, int uploadSpeed, int downloadSpeed, Map<Object?, Object?>? history}) s) {
     // A late response after a drop.
     if (!_connected) return;
     final connectedAt = ref.read(vpnProvider).connectedAt;

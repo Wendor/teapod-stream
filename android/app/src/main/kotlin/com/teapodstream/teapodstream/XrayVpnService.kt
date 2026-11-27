@@ -17,6 +17,7 @@ import com.teapodstream.teapodstream.core.CoreKind
 import com.teapodstream.teapodstream.core.CoreStartParams
 import com.teapodstream.teapodstream.core.VpnCore
 import com.teapodstream.teapodstream.core.VpnCores
+import com.teapodstream.teapodstream.core.VpnMode
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.Socket
@@ -136,6 +137,7 @@ class XrayVpnService : VpnService() {
         override val deviceIdle get() = screen.deviceIdle
         override val core get() = this@XrayVpnService.core
         override val params get() = this@XrayVpnService.params
+        override val socks get() = session.get().let { Heartbeat.Socks(it.socksPort, it.socksUser, it.socksPassword) }
         override val connectedAt get() = lastConnectedMs
         override fun directInternet() = hasDirectInternet()
         override fun reconnect(session: Long?) = reconnectInternal(session)
@@ -341,8 +343,8 @@ class XrayVpnService : VpnService() {
     }
 
     /** SOCKS login/password from the saved config in the format of core [engine]. */
-    private fun extractSocksFromConfig(configJson: String, engine: String): Pair<String, String> =
-        VpnCores.get(CoreKind.fromId(engine)).socksCredentials(configJson)
+    private fun extractSocksFromConfig(configJson: String, engine: CoreKind): Pair<String, String> =
+        VpnCores.get(engine).socksCredentials(configJson)
 
     private fun openApp() {
         packageManager.getLaunchIntentForPackage(packageName)
@@ -377,7 +379,7 @@ class XrayVpnService : VpnService() {
         useParams(request.params)
         // The previous session's notification type stayed until here: switch the foreground one to this session's.
         if (notificationTypeChanged) notifications.foreground()
-        sessionCore = VpnCores.get(CoreKind.fromId(engine))
+        sessionCore = VpnCores.get(engine)
         // Keep the previous TUN (kill-switch sink left by a reconnect) open until the
         // new one is established: establish() atomically replaces the interface, so
         // app traffic is blackholed by the old TUN instead of leaking while xray starts.
@@ -484,7 +486,7 @@ class XrayVpnService : VpnService() {
                         builder.addRoute("::", 0)
                     }
 
-                    if (vpnMode == "onlySelected") {
+                    if (vpnMode == VpnMode.ONLY_SELECTED) {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                             for (pkg in includedPackages) {
                                 try {
@@ -583,21 +585,21 @@ class XrayVpnService : VpnService() {
 
     /**
      * Resolves UIDs for the given package lists based on vpnMode.
-     * In "onlySelected" mode returns allowed UIDs; otherwise returns excluded UIDs
+     * In [VpnMode.ONLY_SELECTED] mode returns allowed UIDs; otherwise returns excluded UIDs
      * (including the app's own UID to prevent routing loops).
      */
     private fun resolveUids(
-        vpnMode: String,
+        vpnMode: VpnMode,
         includedPackages: List<String>,
         excludedPackages: List<String>,
     ): Set<Int> {
         val uids = mutableSetOf<Int>()
-        val packages = if (vpnMode == "onlySelected") includedPackages else excludedPackages
+        val packages = if (vpnMode == VpnMode.ONLY_SELECTED) includedPackages else excludedPackages
         for (pkg in packages) {
             try {
                 val uid = packageManager.getPackageUid(pkg, PackageManager.GET_META_DATA)
                 uids.add(uid)
-                log("info", "${if (vpnMode == "onlySelected") "Allowed" else "Excluded"} UID for $pkg: $uid")
+                log("info", "${if (vpnMode == VpnMode.ONLY_SELECTED) "Allowed" else "Excluded"} UID for $pkg: $uid")
             } catch (e: Exception) {
                 log("warning", "Failed to get UID for $pkg: ${e.message}")
             }
@@ -605,7 +607,7 @@ class XrayVpnService : VpnService() {
 
         try {
             val ownUid = packageManager.getPackageUid(packageName, PackageManager.GET_META_DATA)
-            if (vpnMode == "onlySelected") {
+            if (vpnMode == VpnMode.ONLY_SELECTED) {
                 if (uids.remove(ownUid)) {
                     log("info", "Removed own UID ($ownUid) from Allowed list to prevent loop")
                 }

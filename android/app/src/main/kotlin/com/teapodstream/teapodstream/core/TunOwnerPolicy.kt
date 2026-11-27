@@ -80,13 +80,13 @@ internal class TunOwnerPolicy(
         private const val INVALID_UID = -1
 
         fun of(
-            vpnMode: String,
+            vpnMode: VpnMode,
             listedUids: Set<Int>,
             excludedPackages: Collection<String>,
             allowTethering: Boolean,
             tunDns: String = "",
         ) = TunOwnerPolicy(
-            onlySelected = vpnMode == "onlySelected",
+            onlySelected = vpnMode == VpnMode.ONLY_SELECTED,
             listedUids = listedUids,
             // Go: exclusions exist and the user did not opt into tethering.
             blockUnowned = excludedPackages.isNotEmpty() && !allowTethering,

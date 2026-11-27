@@ -22,7 +22,7 @@ back. It keeps working when the Flutter UI is gone (tile, boot, Tasker, service 
 | `SessionSnapshot.kt` | `SessionState` (the state names Flutter sees) and the immutable `SessionSnapshot`: its map for Flutter, the itest marker, the pure transition `moved` |
 | `core/` | `VpnCore` and its implementations (below), `TunOwnerPolicy`, `SocksCredentials`, `ProxyRedirect` |
 | `VpnEventStreamHandler.kt` | EventChannel (`com.teapodstream/vpn/events`) singleton |
-| `ConnectionParams.kt` | the session parameters (everything but the config and the SOCKS login): one JSON form for the `ACTION_CONNECT` Intent (`EXTRA_PARAMS`) and the stored parameters; `fromJson` holds every default and limit (MTU 576–9000, heartbeat threshold 1–10), `fromArgs` maps Flutter's `connect` / `saveQuickConnect` arguments through it |
+| `ConnectionParams.kt` | the session parameters (everything but the config and the SOCKS login): one JSON form for the `ACTION_CONNECT` Intent (`EXTRA_PARAMS`) and the stored parameters; `fromJson` holds every default and limit (MTU 576–9000, heartbeat threshold 1–10) and parses the choices into enums once (`VpnMode`, `HeartbeatProbe`, `HeartbeatAction`, `CoreKind`; JSON keeps their ids; missing or unknown → the default, unknown with a logcat line), `fromArgs` maps Flutter's `connect` / `saveQuickConnect` arguments through it |
 | `QuickConnectStore.kt` | the quick-reconnect data in `filesDir`, its only reader and writer: the core config (`xray_config.json`), `ConnectionParams` (`last_connection_meta.json`), the SOCKS login (`socks_creds.json`), the tile's config name (`tile_config_name.txt`) and the user-off flag (`user_disconnected.flag`); writes go through a temp file and a rename. `quickStart()` builds the `StartRequest` (config, params, SOCKS login — the stored one, else read from the config — the Flutter `attempt` it answers, 0 for a native start, `reconnect` and the tile's config name — Flutter's, or the stored one read with the config — which the session's save writes back with it) that `startVpn(request)` takes |
 | `VpnTileService.kt` | Quick Settings tile; not an active tile — the system asks for its state whenever it is shown, so a force-stopped process leaves no stale "connected" |
 | `BootReceiver.kt` | auto-start after boot (`autoStartOnBoot`, a saved config, not after an explicit disconnect) |
@@ -165,7 +165,7 @@ excluded from TUN; otherwise VALIDATED first, then Wi-Fi) and sets it as the und
 
 A background thread probes every 15 s (60 s with the screen off; skipped in deep Doze) and acts after
 `heartbeatThreshold` failures in a row. The counters, warm-up and cooldown are `HeartbeatPolicy`'s; the thread probes
-and applies its actions. A failure below the threshold is retried twice, 3 s apart; a passed retry clears the count.
+and applies its actions; it reads the session (parameters, SOCKS port and login, core) only through its `Heartbeat.Host`, which the service implements. A failure below the threshold is retried twice, 3 s apart; a passed retry clears the count.
 
 - **Probe** (`Heartbeat.probe`): `socks` — HTTP through the local SOCKS to `heartbeatUrl`, any 2xx (`SocksHttpProbe`; the
   request line carries the URL's raw, still-encoded path; it offers user/password only when the session has SOCKS credentials, and fails at once if the inbound demands them

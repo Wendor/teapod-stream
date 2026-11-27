@@ -15,6 +15,8 @@ internal class Heartbeat(private val host: Host) {
         val deviceIdle: Boolean
         val core: VpnCore
         val params: ConnectionParams?
+        /** The running session's SOCKS inbound; port 0 — none yet. */
+        val socks: Socks
         /** When the running session connected (0 — none): a wake probe's reconnect is bound to it. */
         val connectedAt: Long
         /** The physical network reaches the internet (not through the tunnel). */
@@ -24,16 +26,15 @@ internal class Heartbeat(private val host: Host) {
         fun log(level: String, message: String)
     }
 
+    /** A SOCKS inbound: the probe connects to [port] with this login ("" — none). */
+    data class Socks(val port: Int, val user: String, val password: String)
+
     private var thread: Thread? = null
     @Volatile private var current: HeartbeatPolicy? = null
     private val wakeProbeRunning = AtomicBoolean(false)
 
-    // How we probe the tunnel: "socks" (HTTP via SOCKS5), "xrayDelay" (measured inside
-    // the core) or "passive" (only tun2socks metrics, no active probes).
-    private val probeKind get() = host.params?.heartbeatProbe ?: "socks"
-    // Behavior on a dead tunnel: "reconnect" — reconnect to the same server,
-    // "switchConfig" — leave the decision to Flutter (it picks a live config).
-    private val switchConfig get() = host.params?.heartbeatAction == "switchConfig"
+    private val probeKind get() = host.params?.heartbeatProbe ?: HeartbeatProbe.SOCKS
+    private val switchConfig get() = host.params?.heartbeatAction == HeartbeatAction.SWITCH_CONFIG
     private val threshold get() = host.params?.heartbeatThreshold ?: 3
     private val url get() = host.params?.heartbeatUrl ?: ConnectionParams.DEFAULT_HEARTBEAT_URL
 
@@ -50,15 +51,15 @@ internal class Heartbeat(private val host: Host) {
         // Idle alone isn't proof of death though — probe the upstream through xray
         // and reconnect only if it actually fails (issue #81: blind reconnects on
         // every wake). onReceive runs on the main thread, so probe off-thread.
-        if (probeKind == "passive") return
+        if (probeKind == HeartbeatProbe.PASSIVE) return
         if (!wakeProbeRunning.compareAndSet(false, true)) return
         Thread {
             try {
                 val session = host.connectedAt // the session probed: a reconnect applies only to it
-                val port = XrayVpnService.snapshot.socksPort
-                if (session <= 0L || port <= 0) return@Thread
+                val socks = host.socks
+                if (session <= 0L || socks.port <= 0) return@Thread
                 try {
-                    probe(port)
+                    probe(socks)
                     host.log("info", "TUN idle ${idleSec}s on wake but tunnel alive, skipping reconnect")
                 } catch (e: Exception) {
                     host.log("warning", "TUN stall on wake: no data for ${idleSec}s, probe failed (${e.message}), reconnecting")
@@ -92,8 +93,8 @@ internal class Heartbeat(private val host: Host) {
                     // on leaving idle (maintenance window) the receiver probes.
                     if (host.deviceIdle) continue
                     policy.onIteration(SystemClock.elapsedRealtime())
-                    val port = XrayVpnService.snapshot.socksPort
-                    if (port <= 0) continue
+                    val socks = host.socks
+                    if (socks.port <= 0) continue
                     // Skip in proxy-only mode: tun2socks is intentionally not started.
                     if (host.tunMode && !apply(policy.onTun(host.core.isTunRunning(), host.core.activeConnections(), { isTunRxFresh() }, SystemClock.elapsedRealtime()))) break
 
@@ -102,8 +103,8 @@ internal class Heartbeat(private val host: Host) {
                     // active probe. Idle tunnels still get the full probe, except in
                     // passive mode: there are no active probes at all, drops are caught by
                     // the TUN stall watchdog and the tun2socks checks above.
-                    if (probeKind != "passive" && !isTunRxFresh()) {
-                        probe(port)
+                    if (probeKind != HeartbeatProbe.PASSIVE && !isTunRxFresh()) {
+                        probe(socks)
                     }
                     policy.onSuccess()
                     val successCount = policy.successes
@@ -141,7 +142,7 @@ internal class Heartbeat(private val host: Host) {
                     while (retries < HeartbeatPolicy.IMMEDIATE_RETRIES && !Thread.currentThread().isInterrupted) {
                         try {
                             Thread.sleep(HeartbeatPolicy.RETRY_DELAY_MS)
-                            probe(XrayVpnService.snapshot.socksPort)
+                            probe(host.socks)
                             recovered = true
                             break
                         } catch (_: InterruptedException) {
@@ -193,19 +194,19 @@ internal class Heartbeat(private val host: Host) {
 
     /// Active probe of the selected type. Throws on failure —
     /// the heartbeat loop counts it as a failure.
-    private fun probe(port: Int) {
+    private fun probe(socks: Socks) {
         when (probeKind) {
-            "passive" -> return   // never reached: the loop doesn't call the probe at all
-            "xrayDelay" -> {
+            HeartbeatProbe.PASSIVE -> return   // never reached: the loop doesn't call the probe at all
+            HeartbeatProbe.XRAY_DELAY -> {
                 val ms = host.core.measureDelay(url)
                 if (ms < 0) throw Exception("xray delay probe returned $ms")
                 host.log("debug", "Heartbeat OK (xray delay ${ms}ms)")
             }
-            else -> checkTunnelConnectivity(port)
+            HeartbeatProbe.SOCKS -> checkTunnelConnectivity(socks)
         }
     }
 
-    private fun checkTunnelConnectivity(port: Int) {
+    private fun checkTunnelConnectivity(socks: Socks) {
         val target = SocksHttpProbe.parseUrl(url)
         if (target.https) {
             // The probe itself speaks plain HTTP over SOCKS5 — it can't do TLS.
@@ -215,9 +216,8 @@ internal class Heartbeat(private val host: Host) {
             host.log("debug", "Heartbeat OK (https url, measured in core: ${ms}ms)")
             return
         }
-        val creds = XrayVpnService.snapshot
         try {
-            SocksHttpProbe.check(port, creds.socksUser, creds.socksPassword, target)
+            SocksHttpProbe.check(socks.port, socks.user, socks.password, target)
         } catch (e: SocksHttpProbe.Failure) {
             host.log("warning", "Heartbeat check failed at [${e.stage}]: ${e.message}")
             throw e

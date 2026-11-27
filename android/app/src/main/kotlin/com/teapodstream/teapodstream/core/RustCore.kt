@@ -86,13 +86,13 @@ object RustCore : VpnCore {
         val prepared = prepareConfig(config, svc, resolver)
         val outbounds = JSONObject(prepared).optJSONArray("outbounds") ?: JSONArray()
         val policy = TunOwnerPolicy(
-            onlySelected = params.vpnMode == "onlySelected",
+            onlySelected = params.vpnMode == VpnMode.ONLY_SELECTED,
             listedUids = params.allowedUids,
             blockUnowned = params.blockUnowned,
             tunDns = tunDnsServer,
             log = log,
         )
-        log("info", "TUN owner check: mode=${params.vpnMode} uids=${params.allowedUids.size} " +
+        log("info", "TUN owner check: mode=${params.vpnMode.id} uids=${params.allowedUids.size} " +
             "blockUnowned=${params.blockUnowned} admission=${policy.needsAdmission}")
         val runtime = XrayCore.create(
             configJson = prepared,

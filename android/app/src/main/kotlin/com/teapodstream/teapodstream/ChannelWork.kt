@@ -46,7 +46,7 @@ internal data class ConnectArgs(
     val configName: String?,
     val attempt: Long,
 ) {
-    override fun toString() = "ConnectArgs(engine=${params.engine}, attempt=$attempt)"
+    override fun toString() = "ConnectArgs(engine=${params.engine.id}, attempt=$attempt)"
 
     companion object {
         fun from(args: Map<*, *>): ConnectArgs? {

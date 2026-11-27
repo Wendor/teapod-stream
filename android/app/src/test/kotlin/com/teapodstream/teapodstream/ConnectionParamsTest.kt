@@ -1,5 +1,7 @@
 package com.teapodstream.teapodstream
 
+import com.teapodstream.teapodstream.core.VpnMode
+import com.teapodstream.teapodstream.core.CoreKind
 import java.io.File
 import java.nio.file.Files
 import org.junit.Assert.assertEquals
@@ -18,7 +20,7 @@ class ConnectionParamsTest {
     fun legacyMetaWithoutEngineLoadsAsGo() {
         val dir = tempDir()
         meta(dir, minimal)
-        assertEquals("go", QuickConnectStore(dir).params()!!.engine)
+        assertEquals(CoreKind.GO, QuickConnectStore(dir).params()!!.engine)
     }
 
     @Test
@@ -26,10 +28,10 @@ class ConnectionParamsTest {
         val dir = tempDir()
         QuickConnectStore(dir).saveParams(ConnectionParams(
             socksPort = 1, excludedPackages = emptyList(), includedPackages = emptyList(),
-            vpnMode = "allExcept", ssPrefix = null, proxyOnly = false, showNotification = true,
-            killSwitch = false, allowIcmp = false, blockQuic = false, engine = "rust",
+            vpnMode = VpnMode.ALL_EXCEPT, ssPrefix = null, proxyOnly = false, showNotification = true,
+            killSwitch = false, allowIcmp = false, blockQuic = false, engine = CoreKind.RUST,
         ))
-        assertEquals("rust", QuickConnectStore(dir).params()!!.engine)
+        assertEquals(CoreKind.RUST, QuickConnectStore(dir).params()!!.engine)
     }
 
     @Test
@@ -39,7 +41,7 @@ class ConnectionParamsTest {
             socksPort = 4321,
             excludedPackages = listOf("a.b", "c.d"),
             includedPackages = listOf("e.f"),
-            vpnMode = "onlySelected",
+            vpnMode = VpnMode.ONLY_SELECTED,
             ssPrefix = "1603",
             proxyOnly = true,
             showNotification = false,
@@ -48,12 +50,12 @@ class ConnectionParamsTest {
             blockQuic = true,
             ipv6Enabled = true,
             mtu = 1400,
-            heartbeatProbe = "passive",
-            heartbeatAction = "switchConfig",
+            heartbeatProbe = HeartbeatProbe.PASSIVE,
+            heartbeatAction = HeartbeatAction.SWITCH_CONFIG,
             heartbeatThreshold = 7,
             heartbeatUrl = "http://probe/204",
             allowTethering = true,
-            engine = "rust",
+            engine = CoreKind.RUST,
         )
         QuickConnectStore(dir).saveParams(params)
         assertEquals(params, QuickConnectStore(dir).params())
@@ -69,8 +71,8 @@ class ConnectionParamsTest {
         assertEquals(false, p.killSwitch)
         assertEquals(false, p.allowIcmp)
         assertEquals(1500, p.mtu)
-        assertEquals("socks", p.heartbeatProbe)
-        assertEquals("reconnect", p.heartbeatAction)
+        assertEquals(HeartbeatProbe.SOCKS, p.heartbeatProbe)
+        assertEquals(HeartbeatAction.RECONNECT, p.heartbeatAction)
         assertEquals(3, p.heartbeatThreshold)
         assertEquals("http://cp.cloudflare.com/generate_204", p.heartbeatUrl)
     }
@@ -96,7 +98,27 @@ class ConnectionParamsTest {
         val p = QuickConnectStore(dir).params()!!
         assertNull(p.ssPrefix)
         assertEquals("http://cp.cloudflare.com/generate_204", p.heartbeatUrl)
-        assertEquals("go", p.engine)
+        assertEquals(CoreKind.GO, p.engine)
+    }
+
+    @Test
+    fun unknownChoicesFallBackToDefaults() {
+        val p = ConnectionParams.fromArgs(
+            mapOf("vpnMode" to "everyone", "heartbeatProbe" to "icmp", "heartbeatAction" to "panic", "engine" to "zig"),
+        )
+        assertEquals(VpnMode.ALL_EXCEPT, p.vpnMode)
+        assertEquals(HeartbeatProbe.SOCKS, p.heartbeatProbe)
+        assertEquals(HeartbeatAction.RECONNECT, p.heartbeatAction)
+        assertEquals(CoreKind.GO, p.engine)
+    }
+
+    @Test
+    fun choicesAreStoredByTheirIds() {
+        val json = full.toJson()
+        assertEquals("onlySelected", json.getString("vpnMode"))
+        assertEquals("xrayDelay", json.getString("heartbeatProbe"))
+        assertEquals("switchConfig", json.getString("heartbeatAction"))
+        assertEquals("box", json.getString("engine"))
     }
 
     @Test
@@ -114,7 +136,7 @@ class ConnectionParamsTest {
         val missing = File(tempDir(), "no/such/dir")
         val params = ConnectionParams(
             socksPort = 1, excludedPackages = emptyList(), includedPackages = emptyList(),
-            vpnMode = "allExcept", ssPrefix = null, proxyOnly = false, showNotification = true,
+            vpnMode = VpnMode.ALL_EXCEPT, ssPrefix = null, proxyOnly = false, showNotification = true,
             killSwitch = false, allowIcmp = false, blockQuic = false,
         )
         assertThrows(java.io.IOException::class.java) { QuickConnectStore(missing).saveParams(params) }
@@ -122,10 +144,10 @@ class ConnectionParamsTest {
 
     private val full = ConnectionParams(
         socksPort = 4321, excludedPackages = listOf("a.b"), includedPackages = listOf("c.d"),
-        vpnMode = "onlySelected", ssPrefix = "1603", proxyOnly = true, showNotification = false,
+        vpnMode = VpnMode.ONLY_SELECTED, ssPrefix = "1603", proxyOnly = true, showNotification = false,
         killSwitch = true, allowIcmp = true, blockQuic = true, ipv6Enabled = true, mtu = 1400,
-        heartbeatProbe = "xrayDelay", heartbeatAction = "switchConfig", heartbeatThreshold = 5,
-        heartbeatUrl = "http://probe/204", allowTethering = true, engine = "box",
+        heartbeatProbe = HeartbeatProbe.XRAY_DELAY, heartbeatAction = HeartbeatAction.SWITCH_CONFIG, heartbeatThreshold = 5,
+        heartbeatUrl = "http://probe/204", allowTethering = true, engine = CoreKind.BOX,
     )
 
     /** The arguments `XrayEngine` sends for [full], with the secrets the params must leave out. */

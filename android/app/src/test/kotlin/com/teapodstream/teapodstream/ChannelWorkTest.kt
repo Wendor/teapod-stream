@@ -1,5 +1,6 @@
 package com.teapodstream.teapodstream
 
+import com.teapodstream.teapodstream.core.CoreKind
 import io.flutter.plugin.common.MethodChannel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -53,7 +54,7 @@ class ChannelWorkTest {
         assertNull(ConnectArgs.from(mapOf("socksUser" to "u")))
         val args = ConnectArgs.from(mapOf("xrayConfig" to "{}", "engine" to "rust", "attempt" to 7))!!
         assertEquals("{}", args.config)
-        assertEquals("rust", args.params.engine)
+        assertEquals(CoreKind.RUST, args.params.engine)
         assertEquals("" to "", args.socksUser to args.socksPassword)
         assertNull(args.configName)
         assertEquals(7L, args.attempt)

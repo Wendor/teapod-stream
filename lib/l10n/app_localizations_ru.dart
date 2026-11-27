@@ -1640,4 +1640,27 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get importChangeLogLevel => 'Уровень логов';
+
+  @override
+  String get logsPause => 'Приостановить лог';
+
+  @override
+  String get logsResume => 'Возобновить лог';
+
+  @override
+  String get logsTunnelDiag => 'Записать диагностику туннеля в лог';
+
+  @override
+  String get logsShare => 'Поделиться логом';
+
+  @override
+  String get logsClear => 'Очистить лог';
+
+  @override
+  String get profilesImport => 'Импортировать профиль';
+
+  @override
+  String settingsAccentSwatch(String hex) {
+    return 'Цвет акцента $hex';
+  }
 }

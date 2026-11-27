@@ -42,16 +42,12 @@ class _ConfigRow extends StatelessWidget {
     final trailing = isDraggable
         ? ReorderableDragStartListener(
             index: draggableIndex!,
-            child: SizedBox(width: 36, height: 40, child: Icon(Icons.drag_handle_rounded, size: 18, color: t.accent)),
+            child: SizedBox(width: 48, height: 48, child: Icon(Icons.drag_handle_rounded, size: 18, color: t.accent)),
           )
-        : Semantics(
+        : TapTarget(
             label: context.l10n.configsConfigMenu,
-            button: true,
-            child: GestureDetector(
-              onTap: onLongPress,
-              behavior: HitTestBehavior.opaque,
-              child: SizedBox(width: 36, height: 40, child: Icon(Icons.more_vert, size: 16, color: t.textMuted)),
-            ),
+            onTap: onLongPress,
+            child: Icon(Icons.more_vert, size: 16, color: t.textMuted),
           );
 
     return Pressable(

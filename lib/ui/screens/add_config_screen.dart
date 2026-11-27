@@ -15,6 +15,7 @@ import '../theme/app_theme.dart';
 import '../widgets/breadcrumb_bar.dart';
 import '../widgets/import_review.dart';
 import '../widgets/untrusted_cert_dialog.dart';
+import '../widgets/tap_target.dart';
 import 'qr_scan_screen.dart';
 import '../../l10n/l10n.dart';
 
@@ -72,8 +73,9 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text('teapod.stream // add', style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
-                  GestureDetector(
+                  TapTarget(
                     onTap: _openQrScan,
+                    label: context.l10n.qrTitle,
                     child: Container(
                       width: 28,
                       height: 28,
@@ -197,6 +199,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
                               child: GestureDetector(
                                 onTap: _loading ? null : _pasteFromClipboard,
                                 child: Container(
+                                  constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
                                   padding: const EdgeInsets.symmetric(vertical: 13),
                                   decoration: BoxDecoration(border: Border.all(color: t.line)),
                                   child: Row(
@@ -218,6 +221,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
                               child: GestureDetector(
                                 onTap: _loading ? null : _import,
                                 child: Container(
+                                  constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
                                   padding: const EdgeInsets.symmetric(vertical: 13),
                                   color: t.accent,
                                   child: Row(

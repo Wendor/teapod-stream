@@ -21,21 +21,18 @@ class _HeaderStrip extends StatelessWidget {
             children: [
               Text('sys.state [$stateCode]', style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
               const SizedBox(width: 12),
-              Semantics(
+              TapTarget(
                 label: context.l10n.homeLogs,
-                button: true,
-                child: GestureDetector(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(builder: (_) => const LogsScreen(breadcrumbParent: 'home')),
-                  ),
-                  child: Container(
-                    width: 28,
-                    height: 28,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(border: Border.all(color: t.line)),
-                    child: Icon(Icons.receipt_long_outlined, size: 14, color: t.textDim),
-                  ),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(builder: (_) => const LogsScreen(breadcrumbParent: 'home')),
+                ),
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(border: Border.all(color: t.line)),
+                  child: Icon(Icons.receipt_long_outlined, size: 14, color: t.textDim),
                 ),
               ),
             ],

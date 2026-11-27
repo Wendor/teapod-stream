@@ -8,6 +8,7 @@ import '../../providers/settings_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import 'pressable.dart';
+import 'tap_target.dart';
 import '../../l10n/l10n.dart';
 
 /// Applies [change] to the settings from a screen ([SettingsNotifier.edit]): in a read-only profile shows a snackbar
@@ -46,7 +47,8 @@ class SetRowToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Pressable(
+    return SetToggleRow(
+      value: value,
       onTap: locked ? () => showReadonlySnack(context) : () => onChange(!value),
       child: Container(
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
@@ -68,7 +70,7 @@ class SetRowToggle extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 14),
-            SetSquareSwitch(t: t, value: value, onChanged: locked ? null : (v) => onChange(v)),
+            SetSquareSwitch(t: t, value: value),
           ],
         ),
       ),
@@ -78,6 +80,8 @@ class SetRowToggle extends StatelessWidget {
 
 // ── Square switch ─────────────────────────────────────────────────
 
+/// A square on/off switch. With [onChanged] it is its own 48 dp tap target; without it (inside a row that toggles
+/// as a whole, or locked) it is only the visual.
 class SetSquareSwitch extends StatelessWidget {
   final TeapodTokens t;
   final bool value;
@@ -87,29 +91,45 @@ class SetSquareSwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onChanged != null ? () => onChanged!(!value) : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        width: 44,
-        height: 22,
-        padding: const EdgeInsets.all(2),
-        decoration: BoxDecoration(
-          border: Border.all(color: value ? t.accent : t.line),
-          color: value ? t.accentSoft : Colors.transparent,
-        ),
-        child: Align(
-          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            width: 14,
-            height: 14,
-            color: value ? t.accent : t.textMuted,
-          ),
+    final visual = AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
+      width: 44,
+      height: 22,
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        border: Border.all(color: value ? t.accent : t.line),
+        color: value ? t.accentSoft : Colors.transparent,
+      ),
+      child: Align(
+        alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: 14,
+          height: 14,
+          color: value ? t.accent : t.textMuted,
         ),
       ),
     );
+    if (onChanged == null) return visual;
+    return TapTarget(onTap: () => onChanged!(!value), toggled: value, child: visual);
   }
+}
+
+/// A row that toggles as a whole: one tap target, announced as a switch with its [child]'s text.
+class SetToggleRow extends StatelessWidget {
+  final bool value;
+  final VoidCallback? onTap;
+  final Widget child;
+
+  const SetToggleRow({super.key, required this.value, required this.onTap, required this.child});
+
+  @override
+  Widget build(BuildContext context) => MergeSemantics(
+    child: Semantics(
+      toggled: value,
+      child: Pressable(onTap: onTap, child: child),
+    ),
+  );
 }
 
 // ── Row: chevron ──────────────────────────────────────────────────
@@ -387,32 +407,34 @@ class SetSegSquare extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(border: Border.all(color: t.line)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: opts.asMap().entries.map((e) {
-          final idx = e.key;
-          final (val, lab) = e.value;
-          final active = value == val;
-          return GestureDetector(
-            onTap: locked ? () => showReadonlySnack(context) : () => onChanged(val),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: active ? t.accentSoft : Colors.transparent,
-                border: Border(right: idx < opts.length - 1 ? BorderSide(color: t.line) : BorderSide.none),
-              ),
-              child: AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 200),
-                style: AppTheme.mono(size: 11, color: active ? t.accent : t.textDim, letterSpacing: 0.5),
-                child: Text(lab),
-              ),
+    // Each segment draws its own border, so the 48 dp tap height around it stays transparent.
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: opts.asMap().entries.map((e) {
+        final idx = e.key;
+        final (val, lab) = e.value;
+        final active = value == val;
+        final side = BorderSide(color: t.line);
+        return TapTarget(
+          onTap: locked ? () => showReadonlySnack(context) : () => onChanged(val),
+          minWidth: 0,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            constraints: const BoxConstraints(minWidth: kMinInteractiveDimension),
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: active ? t.accentSoft : Colors.transparent,
+              border: Border(top: side, bottom: side, right: side, left: idx == 0 ? side : BorderSide.none),
             ),
-          );
-        }).toList(),
-      ),
+            child: AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 200),
+              style: AppTheme.mono(size: 11, color: active ? t.accent : t.textDim, letterSpacing: 0.5),
+              child: Text(lab),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }

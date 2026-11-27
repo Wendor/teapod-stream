@@ -484,5 +484,12 @@
   "importChangeKillSwitch": "Kill switch",
   "importChangeDns": "DNS",
   "importChangeRouting": "Правила маршрутизации",
-  "importChangeLogLevel": "Уровень логов"
+  "importChangeLogLevel": "Уровень логов",
+  "logsPause": "Приостановить лог",
+  "logsResume": "Возобновить лог",
+  "logsTunnelDiag": "Записать диагностику туннеля в лог",
+  "logsShare": "Поделиться логом",
+  "logsClear": "Очистить лог",
+  "profilesImport": "Импортировать профиль",
+  "settingsAccentSwatch": "Цвет акцента {hex}"
 }

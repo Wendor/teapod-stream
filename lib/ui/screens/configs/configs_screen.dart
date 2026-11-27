@@ -21,6 +21,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/hero_panel.dart';
 import '../../widgets/pressable.dart';
 import '../../widgets/untrusted_cert_dialog.dart';
+import '../../widgets/tap_target.dart';
 import '../add_config_screen.dart';
 import '../subscription_settings_screen.dart';
 import '../../../l10n/l10n.dart';

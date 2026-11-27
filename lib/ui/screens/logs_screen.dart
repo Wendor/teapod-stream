@@ -10,6 +10,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/hero_panel.dart';
 import '../widgets/breadcrumb_bar.dart';
+import '../widgets/tap_target.dart';
 import '../../l10n/l10n.dart';
 import '../../providers/native_logs_provider.dart';
 
@@ -160,20 +161,20 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
                   _IconBtn(
                     t: t,
                     icon: logsEnabled ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                    label: logsEnabled ? context.l10n.logsPause : context.l10n.logsResume,
                     onTap: _toggleLogsEnabled,
                   ),
-                  const SizedBox(width: 6),
                   _IconBtn(
                     t: t,
                     icon: Icons.monitor_heart_outlined,
+                    label: context.l10n.logsTunnelDiag,
                     onTap: () => ref.read(nativeLogsProvider).dumpTunnelDiag(),
                   ),
-                  const SizedBox(width: 6),
-                  _IconBtn(t: t, icon: Icons.upload_file_rounded, onTap: _exportLogs),
-                  const SizedBox(width: 6),
+                  _IconBtn(t: t, icon: Icons.upload_file_rounded, label: context.l10n.logsShare, onTap: _exportLogs),
                   _IconBtn(
                     t: t,
                     icon: Icons.delete_sweep_rounded,
+                    label: context.l10n.logsClear,
                     onTap: () {
                       ref.read(logServiceProvider.notifier).clear();
                       ref.read(nativeLogsProvider).clear();
@@ -409,14 +410,16 @@ class _FilterTab extends StatelessWidget {
 class _IconBtn extends StatelessWidget {
   final TeapodTokens t;
   final IconData icon;
+  final String label;
   final VoidCallback? onTap;
 
-  const _IconBtn({required this.t, required this.icon, this.onTap});
+  const _IconBtn({required this.t, required this.icon, required this.label, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return TapTarget(
       onTap: onTap,
+      label: label,
       child: Container(
         width: 32,
         height: 32,

@@ -3,7 +3,6 @@ package com.teapodstream.teapodstream
 import android.app.Activity
 import android.content.Intent
 import android.net.VpnService
-import android.os.Build
 import com.teapodstream.teapodstream.core.CoreKind
 import com.teapodstream.teapodstream.core.VpnCores
 import io.flutter.plugin.common.MethodCall
@@ -169,12 +168,10 @@ internal class VpnChannelHandler(
         work.answer(result, ChannelWork.quickConnect) { quickConnect.save(args, seen) }
     }
 
-    private fun sessionRunning() =
-        XrayVpnService.snapshot.state !in setOf(SessionState.DISCONNECTED, SessionState.ERROR)
+    private fun sessionRunning() = !XrayVpnService.snapshot.state.isOff
 
     private fun startService(intent: Intent) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) activity.startForegroundService(intent)
-        else activity.startService(intent)
+        activity.startForegroundService(intent)
     }
 
     private fun icmpPing(address: String): Int? {

@@ -77,7 +77,6 @@ class ServiceNotifications(private val service: Service, private val log: (Strin
                 .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
 
         private fun ensureChannels(context: Context, manager: NotificationManager) {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
             manager.createNotificationChannel(
                 NotificationChannel(CHANNEL_ID, context.appString(R.string.channel_status_name), NotificationManager.IMPORTANCE_LOW)
                     .apply { description = context.appString(R.string.channel_status_description) }
@@ -164,11 +163,7 @@ class ServiceNotifications(private val service: Service, private val log: (Strin
 
     private fun speedText(upload: Long, download: Long) = "↑ ${formatSpeed(upload)}  ↓ ${formatSpeed(download)}"
 
-    private fun pendingFlags() =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        else
-            PendingIntent.FLAG_UPDATE_CURRENT
+    private fun pendingFlags() = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
 
     private fun openIntent(): PendingIntent = PendingIntent.getActivity(service, 0,
         service.packageManager.getLaunchIntentForPackage(service.packageName)

@@ -6,7 +6,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.VpnService
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
@@ -77,19 +76,24 @@ class XrayVpnService : VpnService() {
         private const val RECONNECT_RETRY_BASE_MS = 5_000L
 
 
+        /** Extracts the bundled geoip.dat / geosite.dat that are missing from filesDir. False when one failed: its
+         *  partial copy is removed, so the next call tries again instead of keeping a truncated file. */
         fun prepareBinaries(context: android.content.Context): Boolean {
             val filesDir = context.filesDir
             val assets = context.assets
-            val assetsToCopy = listOf("geoip.dat", "geosite.dat")
-            for (name in assetsToCopy) {
+            var ok = true
+            for (name in listOf("geoip.dat", "geosite.dat")) {
                 val file = java.io.File(filesDir, name)
                 if (file.exists()) continue
                 try {
                     val input = try { assets.open("binaries/$name") } catch (e: Exception) { assets.open("flutter_assets/assets/binaries/$name") }
                     input.use { i -> file.outputStream().use { o -> i.copyTo(o) } }
-                } catch (e: Exception) { }
+                } catch (e: Exception) {
+                    file.delete()
+                    ok = false
+                }
             }
-            return true
+            return ok
         }
     }
 
@@ -147,7 +151,6 @@ class XrayVpnService : VpnService() {
     @Volatile private var allowIcmpEnabled = true
     @Volatile private var blockQuicEnabled = false
     private var proxyOnlyMode = false
-    private val networkChangeHandler = Handler(Looper.getMainLooper())
     // The one desired session state: commands, revoke, reconnects and retries replace it, one thread brings the
     // session to it. A start that ends off (failed, cancelled) is checked once its run has finished: while it runs it
     // holds the service.
@@ -421,7 +424,7 @@ class XrayVpnService : VpnService() {
             } finally {
                 VpnTileService.configNameChanged(this) // a failed save may have removed the old name too
             }
-            prepareBinaries(this)
+            if (!prepareBinaries(this)) log("warning", "Bundled geodata not extracted: the core may not start")
 
             core.init(this) { level, message -> log(level, message) }
             fun coreParams(tunFd: Int?, allowedUids: Set<Int> = emptySet(), blockUnowned: Boolean = false) =
@@ -487,21 +490,18 @@ class XrayVpnService : VpnService() {
                     }
 
                     if (vpnMode == VpnMode.ONLY_SELECTED) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            for (pkg in includedPackages) {
-                                try {
-                                    builder.addAllowedApplication(pkg)
-                                } catch (e: Exception) {
-                                    log("warning", "Failed to allow $pkg: ${e.message}")
-                                }
+                        var allowed = 0
+                        for (pkg in includedPackages) {
+                            try {
+                                builder.addAllowedApplication(pkg)
+                                allowed++
+                            } catch (e: Exception) {
+                                log("warning", "Failed to allow $pkg: ${e.message}")
                             }
-                        } else {
-                            log("warning", "onlySelected mode requires Android 10+, falling back to allExcept")
-                            for (pkg in excludedPackages) {
-                                try { builder.addDisallowedApplication(pkg) } catch (_: Exception) {}
-                            }
-                            try { builder.addDisallowedApplication(packageName) } catch (_: Exception) {}
                         }
+                        // Android applies a VPN with no allowed app to every app: traffic stays in the tunnel, but
+                        // "only selected apps" covers all of them.
+                        if (allowed == 0) log("warning", "Only selected apps, but none is installed: the VPN covers every app")
                     } else {
                         for (pkg in excludedPackages) {
                             try { builder.addDisallowedApplication(pkg) } catch (_: Exception) {}
@@ -715,7 +715,6 @@ class XrayVpnService : VpnService() {
             // path additionally keeps it after non-explicit stops (traffic sink).
             val keepTunAsSink = (killSwitchEnabled || reconnecting) && !explicit && !proxyOnlyMode
                     && tunInterface != null
-                    && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
             keptTunAsSink = keepTunAsSink
             // A core that reads the TUN fd itself (Rust) is stopped before the fd is closed:
             // otherwise the freed fd number could go to someone else's descriptor.
@@ -811,15 +810,12 @@ class XrayVpnService : VpnService() {
 
     /**
      * A reconnect of the running session (network change, dead tunnel): a new start of the stored session that first
-     * waits for direct internet. [session] — `lastConnectedMs` it was scheduled for (0 — the current one); applies
-     * only while that session's desired state is still the one wanted.
-     */
-    /**
-     * [session] — the `lastConnectedMs` of the session seen dead: the reconnect applies only while it is still the
-     * connected one. Captured as 0 (a stop cleared it meanwhile) it never matches. Null — whatever is connected.
+     * waits for direct internet. [session] — the `lastConnectedMs` of the session seen dead: the reconnect applies only
+     * while it is still the connected one. Captured as 0 (a stop cleared it meanwhile) it never matches. Null —
+     * whatever is connected.
      */
     private fun reconnectInternal(session: Long? = null) {
-        networkChangeHandler.post {
+        mainHandler.post {
             // The desired state of the session that is connected, not whatever is wanted by now (a probe of a session
             // being replaced must not replace its successor).
             val current = connectedDesired ?: return@post
@@ -937,7 +933,7 @@ class XrayVpnService : VpnService() {
         notifications.connected(screenOn)
         // If notify() is dropped by the rate limit (tile → intermediate → connected within
         // a fraction of a second), a retry after 2 s guarantees the final look (issue #76).
-        networkChangeHandler.postDelayed({
+        mainHandler.postDelayed({
             if (snapshot.state == SessionState.CONNECTED) {
                 notifications.refresh(SessionStats.uploadSpeed, SessionStats.downloadSpeed, screenOn)
             }

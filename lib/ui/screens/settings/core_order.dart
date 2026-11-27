@@ -98,23 +98,18 @@ class _CoreOrderListState extends ConsumerState<_CoreOrderList> {
             key: ValueKey(k),
             duration: const Duration(milliseconds: 300),
             color: _moved == k ? t.accentFade : t.accentFade.withValues(alpha: 0),
-            padding: const EdgeInsets.fromLTRB(8, 6, 20, 6),
+            padding: const EdgeInsets.fromLTRB(4, 0, 20, 0),
             child: Row(
               children: [
                 // Move the core one position up; the first one has no button.
                 SizedBox(
-                  width: 40,
-                  height: 36,
+                  width: kMinInteractiveDimension,
                   child: i == 0
                       ? null
-                      : Semantics(
+                      : TapTarget(
                           label: context.l10n.settingsCoreMoveUp(k.displayName),
-                          button: true,
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: () => locked ? showReadonlySnack(context) : moveUp(i),
-                            child: Icon(Icons.arrow_upward_rounded, size: 16, color: t.textMuted),
-                          ),
+                          onTap: () => locked ? showReadonlySnack(context) : moveUp(i),
+                          child: Icon(Icons.arrow_upward_rounded, size: 16, color: t.textMuted),
                         ),
                 ),
                 SizedBox(

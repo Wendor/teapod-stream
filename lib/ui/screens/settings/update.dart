@@ -59,7 +59,7 @@ class _UpdateTile extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(l.updateDownloading(info.version), style: AppTheme.sans(size: 14, color: t.text)),
-                GestureDetector(
+                TapTarget(
                   onTap: () => ref.read(updateProvider.notifier).cancelDownload(),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -149,7 +149,7 @@ class _SqBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return TapTarget(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),

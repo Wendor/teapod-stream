@@ -26,6 +26,9 @@ import '../helpers/ui_harness.dart';
 Future<void> _tapRow(WidgetTester tester, String title) async {
   final row = find.text(title);
   await tester.scrollUntilVisible(row, 200, scrollable: find.byType(Scrollable).first);
+  // scrollUntilVisible stops once the row enters the viewport, possibly at its very edge.
+  await tester.ensureVisible(row);
+  await tester.pump();
   await tester.tap(row);
   await settle(tester);
 }
@@ -122,9 +125,7 @@ void main() {
     testWidgets('changelog row opens the release history in the app language', (tester) async {
       await setUpScreenTest();
       final c = await pumpScreen(tester, const SettingsScreen());
-      final row = find.text('CHANGELOG');
-      await tester.scrollUntilVisible(row, 200, scrollable: find.byType(Scrollable).first);
-      await tester.tap(row);
+      await _tapRow(tester, 'CHANGELOG');
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
       await settle(tester);
       expect(find.byType(WhatsNewScreen), findsOneWidget);

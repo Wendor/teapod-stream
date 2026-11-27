@@ -9,6 +9,7 @@ import '../theme/app_theme.dart';
 import '../widgets/settings_shared.dart';
 import '../widgets/tap_target.dart';
 import '../../l10n/l10n.dart';
+import '../widgets/pressable.dart';
 
 class DnsSettingsScreen extends ConsumerStatefulWidget {
   const DnsSettingsScreen({super.key});
@@ -266,23 +267,29 @@ class _DnsSettingsScreenState extends ConsumerState<DnsSettingsScreen> {
                                   (DnsType.dot, 'DOT'),
                                 ])
                                   Expanded(
-                                    child: GestureDetector(
-                                      onTap: () => setState(() => _customType = type),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(vertical: 10),
-                                        decoration: BoxDecoration(
-                                          color: _customType == type ? t.accentSoft : Colors.transparent,
-                                          border: Border(
-                                            right: type != DnsType.dot ? BorderSide(color: t.line) : BorderSide.none,
+                                    child: Semantics(
+                                      button: true,
+                                      selected: _customType == type,
+                                      child: Pressable(
+                                        onTap: () => setState(() => _customType = type),
+                                        child: Container(
+                                          constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
+                                          alignment: Alignment.center,
+                                          padding: const EdgeInsets.symmetric(vertical: 10),
+                                          decoration: BoxDecoration(
+                                            color: _customType == type ? t.accentSoft : Colors.transparent,
+                                            border: Border(
+                                              right: type != DnsType.dot ? BorderSide(color: t.line) : BorderSide.none,
+                                            ),
                                           ),
-                                        ),
-                                        child: Text(
-                                          lab,
-                                          textAlign: TextAlign.center,
-                                          style: AppTheme.mono(
-                                            size: 11,
-                                            color: _customType == type ? t.accent : t.textDim,
-                                            letterSpacing: 1,
+                                          child: Text(
+                                            lab,
+                                            textAlign: TextAlign.center,
+                                            style: AppTheme.mono(
+                                              size: 11,
+                                              color: _customType == type ? t.accent : t.textDim,
+                                              letterSpacing: 1,
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -316,6 +323,7 @@ class _DnsSettingsScreenState extends ConsumerState<DnsSettingsScreen> {
                               hintStyle: AppTheme.mono(size: 12, color: t.textMuted),
                               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                               isDense: true,
+                              constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
                               enabledBorder: OutlineInputBorder(
                                 borderSide: BorderSide(color: t.line),
                                 borderRadius: BorderRadius.zero,
@@ -358,9 +366,10 @@ class _DnsPresetRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Pressable(
       onTap: onTap,
       child: Container(
+        constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
         decoration: BoxDecoration(
           border: Border(bottom: BorderSide(color: t.lineSoft)),

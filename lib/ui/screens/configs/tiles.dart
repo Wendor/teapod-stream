@@ -10,9 +10,12 @@ class _ToggleTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return SetToggleRow(
+      value: value,
+      checkbox: true,
       onTap: () => onChanged(!value),
       child: Container(
+        constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
         decoration: BoxDecoration(
           border: Border(bottom: BorderSide(color: t.lineSoft)),
@@ -52,6 +55,8 @@ class _SheetTile extends StatelessWidget {
       onTap: onTap,
       child: Container(
         width: double.infinity,
+        constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
+        alignment: Alignment.centerLeft,
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
         decoration: BoxDecoration(
           border: Border(bottom: BorderSide(color: t.lineSoft)),
@@ -81,7 +86,7 @@ class _EmptyState extends StatelessWidget {
             style: AppTheme.sans(size: 14, color: t.textDim),
           ),
           const SizedBox(height: 24),
-          GestureDetector(
+          TapTarget(
             onTap: onAdd,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),

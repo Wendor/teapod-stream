@@ -28,35 +28,43 @@ class _LocalGroup extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        GestureDetector(
-          onTap: onToggle,
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(20, 11, 20, 11),
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: t.lineSoft)),
-            ),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 32,
-                  child: Text('[00]', style: AppTheme.mono(size: 10, color: t.textMuted)),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '[local]',
-                        style: AppTheme.sans(size: 13, weight: FontWeight.w500, color: t.text),
-                      ),
-                      const SizedBox(height: 2),
-                      Text('cnt=${configs.length} · standalone', style: AppTheme.mono(size: 10, color: t.textMuted)),
-                    ],
+        Semantics(
+          expanded: isExpanded,
+          child: Pressable(
+            onTap: onToggle,
+            child: Container(
+              constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
+              padding: const EdgeInsets.fromLTRB(20, 11, 20, 11),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: t.lineSoft)),
+              ),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 32,
+                    child: Text('[00]', style: AppTheme.mono(size: 10, color: t.textMuted)),
                   ),
-                ),
-                Icon(isExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 16, color: t.textMuted),
-              ],
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '[local]',
+                          style: AppTheme.sans(size: 13, weight: FontWeight.w500, color: t.text),
+                        ),
+                        const SizedBox(height: 2),
+                        Text('cnt=${configs.length} · standalone', style: AppTheme.mono(size: 10, color: t.textMuted)),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    isExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                    size: 16,
+                    color: t.textMuted,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -195,39 +203,41 @@ class _SubGroup extends StatelessWidget {
                   Padding(padding: const EdgeInsets.fromLTRB(20, 11, 0, 11), child: addrWidget),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: GestureDetector(
-                      onTap: onToggle,
-                      onLongPress: () => _showSubMenu(context),
-                      behavior: HitTestBehavior.opaque,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 11),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              sub.name,
-                              style: AppTheme.sans(
-                                size: 13,
-                                weight: FontWeight.w500,
-                                color: isActiveSubscription ? t.accent : t.text,
-                                letterSpacing: -0.2,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Row(
-                              children: [
-                                Text('cnt=${configs.length}', style: AppTheme.mono(size: 10, color: t.textMuted)),
-                                Text(
-                                  ' · ${_lastRefresh(context.l10n)}',
-                                  style: AppTheme.mono(size: 10, color: t.textMuted),
+                    child: Semantics(
+                      expanded: isExpanded,
+                      child: Pressable(
+                        onTap: onToggle,
+                        onLongPress: () => _showSubMenu(context),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 11),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                sub.name,
+                                style: AppTheme.sans(
+                                  size: 13,
+                                  weight: FontWeight.w500,
+                                  color: isActiveSubscription ? t.accent : t.text,
+                                  letterSpacing: -0.2,
                                 ),
-                                if (expireLabel != null) ...[
-                                  Text(' · ', style: AppTheme.mono(size: 10, color: t.textMuted)),
-                                  Text(expireLabel, style: AppTheme.mono(size: 10, color: t.danger)),
+                              ),
+                              const SizedBox(height: 2),
+                              Row(
+                                children: [
+                                  Text('cnt=${configs.length}', style: AppTheme.mono(size: 10, color: t.textMuted)),
+                                  Text(
+                                    ' · ${_lastRefresh(context.l10n)}',
+                                    style: AppTheme.mono(size: 10, color: t.textMuted),
+                                  ),
+                                  if (expireLabel != null) ...[
+                                    Text(' · ', style: AppTheme.mono(size: 10, color: t.textMuted)),
+                                    Text(expireLabel, style: AppTheme.mono(size: 10, color: t.danger)),
+                                  ],
                                 ],
-                              ],
-                            ),
-                          ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -241,34 +251,28 @@ class _SubGroup extends StatelessWidget {
                       ),
                     )
                   else ...[
-                    GestureDetector(
+                    TapTarget(
+                      label: context.l10n.configsRefresh,
                       onTap: onRefresh,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 11, 8, 11),
-                        child: Icon(Icons.refresh_rounded, size: 16, color: t.textMuted),
-                      ),
+                      child: Icon(Icons.refresh_rounded, size: 16, color: t.textMuted),
                     ),
-                    Semantics(
+                    TapTarget(
                       label: context.l10n.configsSubMenu,
-                      button: true,
-                      child: GestureDetector(
-                        onTap: () => _showSubMenu(context),
-                        behavior: HitTestBehavior.opaque,
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(4, 11, 4, 11),
-                          child: Icon(Icons.more_vert, size: 16, color: t.textMuted),
-                        ),
-                      ),
+                      onTap: () => _showSubMenu(context),
+                      child: Icon(Icons.more_vert, size: 16, color: t.textMuted),
                     ),
                   ],
-                  GestureDetector(
-                    onTap: onToggle,
+                  // Repeats the name's toggle for TalkBack, so it stays out of the semantics tree.
+                  ExcludeSemantics(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(4, 11, 20, 11),
-                      child: Icon(
-                        isExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                        size: 16,
-                        color: t.textMuted,
+                      padding: const EdgeInsets.only(right: 8),
+                      child: TapTarget(
+                        onTap: onToggle,
+                        child: Icon(
+                          isExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                          size: 16,
+                          color: t.textMuted,
+                        ),
                       ),
                     ),
                   ),
@@ -289,19 +293,24 @@ class _SubGroup extends StatelessWidget {
                 if (sub.totalBytes != null && sub.totalBytes! > 0) _DataUsageBanner(t: t, sub: sub),
                 // Provider message (announce header), link — announce-url
                 if (sub.announce?.isNotEmpty == true)
-                  GestureDetector(
-                    onTap: sub.announceUrl == null
-                        ? null
-                        : () => launchUrl(Uri.parse(sub.announceUrl!), mode: LaunchMode.externalApplication).ignore(),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.fromLTRB(52, 10, 20, 12),
-                      decoration: BoxDecoration(
-                        border: Border(top: BorderSide(color: t.lineSoft)),
-                      ),
-                      child: Text(
-                        sub.announce!,
-                        style: AppTheme.sans(size: 12, color: sub.announceUrl == null ? t.textDim : t.accent),
+                  Semantics(
+                    link: sub.announceUrl != null,
+                    child: Pressable(
+                      onTap: sub.announceUrl == null
+                          ? null
+                          : () => launchUrl(Uri.parse(sub.announceUrl!), mode: LaunchMode.externalApplication).ignore(),
+                      child: Container(
+                        width: double.infinity,
+                        constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
+                        alignment: Alignment.centerLeft,
+                        padding: const EdgeInsets.fromLTRB(52, 10, 20, 12),
+                        decoration: BoxDecoration(
+                          border: Border(top: BorderSide(color: t.lineSoft)),
+                        ),
+                        child: Text(
+                          sub.announce!,
+                          style: AppTheme.sans(size: 12, color: sub.announceUrl == null ? t.textDim : t.accent),
+                        ),
                       ),
                     ),
                   ),
@@ -319,7 +328,7 @@ class _SubGroup extends StatelessWidget {
                         Expanded(
                           child: Text('trial // renew subscription', style: AppTheme.mono(size: 11, color: t.textDim)),
                         ),
-                        GestureDetector(
+                        TapTarget(
                           onTap: onRefresh,
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),

@@ -33,9 +33,10 @@ class _KVRowTap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Pressable(
       onTap: onTap,
       child: Container(
+        constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
         decoration: BoxDecoration(
           border: Border(bottom: BorderSide(color: t.lineSoft)),
@@ -89,7 +90,7 @@ class _ProfilesRow extends ConsumerWidget {
         ? context.l10n.commonLoading
         : '${profile.name}${profile.readonly ? ' · ${context.l10n.profileReadonly}' : ''}';
 
-    return GestureDetector(
+    return Pressable(
       onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const ProfilesScreen())),
       child: Container(
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),

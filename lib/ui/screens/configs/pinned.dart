@@ -136,10 +136,9 @@ class _LostPinRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hexAddr = '0x${addr.toString().padLeft(2, '0')}';
-    return GestureDetector(
+    return Pressable(
       onTap: onTap,
       onLongPress: onTap,
-      behavior: HitTestBehavior.opaque,
       child: Container(
         decoration: BoxDecoration(
           border: Border(bottom: BorderSide(color: t.lineSoft)),

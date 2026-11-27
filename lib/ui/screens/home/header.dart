@@ -192,7 +192,7 @@ class _StateInfo extends ConsumerWidget {
         ),
         if (isBlocked) ...[
           const SizedBox(height: 10),
-          GestureDetector(
+          TapTarget(
             onTap: () => ref.read(vpnProvider.notifier).disconnect(),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),

@@ -13,6 +13,7 @@ import '../widgets/breadcrumb_bar.dart';
 import '../widgets/tap_target.dart';
 import '../../l10n/l10n.dart';
 import '../../providers/native_logs_provider.dart';
+import '../widgets/pressable.dart';
 
 class LogsScreen extends ConsumerStatefulWidget {
   /// Parent screen name for the breadcrumb; null — no breadcrumb.
@@ -314,12 +315,13 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
             ),
 
             // ── Footer ───────────────────────────────────────────
-            GestureDetector(
+            Pressable(
               onTap: () {
                 setState(() => _autoScroll = true);
                 _scrollToBottom();
               },
               child: Container(
+                constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 decoration: BoxDecoration(
                   border: Border(top: BorderSide(color: t.line)),
@@ -370,34 +372,39 @@ class _FilterTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: active ? color.withAlpha(0x14) : Colors.transparent,
-            border: Border(
-              right: last ? BorderSide.none : BorderSide(color: t.line),
-              bottom: active
-                  ? BorderSide(color: color, width: 2)
-                  : const BorderSide(color: Colors.transparent, width: 2),
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                style: AppTheme.mono(
-                  size: 10,
-                  weight: active ? FontWeight.w700 : FontWeight.normal,
-                  color: active ? color : t.textDim,
-                  letterSpacing: 1,
-                ),
+      child: Semantics(
+        button: true,
+        selected: active,
+        child: Pressable(
+          onTap: onTap,
+          child: Container(
+            constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: active ? color.withAlpha(0x14) : Colors.transparent,
+              border: Border(
+                right: last ? BorderSide.none : BorderSide(color: t.line),
+                bottom: active
+                    ? BorderSide(color: color, width: 2)
+                    : const BorderSide(color: Colors.transparent, width: 2),
               ),
-              const SizedBox(height: 2),
-              Text('$count', style: AppTheme.mono(size: 9, color: active ? color : t.textMuted)),
-            ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: AppTheme.mono(
+                    size: 10,
+                    weight: active ? FontWeight.w700 : FontWeight.normal,
+                    color: active ? color : t.textDim,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text('$count', style: AppTheme.mono(size: 9, color: active ? color : t.textMuted)),
+              ],
+            ),
           ),
         ),
       ),

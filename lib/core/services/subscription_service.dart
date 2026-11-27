@@ -95,7 +95,7 @@ class SubscriptionService {
   /// user — only for the host of [url]; an untrusted certificate after a redirect to another host is a plain error.
   /// [pinnedCertDer] — the certificate the user accepted (base64 DER): only it, and only from the host of [url],
   /// passes without verification.
-  /// If [hwidEnabled] is true, HWID headers are sent to support device limits.
+  /// With [hwid], its HWID headers are sent (device limits of the provider).
   /// If [userAgent] is non-empty, it overrides the default User-Agent.
   Future<SubscriptionFetchResult> fetchSubscription(
     String url, {

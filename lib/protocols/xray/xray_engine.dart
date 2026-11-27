@@ -188,19 +188,27 @@ class XrayEngine {
   }
 
   /// Get current stats (for background polling).
-  Future<({int upload, int download, int uploadSpeed, int downloadSpeed})> getStats() async {
+  /// [history] — also the chart points after `since` of `epoch`, in the same call (the [getStatsHistory] answer, in
+  /// `history` of the result; null when not asked or on an error).
+  Future<({int upload, int download, int uploadSpeed, int downloadSpeed, Map<Object?, Object?>? history})> getStats({
+    ({int epoch, int since})? history,
+  }) async {
     try {
-      final result = await _channel.invokeMethod<Map<Object?, Object?>>('getStats');
+      final result = await _channel.invokeMethod<Map<Object?, Object?>>(
+        'getStats',
+        history == null ? null : {'epoch': history.epoch, 'since': history.since},
+      );
       if (result != null) {
         return (
           upload: (result['upload'] as num?)?.toInt() ?? 0,
           download: (result['download'] as num?)?.toInt() ?? 0,
           uploadSpeed: (result['uploadSpeed'] as num?)?.toInt() ?? 0,
           downloadSpeed: (result['downloadSpeed'] as num?)?.toInt() ?? 0,
+          history: result['history'] is Map ? Map<Object?, Object?>.from(result['history'] as Map) : null,
         );
       }
     } catch (_) {}
-    return (upload: 0, download: 0, uploadSpeed: 0, downloadSpeed: 0);
+    return (upload: 0, download: 0, uploadSpeed: 0, downloadSpeed: 0, history: null);
   }
 
   /// Speed history for the chart after point [since] of epoch [epoch]

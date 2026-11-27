@@ -29,7 +29,7 @@ final _log = <String>[];
 
 late Completer<void> _restored;
 late Completer<void> _synced;
-var _vpn = const VpnState2();
+var _vpn = const VpnStatus();
 var _configs = <VpnConfig>[];
 
 VpnConfig _cfg(String id) => VpnConfig(
@@ -57,7 +57,7 @@ class _Logs extends NativeLogs {
 
 class _Vpn extends VpnNotifier {
   @override
-  VpnState2 build() => _vpn;
+  VpnStatus build() => _vpn;
 
   @override
   Future<void> get synced => _synced.future;
@@ -133,7 +133,7 @@ void main() {
     _log.clear();
     _restored = Completer();
     _synced = Completer();
-    _vpn = const VpnState2();
+    _vpn = const VpnStatus();
     _configs = [_cfg('a')];
     effective = _configs.first;
     await SettingsService().save(const AppSettings(autoConnect: true));
@@ -206,7 +206,7 @@ void main() {
     });
 
     test('auto-connect leaves a VPN that is already up alone', () async {
-      _vpn = const VpnState2(connectionState: VpnState.connected);
+      _vpn = const VpnStatus(connectionState: VpnState.connected);
       _synced.complete();
       _restored.complete();
       await c.read(appLifecycleProvider.notifier).start();

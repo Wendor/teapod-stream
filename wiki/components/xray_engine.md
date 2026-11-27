@@ -18,7 +18,7 @@ engine instead of mocking the channel.
 | `saveQuickConnect(config, backend, options)` / `clearQuickConnect` | same | parameters for reconnect from the tile, boot or service restart, without connecting |
 | `disconnect()` | `disconnect` | |
 | `getVpnState()` | `getState` | a `NativeSession`: state, `reconnecting`, SOCKS credentials, `connectedAtMs`, `attempt` (the connect attempt of the native session), `error`. `NativeSession.parse` reads the `state` event map, which `getState` returns too; `VpnNotifier` parses its events with it |
-| `getStats()` / `getStatsHistory(epoch, since)` | same | history is incremental: `(epoch, seq)` |
+| `getStats({history})` / `getStatsHistory(epoch, since)` | same | history is incremental: `(epoch, seq)`; `getStats` carries it when asked |
 | `pingConfig(config)` | `ping` | ICMP `ping` (only for an address that is a hostname or IP literal, `isPingableAddress`), TCP connect as fallback; direct, not through the tunnel |
 | `measureOutbound(config, backend, options, url)` | `measureOutbound` | real request through a temporary core instance (config switch, urltest) |
 | `getLogs` / `getLogFilePath` / `clearLogs` / `setLogsEnabled` | same | `vpn_log.txt` in `filesDir`, lines `epochMs|level|message` |

@@ -129,7 +129,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
     );
   }
 
-  Widget _buildBody(BuildContext context, ConfigState cs, VpnState2 vpnState, TeapodTokens t) {
+  Widget _buildBody(BuildContext context, ConfigState cs, VpnStatus vpnState, TeapodTokens t) {
     if (cs.configs.isEmpty && cs.subscriptions.isEmpty) {
       return _EmptyState(onAdd: () => _openAddConfig(context));
     }
@@ -137,7 +137,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
     return _buildGroupedList(context, cs, vpnState, t);
   }
 
-  Widget _buildFlatList(BuildContext context, ConfigState cs, VpnState2 vpnState, TeapodTokens t) {
+  Widget _buildFlatList(BuildContext context, ConfigState cs, VpnStatus vpnState, TeapodTokens t) {
     final allConfigs = _applySort([
       ...cs.standaloneConfigs,
       for (final s in cs.subscriptions) ...(cs.configsBySubscription[s.id] ?? []),
@@ -173,7 +173,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
     );
   }
 
-  Widget _buildGroupedList(BuildContext context, ConfigState cs, VpnState2 vpnState, TeapodTokens t) {
+  Widget _buildGroupedList(BuildContext context, ConfigState cs, VpnStatus vpnState, TeapodTokens t) {
     final standalone = _applySort(cs.standaloneConfigs);
     final subs = cs.subscriptions;
     final pinnedOffset = cs.pins.isNotEmpty ? 1 : 0;

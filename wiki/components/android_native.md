@@ -204,7 +204,8 @@ the first one and every power of two after it go to the log as a warning. [secur
 ## Stats, notification, logs
 
 - **Stats** thread: every 1 s with the screen on (counters, history for the chart, notification), every 10 s with it
-  off (counters only — the chart shows a gap). Flutter polls `getStats` / `getStatsHistory`.
+  off (counters only — the chart shows a gap). Flutter polls `getStats` (with `epoch` / `since` it also returns the chart points, so the Home tab makes one call a
+  second); `getStatsHistory` is the history alone.
 - **Notification** is present while the service lives (a foreground service; the service lives only while the VPN
   is on or `blocked`); `showNotification`
   chooses full (`vpn_service`) or minimal (`vpn_service_minimal`). Updates are deduplicated, at most every 5 s, not with

@@ -240,38 +240,39 @@ void main() {
       expect(c.read(geoProvider), isA<GeoReady>());
     });
 
-    test('a check that ends during a download neither replaces its state nor lets a second one start', () async {
-      final gets = <String>[];
-      final release = Completer<void>();
-      server.handler = (r) async {
-        if (r.method == 'GET') gets.add(r.uri.path);
-        if (r.method == 'GET' && r.uri.path == '/ip.dat') await release.future;
-        if (r.uri.path.endsWith('.sha256sum')) {
-          r.response.statusCode = HttpStatus.notFound;
-        } else if (r.method != 'HEAD') {
-          r.response.write('x');
-        }
-        await r.response.close();
-      };
-      await start();
-      final notifier = c.read(geoProvider.notifier);
-      await HttpOverrides.runWithHttpOverrides(() async {
-        final hold = holdFilesDir = Completer<void>();
-        final checking = notifier.check(); // waits in getFilesDir
-        final first = notifier.download();
-        while (!gets.contains('/ip.dat')) {
-          await Future<void>.delayed(const Duration(milliseconds: 5));
-        }
-        hold.complete();
-        await checking; // no files yet: it would publish GeoMissing
-        expect(c.read(geoProvider), isA<GeoDownloading>());
-        await notifier.download(); // returns at once
-        release.complete();
-        await first;
-      }, RedirectHttpOverrides(server.port));
-      expect(gets.where((p) => p == '/ip.dat'), hasLength(1));
-      expect(c.read(geoProvider), isA<GeoReady>());
-    });
+    test(
+      'a check overtaken by a download neither extracts the bundled copy nor publishes; one download runs',
+      () async {
+        final gets = <String>[];
+        server.handler = (r) async {
+          if (r.method == 'GET') gets.add(r.uri.path);
+          if (r.uri.path.endsWith('.sha256sum')) {
+            r.response.statusCode = HttpStatus.notFound;
+          } else if (r.method != 'HEAD') {
+            r.response.write('x');
+          }
+          await r.response.close();
+        };
+        await start();
+        calls.clear();
+        final notifier = c.read(geoProvider.notifier);
+        final states = <GeoState>[];
+        c.listen(geoProvider, (_, s) => states.add(s));
+        await HttpOverrides.runWithHttpOverrides(() async {
+          final hold = holdFilesDir = Completer<void>();
+          final checking = notifier.check(); // waits in getFilesDir; no files: it would extract and publish GeoMissing
+          final first = notifier.download(); // waits for the check
+          final second = notifier.download(); // returns at once
+          hold.complete();
+          await Future.wait([checking, first, second]);
+        }, RedirectHttpOverrides(server.port));
+        expect(calls, isNot(contains('prepareBinaries')));
+        expect(states.whereType<GeoMissing>(), isEmpty);
+        expect(gets.where((p) => p == '/ip.dat'), hasLength(1));
+        expect(gets.where((p) => p == '/site.dat'), hasLength(1));
+        expect(c.read(geoProvider), isA<GeoReady>());
+      },
+    );
 
     test('a failed sum request is an error, not a skipped check', () async {
       File('${dir.path}/geoip.dat').writeAsStringSync('old ip');
@@ -343,6 +344,20 @@ void main() {
       expect((c.read(geoProvider) as GeoReady).lastUpdated, _FakeGeodata.finished);
     });
 
+    test('a check overtaken by a failed download leaves the error', () async {
+      await start();
+      fake.filesThere = true;
+      final hold = fake.holdLastUpdated = Completer<void>();
+      final notifier = c.read(geoProvider.notifier);
+      final checking = notifier.check(); // waits in lastUpdated
+      await Future<void>.delayed(Duration.zero);
+      fake.error = Exception('HTTP 503');
+      final downloading = notifier.download(); // waits for the check, then fails
+      hold.complete();
+      await Future.wait([checking, downloading]);
+      expect((c.read(geoProvider) as GeoError).message, const AppMessage.text('HTTP 503'));
+    });
+
     test('a failed download is the error and no ready state', () async {
       await start();
       fake.error = Exception('HTTP 503');
@@ -368,8 +383,16 @@ class _FakeGeodata extends GeodataService {
   @override
   bool present(String dir) => filesThere;
 
+  /// When set, the next [lastUpdated] waits for it (once).
+  Completer<void>? holdLastUpdated;
+
   @override
-  Future<DateTime?> lastUpdated() async => finished;
+  Future<DateTime?> lastUpdated() async {
+    final hold = holdLastUpdated;
+    holdLastUpdated = null;
+    await hold?.future;
+    return finished;
+  }
 
   @override
   Future<DateTime> download({

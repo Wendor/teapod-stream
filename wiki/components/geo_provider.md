@@ -13,7 +13,7 @@ State (sealed): `GeoMissing`, `GeoReady(lastUpdated)`, `GeoDownloading(downloade
   fallback bundled in `assets/binaries/` (put there by `./build.sh binaries` from the Loyalsoldier release pinned in
   `build.sh`, `GEODATA_VERSION` with SHA-256 per file; the monthly update check reports a newer release, and the pin
   is moved by a pull request), then checks again.
-- **`download()`** (one at a time: a second call while one runs returns at once; `check()` neither runs nor publishes during a download) from `AppSettings.geoipUrl` / `geositeUrl` (`GeodataService.download`): HEAD for the total size, both files into `*.tmp`
+- **`download()`** (one at a time: a second call while one runs returns at once; a check running when it starts is finished first and discarded, so the bundled-copy extraction never overlaps the install; `check()` does nothing during a download) from `AppSettings.geoipUrl` / `geositeUrl` (`GeodataService.download`): HEAD for the total size, both files into `*.tmp`
   (hashed as they arrive, `Sha256` in `lib/core/crypto/sha256.dart`), each checked against the SHA-256 its source
   publishes next to it (`<url>.sha256sum`: Loyalsoldier, runetfreedom and v2fly do), then renamed over the old files
   only when both arrived and matched. A failure or mismatch (`geoChecksumMismatch`) leaves both old files intact. No

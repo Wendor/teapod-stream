@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
+import 'one_line.dart';
 
 /// Standard hero panel: tagline · title · subtitle + a trailing widget.
 /// Used on all screens instead of duplicated Container+Stack+Corner ticks.
@@ -64,16 +65,18 @@ class HeroPanel extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(tagline, style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1.5)),
+                      OneLine(Text(tagline, style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1.5))),
                       const SizedBox(height: 8),
-                      Text(
-                        title,
-                        style: AppTheme.sans(
-                          size: 30,
-                          weight: FontWeight.w500,
-                          color: titleColor ?? t.text,
-                          letterSpacing: -1,
-                          height: 1,
+                      OneLine(
+                        Text(
+                          title,
+                          style: AppTheme.sans(
+                            size: 30,
+                            weight: FontWeight.w500,
+                            color: titleColor ?? t.text,
+                            letterSpacing: -1,
+                            height: 1,
+                          ),
                         ),
                       ),
                       if (subtitle != null) ...[const SizedBox(height: 6), subtitle!],

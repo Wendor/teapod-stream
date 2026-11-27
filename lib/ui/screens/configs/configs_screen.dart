@@ -20,6 +20,7 @@ import '../../../core/interfaces/vpn_engine.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/hero_panel.dart';
+import '../../widgets/one_line.dart';
 import '../../widgets/pressable.dart';
 import '../../widgets/untrusted_cert_dialog.dart';
 import '../../widgets/settings_shared.dart' show SetToggleRow;
@@ -384,8 +385,9 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
       backgroundColor: t.bg,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
       builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        // A list, not a column: at a large text scale the menu scrolls instead of being cut off.
+        child: ListView(
+          shrinkWrap: true,
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),

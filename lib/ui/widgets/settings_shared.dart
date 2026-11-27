@@ -204,12 +204,16 @@ class SetInlineField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final row = Container(
+      width: double.infinity,
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: t.lineSoft)),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 12,
+        runSpacing: 8,
         children: [
           Text(label, style: AppTheme.sans(size: 14, color: t.text)),
           child,
@@ -411,35 +415,43 @@ class SetSegSquare extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Each segment draws its own border, so the 48 dp tap height around it stays transparent.
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: opts.asMap().entries.map((e) {
-        final idx = e.key;
-        final (val, lab) = e.value;
-        final active = value == val;
-        final side = BorderSide(color: t.line);
-        return TapTarget(
-          onTap: locked ? () => showReadonlySnack(context) : () => onChanged(val),
-          selected: active,
-          minWidth: 0,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            constraints: const BoxConstraints(minWidth: kMinInteractiveDimension),
-            alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: active ? t.accentSoft : Colors.transparent,
-              border: Border(top: side, bottom: side, right: side, left: idx == 0 ? side : BorderSide.none),
-            ),
-            child: AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 200),
-              style: AppTheme.mono(size: 11, color: active ? t.accent : t.textDim, letterSpacing: 0.5),
-              child: Text(lab),
-            ),
-          ),
-        );
-      }).toList(),
+    // Each segment draws its own border, so the 48 dp tap height around it stays transparent. The labels are capped
+    // at 1.5×; a selector still wider than its line (many segments on a narrow screen) scrolls sideways. The tap
+    // targets are never scaled.
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.5,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: opts.asMap().entries.map((e) {
+            final idx = e.key;
+            final (val, lab) = e.value;
+            final active = value == val;
+            final side = BorderSide(color: t.line);
+            return TapTarget(
+              onTap: locked ? () => showReadonlySnack(context) : () => onChanged(val),
+              selected: active,
+              minWidth: 0,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                constraints: const BoxConstraints(minWidth: kMinInteractiveDimension),
+                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: active ? t.accentSoft : Colors.transparent,
+                  border: Border(top: side, bottom: side, right: side, left: idx == 0 ? side : BorderSide.none),
+                ),
+                child: AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 200),
+                  style: AppTheme.mono(size: 11, color: active ? t.accent : t.textDim, letterSpacing: 0.5),
+                  child: Text(lab),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
     );
   }
 }

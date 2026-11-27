@@ -15,7 +15,15 @@ class _SetHeaderStrip extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text('teapod.stream // config', style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+          Flexible(
+            child: Text(
+              'teapod.stream // config',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1),
+            ),
+          ),
+          const SizedBox(width: 12),
           Text(
             'sys.state [${locked ? 'locked' : 'open'}]',
             style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1),
@@ -88,31 +96,33 @@ class _SetHeroPanel extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                // Lock indicator
-                Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(border: Border.all(color: borderColor)),
-                  child: Stack(
-                    children: [
-                      if (locked) ...[
-                        Positioned(top: -1, left: -1, child: _LockCorner(color: _gold, isTop: true)),
-                        Positioned(bottom: -1, right: -1, child: _LockCorner(color: _gold, isTop: false)),
-                      ],
-                      Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _LockIcon(color: lockColor, open: !locked),
-                            const SizedBox(height: 2),
-                            Text(
-                              locked ? 'ro' : 'rw',
-                              style: AppTheme.mono(size: 8, color: lockColor, letterSpacing: 1),
-                            ),
-                          ],
+                // Lock indicator: an icon of a fixed size, its caption doesn't scale
+                MediaQuery.withNoTextScaling(
+                  child: Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(border: Border.all(color: borderColor)),
+                    child: Stack(
+                      children: [
+                        if (locked) ...[
+                          Positioned(top: -1, left: -1, child: _LockCorner(color: _gold, isTop: true)),
+                          Positioned(bottom: -1, right: -1, child: _LockCorner(color: _gold, isTop: false)),
+                        ],
+                        Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _LockIcon(color: lockColor, open: !locked),
+                              const SizedBox(height: 2),
+                              Text(
+                                locked ? 'ro' : 'rw',
+                                style: AppTheme.mono(size: 8, color: lockColor, letterSpacing: 1),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ],

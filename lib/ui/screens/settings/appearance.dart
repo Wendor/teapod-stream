@@ -16,12 +16,17 @@ class _AppearanceRows extends ConsumerWidget {
       children: [
         // Theme
         Container(
+          width: double.infinity,
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
           decoration: BoxDecoration(
             border: Border(bottom: BorderSide(color: t.lineSoft)),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          // A Wrap, not a Row: at a large text scale the segments go under the label instead of past the edge.
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 8,
             children: [
               Text(l.settingsTheme, style: AppTheme.sans(size: 14, color: t.text)),
               SetSegSquare(
@@ -47,12 +52,16 @@ class _AppearanceRows extends ConsumerWidget {
         ),
         // Language
         Container(
+          width: double.infinity,
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
           decoration: BoxDecoration(
             border: Border(bottom: BorderSide(color: t.lineSoft)),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 8,
             children: [
               Text(l.settingsLanguage, style: AppTheme.sans(size: 14, color: t.text)),
               SetSegSquare(
@@ -67,12 +76,16 @@ class _AppearanceRows extends ConsumerWidget {
         ),
         // Font scale
         Container(
+          width: double.infinity,
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
           decoration: BoxDecoration(
             border: Border(bottom: BorderSide(color: t.lineSoft)),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 8,
             children: [
               Text(l.settingsFontSize, style: AppTheme.sans(size: 14, color: t.text)),
               if (settings != null)

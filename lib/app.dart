@@ -20,8 +20,10 @@ import 'providers/theme_provider.dart';
 import 'providers/locale_provider.dart';
 import 'ui/deeplink_handler.dart';
 import 'protocols/xray/xray_engine.dart';
+import 'ui/theme/app_text_scaler.dart';
 import 'itest/itest_agent.dart';
 import 'itest/itest_protocol.dart';
+import 'ui/widgets/one_line.dart';
 
 class TeapodApp extends StatelessWidget {
   const TeapodApp({super.key});
@@ -61,7 +63,7 @@ class _TeapodMaterialApp extends ConsumerWidget {
       builder: (ctx, child) {
         L10n.current = ctx.l10n;
         return MediaQuery(
-          data: MediaQuery.of(ctx).copyWith(textScaler: TextScaler.linear(fontScale)),
+          data: MediaQuery.of(ctx).copyWith(textScaler: appTextScaler(MediaQuery.textScalerOf(ctx), fontScale)),
           child: child!,
         );
       },
@@ -172,61 +174,75 @@ class _ConsoleTabBar extends ConsumerWidget {
       _TabItem(icon: _TabIcon.cog, label: l.tabSettings, badge: hasUpdateBadge),
     ];
 
-    return Container(
-      decoration: BoxDecoration(
-        color: t.bg,
-        border: Border(top: BorderSide(color: t.line, width: 1)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 10, 8, 6),
-          child: Row(
-            children: items.asMap().entries.map((e) {
-              final idx = e.key;
-              final item = e.value;
-              final active = idx == currentIndex;
-              return Expanded(
-                child: Semantics(
-                  label: item.label,
-                  button: true,
-                  selected: active,
-                  child: GestureDetector(
-                    onTap: () => onTap(idx),
-                    behavior: HitTestBehavior.opaque,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Active underline indicator
-                        Container(width: 28, height: 2, color: active ? t.accent : Colors.transparent),
-                        const SizedBox(height: 5),
-                        Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            _SvgTabIcon(icon: item.icon, color: active ? t.accent : t.textMuted),
-                            if (item.badge)
-                              Positioned(
-                                right: -3,
-                                top: -3,
-                                child: Container(
-                                  width: 7,
-                                  height: 7,
-                                  decoration: BoxDecoration(color: t.danger, shape: BoxShape.circle),
+    // Four labels share the width: capped at 1.3 they keep one size (a label that still doesn't fit shrinks alone).
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.3,
+      child: Container(
+        decoration: BoxDecoration(
+          color: t.bg,
+          border: Border(top: BorderSide(color: t.line, width: 1)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 10, 8, 6),
+            child: Row(
+              children: items.asMap().entries.map((e) {
+                final idx = e.key;
+                final item = e.value;
+                final active = idx == currentIndex;
+                return Expanded(
+                  child: Semantics(
+                    label: item.label,
+                    button: true,
+                    selected: active,
+                    child: GestureDetector(
+                      onTap: () => onTap(idx),
+                      behavior: HitTestBehavior.opaque,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Active underline indicator
+                          Container(width: 28, height: 2, color: active ? t.accent : Colors.transparent),
+                          const SizedBox(height: 5),
+                          Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              _SvgTabIcon(icon: item.icon, color: active ? t.accent : t.textMuted),
+                              if (item.badge)
+                                Positioned(
+                                  right: -3,
+                                  top: -3,
+                                  child: Container(
+                                    width: 7,
+                                    height: 7,
+                                    decoration: BoxDecoration(color: t.danger, shape: BoxShape.circle),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: OneLine(
+                              alignment: Alignment.center,
+                              Text(
+                                item.label.toUpperCase(),
+                                style: AppTheme.mono(
+                                  size: 10,
+                                  color: active ? t.accent : t.textMuted,
+                                  letterSpacing: 0.5,
                                 ),
                               ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          item.label.toUpperCase(),
-                          style: AppTheme.mono(size: 10, color: active ? t.accent : t.textMuted, letterSpacing: 0.5),
-                        ),
-                      ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              );
-            }).toList(),
+                );
+              }).toList(),
+            ),
           ),
         ),
       ),

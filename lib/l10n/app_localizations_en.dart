@@ -1617,4 +1617,27 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get importChangeLogLevel => 'Log level';
+
+  @override
+  String get logsPause => 'Pause the log';
+
+  @override
+  String get logsResume => 'Resume the log';
+
+  @override
+  String get logsTunnelDiag => 'Write tunnel diagnostics to the log';
+
+  @override
+  String get logsShare => 'Share the log';
+
+  @override
+  String get logsClear => 'Clear the log';
+
+  @override
+  String get profilesImport => 'Import a profile';
+
+  @override
+  String settingsAccentSwatch(String hex) {
+    return 'Accent color $hex';
+  }
 }

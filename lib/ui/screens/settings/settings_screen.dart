@@ -22,6 +22,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/settings_shared.dart';
 import '../../widgets/reconnect_banner.dart';
+import '../../widgets/tap_target.dart';
 import '../subscription_settings_screen.dart';
 import '../whats_new_screen.dart';
 import '../../../l10n/l10n.dart';

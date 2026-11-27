@@ -9,8 +9,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/hero_panel.dart';
 import '../../widgets/reconnect_banner.dart';
-import '../../widgets/pressable.dart';
-import '../../widgets/settings_shared.dart' show SetRowChev, SetSquareSwitch, saveSettings;
+import '../../widgets/settings_shared.dart' show SetRowChev, SetSquareSwitch, SetToggleRow, saveSettings;
 import '../split_tunnel_screen.dart';
 import '../../../l10n/l10n.dart';
 

@@ -2917,6 +2917,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Log level'**
   String get importChangeLogLevel;
+
+  /// No description provided for @logsPause.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause the log'**
+  String get logsPause;
+
+  /// No description provided for @logsResume.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume the log'**
+  String get logsResume;
+
+  /// No description provided for @logsTunnelDiag.
+  ///
+  /// In en, this message translates to:
+  /// **'Write tunnel diagnostics to the log'**
+  String get logsTunnelDiag;
+
+  /// No description provided for @logsShare.
+  ///
+  /// In en, this message translates to:
+  /// **'Share the log'**
+  String get logsShare;
+
+  /// No description provided for @logsClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear the log'**
+  String get logsClear;
+
+  /// No description provided for @profilesImport.
+  ///
+  /// In en, this message translates to:
+  /// **'Import a profile'**
+  String get profilesImport;
+
+  /// No description provided for @settingsAccentSwatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Accent color {hex}'**
+  String settingsAccentSwatch(String hex);
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

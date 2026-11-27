@@ -7,6 +7,7 @@ import '../../providers/settings_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/settings_shared.dart';
+import '../widgets/tap_target.dart';
 import '../../l10n/l10n.dart';
 
 class DnsSettingsScreen extends ConsumerStatefulWidget {
@@ -102,8 +103,9 @@ class _DnsSettingsScreenState extends ConsumerState<DnsSettingsScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  GestureDetector(
+                  TapTarget(
                     onTap: () => Navigator.pop(context),
+                    minWidth: 0,
                     child: Row(
                       children: [
                         Text('‹', style: AppTheme.mono(size: 12, color: t.textMuted)),
@@ -116,7 +118,7 @@ class _DnsSettingsScreenState extends ConsumerState<DnsSettingsScreen> {
                       ],
                     ),
                   ),
-                  GestureDetector(
+                  TapTarget(
                     onTap: _save,
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),

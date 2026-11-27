@@ -126,40 +126,18 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(context.l10n.splitVpnMode, style: AppTheme.sans(size: 14, color: t.text)),
-                  Container(
-                    decoration: BoxDecoration(border: Border.all(color: t.line)),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        for (final (mode, lab) in [
-                          (VpnMode.onlySelected, context.l10n.splitModeOnly),
-                          (VpnMode.allExcept, context.l10n.splitModeExcept),
-                        ]) ...[
-                          GestureDetector(
-                            onTap: () {
-                              if (settings != null) {
-                                saveSettings(context, ref, (c) => c.copyWith(vpnMode: mode));
-                              }
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: settings?.vpnMode == mode ? t.accentSoft : Colors.transparent,
-                                border: mode == VpnMode.onlySelected ? Border(right: BorderSide(color: t.line)) : null,
-                              ),
-                              child: Text(
-                                lab,
-                                style: AppTheme.mono(
-                                  size: 11,
-                                  color: settings?.vpnMode == mode ? t.accent : t.textDim,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
+                  SetSegSquare(
+                    t: t,
+                    value: settings?.vpnMode.name ?? '',
+                    opts: [
+                      (VpnMode.onlySelected.name, context.l10n.splitModeOnly),
+                      (VpnMode.allExcept.name, context.l10n.splitModeExcept),
+                    ],
+                    onChanged: (v) {
+                      if (settings == null) return;
+                      final mode = VpnMode.values.byName(v);
+                      saveSettings(context, ref, (c) => c.copyWith(vpnMode: mode));
+                    },
                   ),
                 ],
               ),

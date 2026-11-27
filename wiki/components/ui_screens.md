@@ -90,6 +90,11 @@ text helpers (minimum 11 px). Font scale (`fontScale`) applies through the app's
   private widgets in `part` files next to it (`screens/configs/`: `header`, `groups`, `config_row`, `pinned`,
   `tiles`; `screens/routing/`: `controls`, `picker`, `geo`; `screens/settings/`:
   `header`, `rows`, `core_order`, `appearance`, `update`; `screens/home/`: `header`, `power`, `ticks`, `metrics`).
+- Every tap target is at least 48 dp on each side and an icon-only one has a label: `TapTarget`
+  (`widgets/tap_target.dart`) puts a transparent 48 dp area around a smaller visual, dims it while pressed and
+  carries the TalkBack label; a row that toggles as a whole is one target announced as a switch (`SetToggleRow`; its
+  `SetSquareSwitch` is then only the visual). `test/ui/accessibility_test.dart` checks the main screens with
+  `androidTapTargetGuideline` and `labeledTapTargetGuideline`.
 - UI tests: `test/ui/` — smoke of every screen, interactions ([tests](tests.md)).
 
 ## Related

@@ -230,7 +230,8 @@ class _RowToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // The whole row toggles, as in settings.
-    return Pressable(
+    return SetToggleRow(
+      value: value,
       onTap: locked ? null : () => onChange(!value),
       child: Container(
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
@@ -252,7 +253,7 @@ class _RowToggle extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 14),
-            SetSquareSwitch(t: t, value: value, onChanged: locked ? null : (v) => onChange(v)),
+            SetSquareSwitch(t: t, value: value),
           ],
         ),
       ),

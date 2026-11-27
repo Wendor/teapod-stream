@@ -1004,5 +1004,19 @@
   "importChangeKillSwitch": "Kill switch",
   "importChangeDns": "DNS",
   "importChangeRouting": "Routing rules",
-  "importChangeLogLevel": "Log level"
+  "importChangeLogLevel": "Log level",
+  "logsPause": "Pause the log",
+  "logsResume": "Resume the log",
+  "logsTunnelDiag": "Write tunnel diagnostics to the log",
+  "logsShare": "Share the log",
+  "logsClear": "Clear the log",
+  "profilesImport": "Import a profile",
+  "settingsAccentSwatch": "Accent color {hex}",
+  "@settingsAccentSwatch": {
+    "placeholders": {
+      "hex": {
+        "type": "String"
+      }
+    }
+  }
 }

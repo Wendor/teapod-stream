@@ -101,12 +101,14 @@ class _AppearanceRows extends ConsumerWidget {
               Text(l.settingsAccentColor, style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
               const SizedBox(height: 10),
               Wrap(
-                spacing: 8,
-                runSpacing: 8,
                 children: AppColors.accentPresets.map((c) {
                   final selected = accent.toARGB32() == c.toARGB32();
-                  return GestureDetector(
+                  return TapTarget(
                     onTap: () => ref.read(accentProvider.notifier).set(c),
+                    label: l.settingsAccentSwatch(
+                      '#${c.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
+                    ),
+                    selected: selected,
                     child: Container(
                       width: 38,
                       height: 38,

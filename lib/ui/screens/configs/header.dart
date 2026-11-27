@@ -19,13 +19,23 @@ class _CfgHeaderStrip extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text('teapod.stream // configs', style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+          // The caption gives way: the 48 dp ping target and the total keep their width on a narrow screen.
+          Flexible(
+            child: Text(
+              'teapod.stream // configs',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1),
+            ),
+          ),
+          const SizedBox(width: 12),
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               if (isPinging)
                 SizedBox(width: 12, height: 12, child: CircularProgressIndicator(color: t.accent, strokeWidth: 1.2))
               else if (onPing != null)
-                GestureDetector(
+                TapTarget(
                   onTap: onPing,
                   child: Text('ping', style: AppTheme.mono(size: 10, color: t.accent, letterSpacing: 1)),
                 ),
@@ -79,7 +89,6 @@ class _CfgTitlePanel extends StatelessWidget {
             label: context.l10n.configsDisplaySettings,
             onTap: onSettings,
           ),
-          const SizedBox(width: 6),
           _IconBtn(
             t: t,
             icon: Icons.schedule_rounded,
@@ -87,7 +96,6 @@ class _CfgTitlePanel extends StatelessWidget {
             label: context.l10n.configsSubSettings,
             onTap: onSubSettings,
           ),
-          const SizedBox(width: 6),
           _IconBtn(
             t: t,
             icon: Icons.ios_share_rounded,
@@ -95,11 +103,10 @@ class _CfgTitlePanel extends StatelessWidget {
             label: context.l10n.configsExport,
             onTap: onExport,
           ),
-          const SizedBox(width: 6),
           if (isRefreshing)
             SizedBox(
-              width: 32,
-              height: 32,
+              width: kMinInteractiveDimension,
+              height: kMinInteractiveDimension,
               child: Center(
                 child: SizedBox(
                   width: 14,
@@ -116,7 +123,6 @@ class _CfgTitlePanel extends StatelessWidget {
               label: context.l10n.configsRefreshSubs,
               onTap: onRefreshAll,
             ),
-          const SizedBox(width: 6),
           _IconBtn(t: t, icon: Icons.add_rounded, accent: true, label: context.l10n.configsAdd, onTap: onAdd),
         ],
       ),
@@ -135,28 +141,24 @@ class _IconBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
+    return TapTarget(
       label: label,
-      button: true,
-      enabled: onTap != null,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: accent ? t.accent : Colors.transparent,
-            border: Border.all(color: accent ? t.accent : t.line),
-          ),
-          child: Icon(
-            icon,
-            size: 15,
-            color: accent
-                ? t.bg
-                : onTap != null
-                ? t.textDim
-                : t.textMuted,
-          ),
+      onTap: onTap,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: accent ? t.accent : Colors.transparent,
+          border: Border.all(color: accent ? t.accent : t.line),
+        ),
+        child: Icon(
+          icon,
+          size: 15,
+          color: accent
+              ? t.bg
+              : onTap != null
+              ? t.textDim
+              : t.textMuted,
         ),
       ),
     );

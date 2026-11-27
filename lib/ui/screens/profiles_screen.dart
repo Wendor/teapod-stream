@@ -14,6 +14,7 @@ import '../theme/app_colors.dart';
 import '../widgets/import_review.dart';
 import '../widgets/breadcrumb_bar.dart';
 import '../widgets/hero_panel.dart';
+import '../widgets/tap_target.dart';
 import '../../l10n/l10n.dart';
 
 // ── Screen ────────────────────────────────────────────────────────
@@ -64,12 +65,17 @@ class ProfilesScreen extends ConsumerWidget {
               ),
               trailing: Row(
                 children: [
-                  _ProfIconBtn(t: t, icon: Icons.download_rounded, onTap: () => _profShowImportDialog(context, ref, t)),
-                  const SizedBox(width: 6),
+                  _ProfIconBtn(
+                    t: t,
+                    icon: Icons.download_rounded,
+                    label: context.l10n.profilesImport,
+                    onTap: () => _profShowImportDialog(context, ref, t),
+                  ),
                   _ProfIconBtn(
                     t: t,
                     icon: Icons.add_rounded,
                     accent: true,
+                    label: context.l10n.profilesNew,
                     onTap: () => _profShowCreateDialog(context, ref, t),
                   ),
                 ],
@@ -770,14 +776,22 @@ class _ProfIconBtn extends StatelessWidget {
   final TeapodTokens t;
   final IconData icon;
   final bool accent;
+  final String label;
   final VoidCallback onTap;
 
-  const _ProfIconBtn({required this.t, required this.icon, required this.onTap, this.accent = false});
+  const _ProfIconBtn({
+    required this.t,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.accent = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return TapTarget(
       onTap: onTap,
+      label: label,
       child: Container(
         width: 32,
         height: 32,

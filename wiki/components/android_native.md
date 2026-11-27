@@ -23,13 +23,15 @@ back. It keeps working when the Flutter UI is gone (tile, boot, Tasker, service 
 | `core/` | `VpnCore` and its implementations (below), `TunOwnerPolicy`, `SocksCredentials`, `ProxyRedirect` |
 | `VpnEventStreamHandler.kt` | EventChannel (`com.teapodstream/vpn/events`) singleton |
 | `ConnectionParams.kt` | the session parameters (everything but the config and the SOCKS login): one JSON form for the `ACTION_CONNECT` Intent (`EXTRA_PARAMS`) and the stored parameters; `fromJson` holds every default and limit (MTU 576–9000, heartbeat threshold 1–10) and parses the choices into enums once (`VpnMode`, `HeartbeatProbe`, `HeartbeatAction`, `CoreKind`; JSON keeps their ids; missing or unknown → the default, unknown with a logcat line), `fromArgs` maps Flutter's `connect` / `saveQuickConnect` arguments through it |
-| `QuickConnectStore.kt` | the quick-reconnect data in `filesDir`, its only reader and writer: the core config (`xray_config.json`), `ConnectionParams` (`last_connection_meta.json`), the SOCKS login (`socks_creds.json`), the tile's config name (`tile_config_name.txt`) and the user-off flag (`user_disconnected.flag`); writes go through a temp file and a rename. `quickStart()` builds the `StartRequest` (config, params, SOCKS login — the stored one, else read from the config — the Flutter `attempt` it answers, 0 for a native start, `reconnect` and the tile's config name — Flutter's, or the stored one read with the config — which the session's save writes back with it) that `startVpn(request)` takes |
+| `QuickConnectStore.kt` | the quick-reconnect data in `filesDir`, its only reader and writer: the core config (`xray_config.json`), `ConnectionParams` (`last_connection_meta.json`), the tile's config name (`tile_config_name.txt`) and the user-off flag (`user_disconnected.flag`); writes go through a temp file and a rename. `quickStart()` builds the `StartRequest` (config, params, the SOCKS login read from the config — the only place a quick start reads it from, the inbound tagged `socks-in` or else the first SOCKS one, as a managed config keeps the server's tag (`SocksCredentials`) — the Flutter `attempt` it answers, 0 for a native start, `reconnect` and the tile's config name — Flutter's, or the stored one read with the config — which the session's save writes back with it) that `startVpn(request)` takes |
 | `VpnTileService.kt` | Quick Settings tile; not an active tile — the system asks for its state whenever it is shown, so a force-stopped process leaves no stale "connected" |
 | `BootReceiver.kt` | auto-start after boot (`autoStartOnBoot`, a saved config, not after an explicit disconnect) |
 | `VpnCommandReceiver.kt` | Tasker/automation broadcasts `com.teapodstream.CONNECT` / `DISCONNECT`; ignored unless `automationEnabled` |
 | `PrefixTcpProxy.kt` | local TCP proxy for Shadowsocks `?prefix=` (Outline) |
 | `SessionReconciler.kt` | the one desired session state (`Desired.Off(attempt)` / `Desired.On(request, id)`) and the thread that brings the session to it: commands, `onRevoke`, reconnects and retries only replace it (`set`, or `replace` while an expected state is still wanted); a run loops the pure `nextAction(desired, actual)` (stop / close the sink / start / settled) through `SessionDriver` |
 | `HeartbeatPolicy.kt` | the heartbeat's decisions, pure and JVM-tested: observations (probe ok / failed, no direct internet, dead or leaking tun2socks, TUN idle, warm-up deadline) → an action (none, log, retry now, reconnect, ask Flutter to switch); the thread in `Heartbeat` only probes and applies it |
+| `TunSpec.kt` | what the TUN is built with, pure and JVM-tested: session name, MTU, random addresses, routes, DNS, the allowed or disallowed apps; the service only passes it to `VpnService.Builder` (skipping apps that aren't installed) and calls `establish()` |
+| `StartFailurePolicy.kt` | what a stop and a failed start leave, pure and JVM-tested: `stop` (kill switch, reconnecting, whether the stop allows a sink, a TUN held → keep the TUN, the final state), `startFailure` (kill switch, reconnect, a previous TUN, a new TUN held, still wanted / replaced by a start / by an off, attempts → restore the previous TUN, retry, the stop's flags, whether the error is reported); `stopVpn` and `startVpn`'s failure path only apply them |
 | `NetworkChangePolicy.kt` | network-change scheduling, pure and JVM-tested: an event and the time since connect → a plan (delay, check the network or reconnect); when the plan fires → reconnect or not |
 | `SocksHttpProbe.kt` | the heartbeat's `socks` probe: SOCKS5 handshake and an HTTP GET over raw sockets, probe-URL parsing |
 | `SpeedHistory.kt` | ring buffer for the speed chart (`(epoch, seq)` increments) |
@@ -66,14 +68,14 @@ desired state's attempt (`own`); an `Off` that is reached reports `disconnected`
 desired state its session was started for (`connectedDesired`), and a start replaced before it began does nothing.
 
 - **`ACTION_CONNECT`** (from Flutter): only the notification type is taken before the state is set (when no session runs);
-  `startVpn(StartRequest)` takes the parameters (`useParams`: the heartbeat, tethering and notification settings are
-  read from them) once it owns the session, and stores them, the config it runs and its SOCKS login together with the
-  tile's config name, then refreshes the tile (`QuickConnectStore.save`: one step under a lock shared with the activity's save and the quick-start read; the old login and
-  config are removed first, so an interrupted save leaves nothing to quick-start rather than a mix of two connections; a failed save is logged
+  `startVpn(StartRequest)` takes the parameters (`useParams`: the only copy of them in the service — the kill switch, proxy-only,
+  the heartbeat, tethering and notification settings are read from it) once it owns the session, and stores them, the config it runs (with its SOCKS login) together with the
+  tile's config name, then refreshes the tile (`QuickConnectStore.save`: one step under a lock shared with the activity's save and the quick-start read; the old
+  config is removed first (and a `socks_creds.json` left by older versions), so an interrupted save leaves nothing to quick-start rather than a mix of two connections; a failed save is logged
   and costs only the quick start, not the session). Before the old session stops, `sessionAttempt` takes Flutter's
   connect attempt (`EXTRA_ATTEMPT`), and every snapshot the session
   publishes carries it as `attempt` (quick starts reset it to 0 — untagged); if a session is running this is a **hot
-  switch** — `stopVpn(reconnecting=true)` keeps TUN as a sink until the new session is up, no leak window.
+  switch** — `stopVpn(mayKeepSink = true, reconnecting = true)` keeps TUN as a sink until the new session is up, no leak window.
 - **`ACTION_CONNECT_QUICK`** (tile, the `blocked` notification, boot) and the START_STICKY restart
   start from one request, `QuickConnectStore.quickStart()` (so do reconnects and retries; without a stored one they
   reuse the session's own request). `ACTION_CONNECT_QUICK` is ignored while a session is wanted and running or being
@@ -90,8 +92,8 @@ desired state its session was started for (`connectedDesired`), and a start repl
   for, cancelled from the notification or the tile, gets its answer. Calls `ServiceNotifications.foreground()` first —
   it may arrive via `startForegroundService` into a fresh process.
 
-**Starting.** `Builder.establish()` → TUN (random `10.x.x.x/32`, IPv4 default route; IPv6 only with `ipv6Enabled`;
-MTU from settings) → `VpnCore.start` → `setConnected()`: publishes the `connected` snapshot (SOCKS credentials,
+**Starting.** `TunSpec.of` → `Builder.establish()` → TUN (random `10.x.x.x/32`, IPv4 default route; IPv6 only with
+`ipv6Enabled`; MTU from settings; the split-tunneling app lists) → `VpnCore.start` → `setConnected()`: publishes the `connected` snapshot (SOCKS credentials,
 `connectedAtMs`), notification.
 
 **Failure reason.** A failed start passes its reason to `stopVpn(error = …)`; the `error`/`blocked` snapshot carries it
@@ -118,7 +120,7 @@ phantom connection, and the heartbeat's own tun2socks check stays as a fallback.
 
 ## Kill switch and reconnect
 
-- **TUN fd reuse.** `stopVpn(reconnecting=true)` keeps TUN open, and `startVpn` of a request with `reconnect = true`
+- **TUN fd reuse.** `stopVpn(mayKeepSink = true, reconnecting = true)` keeps TUN open, and `startVpn` of a request with `reconnect = true`
   whose `ConnectionParams` are the ones the TUN was built with (`tunParams`) passes the **same fd** to the core
   instead of a new `establish()` (tun2socks works on its own `dup`). No new VPN network agent, so no system "VPN
   active" notification on Android 15/16 and no connectivity flap for apps; traffic during the reconnect goes into the
@@ -130,6 +132,9 @@ phantom connection, and the heartbeat's own tun2socks check stays as a fallback.
   otherwise it establishes a new TUN and closes the held one. Final failure with kill switch → sink stays, state
   `blocked`.
   A failed manual connect keeps a sink only if there already was one — a broken config must not lock the network.
+  A start replaced while it ran reports no error: by another start it keeps the sink for it (`reconnecting`), by an
+  off it stops as a user's off does. All of it is `StartFailurePolicy`; `stopVpn(mayKeepSink = false)` is a stop
+  that never keeps a sink (a user's off, a final failure without the kill switch's sink).
 - **`blocked`.** The kill switch keeps TUN with `setUnderlyingNetworks(emptyArray())` after an unexpected drop: traffic
   enters TUN and nobody reads it. Notification and tile show it; tapping the tile or the notification's Connect
   reconnects.

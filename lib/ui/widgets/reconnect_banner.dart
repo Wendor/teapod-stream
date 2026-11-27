@@ -5,6 +5,7 @@ import '../../providers/vpn_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../../l10n/l10n.dart';
+import 'tap_target.dart';
 
 /// "Settings changed — reconnect" banner.
 /// Visible only when pendingReconnectProvider == true.
@@ -32,16 +33,13 @@ class ReconnectBanner extends ConsumerWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Semantics(
+          TapTarget(
             label: context.l10n.homeActionReconnect,
-            button: true,
-            child: GestureDetector(
-              onTap: () => ref.read(vpnProvider.notifier).reconnectWithNewConfig(),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                color: t.accent,
-                child: Text(context.l10n.reconnectButton, style: AppTheme.mono(size: 9, color: t.bg, letterSpacing: 1)),
-              ),
+            onTap: () => ref.read(vpnProvider.notifier).reconnectWithNewConfig(),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              color: t.accent,
+              child: Text(context.l10n.reconnectButton, style: AppTheme.mono(size: 9, color: t.bg, letterSpacing: 1)),
             ),
           ),
         ],

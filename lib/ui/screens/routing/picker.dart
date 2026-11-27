@@ -24,7 +24,7 @@ class _PickerShell extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(title, style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
-                GestureDetector(
+                TapTarget(
                   onTap: onDone,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -76,7 +76,9 @@ class _CheckRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return SetToggleRow(
+      value: value,
+      checkbox: true,
       onTap: () => onChanged(!value),
       child: Container(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
@@ -138,6 +140,7 @@ class _CustomInputRow extends StatelessWidget {
                 hintStyle: AppTheme.mono(size: 12, color: t.textMuted),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 isDense: true,
+                constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
                 enabledBorder: OutlineInputBorder(
                   borderSide: BorderSide(color: t.line),
                   borderRadius: BorderRadius.zero,
@@ -150,8 +153,9 @@ class _CustomInputRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          GestureDetector(
+          TapTarget(
             onTap: onAdd,
+            label: hint,
             child: Container(
               width: 40,
               height: 40,

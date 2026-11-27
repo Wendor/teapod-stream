@@ -15,6 +15,7 @@ import '../theme/app_theme.dart';
 import '../widgets/breadcrumb_bar.dart';
 import '../widgets/import_review.dart';
 import '../widgets/untrusted_cert_dialog.dart';
+import '../widgets/tap_target.dart';
 import 'qr_scan_screen.dart';
 import '../../l10n/l10n.dart';
 
@@ -72,8 +73,9 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text('teapod.stream // add', style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
-                  GestureDetector(
+                  TapTarget(
                     onTap: _openQrScan,
+                    label: context.l10n.qrTitle,
                     child: Container(
                       width: 28,
                       height: 28,
@@ -151,7 +153,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
                         ),
                         if (_clipboardSuggestion != null) ...[
                           const SizedBox(height: 10),
-                          GestureDetector(
+                          TapTarget(
                             onTap: () {
                               final text = _clipboardSuggestion!;
                               setState(() {
@@ -194,7 +196,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
                         Row(
                           children: [
                             Expanded(
-                              child: GestureDetector(
+                              child: TapTarget(
                                 onTap: _loading ? null : _pasteFromClipboard,
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(vertical: 13),
@@ -215,7 +217,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
                             ),
                             const SizedBox(width: 10),
                             Expanded(
-                              child: GestureDetector(
+                              child: TapTarget(
                                 onTap: _loading ? null : _import,
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(vertical: 13),

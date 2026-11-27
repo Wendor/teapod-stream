@@ -10,6 +10,7 @@ import '../../providers/settings_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/breadcrumb_bar.dart';
+import '../widgets/dialog_parts.dart';
 import '../widgets/hero_panel.dart';
 import '../widgets/settings_shared.dart';
 import '../../l10n/l10n.dart';
@@ -39,18 +40,11 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: t.bgElev,
-        title: Text(context.l10n.splitTethering, style: AppTheme.sans(size: 16, color: t.text)),
-        content: Text(context.l10n.splitTetheringWarning, style: AppTheme.sans(size: 13, color: t.textDim)),
+        title: Text(context.l10n.splitTethering),
+        content: Text(context.l10n.splitTetheringWarning),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(context.l10n.commonCancel, style: AppTheme.mono(size: 12, color: t.textDim)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(context.l10n.commonEnable, style: AppTheme.mono(size: 12, color: t.danger)),
-          ),
+          const DialogCancel(result: false),
+          DialogAction(context.l10n.commonEnable, danger: true, onPressed: () => Navigator.pop(ctx, true)),
         ],
       ),
     );
@@ -126,40 +120,18 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(context.l10n.splitVpnMode, style: AppTheme.sans(size: 14, color: t.text)),
-                  Container(
-                    decoration: BoxDecoration(border: Border.all(color: t.line)),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        for (final (mode, lab) in [
-                          (VpnMode.onlySelected, context.l10n.splitModeOnly),
-                          (VpnMode.allExcept, context.l10n.splitModeExcept),
-                        ]) ...[
-                          GestureDetector(
-                            onTap: () {
-                              if (settings != null) {
-                                saveSettings(context, ref, (c) => c.copyWith(vpnMode: mode));
-                              }
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: settings?.vpnMode == mode ? t.accentSoft : Colors.transparent,
-                                border: mode == VpnMode.onlySelected ? Border(right: BorderSide(color: t.line)) : null,
-                              ),
-                              child: Text(
-                                lab,
-                                style: AppTheme.mono(
-                                  size: 11,
-                                  color: settings?.vpnMode == mode ? t.accent : t.textDim,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
+                  SetSegSquare(
+                    t: t,
+                    value: settings?.vpnMode.name ?? '',
+                    opts: [
+                      (VpnMode.onlySelected.name, context.l10n.splitModeOnly),
+                      (VpnMode.allExcept.name, context.l10n.splitModeExcept),
+                    ],
+                    onChanged: (v) {
+                      if (settings == null) return;
+                      final mode = VpnMode.values.byName(v);
+                      saveSettings(context, ref, (c) => c.copyWith(vpnMode: mode));
+                    },
                   ),
                 ],
               ),
@@ -210,9 +182,12 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
               ),
             ),
             // ── Hide system apps toggle ────────────────────────────
-            GestureDetector(
+            SetToggleRow(
+              value: _hideSystemApps,
+              checkbox: true,
               onTap: () => setState(() => _hideSystemApps = !_hideSystemApps),
               child: Container(
+                constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
                 decoration: BoxDecoration(
                   border: Border(bottom: BorderSide(color: t.line)),
@@ -317,7 +292,9 @@ class _AppRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final iconAsync = ref.watch(appIconProvider(app.packageName));
 
-    return GestureDetector(
+    return SetToggleRow(
+      value: isSelected,
+      checkbox: true,
       onTap: onToggle,
       child: Container(
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),

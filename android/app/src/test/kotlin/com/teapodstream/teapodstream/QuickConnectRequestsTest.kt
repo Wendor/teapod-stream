@@ -83,7 +83,7 @@ class QuickConnectRequestsTest {
 
     @Test
     fun aSessionStartedSinceTheCheckKeepsItsData() {
-        store.save("{session}", args("{session}").params, "u", "p")
+        store.save("{session}", args("{session}").params)
         val seen = starts.get()
         starts.incrementAndGet() // a session started (and may have stopped) after the check
         assertFalse(requests.save(args("{old}"), seen))

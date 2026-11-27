@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import '../../widgets/core_support_gate.dart';
 import '../../widgets/core_sheet.dart';
+import '../../widgets/dialog_parts.dart';
 import '../../../providers/core_provider.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,6 +22,8 @@ import '../../theme/app_theme.dart';
 import '../../widgets/hero_panel.dart';
 import '../../widgets/pressable.dart';
 import '../../widgets/untrusted_cert_dialog.dart';
+import '../../widgets/settings_shared.dart' show SetToggleRow;
+import '../../widgets/tap_target.dart';
 import '../add_config_screen.dart';
 import '../subscription_settings_screen.dart';
 import '../../../l10n/l10n.dart';
@@ -483,11 +486,12 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: InputDecoration(labelText: context.l10n.commonName, border: const OutlineInputBorder()),
+          style: dialogFieldStyle(ctx),
+          decoration: dialogField(label: context.l10n.commonName),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l10n.commonCancel)),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.l10n.commonSave)),
+          const DialogCancel(result: false),
+          DialogAction(context.l10n.commonSave, onPressed: () => Navigator.pop(ctx, true)),
         ],
       ),
     );
@@ -508,12 +512,13 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
             controller: controller,
             maxLines: 5,
             keyboardType: TextInputType.multiline,
-            decoration: const InputDecoration(hintText: 'vless://...', border: OutlineInputBorder(), isDense: true),
+            style: dialogFieldStyle(ctx),
+            decoration: dialogField(hint: 'vless://...'),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l10n.commonCancel)),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.l10n.commonSave)),
+          const DialogCancel(result: false),
+          DialogAction(context.l10n.commonSave, onPressed: () => Navigator.pop(ctx, true)),
         ],
       ),
     );
@@ -536,12 +541,8 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
         title: Text(context.l10n.configsDeleteTitle),
         content: Text(context.l10n.configsDeleteMessage(config.name)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l10n.commonCancel)),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.danger),
-            child: Text(context.l10n.commonDelete),
-          ),
+          const DialogCancel(result: false),
+          DialogAction(context.l10n.commonDelete, danger: true, onPressed: () => Navigator.pop(ctx, true)),
         ],
       ),
     );
@@ -592,11 +593,12 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: InputDecoration(labelText: context.l10n.commonName, border: const OutlineInputBorder()),
+          style: dialogFieldStyle(ctx),
+          decoration: dialogField(label: context.l10n.commonName),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l10n.commonCancel)),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.l10n.commonSave)),
+          const DialogCancel(result: false),
+          DialogAction(context.l10n.commonSave, onPressed: () => Navigator.pop(ctx, true)),
         ],
       ),
     );
@@ -617,17 +619,13 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
             controller: controller,
             maxLines: 3,
             keyboardType: TextInputType.url,
-            decoration: const InputDecoration(
-              labelText: 'URL',
-              hintText: 'https://...',
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
+            style: dialogFieldStyle(ctx),
+            decoration: dialogField(label: 'URL', hint: 'https://...'),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l10n.commonCancel)),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.l10n.configsSaveAndRefresh)),
+          const DialogCancel(result: false),
+          DialogAction(context.l10n.configsSaveAndRefresh, onPressed: () => Navigator.pop(ctx, true)),
         ],
       ),
     );
@@ -653,12 +651,8 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
         title: Text(context.l10n.configsDeleteSubTitle),
         content: Text(context.l10n.configsDeleteSubMessage(sub.name)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.l10n.commonCancel)),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.danger),
-            child: Text(context.l10n.commonDelete),
-          ),
+          const DialogCancel(result: false),
+          DialogAction(context.l10n.commonDelete, danger: true, onPressed: () => Navigator.pop(ctx, true)),
         ],
       ),
     );

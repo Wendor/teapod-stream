@@ -17,6 +17,8 @@ import '../../widgets/live_sparkline.dart';
 import '../../widgets/reconnect_banner.dart';
 import '../../widgets/server_picker_sheet.dart';
 import '../../widgets/core_sheet.dart';
+import '../../widgets/pressable.dart';
+import '../../widgets/tap_target.dart';
 import '../../../core/cores/core_resolver.dart';
 import '../logs_screen.dart';
 import '../../../l10n/l10n.dart';

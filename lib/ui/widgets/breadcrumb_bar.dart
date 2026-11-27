@@ -13,23 +13,29 @@ class BreadcrumbBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onBack ?? () => Navigator.pop(context),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
-        decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: t.lineSoft)),
-        ),
-        child: Row(
-          children: [
-            Text('‹', style: AppTheme.mono(size: 12, color: t.textMuted)),
-            const SizedBox(width: 8),
-            Text(parent, style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
-            const SizedBox(width: 6),
-            Text('/', style: AppTheme.mono(size: 10, color: t.textMuted)),
-            const SizedBox(width: 6),
-            Text(current, style: AppTheme.mono(size: 10, color: t.text, letterSpacing: 1)),
-          ],
+    return Semantics(
+      button: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onBack ?? () => Navigator.pop(context),
+        child: Container(
+          // The whole bar is the back button: at least 48 dp tall.
+          constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: t.lineSoft)),
+          ),
+          child: Row(
+            children: [
+              Text('‹', style: AppTheme.mono(size: 12, color: t.textMuted)),
+              const SizedBox(width: 8),
+              Text(parent, style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+              const SizedBox(width: 6),
+              Text('/', style: AppTheme.mono(size: 10, color: t.textMuted)),
+              const SizedBox(width: 6),
+              Text(current, style: AppTheme.mono(size: 10, color: t.text, letterSpacing: 1)),
+            ],
+          ),
         ),
       ),
     );

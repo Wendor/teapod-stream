@@ -37,7 +37,7 @@ jobs:
           - abi: x86_64
             platform: android-x64
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Signing key
         env:
@@ -53,7 +53,7 @@ jobs:
             | awk '/SHA256:/{print $2}' | tr -d ':' | tr 'A-F' 'a-f')
           [ "$fp" = "$CERT_SHA256" ] || { echo "::error::DEBUG_KEYSTORE_BASE64 — wrong key: '$fp'"; exit 1; }
 
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: temurin
           java-version: 21
@@ -70,7 +70,7 @@ jobs:
         with:
           ndk-version: ${{ env.NDK_VERSION }}
 
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
@@ -97,7 +97,7 @@ jobs:
           done
 
       # Paths are kept relative to build/app/outputs: flutter-apk/… and symbols/…
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: build-${{ matrix.abi }}
           path: |
@@ -108,7 +108,7 @@ jobs:
 
       # The AAR the APKs were built with, for the release; the same core/ tree in both jobs, so one copy
       - if: matrix.abi == 'arm64-v8a'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: teapod-core
           path: core/outputs/teapod-core-*.aar
@@ -120,22 +120,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Version
         id: ver
         run: echo "version=$(awk '/^version:/{split($2,a,"+"); print a[1]; exit}' pubspec.yaml)" >> "$GITHUB_OUTPUT"
 
       # By name: a missing ABI fails here instead of publishing a release without it
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: build-arm64-v8a
           path: build/app/outputs
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: build-x86_64
           path: build/app/outputs
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: teapod-core
           path: core/outputs
@@ -146,7 +146,7 @@ jobs:
           PRE: ${{ inputs.prerelease }}
         run: ./build.sh "$([ "$PRE" = true ] && echo pushpre || echo push)"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: symbols-${{ steps.ver.outputs.version }}
           path: build/app/outputs/symbols

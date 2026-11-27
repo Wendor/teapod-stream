@@ -16,26 +16,33 @@ class _HeaderStrip extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text('teapod.stream // $version', style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
+          // The caption gives way: the state and the 48 dp logs target keep their width on a narrow screen.
+          Flexible(
+            child: Text(
+              'teapod.stream // $version',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1),
+            ),
+          ),
+          const SizedBox(width: 12),
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Text('sys.state [$stateCode]', style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
               const SizedBox(width: 12),
-              Semantics(
+              TapTarget(
                 label: context.l10n.homeLogs,
-                button: true,
-                child: GestureDetector(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(builder: (_) => const LogsScreen(breadcrumbParent: 'home')),
-                  ),
-                  child: Container(
-                    width: 28,
-                    height: 28,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(border: Border.all(color: t.line)),
-                    child: Icon(Icons.receipt_long_outlined, size: 14, color: t.textDim),
-                  ),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(builder: (_) => const LogsScreen(breadcrumbParent: 'home')),
+                ),
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(border: Border.all(color: t.line)),
+                  child: Icon(Icons.receipt_long_outlined, size: 14, color: t.textDim),
                 ),
               ),
             ],
@@ -185,7 +192,7 @@ class _StateInfo extends ConsumerWidget {
         ),
         if (isBlocked) ...[
           const SizedBox(height: 10),
-          GestureDetector(
+          TapTarget(
             onTap: () => ref.read(vpnProvider.notifier).disconnect(),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),

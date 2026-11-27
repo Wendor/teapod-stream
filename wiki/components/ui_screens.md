@@ -92,6 +92,18 @@ scaling) times the app's font setting (`fontScale`: 1.0 or 1.2), capped at 2.0 (
   private widgets in `part` files next to it (`screens/configs/`: `header`, `groups`, `config_row`, `pinned`,
   `tiles`; `screens/routing/`: `controls`, `picker`, `geo`; `screens/settings/`:
   `header`, `rows`, `core_order`, `appearance`, `update`; `screens/home/`: `header`, `power`, `ticks`, `metrics`).
+- Every tap target is at least 48 dp on each side and an icon-only one has a label: `TapTarget`
+  (`widgets/tap_target.dart`) puts a transparent 48 dp area around a smaller visual, dims it while pressed and
+  carries the TalkBack label; a row that toggles as a whole is one target announced as a switch (`SetToggleRow`; its
+  `SetSquareSwitch` is then only the visual) or, with `checkbox: true`, as a checkbox. A full-width row is a
+  `Pressable` at least 48 dp high; a segment of a full-width selector is a `Pressable` marked `selected`. No bare
+  `GestureDetector` for a tap target outside these widgets. A dense `TextField` in a dialog or a sheet gets
+  `InputDecoration.constraints` of 48 dp.
+- Every dialog is a plain `AlertDialog` without its own colours: `dialogTheme` and `textButtonTheme` in `AppTheme`
+  give the frame, title, body text and buttons; `widgets/dialog_parts.dart` adds what the theme can't —
+  `DialogCancel` (muted), `DialogAction` (accent, or `danger` for deleting and lowering security) and
+  `dialogField` / `dialogFieldStyle` for a text field. `test/ui/accessibility_test.dart` checks the main screens, a subscription
+  group, the profile dialog and the server sheet with `androidTapTargetGuideline` and `labeledTapTargetGuideline`.
 - UI tests: `test/ui/` — smoke of every screen, interactions ([tests](tests.md)).
 
 ## Related

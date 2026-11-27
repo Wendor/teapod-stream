@@ -11,9 +11,13 @@ import '../../providers/profile_provider.dart';
 import '../../providers/vpn_provider.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_colors.dart';
+import '../widgets/dialog_parts.dart';
 import '../widgets/import_review.dart';
 import '../widgets/breadcrumb_bar.dart';
 import '../widgets/hero_panel.dart';
+import '../widgets/pressable.dart';
+import '../widgets/settings_shared.dart' show SetToggleRow;
+import '../widgets/tap_target.dart';
 import '../../l10n/l10n.dart';
 
 // ── Screen ────────────────────────────────────────────────────────
@@ -64,12 +68,17 @@ class ProfilesScreen extends ConsumerWidget {
               ),
               trailing: Row(
                 children: [
-                  _ProfIconBtn(t: t, icon: Icons.download_rounded, onTap: () => _profShowImportDialog(context, ref, t)),
-                  const SizedBox(width: 6),
+                  _ProfIconBtn(
+                    t: t,
+                    icon: Icons.download_rounded,
+                    label: context.l10n.profilesImport,
+                    onTap: () => _profShowImportDialog(context, ref, t),
+                  ),
                   _ProfIconBtn(
                     t: t,
                     icon: Icons.add_rounded,
                     accent: true,
+                    label: context.l10n.profilesNew,
                     onTap: () => _profShowCreateDialog(context, ref, t),
                   ),
                 ],
@@ -154,12 +163,7 @@ void _profShowCreateDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setState) => AlertDialog(
-        backgroundColor: t.bg,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-        title: Text(
-          context.l10n.profilesNew,
-          style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500),
-        ),
+        title: Text(context.l10n.profilesNew),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -167,48 +171,37 @@ void _profShowCreateDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
             TextField(
               controller: ctrl,
               autofocus: true,
-              style: AppTheme.mono(size: 13, color: t.text),
-              decoration: InputDecoration(
-                hintText: context.l10n.profilesNameHint,
-                hintStyle: AppTheme.mono(size: 12, color: t.textMuted),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                isDense: true,
-                enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: t.line),
-                  borderRadius: BorderRadius.zero,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: t.accent),
-                  borderRadius: BorderRadius.zero,
-                ),
-              ),
+              style: dialogFieldStyle(ctx),
+              decoration: dialogField(hint: context.l10n.profilesNameHint),
             ),
             const SizedBox(height: 14),
-            GestureDetector(
+            SetToggleRow(
+              value: copyFromCurrent,
+              checkbox: true,
               onTap: () => setState(() => copyFromCurrent = !copyFromCurrent),
-              child: Row(
-                children: [
-                  _CheckBox(t: t, value: copyFromCurrent),
-                  const SizedBox(width: 10),
-                  Text(context.l10n.profilesCopyCurrent, style: AppTheme.mono(size: 11, color: t.text)),
-                ],
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
+                child: Row(
+                  children: [
+                    _CheckBox(t: t, value: copyFromCurrent),
+                    const SizedBox(width: 10),
+                    Text(context.l10n.profilesCopyCurrent, style: AppTheme.mono(size: 11, color: t.text)),
+                  ],
+                ),
               ),
             ),
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(context.l10n.commonCancel, style: AppTheme.mono(size: 11, color: t.textMuted)),
-          ),
-          TextButton(
+          const DialogCancel(),
+          DialogAction(
+            context.l10n.commonCreate,
             onPressed: () {
               final name = ctrl.text.trim();
               if (name.isEmpty) return;
               ref.read(profileProvider.notifier).createProfile(name, copyFromCurrent: copyFromCurrent);
               Navigator.pop(ctx);
             },
-            child: Text(context.l10n.commonCreate, style: AppTheme.mono(size: 11, color: t.accent)),
           ),
         ],
       ),
@@ -225,12 +218,7 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setState) => AlertDialog(
-        backgroundColor: t.bg,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-        title: Text(
-          context.l10n.profileImportTitle,
-          style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500),
-        ),
+        title: Text(context.l10n.profileImportTitle),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -238,52 +226,47 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
             TextField(
               controller: ctrl,
               maxLines: 4,
-              style: AppTheme.mono(size: 11, color: t.text),
-              decoration: InputDecoration(
-                hintText: context.l10n.profilesImportHint,
-                hintStyle: AppTheme.mono(size: 10, color: t.textMuted),
-                contentPadding: const EdgeInsets.all(10),
-                isDense: true,
-                enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: t.line),
-                  borderRadius: BorderRadius.zero,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: t.accent),
-                  borderRadius: BorderRadius.zero,
-                ),
-              ),
+              style: dialogFieldStyle(ctx),
+              decoration: dialogField(hint: context.l10n.profilesImportHint),
             ),
             const SizedBox(height: 14),
-            GestureDetector(
+            SetToggleRow(
+              value: switchTo,
+              checkbox: true,
               onTap: () => setState(() => switchTo = !switchTo),
-              child: Row(
-                children: [
-                  _CheckBox(t: t, value: switchTo),
-                  const SizedBox(width: 10),
-                  Text(context.l10n.profilesSwitchAfterImport, style: AppTheme.mono(size: 11, color: t.text)),
-                ],
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
+                child: Row(
+                  children: [
+                    _CheckBox(t: t, value: switchTo),
+                    const SizedBox(width: 10),
+                    Text(context.l10n.profilesSwitchAfterImport, style: AppTheme.mono(size: 11, color: t.text)),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 8),
-            GestureDetector(
+            SetToggleRow(
+              value: makeReadonly,
+              checkbox: true,
               onTap: () => setState(() => makeReadonly = !makeReadonly),
-              child: Row(
-                children: [
-                  _CheckBox(t: t, value: makeReadonly),
-                  const SizedBox(width: 10),
-                  Text(context.l10n.profilesReadonly, style: AppTheme.mono(size: 11, color: t.text)),
-                ],
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
+                child: Row(
+                  children: [
+                    _CheckBox(t: t, value: makeReadonly),
+                    const SizedBox(width: 10),
+                    Text(context.l10n.profilesReadonly, style: AppTheme.mono(size: 11, color: t.text)),
+                  ],
+                ),
               ),
             ),
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(context.l10n.commonCancel, style: AppTheme.mono(size: 11, color: t.textMuted)),
-          ),
-          TextButton(
+          const DialogCancel(),
+          DialogAction(
+            context.l10n.commonImport,
             onPressed: () async {
               var loading = false;
 
@@ -326,7 +309,6 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
                     switchTo: switchTo,
                   );
             },
-            child: Text(context.l10n.commonImport, style: AppTheme.mono(size: 11, color: t.accent)),
           ),
         ],
       ),
@@ -380,42 +362,18 @@ void _showRenameDialog(BuildContext context, WidgetRef ref, Profile profile, Tea
   showDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog(
-      backgroundColor: t.bg,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-      title: Text(
-        context.l10n.commonRename,
-        style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500),
-      ),
-      content: TextField(
-        controller: ctrl,
-        autofocus: true,
-        style: AppTheme.mono(size: 13, color: t.text),
-        decoration: InputDecoration(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          isDense: true,
-          enabledBorder: OutlineInputBorder(
-            borderSide: BorderSide(color: t.line),
-            borderRadius: BorderRadius.zero,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderSide: BorderSide(color: t.accent),
-            borderRadius: BorderRadius.zero,
-          ),
-        ),
-      ),
+      title: Text(context.l10n.commonRename),
+      content: TextField(controller: ctrl, autofocus: true, style: dialogFieldStyle(ctx), decoration: dialogField()),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx),
-          child: Text(context.l10n.commonCancel, style: AppTheme.mono(size: 11, color: t.textMuted)),
-        ),
-        TextButton(
+        const DialogCancel(),
+        DialogAction(
+          context.l10n.commonSave,
           onPressed: () {
             final name = ctrl.text.trim();
             if (name.isEmpty) return;
             ref.read(profileProvider.notifier).renameProfile(profile.id, name);
             Navigator.pop(ctx);
           },
-          child: Text(context.l10n.commonSave, style: AppTheme.mono(size: 11, color: t.accent)),
         ),
       ],
     ),
@@ -479,24 +437,17 @@ void _confirmDelete(BuildContext context, WidgetRef ref, Profile profile, Teapod
   showDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog(
-      backgroundColor: t.bg,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-      title: Text(
-        context.l10n.profilesDeleteTitle,
-        style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500),
-      ),
-      content: Text(context.l10n.profilesDeleteMessage(profile.name), style: AppTheme.mono(size: 12, color: t.textDim)),
+      title: Text(context.l10n.profilesDeleteTitle),
+      content: Text(context.l10n.profilesDeleteMessage(profile.name)),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx),
-          child: Text(context.l10n.commonCancel, style: AppTheme.mono(size: 11, color: t.textMuted)),
-        ),
-        TextButton(
+        const DialogCancel(),
+        DialogAction(
+          context.l10n.commonDelete,
+          danger: true,
           onPressed: () {
             ref.read(profileProvider.notifier).deleteProfile(profile.id);
             Navigator.pop(ctx);
           },
-          child: Text(context.l10n.commonDelete, style: AppTheme.mono(size: 11, color: t.danger)),
         ),
       ],
     ),
@@ -566,7 +517,7 @@ class _ProfileCard extends StatelessWidget {
     final borderColor = isActive ? t.accent : t.line;
     final hexAddr = '0x${addr.toString().padLeft(2, '0')}';
 
-    return GestureDetector(
+    return Pressable(
       onTap: onTap,
       onLongPress: onActions,
       child: Container(
@@ -711,10 +662,12 @@ class _ActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Pressable(
       onTap: onTap,
       child: Container(
         width: double.infinity,
+        constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
+        alignment: Alignment.centerLeft,
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
         decoration: BoxDecoration(
           border: Border(bottom: BorderSide(color: t.lineSoft)),
@@ -737,7 +690,7 @@ class _ExportRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Pressable(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -770,14 +723,22 @@ class _ProfIconBtn extends StatelessWidget {
   final TeapodTokens t;
   final IconData icon;
   final bool accent;
+  final String label;
   final VoidCallback onTap;
 
-  const _ProfIconBtn({required this.t, required this.icon, required this.onTap, this.accent = false});
+  const _ProfIconBtn({
+    required this.t,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.accent = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return TapTarget(
       onTap: onTap,
+      label: label,
       child: Container(
         width: 32,
         height: 32,

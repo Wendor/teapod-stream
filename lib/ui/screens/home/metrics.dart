@@ -55,9 +55,8 @@ class _MetricsGrid extends StatelessWidget {
                 child: Semantics(
                   label: context.l10n.homeChangeServer,
                   button: true,
-                  child: GestureDetector(
+                  child: Pressable(
                     onTap: onServerTap,
-                    behavior: HitTestBehavior.opaque,
                     child: _MetricCell(
                       t: t,
                       label: context.l10n.homeServer,
@@ -126,11 +125,11 @@ class _CoreLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final kind = core.backend?.kind;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+    return TapTarget(
       onTap: onTap,
+      minWidth: 0,
       child: Padding(
-        padding: const EdgeInsets.only(top: 10),
+        padding: const EdgeInsets.symmetric(vertical: 4),
         // Animate core changes (pinning, priority), otherwise it's unclear whether they applied.
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 250),

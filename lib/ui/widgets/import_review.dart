@@ -5,6 +5,7 @@ import '../../core/models/import_review.dart';
 import '../../l10n/l10n.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
+import 'dialog_parts.dart';
 
 /// The traffic settings an import changes and the subscription hosts it adds; nothing when [review] is empty.
 class ImportReviewDetails extends StatelessWidget {
@@ -50,27 +51,15 @@ class ImportReviewDetails extends StatelessWidget {
 /// Asks before an import that changes traffic settings or adds subscriptions; true at once when [review] is empty.
 Future<bool> confirmImportReview(BuildContext context, ImportReview review) async {
   if (review.isEmpty) return true;
-  final t = Theme.of(context).extension<TeapodTokens>()!;
   final l = context.l10n;
   final ok = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
-      backgroundColor: t.bg,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-      title: Text(
-        l.importReviewTitle,
-        style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500),
-      ),
+      title: Text(l.importReviewTitle),
       content: SingleChildScrollView(child: ImportReviewDetails(review)),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, false),
-          child: Text(l.commonCancel, style: AppTheme.mono(size: 11, color: t.textMuted)),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, true),
-          child: Text(l.commonContinue, style: AppTheme.mono(size: 11, color: t.accent)),
-        ),
+        const DialogCancel(result: false),
+        DialogAction(l.commonContinue, onPressed: () => Navigator.pop(ctx, true)),
       ],
     ),
   );

@@ -28,6 +28,7 @@ says how, and what counts.
 | Self-signed subscription servers | explicit user confirmation showing the SHA-256 fingerprint; the retry trusts only the certificate shown, only for the subscription host (TOFU pin) |
 | A corrupted or swapped geoip/geosite download changes routing | each file is checked against the `.sha256sum` its source publishes; a mismatch keeps both old files ([geo](components/geo_provider.md)). A source without sums (custom URL) is not checked |
 | A hashing bug weakens the certificate pin, the HWID or the geodata check | SHA-256 and HMAC-SHA256 live in one file, `lib/core/crypto/sha256.dart` (no dependency), tested against the FIPS 180-4 and RFC 4231 vectors (including a key longer than the block) |
+| A third-party action's moved tag runs in CI with the release signing secrets | every direct `uses:` in `.github/` names a commit SHA with its release tag in a comment; the monthly update check reports newer releases, bumped by hand ([CI](components/ci.md)). Actions those call by tag are not covered: `subosito/flutter-action` with `cache: true` runs `actions/cache@v5` in the signing job |
 
 ## Accepted risks
 
@@ -47,8 +48,8 @@ says how, and what counts.
 | SOCKS user / password | in the profile's settings (encrypted); `socks_user_v2`, `socks_password_v2` (encrypted) only read by the settings migration | SENSITIVE |
 | HWID cache | `cached_device_id`, `cached_device_info` (encrypted) | SENSITIVE |
 | Settings (ports, DNS, split tunneling, kill switch, …) | in the active profile (`profiles_v1`, encrypted); `auto_start_on_boot` and `automation_enabled` mirrored to SharedPreferences for native code; the per-key SharedPreferences of before are only read by the migration | PUBLIC |
-| Core config | `filesDir/xray_config.json` through `QuickConnectStore` | SECRET, process-private |
-| Quick-reconnect parameters | `filesDir/last_connection_meta.json` (no SOCKS credentials), `socks_creds.json`, `tile_config_name.txt` (the config name the tile shows), `user_disconnected.flag` — all through `QuickConnectStore` | SENSITIVE, process-private |
+| Core config | `filesDir/xray_config.json` through `QuickConnectStore`; carries the session's SOCKS login, the only place a quick start reads it from (a manual login is also kept in the profile settings) | SECRET, process-private |
+| Quick-reconnect parameters | `filesDir/last_connection_meta.json` (no SOCKS credentials), `tile_config_name.txt` (the config name the tile shows), `user_disconnected.flag` — all through `QuickConnectStore` | SENSITIVE, process-private |
 | Logs | `filesDir/vpn_log.txt` (+ `.prev`) | SENSITIVE: core warnings and errors carry server and destination addresses, `debug` adds access lines; masked on export |
 | Exported log | `cacheDir/teapod_log.txt` | masked, overwritten by the next export |
 

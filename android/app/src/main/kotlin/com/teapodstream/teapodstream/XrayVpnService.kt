@@ -160,10 +160,6 @@ class XrayVpnService : VpnService() {
         override fun reconnect(session: Long?) = reconnectInternal(session)
         override fun log(level: String, message: String) = this@XrayVpnService.log(level, message)
     })
-    private var killSwitchEnabled = false
-    @Volatile private var allowIcmpEnabled = true
-    @Volatile private var blockQuicEnabled = false
-    private var proxyOnlyMode = false
     // The one desired session state: commands, revoke, reconnects and retries replace it, one thread brings the
     // session to it. A start that ends off (failed, cancelled) is checked once its run has finished: while it runs it
     // holds the service.
@@ -174,7 +170,7 @@ class XrayVpnService : VpnService() {
         override fun stop(forNext: Boolean) {
             // Decided by what is wanted as the stop begins: an off replaced by a connect meanwhile keeps the sink.
             val next = forNext || reconciler.desired is Desired.On
-            stopVpn(explicit = !next, reconnecting = next)
+            stopVpn(mayKeepSink = next, reconnecting = next)
         }
         override fun closeSink() = closeTunSink()
         override fun start(on: Desired.On): Boolean = startSession(on)
@@ -197,13 +193,14 @@ class XrayVpnService : VpnService() {
     /** The parameters [tunInterface] was built with: a reconnect reuses the fd only for the same ones. */
     @Volatile private var tunParams: ConnectionParams? = null
 
-    /** The parameters of the session being started or run ([useParams]); null before the first start. */
+    /**
+     * The parameters of the session being started or run ([useParams]); null before the first start. The only copy:
+     * the kill switch, proxy-only and the rest are read from it. Written in [startVpn] after its CAS on [isRunning].
+     */
     @Volatile private var params: ConnectionParams? = null
     private val allowTethering get() = params?.allowTethering ?: false
     private val mainHandler = Handler(Looper.getMainLooper())
     private val reconnectAttempts = AtomicInteger(0)
-
-    @Volatile private var tunMtu = 1500
     // Core of the current session: fixed in startVpn after the CAS so that a core change
     // by a new connect doesn't redirect stop/heartbeat/stats to another core.
     // Before the first start here: the last session's core in this process.
@@ -220,14 +217,14 @@ class XrayVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         lastStartId = startId
         if (intent?.action == ACTION_ITEST_DROP) {
-            // itest build only: a drop along the failure path (explicit=false), as on
+            // itest build only: a drop along the failure path (the sink allowed), as on
             // an unexpected tunnel death — the kill switch keeps the TUN sink.
             if (!BuildConfig.ITEST || !isRunning.get()) {
                 if (!isRunning.get()) stopSelf(startId)
                 return START_NOT_STICKY
             }
             log("warning", "itest: simulated unexpected drop")
-            Thread { stopVpn(resultState = SessionState.ERROR, explicit = false) }.start()
+            Thread { stopVpn(resultState = SessionState.ERROR, mayKeepSink = true) }.start()
             return START_STICKY
         }
         when (intent?.action) {
@@ -283,7 +280,7 @@ class XrayVpnService : VpnService() {
                 when {
                     // Nothing stored to start (a failed save may have removed it): the session holding the sink, if
                     // any, decides whether it stays.
-                    request == null -> abortQuickConnect(killSwitchEnabled)
+                    request == null -> abortQuickConnect(params?.killSwitch == true)
                     // Permission revoked — the system already disconnected our TUN, nothing to block with.
                     !request.params.proxyOnly && VpnService.prepare(this) != null -> abortQuickConnect(killSwitch = false)
                     else -> {
@@ -401,16 +398,10 @@ class XrayVpnService : VpnService() {
         // app traffic is blackholed by the old TUN instead of leaking while xray starts.
         var previousTun = tunInterface
         val previousTunParams = tunParams
-        // A manual connect with the kill switch keeps the sink after a failure only if traffic
-        // was already blocked (BLOCKED) — otherwise a broken config would lock the network.
-        val keepSinkOnFailure = killSwitch && (isReconnect || previousTun != null)
+        val hadPreviousTun = previousTun != null
         tunInterface = null
-        killSwitchEnabled = killSwitch
         tunModeActive = !proxyOnly
-        allowIcmpEnabled = allowIcmp
-        blockQuicEnabled = blockQuic
-        proxyOnlyMode = proxyOnly
-        tunMtu = core.tunMtu(mtu.coerceIn(576, 9000))
+        val tunMtu = core.tunMtu(mtu.coerceIn(576, 9000))
         if (!isReconnect) ServiceLog.rotate(filesDir)
         setState(if (isReconnect) SessionState.RECONNECTING else SessionState.CONNECTING)
         // After the state, before the save: a quick-connect write that read the count before this is dropped, one
@@ -426,12 +417,12 @@ class XrayVpnService : VpnService() {
                 xrayConfig
             }
 
-            // For a quick start (tile, boot, reconnect): the params, the config, its SOCKS login and the tile's name
+            // For a quick start (tile, boot, reconnect): the params, the config (with its SOCKS login) and the tile's name
             // together (a quick start's name was read with its config). A failed save costs the quick start, not this
             // session. Saved on a reconnect too: the config it runs may differ from the stored one (a new prefix
             // proxy port).
             try {
-                store.save(finalConfig, request.params, socksUser, socksPassword, tileName = request.configName ?: "")
+                store.save(finalConfig, request.params, tileName = request.configName ?: "")
             } catch (e: Exception) {
                 log("warning", "Quick-connect data not saved: ${e.message}")
             } finally {
@@ -444,7 +435,7 @@ class XrayVpnService : VpnService() {
                 CoreStartParams(
                     tunFd = tunFd, mtu = tunMtu, socksPort = socksPort,
                     socksUser = socksUser, socksPassword = socksPassword,
-                    allowIcmp = allowIcmpEnabled, blockQuic = blockQuicEnabled,
+                    allowIcmp = allowIcmp, blockQuic = blockQuic,
                     vpnMode = vpnMode, allowedUids = allowedUids, blockUnowned = blockUnowned,
                 )
 
@@ -474,53 +465,12 @@ class XrayVpnService : VpnService() {
                     previousTun = null
                     log("info", "Reusing existing TUN fd for reconnect")
                 } else {
-                    val randomSubnet1 = (2..250).random()
-                    val randomSubnet2 = (2..250).random()
-                    val randomSubnet3 = (2..250).random()
-                    val dynamicTunIp = "10.$randomSubnet1.$randomSubnet2.$randomSubnet3"
-
-                    val dynamicSession = "Teapod-${System.currentTimeMillis() % 10000}"
-
-                    val builder = Builder()
-                        .setSession(dynamicSession)
-                        .setMtu(tunMtu)
-                        .addAddress(dynamicTunIp, 32)
-                        .addRoute("0.0.0.0", 0)
-                        .addDnsServer(core.tunDnsServer)
-                        .setBlocking(true)
-                        .setMetered(false)
-
-                    // Without an IPv6 address Android blocks the family for tunneled apps
-                    // (no leak): connect() fails instantly and apps fall back to IPv4.
-                    // With the address, literal-IPv6 destinations (e.g. Telegram DCs) hang
-                    // when the VPN server has no IPv6 connectivity (#81).
-                    if (ipv6Enabled) {
-                        val hex1 = (1..65535).random().toString(16)
-                        val hex2 = (1..65535).random().toString(16)
-                        val hex3 = (1..65535).random().toString(16)
-                        builder.addAddress("fd00:$hex1:$hex2:$hex3::1", 64)
-                        builder.addRoute("::", 0)
-                    }
-
-                    if (vpnMode == VpnMode.ONLY_SELECTED) {
-                        var allowed = 0
-                        for (pkg in includedPackages) {
-                            try {
-                                builder.addAllowedApplication(pkg)
-                                allowed++
-                            } catch (e: Exception) {
-                                log("warning", "Failed to allow $pkg: ${e.message}")
-                            }
-                        }
-                        // Android applies a VPN with no allowed app to every app: traffic stays in the tunnel, but
-                        // "only selected apps" covers all of them.
-                        if (allowed == 0) log("warning", "Only selected apps, but none is installed: the VPN covers every app")
-                    } else {
-                        for (pkg in excludedPackages) {
-                            try { builder.addDisallowedApplication(pkg) } catch (_: Exception) {}
-                        }
-                        try { builder.addDisallowedApplication(packageName) } catch (_: Exception) {}
-                    }
+                    val spec = TunSpec.of(
+                        mtu = tunMtu, dnsServer = core.tunDnsServer, ipv6 = ipv6Enabled, vpnMode = vpnMode,
+                        included = includedPackages, excluded = excludedPackages, ownPackage = packageName,
+                        nowMs = System.currentTimeMillis(),
+                    )
+                    val builder = builder(spec)
 
                     val fdResult = nativeSetMaxFds(65536)
                     log("info", "nativeSetMaxFds result: $fdResult")
@@ -529,7 +479,7 @@ class XrayVpnService : VpnService() {
                     tunParams = request.params
                     // The new interface replaced the old one atomically — the sink fd can go now.
                     try { previousTun?.close() } catch (_: Exception) {}
-                    log("info", "TUN established with IP $dynamicTunIp")
+                    log("info", "TUN established with IP ${spec.addresses.first().address}")
                 }
 
                 // Split tunneling: UID filter at the core level (tun2socks validator / TUN admission)
@@ -553,32 +503,31 @@ class XrayVpnService : VpnService() {
             // Throwable: the core's UnsatisfiedLinkError/ExceptionInInitializerError must also
             // return the service to the stopped state.
             log("error", "Start failed: ${e.message}")
-            // If no new TUN was established, restore the old fd: as kill-switch sink
-            // (keeps blocking traffic) and/or for reuse by the next reconnect attempt.
-            // Otherwise the old fd is obsolete.
             val wanted = reconciler.desired // read once: the decisions below agree
-            val replaced = superseded(request, wanted)
-            val next = replaced && wanted is Desired.On
-            if (tunInterface == null && previousTun != null && (killSwitch || isReconnect || next) && !proxyOnly) {
+            val failure = StartFailurePolicy.startFailure(
+                killSwitch = killSwitch, reconnect = isReconnect, proxyOnly = proxyOnly,
+                hadPreviousTun = hadPreviousTun, newTunHeld = tunInterface != null,
+                previousTunOpen = previousTun != null,
+                wanted = when {
+                    !superseded(request, wanted) -> StartFailurePolicy.Wanted.SAME
+                    wanted is Desired.On -> StartFailurePolicy.Wanted.OTHER_START
+                    else -> StartFailurePolicy.Wanted.OFF
+                },
+                maxAttempts = MAX_RECONNECT_ATTEMPTS,
+                nextAttempt = reconnectAttempts::incrementAndGet,
+            )
+            if (failure.restorePrevious) {
                 tunInterface = previousTun
                 tunParams = previousTunParams
             } else {
                 try { previousTun?.close() } catch (_: Exception) {}
             }
-            if (replaced) {
-                // Replaced while starting: no error for it. A new session keeps the sink for its start; an off
-                // state stops as a user disconnect does. Its states belong to what is wanted now.
-                sessionAttempt = wanted.tag
-                stopVpn(explicit = !next, reconnecting = next)
-                return false
-            }
-            val retry = (wanted as? Desired.On)?.takeIf { isReconnect }
-            val willRetry = retry != null && reconnectAttempts.incrementAndGet() <= MAX_RECONNECT_ATTEMPTS
-            // On final failure with kill switch keep the sink (explicit=false) so
-            // traffic stays blocked instead of silently leaking past the VPN.
-            stopVpn(resultState = SessionState.ERROR, explicit = !willRetry && !keepSinkOnFailure, reconnecting = willRetry,
-                error = if (willRetry) null else e.message ?: e.javaClass.simpleName)
-            if (willRetry) {
+            // Replaced while starting: its states belong to what is wanted now.
+            if (failure.adoptWanted) sessionAttempt = wanted.tag
+            stopVpn(resultState = failure.resultState, mayKeepSink = failure.mayKeepSink,
+                reconnecting = failure.reconnecting,
+                error = if (failure.reportError) e.message ?: e.javaClass.simpleName else null)
+            if (failure.retry) {
                 val attempt = reconnectAttempts.get()
                 val delayMs = RECONNECT_RETRY_BASE_MS * attempt
                 log("warning", "Reconnect attempt $attempt/$MAX_RECONNECT_ATTEMPTS failed, retrying in ${delayMs}ms")
@@ -589,11 +538,41 @@ class XrayVpnService : VpnService() {
                     if (destroyed || snapshot.state != SessionState.RECONNECTING) return@postDelayed
                     // The stored session, or the failed request itself when the store has none (a failed save).
                     val again = quickStartRequest() ?: request
-                    reconciler.replace(retry!!, Desired.On(again, reconciler.newId()))
+                    reconciler.replace(wanted, Desired.On(again, reconciler.newId()))
                 }, delayMs)
             }
             return false
         }
+    }
+
+    /** A `VpnService.Builder` for [spec]; an app that can't be allowed or disallowed (not installed) is skipped. */
+    private fun builder(spec: TunSpec): Builder {
+        val builder = Builder()
+            .setSession(spec.session)
+            .setMtu(spec.mtu)
+            .addDnsServer(spec.dnsServer)
+            .setBlocking(true)
+            .setMetered(false)
+        for (a in spec.addresses) builder.addAddress(a.address, a.prefix)
+        for (r in spec.routes) builder.addRoute(r.address, r.prefix)
+        var allowed = 0
+        for (pkg in spec.allowed) {
+            try {
+                builder.addAllowedApplication(pkg)
+                allowed++
+            } catch (e: Exception) {
+                log("warning", "Failed to allow $pkg: ${e.message}")
+            }
+        }
+        // Android applies a VPN with no allowed app to every app: traffic stays in the tunnel, but "only selected
+        // apps" covers all of them.
+        if (spec.onlySelected && allowed == 0) {
+            log("warning", "Only selected apps, but none is installed: the VPN covers every app")
+        }
+        for (pkg in spec.disallowed) {
+            try { builder.addDisallowedApplication(pkg) } catch (_: Exception) {}
+        }
+        return builder
     }
 
     /**
@@ -692,18 +671,24 @@ class XrayVpnService : VpnService() {
 
     private fun stopVpn(
         resultState: SessionState = SessionState.DISCONNECTED,
-        explicit: Boolean = false,
+        /** The TUN may stay as the kill switch's sink ([StartFailurePolicy.stop]); false for a user's off. */
+        mayKeepSink: Boolean,
         reconnecting: Boolean = false,
         /** The reason of a failed start, reported with [resultState] (or `blocked`). */
         error: String? = null,
     ) {
         if (!isRunning.compareAndSet(true, false)) return  // idempotent — safe to call multiple times
-        log("info", "stopVpn: begin (explicit=$explicit, reconnecting=$reconnecting)")
+        log("info", "stopVpn: begin (mayKeepSink=$mayKeepSink, reconnecting=$reconnecting)")
         heartbeat.stop()
         tunModeActive = false
         lastConnectedMs = 0L
 
-        var keptTunAsSink = false
+        fun outcome(tunHeld: Boolean) = StartFailurePolicy.stop(
+            killSwitch = params?.killSwitch == true, proxyOnly = params?.proxyOnly == true, mayKeepSink = mayKeepSink,
+            reconnecting = reconnecting, tunHeld = tunHeld, resultState = resultState,
+        )
+        // Until the TUN is looked at below (a failure before that keeps nothing).
+        var stop = outcome(tunHeld = false)
         try {
             network.stop()
 
@@ -721,14 +706,9 @@ class XrayVpnService : VpnService() {
 
             // Close TUN fd early so tun2socks goroutines reading from it get EOF and
             // unblock immediately (tun2socks works on a dup'd fd, so this is safe to
-            // skip too). During internal reconnects the TUN is always kept open: the
-            // next startVpn(isReconnect=true) reuses the same fd (no establish(), no
-            // system "VPN active" notification), and in between app traffic is
-            // blackholed by the sink instead of leaking past the VPN. Kill-switch
-            // path additionally keeps it after non-explicit stops (traffic sink).
-            val keepTunAsSink = (killSwitchEnabled || reconnecting) && !explicit && !proxyOnlyMode
-                    && tunInterface != null
-            keptTunAsSink = keepTunAsSink
+            // skip too). A kept TUN blackholes app traffic instead of letting it leak past the VPN.
+            stop = outcome(tunHeld = tunInterface != null)
+            val keepTunAsSink = stop.keepTun
             // A core that reads the TUN fd itself (Rust) is stopped before the fd is closed:
             // otherwise the freed fd number could go to someone else's descriptor.
             if (core.borrowsTunFd) core.stop()
@@ -743,11 +723,6 @@ class XrayVpnService : VpnService() {
 
             if (!core.borrowsTunFd) core.stop()
 
-            // Clean up saved credentials on explicit disconnect
-            if (explicit) {
-                try { store.clearCredentials() } catch (e: Exception) { log("warning", "clearing socks_creds: ${e.message}") }
-            }
-
             if (keepTunAsSink) {
                 if (reconnecting) {
                     log("info", "TUN kept open during reconnect (sink + fd reuse)")
@@ -759,18 +734,12 @@ class XrayVpnService : VpnService() {
 
             // The stored config stays for a quick reconnect (tile, boot): process-private filesDir.
         } finally {
-            val finalState = when {
-                // TUN is already a sink: no traffic while we wait for the network (up to 30 s) — not "connected".
-                // The snapshot drops the SOCKS login, so the next start reports fresh credentials.
-                reconnecting -> SessionState.RECONNECTING
-                // The TUN sink stayed open (kill switch) — traffic is blocked,
-                // report a state distinct from disconnected.
-                keptTunAsSink -> SessionState.BLOCKED
-                else -> resultState
-            }
+            // RECONNECTING: the TUN is a sink while the next start waits (up to 30 s) — not "connected"; the snapshot
+            // drops the SOCKS login, so the next start reports fresh credentials. BLOCKED: the kill switch's sink.
+            val finalState = stop.state
             setState(finalState, error)
             // Off without a sink, the service stops (publish); the kill switch's block keeps it with its notification.
-            if (keptTunAsSink && !reconnecting) notifications.blocked()
+            if (stop.keepTun && !reconnecting) notifications.blocked()
             log("info", "stopVpn: done (state=${finalState.wire})")
             ServiceLog.flush(filesDir)
         }
@@ -779,7 +748,7 @@ class XrayVpnService : VpnService() {
     override fun onDestroy() {
         destroyed = true
         screen.unregister()
-        stopVpn()
+        stopVpn(mayKeepSink = true)
         // stopVpn posted "Disconnected" — after the service dies it would remain an orphan.
         notifications.cancel()
         ServiceLog.flush(filesDir)

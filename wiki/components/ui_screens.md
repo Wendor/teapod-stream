@@ -82,6 +82,9 @@ anyway ([profiles](profiles.md)).
 text helpers (minimum 11 px). Text follows the system font size: the app's `textScaler` is the system one (Android's font size and accessibility
 scaling) times the app's font setting (`fontScale`: 1.0 or 1.2), capped at 2.0 (`appTextScaler`,
 `theme/app_text_scaler.dart`). Layouts at large sizes are checked on a device: the test font is wider than the real ones.
+Where width is fixed, text gives way instead of breaking the layout: a short caption (tab label, `0x01` address, hero
+title) is a `OneLine` (`widgets/one_line.dart`) and shrinks rather than wrap mid-word; the tab bar caps its scale at
+1.3 so its four labels keep one size; a label + selector row is a `Wrap`; a bottom-sheet menu is a `ListView`.
 
 ## Conventions
 

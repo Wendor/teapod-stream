@@ -76,10 +76,10 @@ class XrayVpnService : VpnService() {
         private const val RECONNECT_RETRY_BASE_MS = 5_000L
 
 
-        /** Extracts the bundled geoip.dat / geosite.dat that are missing from filesDir. False when one failed: its
-         *  partial copy is removed, so the next call tries again instead of keeping a truncated file. Synchronized:
-         *  the channel (on the I/O pool) and startVpn call it, and a second copy of the same file would truncate the
-         *  first or delete it on failure. */
+        /** Extracts the bundled geoip.dat / geosite.dat that are missing from filesDir. The copy goes to
+         *  `<name>.bundled` and is renamed into place only when complete, so neither a failed copy nor a geodata
+         *  download landing at the same path meanwhile leaves a truncated or deleted file. False when one failed;
+         *  the next call tries again. Synchronized: the channel (on the I/O pool) and startVpn both call it. */
         @Synchronized
         fun prepareBinaries(context: android.content.Context): Boolean {
             val filesDir = context.filesDir
@@ -88,11 +88,14 @@ class XrayVpnService : VpnService() {
             for (name in listOf("geoip.dat", "geosite.dat")) {
                 val file = java.io.File(filesDir, name)
                 if (file.exists()) continue
+                val part = java.io.File(filesDir, "$name.bundled")
                 try {
                     val input = try { assets.open("binaries/$name") } catch (e: Exception) { assets.open("flutter_assets/assets/binaries/$name") }
-                    input.use { i -> file.outputStream().use { o -> i.copyTo(o) } }
+                    input.use { i -> part.outputStream().use { o -> i.copyTo(o) } }
+                    // A download that finished meanwhile is newer than the bundled copy: keep it.
+                    if (file.exists()) part.delete() else if (!part.renameTo(file)) throw java.io.IOException("rename $name")
                 } catch (e: Exception) {
-                    file.delete()
+                    part.delete()
                     ok = false
                 }
             }

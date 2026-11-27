@@ -193,6 +193,7 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
               checkbox: true,
               onTap: () => setState(() => _hideSystemApps = !_hideSystemApps),
               child: Container(
+                constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
                 decoration: BoxDecoration(
                   border: Border(bottom: BorderSide(color: t.line)),

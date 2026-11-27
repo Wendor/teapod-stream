@@ -302,6 +302,8 @@ class _SubGroup extends StatelessWidget {
                           : () => launchUrl(Uri.parse(sub.announceUrl!), mode: LaunchMode.externalApplication).ignore(),
                       child: Container(
                         width: double.infinity,
+                        constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
+                        alignment: Alignment.centerLeft,
                         padding: const EdgeInsets.fromLTRB(52, 10, 20, 12),
                         decoration: BoxDecoration(
                           border: Border(top: BorderSide(color: t.lineSoft)),

@@ -122,11 +122,13 @@ class _PickerRow extends StatelessWidget {
     return Pressable(
       onTap: onTap,
       child: Container(
+        constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
         decoration: BoxDecoration(
           color: isActive ? t.accentFade : Colors.transparent,
           border: Border(bottom: BorderSide(color: t.lineSoft)),
         ),
         child: Stack(
+          alignment: AlignmentDirectional.centerStart,
           children: [
             if (isActive) Positioned(left: 0, top: 0, bottom: 0, child: Container(width: 2, color: t.accent)),
             Padding(

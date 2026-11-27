@@ -342,6 +342,7 @@ class _RoutingBody extends StatelessWidget {
                       _GeoSourceSheet(currentGeoipUrl: geoipUrl, currentGeositeUrl: geositeUrl, onSave: onUpdateGeo),
                 ),
                 child: Container(
+                  constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
                   decoration: BoxDecoration(
                     border: Border(bottom: BorderSide(color: t.lineSoft)),

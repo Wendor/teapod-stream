@@ -15,6 +15,7 @@ class _ToggleTile extends StatelessWidget {
       checkbox: true,
       onTap: () => onChanged(!value),
       child: Container(
+        constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
         decoration: BoxDecoration(
           border: Border(bottom: BorderSide(color: t.lineSoft)),
@@ -54,6 +55,8 @@ class _SheetTile extends StatelessWidget {
       onTap: onTap,
       child: Container(
         width: double.infinity,
+        constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
+        alignment: Alignment.centerLeft,
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
         decoration: BoxDecoration(
           border: Border(bottom: BorderSide(color: t.lineSoft)),

@@ -10,7 +10,7 @@ import org.junit.Test
  * The owner check (Tun2SocksCore.buildTunValidator and RustCore.tunAdmission) decides:
  *
  *     if (allowedUids.isEmpty()) -> always true
- *     uid < 0                    -> DNS to tunDns || (vpnMode != "onlySelected" && !blockUnowned)
+ *     uid < 0                    -> DNS to tunDns || (vpnMode != ONLY_SELECTED && !blockUnowned)
  *     onlySelected               -> uid in allowedUids
  *     allExcept                  -> uid !in allowedUids
  *
@@ -26,16 +26,16 @@ class TunOwnerPolicyTest {
     private val dns = "1.1.1.1"
 
     /** The rule above, transcribed literally. */
-    private fun go(vpnMode: String, allowedUids: Set<Int>, blockUnowned: Boolean, uid: Int?): Boolean {
+    private fun go(vpnMode: VpnMode, allowedUids: Set<Int>, blockUnowned: Boolean, uid: Int?): Boolean {
         if (allowedUids.isEmpty()) return true
-        if (uid == null || uid < 0) return vpnMode != "onlySelected" && !blockUnowned
-        return if (vpnMode == "onlySelected") uid in allowedUids else uid !in allowedUids
+        if (uid == null || uid < 0) return vpnMode != VpnMode.ONLY_SELECTED && !blockUnowned
+        return if (vpnMode == VpnMode.ONLY_SELECTED) uid in allowedUids else uid !in allowedUids
     }
 
     @Test
     fun matchesGoForEveryModeTetheringAndOwner() {
         val uids = listOf(null, unowned, own, browser, excluded, other)
-        for (vpnMode in listOf("allExcept", "onlySelected")) {
+        for (vpnMode in VpnMode.entries) {
             for (exclusions in listOf(emptyList(), listOf("org.example.excluded"))) {
                 for (tethering in listOf(false, true)) {
                     for (listed in listOf(emptySet(), setOf(own), setOf(own, excluded), setOf(browser))) {
@@ -57,7 +57,7 @@ class TunOwnerPolicyTest {
 
     @Test
     fun onlySelectedDropsUnownedAndUnlistedFlows() {
-        val policy = TunOwnerPolicy.of("onlySelected", setOf(browser), emptyList(), allowTethering = true)
+        val policy = TunOwnerPolicy.of(VpnMode.ONLY_SELECTED, setOf(browser), emptyList(), allowTethering = true)
         assertTrue(policy.needsAdmission)
         assertTrue(policy.admitFlow(WEB, 443) { browser })
         // Tethering, an unselected app bound to tun0, or an OEM's INVALID_UID for a
@@ -69,19 +69,19 @@ class TunOwnerPolicyTest {
 
     @Test
     fun allExceptBlocksUnownedOnlyWithExclusionsAndTetheringOff() {
-        val strict = TunOwnerPolicy.of("allExcept", setOf(own, excluded), listOf("x"), allowTethering = false)
+        val strict = TunOwnerPolicy.of(VpnMode.ALL_EXCEPT, setOf(own, excluded), listOf("x"), allowTethering = false)
         assertTrue(strict.needsAdmission)
         assertFalse(strict.admit(unowned))
         assertTrue(strict.admit(browser))
         assertFalse(strict.admit(excluded))
 
-        val tethering = TunOwnerPolicy.of("allExcept", setOf(own, excluded), listOf("x"), allowTethering = true)
+        val tethering = TunOwnerPolicy.of(VpnMode.ALL_EXCEPT, setOf(own, excluded), listOf("x"), allowTethering = true)
         assertTrue(tethering.admit(unowned))
         // Android never reports an excluded UID to this VPN (INVALID_UID instead), so
         // nothing reachable is refused and the core keeps running without the hook.
         assertFalse(tethering.needsAdmission)
 
-        val noExclusions = TunOwnerPolicy.of("allExcept", setOf(own), emptyList(), allowTethering = false)
+        val noExclusions = TunOwnerPolicy.of(VpnMode.ALL_EXCEPT, setOf(own), emptyList(), allowTethering = false)
         assertTrue(noExclusions.admit(unowned))
         assertFalse(noExclusions.needsAdmission)
     }
@@ -89,13 +89,13 @@ class TunOwnerPolicyTest {
     @Test
     fun unownedDnsToTunResolverIsAdmittedInEveryMode() {
         // Android 10: netd owns resolver sockets, lookup returns INVALID_UID (issue #155).
-        val only = TunOwnerPolicy.of("onlySelected", setOf(browser), emptyList(), false, dns)
+        val only = TunOwnerPolicy.of(VpnMode.ONLY_SELECTED, setOf(browser), emptyList(), false, dns)
         assertTrue(only.admitFlow(dns, 53) { unowned })
         assertFalse(only.admitFlow(dns, 443) { unowned })
         assertFalse(only.admitFlow("8.8.8.8", 53) { unowned })
         assertFalse(only.admitFlow(dns, 53) { other })
 
-        val strict = TunOwnerPolicy.of("allExcept", setOf(own, excluded), listOf("x"), false, dns)
+        val strict = TunOwnerPolicy.of(VpnMode.ALL_EXCEPT, setOf(own, excluded), listOf("x"), false, dns)
         assertTrue(strict.admit(unowned, dns, 53))
         assertFalse(strict.admit(unowned, "8.8.8.8", 53))
     }
@@ -116,7 +116,7 @@ class TunOwnerPolicyTest {
         assertEquals(2, logged.size)
         assertTrue(logged[0].contains("SecurityException"))
 
-        val strict = TunOwnerPolicy.of("allExcept", setOf(own, excluded), listOf("x"), false, dns)
+        val strict = TunOwnerPolicy.of(VpnMode.ALL_EXCEPT, setOf(own, excluded), listOf("x"), false, dns)
         assertTrue(strict.needsAdmission)
         assertFalse(strict.admitFlow(WEB, 443) { throw SecurityException("not the active VPN") })
         assertTrue(strict.admitFlow(dns, 53) { throw SecurityException("not the active VPN") })
@@ -126,9 +126,9 @@ class TunOwnerPolicyTest {
     @Test
     fun failedLookupIsAdmittedWhereOwnerlessFlowsAre() {
         for (policy in listOf(
-            TunOwnerPolicy.of("allExcept", setOf(own, excluded), listOf("x"), allowTethering = true),
-            TunOwnerPolicy.of("allExcept", setOf(own), emptyList(), allowTethering = false),
-            TunOwnerPolicy.of("onlySelected", emptySet(), emptyList(), allowTethering = false),
+            TunOwnerPolicy.of(VpnMode.ALL_EXCEPT, setOf(own, excluded), listOf("x"), allowTethering = true),
+            TunOwnerPolicy.of(VpnMode.ALL_EXCEPT, setOf(own), emptyList(), allowTethering = false),
+            TunOwnerPolicy.of(VpnMode.ONLY_SELECTED, emptySet(), emptyList(), allowTethering = false),
         )) {
             assertTrue(policy.admitFlow(WEB, 443) { throw SecurityException("not the active VPN") })
             assertEquals(0, policy.denied)
@@ -137,7 +137,7 @@ class TunOwnerPolicyTest {
 
     @Test
     fun refusalWithAWorkingLookupIsNotCountedAsLookupError() {
-        val policy = TunOwnerPolicy.of("onlySelected", setOf(browser), emptyList(), allowTethering = false)
+        val policy = TunOwnerPolicy.of(VpnMode.ONLY_SELECTED, setOf(browser), emptyList(), allowTethering = false)
         assertFalse(policy.admitFlow(WEB, 443) { other })
         assertEquals(1, policy.denied)
         assertEquals(0, policy.deniedOnLookupError)
@@ -145,7 +145,7 @@ class TunOwnerPolicyTest {
 
     @Test
     fun emptyUidListIsGoAllowAll() {
-        val policy = TunOwnerPolicy.of("onlySelected", emptySet(), emptyList(), allowTethering = false)
+        val policy = TunOwnerPolicy.of(VpnMode.ONLY_SELECTED, emptySet(), emptyList(), allowTethering = false)
         assertTrue(policy.admit(unowned))
         assertTrue(policy.admit(other))
         assertFalse(policy.needsAdmission)

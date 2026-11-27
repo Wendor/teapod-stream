@@ -1,5 +1,7 @@
 package com.teapodstream.teapodstream
 
+import com.teapodstream.teapodstream.core.VpnMode
+import com.teapodstream.teapodstream.core.CoreKind
 import java.io.File
 import java.nio.file.Files
 import org.junit.Assert.assertEquals
@@ -13,10 +15,10 @@ class QuickConnectStoreTest {
     private val store = QuickConnectStore(dir)
     private val params = ConnectionParams(
         socksPort = 2080, excludedPackages = listOf("a.b"), includedPackages = emptyList(),
-        vpnMode = "allExcept", ssPrefix = null, proxyOnly = false, showNotification = true,
-        killSwitch = true, allowIcmp = false, blockQuic = false, engine = "box",
+        vpnMode = VpnMode.ALL_EXCEPT, ssPrefix = null, proxyOnly = false, showNotification = true,
+        killSwitch = true, allowIcmp = false, blockQuic = false, engine = CoreKind.BOX,
     )
-    private val fromConfig = { config: String, engine: String -> "cfg-user($config,$engine)" to "cfg-pass" }
+    private val fromConfig = { config: String, engine: CoreKind -> "cfg-user($config,${engine.id})" to "cfg-pass" }
 
     @Test
     fun savedConnectionRoundTripsWithoutTempFiles() {
@@ -100,7 +102,7 @@ class QuickConnectStoreTest {
         store.clearCredentials()
         File(dir, QuickConnectStore.CREDENTIALS).mkdir()
         File(dir, "${QuickConnectStore.CREDENTIALS}/x").writeText("")
-        assertTrue(runCatching { store.save("{new}", params.copy(engine = "go"), "u", "p") }.isFailure)
+        assertTrue(runCatching { store.save("{new}", params.copy(engine = CoreKind.GO), "u", "p") }.isFailure)
         assertEquals("{old}", store.config())
         assertEquals("the params stay with the config", params, store.params())
     }
@@ -165,7 +167,7 @@ class QuickConnectStoreTest {
         File(dir, QuickConnectStore.PARAMS).delete()
         File(dir, QuickConnectStore.PARAMS).mkdir()
         File(dir, "${QuickConnectStore.PARAMS}/x").writeText("")
-        assertTrue(runCatching { store.save("{new}", params.copy(engine = "go"), "u", "p") }.isFailure)
+        assertTrue(runCatching { store.save("{new}", params.copy(engine = CoreKind.GO), "u", "p") }.isFailure)
         assertNull("the old config doesn't stay with other params", store.config())
         assertNull(store.quickStart(fromConfig))
     }
@@ -233,9 +235,9 @@ class QuickConnectStoreTest {
     @Test
     fun aSecondSaveReplacesTheFirst() {
         store.save("{one}", params, "u1", "p1")
-        store.save("{two}", params.copy(engine = "rust"), "u2", "p2")
+        store.save("{two}", params.copy(engine = CoreKind.RUST), "u2", "p2")
         assertEquals("{two}", store.config())
-        assertEquals("rust", store.params()!!.engine)
+        assertEquals(CoreKind.RUST, store.params()!!.engine)
         assertEquals("u2" to "p2", store.credentials())
     }
 }

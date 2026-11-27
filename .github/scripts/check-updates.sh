@@ -57,6 +57,15 @@ gradle=$(sed -n 's/.*gradle-\([0-9.]*\)-all.zip/\1/p' android/gradle/wrapper/gra
 gradle_latest=$(curl -fsSL https://services.gradle.org/versions/current | jq -r .version)
 newer "$gradle" "$gradle_latest" && add "Gradle" "$gradle" "$gradle_latest" "\`android/gradle/wrapper/gradle-wrapper.properties\`"
 
+# GitHub Actions: pinned by commit SHA with the release in a comment (`uses: owner/repo@<sha> # vX.Y.Z`), so a moved
+# tag can't change what runs with the release secrets. A newer release is bumped by hand: new SHA and comment.
+while read -r action pinned; do
+  action_latest=$(latest_tag "$action")
+  newer "$pinned" "$action_latest" && add "action $action" "$pinned" "$action_latest" \
+    "\`.github/\` (every \`uses: $action@\`: the release's commit SHA, the tag in the comment)"
+done < <(grep -rhoE 'uses: [a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+@[0-9a-f]{40} # v[0-9.]+' .github \
+  | sed -E 's/uses: ([^@]+)@[0-9a-f]+ # (.*)/\1 \2/' | sort -u)
+
 # Other direct Go modules (xray-core and sing-box are above; replaced modules are ours).
 go_mods=$(cd core && go list -m -u -json all 2>/dev/null | jq -r 'select(.Main != true and .Indirect != true and .Update != null
   and .Replace == null and (.Path | test("xtls/xray-core$|sagernet/sing-box$") | not))
@@ -100,7 +109,7 @@ $(printf '%s\n' "${items[@]}")
 ### Pull requests
 
 One PR per core (xray-core, sing-box, xray-rust), one for Flutter with the Dart packages, one for Gradle/AGP/Kotlin,
-one for Go and the other Go modules. Each can merge on its own; open at most three at a time. Skip an item that
+one for Go and the other Go modules, one for the GitHub Actions pins. Each can merge on its own; open at most three at a time. Skip an item that
 breaks something you can't fix and say why in this issue.
 
 ### Done when

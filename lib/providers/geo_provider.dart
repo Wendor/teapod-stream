@@ -47,10 +47,12 @@ class GeoNotifier extends Notifier<GeoState> {
     return GeoMissing();
   }
 
-  /// Whether the files are there (extracting the bundled copy if not). Does nothing during a download; a check that a
-  /// download overtook neither extracts nor publishes.
+  /// Whether the files are there (extracting the bundled copy if not). Does nothing during a download; a call during a
+  /// check joins it; a check that a download overtook neither extracts nor publishes.
   Future<void> check() {
     if (_downloading) return Future.value();
+    // Calls during a check join it: one extraction at a time, and the download waits for the one that runs.
+    if (_checking case final running?) return running;
     final run = _check(_epoch);
     _checking = run;
     return run.whenComplete(() {

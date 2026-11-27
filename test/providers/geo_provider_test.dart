@@ -344,6 +344,21 @@ void main() {
       expect((c.read(geoProvider) as GeoReady).lastUpdated, _FakeGeodata.finished);
     });
 
+    test('overlapping checks are one: the download waits for the extraction that runs', () async {
+      await start();
+      calls.clear();
+      final notifier = c.read(geoProvider.notifier);
+      final hold = holdFilesDir = Completer<void>();
+      final first = notifier.check(); // waits in getFilesDir
+      final second = notifier.check(); // joins the first
+      final downloading = notifier.download(); // waits for that one check
+      hold.complete();
+      await Future.wait([first, second, downloading]);
+      expect(calls.where((m) => m == 'getFilesDir'), hasLength(2), reason: 'one check, one download');
+      expect(fake.calls, hasLength(1));
+      expect(c.read(geoProvider), isA<GeoReady>());
+    });
+
     test('a check overtaken by a failed download leaves the error', () async {
       await start();
       fake.filesThere = true;

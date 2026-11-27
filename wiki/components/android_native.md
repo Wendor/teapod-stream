@@ -30,6 +30,7 @@ back. It keeps working when the Flutter UI is gone (tile, boot, Tasker, service 
 | `PrefixTcpProxy.kt` | local TCP proxy for Shadowsocks `?prefix=` (Outline) |
 | `SessionReconciler.kt` | the one desired session state (`Desired.Off(attempt)` / `Desired.On(request, id)`) and the thread that brings the session to it: commands, `onRevoke`, reconnects and retries only replace it (`set`, or `replace` while an expected state is still wanted); a run loops the pure `nextAction(desired, actual)` (stop / close the sink / start / settled) through `SessionDriver` |
 | `HeartbeatPolicy.kt` | the heartbeat's decisions, pure and JVM-tested: observations (probe ok / failed, no direct internet, dead or leaking tun2socks, TUN idle, warm-up deadline) → an action (none, log, retry now, reconnect, ask Flutter to switch); the thread in `Heartbeat` only probes and applies it |
+| `StartFailurePolicy.kt` | what a stop and a failed start leave, pure and JVM-tested: `stop` (kill switch, reconnecting, whether the stop allows a sink, a TUN held → keep the TUN, the final state), `startFailure` (kill switch, reconnect, a previous TUN, a new TUN held, still wanted / replaced by a start / by an off, attempts → restore the previous TUN, retry, the stop's flags, whether the error is reported); `stopVpn` and `startVpn`'s failure path only apply them |
 | `NetworkChangePolicy.kt` | network-change scheduling, pure and JVM-tested: an event and the time since connect → a plan (delay, check the network or reconnect); when the plan fires → reconnect or not |
 | `SocksHttpProbe.kt` | the heartbeat's `socks` probe: SOCKS5 handshake and an HTTP GET over raw sockets, probe-URL parsing |
 | `SpeedHistory.kt` | ring buffer for the speed chart (`(epoch, seq)` increments) |
@@ -130,6 +131,9 @@ phantom connection, and the heartbeat's own tun2socks check stays as a fallback.
   otherwise it establishes a new TUN and closes the held one. Final failure with kill switch → sink stays, state
   `blocked`.
   A failed manual connect keeps a sink only if there already was one — a broken config must not lock the network.
+  A start replaced while it ran reports no error: by another start it keeps the sink for it (`reconnecting`), by an
+  off it stops as a user's off does. All of it is `StartFailurePolicy`; `stopVpn(mayKeepSink = false)` is a stop
+  that never keeps a sink (a user's off, a final failure without the kill switch's sink).
 - **`blocked`.** The kill switch keeps TUN with `setUnderlyingNetworks(emptyArray())` after an unexpected drop: traffic
   enters TUN and nobody reads it. Notification and tile show it; tapping the tile or the notification's Connect
   reconnects.

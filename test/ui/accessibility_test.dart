@@ -36,7 +36,10 @@ void main() {
       final handle = tester.ensureSemantics();
       await setUpScreenTest(
         settings: const AppSettings(splitTunnelingEnabled: true, includedPackages: {'b.app'}),
-        configs: [testConfig('1', latency: 40), testConfig('2', subId: 's')],
+        configs: [
+          testConfig('1', latency: 40),
+          testConfig('2', subId: 's'),
+        ],
       );
       final c = await pumpScreen(tester, e.value());
       await expectLater(tester, meetsGuideline(androidTapTargetGuideline));

@@ -27,7 +27,10 @@ type coreRun[T any] struct {
 	mu   sync.Mutex // held through the open and the close: readers wait for an open in progress
 	inst T
 	open bool // inst is set
-	cb   statusCallback
+	// ended: the start's outcome other than a running core — cancelled before it opened or a failed
+	// open — is reported; nothing else is reported for this run and the open never runs.
+	ended bool
+	cb    statusCallback
 }
 
 // statusCallback is XrayCallback (android-only, with the rest of the gomobile API).
@@ -60,20 +63,28 @@ func chain(prev, done chan struct{}) {
 	close(done)
 }
 
-// closeRun closes run's instance (after an open in progress) and reports the stop.
+// closeRun closes run's instance (after an open in progress) and reports the stop. A run taken
+// before it opened reports only the cancellation (-1): a 0 would read as a successful start.
 func (s *coreSlot[T]) closeRun(run *coreRun[T]) {
 	if run == nil {
 		return
 	}
 	run.mu.Lock()
 	defer run.mu.Unlock()
-	if run.open {
-		if err := s.close(run.inst); err != nil {
-			log.Printf("[%s] shutdown error: %v", s.name, err)
+	if !run.open {
+		if !run.ended {
+			run.ended = true
+			if run.cb != nil {
+				run.cb.OnStatus(-1, "start cancelled: core was stopped")
+			}
 		}
-		var zero T
-		run.inst, run.open = zero, false
+		return
 	}
+	if err := s.close(run.inst); err != nil {
+		log.Printf("[%s] shutdown error: %v", s.name, err)
+	}
+	var zero T
+	run.inst, run.open = zero, false
 	if run.cb != nil {
 		run.cb.OnStatus(0, "Core stopped")
 	}
@@ -90,7 +101,11 @@ func (s *coreSlot[T]) start(cb statusCallback, open func() (T, error)) {
 
 		run.mu.Lock()
 		defer run.mu.Unlock()
-		if s.current() != run {
+		if run.ended {
+			return
+		}
+		if s.current() != run { // replaced already: its replacer's closeRun finds it ended
+			run.ended = true
 			if cb != nil {
 				cb.OnStatus(-1, "start cancelled: core was stopped")
 			}
@@ -98,6 +113,7 @@ func (s *coreSlot[T]) start(cb statusCallback, open func() (T, error)) {
 		}
 		inst, err := open()
 		if err != nil {
+			run.ended = true
 			log.Printf("[%s] %v", s.name, err)
 			if cb != nil {
 				cb.OnStatus(-1, err.Error())

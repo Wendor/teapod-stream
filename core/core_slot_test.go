@@ -90,6 +90,10 @@ func TestCoreSlotFailedOpenReportsTheError(t *testing.T) {
 	if _, ok := s.get(); ok {
 		t.Fatal("a failed start reads as running")
 	}
+	s.stop()
+	if got := cb.statuses(); len(got) != 1 {
+		t.Fatalf("statuses %v, want only the failure: the stop of a failed start reports nothing", got)
+	}
 }
 
 // A stop racing the start's goroutine either cancels the start or closes what it opened:
@@ -181,12 +185,12 @@ func TestCoreSlotStartStoppedWhileWaitingNeverOpens(t *testing.T) {
 	s.start(cb, func() (int32, error) { return opened.Add(1), nil })
 	s.stop() // the caller's deadline: returns although the earlier close still hangs
 	close(release)
-	waitFor(t, func() bool { return len(cb.statuses()) == 2 })
+	time.Sleep(50 * time.Millisecond) // the start's goroutine runs after the release
 	if opened.Load() != 1 {
 		t.Fatalf("opened %d, want the stopped start never to open", opened.Load())
 	}
-	if got := cb.statuses(); got[0] != 0 || got[1] != -1 {
-		t.Fatalf("statuses %v, want stopped then cancelled", got)
+	if got := cb.statuses(); len(got) != 1 || got[0] != -1 {
+		t.Fatalf("statuses %v, want only the cancellation: a 0 would read as a started core", got)
 	}
 }
 
@@ -239,5 +243,35 @@ func TestCoreSlotConcurrentStartsLeaveNoOrphan(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	if c.opened.Load() != c.closed.Load() {
 		t.Fatalf("opened %d, closed %d", c.opened.Load(), c.closed.Load())
+	}
+}
+
+// Every start reports exactly one outcome, and a start that never opened never reports 0.
+func TestCoreSlotEachStartReportsOneOutcome(t *testing.T) {
+	var c counter
+	s := c.slot()
+	logs := make([]*statusLog, 100)
+	for i := range logs {
+		logs[i] = &statusLog{}
+		s.start(logs[i], c.open)
+		if i%3 == 0 {
+			s.stop()
+		}
+	}
+	s.stop()
+	time.Sleep(100 * time.Millisecond)
+	opened := 0
+	for i, l := range logs {
+		got := l.statuses()
+		switch {
+		case len(got) == 1 && got[0] == -1: // cancelled before it opened
+		case len(got) == 2 && got[0] == 0 && got[1] == 0: // started, then stopped
+			opened++
+		default:
+			t.Fatalf("start %d reported %v", i, got)
+		}
+	}
+	if int32(opened) != c.opened.Load() || c.opened.Load() != c.closed.Load() {
+		t.Fatalf("reported %d started, opened %d, closed %d", opened, c.opened.Load(), c.closed.Load())
 	}
 }

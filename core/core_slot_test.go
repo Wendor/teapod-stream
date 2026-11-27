@@ -137,8 +137,8 @@ func TestCoreSlotStopDuringOpenClosesTheOpenedInstance(t *testing.T) {
 }
 
 // A start while another caller's stop is still closing the instance opens the new one only after
-// that close returned: the old instance may still hold the port.
-func TestCoreSlotStartWaitsForAStopInProgress(t *testing.T) {
+// that close returned (the old instance may still hold the port), and start itself doesn't wait.
+func TestCoreSlotOpenWaitsForAStopInProgress(t *testing.T) {
 	var opened atomic.Int32
 	closing, release := make(chan struct{}), make(chan struct{})
 	s := &coreSlot[int32]{name: "test", close: func(int32) error {
@@ -151,20 +151,41 @@ func TestCoreSlotStartWaitsForAStopInProgress(t *testing.T) {
 
 	go s.stop()
 	<-closing
-	started := make(chan struct{})
-	go func() {
-		s.start(nil, func() (int32, error) { return opened.Add(1), nil })
-		close(started)
-	}()
-	select {
-	case <-started:
-		t.Fatal("start returned while the previous instance was closing")
-	case <-time.After(20 * time.Millisecond):
-	}
+	s.start(nil, func() (int32, error) { return opened.Add(1), nil }) // returns at once
+	time.Sleep(20 * time.Millisecond)
 	if opened.Load() != 1 {
 		t.Fatalf("opened %d before the close returned, want 1", opened.Load())
 	}
 	close(release)
-	<-started
 	waitFor(t, func() bool { inst, ok := s.get(); return ok && inst == 2 })
+}
+
+// A start given up while it waits for a hung close (its caller's deadline passed and it stopped)
+// never opens, even when the close finally returns.
+func TestCoreSlotStartStoppedWhileWaitingNeverOpens(t *testing.T) {
+	var opened atomic.Int32
+	closing, release := make(chan struct{}), make(chan struct{})
+	s := &coreSlot[int32]{name: "test", close: func(int32) error {
+		if opened.Load() == 1 {
+			close(closing)
+			<-release
+		}
+		return nil
+	}}
+	s.start(nil, func() (int32, error) { return opened.Add(1), nil })
+	waitFor(t, func() bool { _, ok := s.get(); return ok })
+
+	go s.stop()
+	<-closing
+	cb := &statusLog{}
+	s.start(cb, func() (int32, error) { return opened.Add(1), nil })
+	s.stop() // the caller's deadline: returns although the earlier close still hangs
+	close(release)
+	waitFor(t, func() bool { return len(cb.statuses()) == 2 })
+	if opened.Load() != 1 {
+		t.Fatalf("opened %d, want the stopped start never to open", opened.Load())
+	}
+	if got := cb.statuses(); got[0] != 0 || got[1] != -1 {
+		t.Fatalf("statuses %v, want stopped then cancelled", got)
+	}
 }

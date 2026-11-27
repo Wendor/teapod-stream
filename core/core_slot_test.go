@@ -130,10 +130,12 @@ func TestCoreSlotStopDuringOpenClosesTheOpenedInstance(t *testing.T) {
 	<-entered
 	stopped := make(chan struct{})
 	go func() { s.stop(); close(stopped) }()
+	// The stop has taken the run (and now waits for the open) before the open may return.
+	waitFor(t, func() bool { return s.current() == nil })
 	select {
 	case <-stopped:
 		t.Fatal("stop returned while the open was running")
-	case <-time.After(20 * time.Millisecond):
+	default:
 	}
 	close(release)
 	<-stopped

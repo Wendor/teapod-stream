@@ -472,53 +472,12 @@ class XrayVpnService : VpnService() {
                     previousTun = null
                     log("info", "Reusing existing TUN fd for reconnect")
                 } else {
-                    val randomSubnet1 = (2..250).random()
-                    val randomSubnet2 = (2..250).random()
-                    val randomSubnet3 = (2..250).random()
-                    val dynamicTunIp = "10.$randomSubnet1.$randomSubnet2.$randomSubnet3"
-
-                    val dynamicSession = "Teapod-${System.currentTimeMillis() % 10000}"
-
-                    val builder = Builder()
-                        .setSession(dynamicSession)
-                        .setMtu(tunMtu)
-                        .addAddress(dynamicTunIp, 32)
-                        .addRoute("0.0.0.0", 0)
-                        .addDnsServer(core.tunDnsServer)
-                        .setBlocking(true)
-                        .setMetered(false)
-
-                    // Without an IPv6 address Android blocks the family for tunneled apps
-                    // (no leak): connect() fails instantly and apps fall back to IPv4.
-                    // With the address, literal-IPv6 destinations (e.g. Telegram DCs) hang
-                    // when the VPN server has no IPv6 connectivity (#81).
-                    if (ipv6Enabled) {
-                        val hex1 = (1..65535).random().toString(16)
-                        val hex2 = (1..65535).random().toString(16)
-                        val hex3 = (1..65535).random().toString(16)
-                        builder.addAddress("fd00:$hex1:$hex2:$hex3::1", 64)
-                        builder.addRoute("::", 0)
-                    }
-
-                    if (vpnMode == VpnMode.ONLY_SELECTED) {
-                        var allowed = 0
-                        for (pkg in includedPackages) {
-                            try {
-                                builder.addAllowedApplication(pkg)
-                                allowed++
-                            } catch (e: Exception) {
-                                log("warning", "Failed to allow $pkg: ${e.message}")
-                            }
-                        }
-                        // Android applies a VPN with no allowed app to every app: traffic stays in the tunnel, but
-                        // "only selected apps" covers all of them.
-                        if (allowed == 0) log("warning", "Only selected apps, but none is installed: the VPN covers every app")
-                    } else {
-                        for (pkg in excludedPackages) {
-                            try { builder.addDisallowedApplication(pkg) } catch (_: Exception) {}
-                        }
-                        try { builder.addDisallowedApplication(packageName) } catch (_: Exception) {}
-                    }
+                    val spec = TunSpec.of(
+                        mtu = tunMtu, dnsServer = core.tunDnsServer, ipv6 = ipv6Enabled, vpnMode = vpnMode,
+                        included = includedPackages, excluded = excludedPackages, ownPackage = packageName,
+                        nowMs = System.currentTimeMillis(),
+                    )
+                    val builder = builder(spec)
 
                     val fdResult = nativeSetMaxFds(65536)
                     log("info", "nativeSetMaxFds result: $fdResult")
@@ -527,7 +486,7 @@ class XrayVpnService : VpnService() {
                     tunParams = request.params
                     // The new interface replaced the old one atomically — the sink fd can go now.
                     try { previousTun?.close() } catch (_: Exception) {}
-                    log("info", "TUN established with IP $dynamicTunIp")
+                    log("info", "TUN established with IP ${spec.addresses.first().address}")
                 }
 
                 // Split tunneling: UID filter at the core level (tun2socks validator / TUN admission)
@@ -591,6 +550,36 @@ class XrayVpnService : VpnService() {
             }
             return false
         }
+    }
+
+    /** A `VpnService.Builder` for [spec]; an app that can't be allowed or disallowed (not installed) is skipped. */
+    private fun builder(spec: TunSpec): Builder {
+        val builder = Builder()
+            .setSession(spec.session)
+            .setMtu(spec.mtu)
+            .addDnsServer(spec.dnsServer)
+            .setBlocking(true)
+            .setMetered(false)
+        for (a in spec.addresses) builder.addAddress(a.address, a.prefix)
+        for (r in spec.routes) builder.addRoute(r.address, r.prefix)
+        var allowed = 0
+        for (pkg in spec.allowed) {
+            try {
+                builder.addAllowedApplication(pkg)
+                allowed++
+            } catch (e: Exception) {
+                log("warning", "Failed to allow $pkg: ${e.message}")
+            }
+        }
+        // Android applies a VPN with no allowed app to every app: traffic stays in the tunnel, but "only selected
+        // apps" covers all of them.
+        if (spec.onlySelected && allowed == 0) {
+            log("warning", "Only selected apps, but none is installed: the VPN covers every app")
+        }
+        for (pkg in spec.disallowed) {
+            try { builder.addDisallowedApplication(pkg) } catch (_: Exception) {}
+        }
+        return builder
     }
 
     /**

@@ -160,10 +160,6 @@ class XrayVpnService : VpnService() {
         override fun reconnect(session: Long?) = reconnectInternal(session)
         override fun log(level: String, message: String) = this@XrayVpnService.log(level, message)
     })
-    private var killSwitchEnabled = false
-    @Volatile private var allowIcmpEnabled = true
-    @Volatile private var blockQuicEnabled = false
-    private var proxyOnlyMode = false
     // The one desired session state: commands, revoke, reconnects and retries replace it, one thread brings the
     // session to it. A start that ends off (failed, cancelled) is checked once its run has finished: while it runs it
     // holds the service.
@@ -197,13 +193,14 @@ class XrayVpnService : VpnService() {
     /** The parameters [tunInterface] was built with: a reconnect reuses the fd only for the same ones. */
     @Volatile private var tunParams: ConnectionParams? = null
 
-    /** The parameters of the session being started or run ([useParams]); null before the first start. */
+    /**
+     * The parameters of the session being started or run ([useParams]); null before the first start. The only copy:
+     * the kill switch, proxy-only and the rest are read from it. Written in [startVpn] after its CAS on [isRunning].
+     */
     @Volatile private var params: ConnectionParams? = null
     private val allowTethering get() = params?.allowTethering ?: false
     private val mainHandler = Handler(Looper.getMainLooper())
     private val reconnectAttempts = AtomicInteger(0)
-
-    @Volatile private var tunMtu = 1500
     // Core of the current session: fixed in startVpn after the CAS so that a core change
     // by a new connect doesn't redirect stop/heartbeat/stats to another core.
     // Before the first start here: the last session's core in this process.
@@ -283,7 +280,7 @@ class XrayVpnService : VpnService() {
                 when {
                     // Nothing stored to start (a failed save may have removed it): the session holding the sink, if
                     // any, decides whether it stays.
-                    request == null -> abortQuickConnect(killSwitchEnabled)
+                    request == null -> abortQuickConnect(params?.killSwitch == true)
                     // Permission revoked — the system already disconnected our TUN, nothing to block with.
                     !request.params.proxyOnly && VpnService.prepare(this) != null -> abortQuickConnect(killSwitch = false)
                     else -> {
@@ -403,12 +400,8 @@ class XrayVpnService : VpnService() {
         val previousTunParams = tunParams
         val hadPreviousTun = previousTun != null
         tunInterface = null
-        killSwitchEnabled = killSwitch
         tunModeActive = !proxyOnly
-        allowIcmpEnabled = allowIcmp
-        blockQuicEnabled = blockQuic
-        proxyOnlyMode = proxyOnly
-        tunMtu = core.tunMtu(mtu.coerceIn(576, 9000))
+        val tunMtu = core.tunMtu(mtu.coerceIn(576, 9000))
         if (!isReconnect) ServiceLog.rotate(filesDir)
         setState(if (isReconnect) SessionState.RECONNECTING else SessionState.CONNECTING)
         // After the state, before the save: a quick-connect write that read the count before this is dropped, one
@@ -442,7 +435,7 @@ class XrayVpnService : VpnService() {
                 CoreStartParams(
                     tunFd = tunFd, mtu = tunMtu, socksPort = socksPort,
                     socksUser = socksUser, socksPassword = socksPassword,
-                    allowIcmp = allowIcmpEnabled, blockQuic = blockQuicEnabled,
+                    allowIcmp = allowIcmp, blockQuic = blockQuic,
                     vpnMode = vpnMode, allowedUids = allowedUids, blockUnowned = blockUnowned,
                 )
 
@@ -691,7 +684,7 @@ class XrayVpnService : VpnService() {
         lastConnectedMs = 0L
 
         fun outcome(tunHeld: Boolean) = StartFailurePolicy.stop(
-            killSwitch = killSwitchEnabled, proxyOnly = proxyOnlyMode, mayKeepSink = mayKeepSink,
+            killSwitch = params?.killSwitch == true, proxyOnly = params?.proxyOnly == true, mayKeepSink = mayKeepSink,
             reconnecting = reconnecting, tunHeld = tunHeld, resultState = resultState,
         )
         // Until the TUN is looked at below (a failure before that keeps nothing).

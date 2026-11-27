@@ -189,3 +189,55 @@ func TestCoreSlotStartStoppedWhileWaitingNeverOpens(t *testing.T) {
 		t.Fatalf("statuses %v, want stopped then cancelled", got)
 	}
 }
+
+// A replacement start returns while the running instance's open still hangs; that instance is
+// closed once its open returns, and only then does the new one open.
+func TestCoreSlotReplacementStartDoesNotWaitForAHungOpen(t *testing.T) {
+	var c counter
+	s := c.slot()
+	entered, release := make(chan struct{}), make(chan struct{})
+	s.start(nil, func() (int32, error) {
+		close(entered)
+		<-release
+		return c.open()
+	})
+	<-entered
+	returned := make(chan struct{})
+	go func() {
+		s.start(nil, c.open)
+		close(returned)
+	}()
+	select {
+	case <-returned:
+	case <-time.After(time.Second):
+		t.Fatal("start waited for the hung open")
+	}
+	close(release)
+	waitFor(t, func() bool { inst, ok := s.get(); return ok && inst == 2 })
+	if c.closed.Load() != 1 {
+		t.Fatalf("closed %d, want the first instance closed", c.closed.Load())
+	}
+	s.stop()
+}
+
+// Starts racing each other and a final stop leave nothing open: each replaced run is closed by
+// the call that replaced it.
+func TestCoreSlotConcurrentStartsLeaveNoOrphan(t *testing.T) {
+	var c counter
+	s := c.slot()
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s.start(nil, c.open)
+		}()
+	}
+	wg.Wait()
+	waitFor(t, func() bool { _, ok := s.get(); return ok })
+	s.stop()
+	time.Sleep(50 * time.Millisecond)
+	if c.opened.Load() != c.closed.Load() {
+		t.Fatalf("opened %d, closed %d", c.opened.Load(), c.closed.Load())
+	}
+}

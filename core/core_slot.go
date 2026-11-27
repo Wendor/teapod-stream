@@ -6,25 +6,25 @@ import (
 )
 
 // coreSlot holds the one running instance of a core: xray and sing-box share this lifecycle.
-// start replaces the running instance and opens the new one on its own goroutine; stop closes it.
-// A stop that comes before that goroutine runs cancels the start: the instance it would open
-// would have no reference left to close it, holding the SOCKS port and its upstream connections.
-// The open waits for every stop begun before the start to finish closing, also one another caller
-// began: the instance being closed may still hold the SOCKS port the new one needs. start itself
-// doesn't wait, so a hung close holds only that open, which the caller's start deadline bounds
-// (its stop then cancels the start).
+//
+// A start or stop swaps the run under mu in one step, so every replaced run is closed by whoever
+// replaced it and none is left behind by two calls racing. stop closes the run it took before it
+// returns; start returns at once, and its goroutine closes the run it replaced, waits until every
+// earlier stop has finished closing (the closing instance may still hold the SOCKS port), and only
+// then opens — if its run is still the current one. A hung close therefore holds only that open,
+// which the caller's start deadline bounds; the stop the caller then sends cancels the start.
 type coreSlot[T any] struct {
 	name  string        // log prefix
 	close func(T) error // releases an opened instance
 
 	mu  sync.Mutex // guards run and closed; coreRun.mu guards a run's fields
 	run *coreRun[T]
-	// closed is closed once every stop begun so far has finished closing its instance; nil — none yet.
+	// closed is closed once every run replaced so far has been closed; nil — none yet.
 	closed chan struct{}
 }
 
 type coreRun[T any] struct {
-	mu   sync.Mutex // held through the whole start and stop: readers wait for a start in progress
+	mu   sync.Mutex // held through the open and the close: readers wait for an open in progress
 	inst T
 	open bool // inst is set
 	cb   statusCallback
@@ -41,23 +41,55 @@ func (s *coreSlot[T]) current() *coreRun[T] {
 	return s.run
 }
 
-// start stops the running instance, then opens a new one with open on a new goroutine. cb gets
-// 0 once it runs, or -1 with open's error or the cancellation.
-func (s *coreSlot[T]) start(cb statusCallback, open func() (T, error)) {
-	s.stop()
-	run := &coreRun[T]{cb: cb}
+// swap makes next the current run and returns the one it replaced, with the channel of the closes
+// before it and the one to close once that run is closed too.
+func (s *coreSlot[T]) swap(next *coreRun[T]) (old *coreRun[T], prev, done chan struct{}) {
 	s.mu.Lock()
-	s.run = run
-	closed := s.closed
-	s.mu.Unlock()
+	defer s.mu.Unlock()
+	old, s.run = s.run, next
+	prev, done = s.closed, make(chan struct{})
+	s.closed = done
+	return old, prev, done
+}
 
-	go func() {
-		if closed != nil {
-			<-closed
+// chain closes done once prev is: done then follows every earlier close as well.
+func chain(prev, done chan struct{}) {
+	if prev != nil {
+		<-prev
+	}
+	close(done)
+}
+
+// closeRun closes run's instance (after an open in progress) and reports the stop.
+func (s *coreSlot[T]) closeRun(run *coreRun[T]) {
+	if run == nil {
+		return
+	}
+	run.mu.Lock()
+	defer run.mu.Unlock()
+	if run.open {
+		if err := s.close(run.inst); err != nil {
+			log.Printf("[%s] shutdown error: %v", s.name, err)
 		}
+		var zero T
+		run.inst, run.open = zero, false
+	}
+	if run.cb != nil {
+		run.cb.OnStatus(0, "Core stopped")
+	}
+}
+
+// start replaces the running instance with one opened by open, on a new goroutine. cb gets 0
+// once it runs, or -1 with open's error or the cancellation.
+func (s *coreSlot[T]) start(cb statusCallback, open func() (T, error)) {
+	run := &coreRun[T]{cb: cb}
+	old, prev, done := s.swap(run)
+	go func() {
+		s.closeRun(old)
+		chain(prev, done)
+
 		run.mu.Lock()
 		defer run.mu.Unlock()
-
 		if s.current() != run {
 			if cb != nil {
 				cb.OnStatus(-1, "start cancelled: core was stopped")
@@ -80,39 +112,11 @@ func (s *coreSlot[T]) start(cb statusCallback, open func() (T, error)) {
 	}()
 }
 
-// stop closes the running instance; an open in progress finishes first.
+// stop closes the running instance before it returns; an open in progress finishes first.
 func (s *coreSlot[T]) stop() {
-	s.mu.Lock()
-	run := s.run
-	s.run = nil
-	prev, done := s.closed, make(chan struct{})
-	s.closed = done
-	s.mu.Unlock()
-	// done follows the earlier stops too, so a start waits for all of them.
-	defer func() {
-		go func() {
-			if prev != nil {
-				<-prev
-			}
-			close(done)
-		}()
-	}()
-	if run == nil {
-		return
-	}
-
-	run.mu.Lock()
-	defer run.mu.Unlock()
-	if run.open {
-		if err := s.close(run.inst); err != nil {
-			log.Printf("[%s] shutdown error: %v", s.name, err)
-		}
-		var zero T
-		run.inst, run.open = zero, false
-	}
-	if run.cb != nil {
-		run.cb.OnStatus(0, "Core stopped")
-	}
+	old, prev, done := s.swap(nil)
+	s.closeRun(old)
+	go chain(prev, done)
 }
 
 // get returns the running instance, false when none runs; an open in progress finishes first.

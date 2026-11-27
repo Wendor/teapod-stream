@@ -68,8 +68,8 @@ desired state's attempt (`own`); an `Off` that is reached reports `disconnected`
 desired state its session was started for (`connectedDesired`), and a start replaced before it began does nothing.
 
 - **`ACTION_CONNECT`** (from Flutter): only the notification type is taken before the state is set (when no session runs);
-  `startVpn(StartRequest)` takes the parameters (`useParams`: the heartbeat, tethering and notification settings are
-  read from them) once it owns the session, and stores them, the config it runs (with its SOCKS login) together with the
+  `startVpn(StartRequest)` takes the parameters (`useParams`: the only copy of them in the service — the kill switch, proxy-only,
+  the heartbeat, tethering and notification settings are read from it) once it owns the session, and stores them, the config it runs (with its SOCKS login) together with the
   tile's config name, then refreshes the tile (`QuickConnectStore.save`: one step under a lock shared with the activity's save and the quick-start read; the old
   config is removed first (and a `socks_creds.json` left by older versions), so an interrupted save leaves nothing to quick-start rather than a mix of two connections; a failed save is logged
   and costs only the quick start, not the session). Before the old session stops, `sessionAttempt` takes Flutter's

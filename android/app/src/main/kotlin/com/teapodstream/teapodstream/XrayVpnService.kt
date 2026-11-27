@@ -77,7 +77,10 @@ class XrayVpnService : VpnService() {
 
 
         /** Extracts the bundled geoip.dat / geosite.dat that are missing from filesDir. False when one failed: its
-         *  partial copy is removed, so the next call tries again instead of keeping a truncated file. */
+         *  partial copy is removed, so the next call tries again instead of keeping a truncated file. Synchronized:
+         *  the channel (on the I/O pool) and startVpn call it, and a second copy of the same file would truncate the
+         *  first or delete it on failure. */
+        @Synchronized
         fun prepareBinaries(context: android.content.Context): Boolean {
             val filesDir = context.filesDir
             val assets = context.assets

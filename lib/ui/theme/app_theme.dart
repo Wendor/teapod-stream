@@ -137,6 +137,23 @@ class AppTheme {
         subtitleTextStyle: sans(size: 13, color: tokens.textDim),
         iconColor: tokens.textDim,
       ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: tokens.bg,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.zero,
+          side: BorderSide(color: tokens.line),
+        ),
+        titleTextStyle: sans(size: 16, weight: FontWeight.w500, color: tokens.text),
+        contentTextStyle: mono(size: 12, color: tokens.textDim),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: tokens.accent,
+          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+          textStyle: mono(size: 12),
+        ),
+      ),
       popupMenuTheme: PopupMenuThemeData(
         color: isDark ? AppColors.surfaceElevated : AppColors.bgElevLight,
         shape: RoundedRectangleBorder(

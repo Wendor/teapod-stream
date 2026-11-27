@@ -11,6 +11,7 @@ import '../providers/config_provider.dart';
 import '../providers/vpn_provider.dart';
 import 'theme/app_theme.dart';
 import 'theme/app_colors.dart';
+import 'widgets/dialog_parts.dart';
 import 'widgets/import_review.dart';
 import '../l10n/l10n.dart';
 
@@ -120,12 +121,7 @@ class DeeplinkHandler {
     return showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: t.bg,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-        title: Text(
-          title,
-          style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500),
-        ),
+        title: Text(title),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -134,11 +130,9 @@ class DeeplinkHandler {
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(context.l10n.commonCancel, style: AppTheme.mono(size: 11, color: t.textMuted)),
-          ),
-          TextButton(
+          const DialogCancel(),
+          DialogAction(
+            context.l10n.commonImport,
             onPressed: () async {
               Navigator.pop(ctx);
               final message = await import();
@@ -151,7 +145,6 @@ class DeeplinkHandler {
                 ),
               );
             },
-            child: Text(context.l10n.commonImport, style: AppTheme.mono(size: 11, color: t.accent)),
           ),
         ],
       ),
@@ -171,26 +164,14 @@ class DeeplinkHandler {
   }
 
   Future<bool> _confirmFetch(String host) async {
-    final t = Theme.of(context).extension<TeapodTokens>()!;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: t.bg,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-        title: Text(
-          context.l10n.deeplinkFetchTitle,
-          style: AppTheme.sans(size: 16, color: t.text, weight: FontWeight.w500),
-        ),
-        content: Text(context.l10n.deeplinkFetchMessage(host), style: AppTheme.mono(size: 12, color: t.text)),
+        title: Text(context.l10n.deeplinkFetchTitle),
+        content: Text(context.l10n.deeplinkFetchMessage(host)),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(context.l10n.commonCancel, style: AppTheme.mono(size: 11, color: t.textMuted)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(context.l10n.deeplinkFetchButton, style: AppTheme.mono(size: 11, color: t.accent)),
-          ),
+          const DialogCancel(result: false),
+          DialogAction(context.l10n.deeplinkFetchButton, onPressed: () => Navigator.pop(ctx, true)),
         ],
       ),
     );

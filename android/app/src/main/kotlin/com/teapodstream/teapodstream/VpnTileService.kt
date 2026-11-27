@@ -4,12 +4,9 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Icon
-import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
-import androidx.annotation.RequiresApi
 
-@RequiresApi(Build.VERSION_CODES.N)
 class VpnTileService : TileService() {
 
     override fun onStartListening() {
@@ -64,14 +61,12 @@ class VpnTileService : TileService() {
 
         fun updateTile(context: Context) {
             tileService?.requestUpdate() ?: run {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    try {
-                        TileService.requestListeningState(
-                            context,
-                            ComponentName(context, VpnTileService::class.java)
-                        )
-                    } catch (_: Exception) { }
-                }
+                try {
+                    TileService.requestListeningState(
+                        context,
+                        ComponentName(context, VpnTileService::class.java)
+                    )
+                } catch (_: Exception) { }
             }
         }
     }
@@ -139,8 +134,6 @@ class VpnTileService : TileService() {
     }
 
     private fun setSubtitle(text: String?) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            qsTile?.subtitle = text
-        }
+        qsTile?.subtitle = text
     }
 }

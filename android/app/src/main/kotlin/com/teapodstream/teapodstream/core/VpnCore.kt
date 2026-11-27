@@ -11,6 +11,14 @@ enum class CoreKind(val id: String, val versionKey: String) {
     }
 }
 
+/** Split tunnelling: which apps go through the tunnel. [id] is the stored and Flutter form. */
+enum class VpnMode(val id: String) {
+    /** Every app except the excluded ones. */
+    ALL_EXCEPT("allExcept"),
+    /** Only the included apps. */
+    ONLY_SELECTED("onlySelected"),
+}
+
 data class CoreStartParams(
     /** null — proxy-only (no TUN). */
     val tunFd: Int?,
@@ -20,7 +28,7 @@ data class CoreStartParams(
     val socksPassword: String,
     val allowIcmp: Boolean,
     val blockQuic: Boolean,
-    val vpnMode: String,
+    val vpnMode: VpnMode,
     /** onlySelected — allowed UIDs, allExcept — excluded ones. */
     val allowedUids: Set<Int>,
     /** allExcept: drop ownerless flows (tethering/bypass via tun0). */

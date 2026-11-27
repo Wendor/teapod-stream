@@ -6,7 +6,6 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.VpnService
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import com.teapodstream.teapodstream.core.VpnCore
@@ -96,21 +95,19 @@ internal class NetworkWatcher(private val service: VpnService, private val host:
                     network: Network,
                     networkCapabilities: NetworkCapabilities
                 ) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                        if (cm.activeNetwork == network) {
-                            val prev = underlying
-                            updateUnderlyingNetworks(cm)
-                            // Captive portal / temporary internet loss: VALIDATED is removed
-                            // without triggering onLost/onAvailable — detect and reconnect.
-                            val validated = networkCapabilities.hasCapability(
-                                NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-                            // The network became the default only after onAvailable (LTE → Wi-Fi after
-                            // airplane mode): the core's sockets stayed on the previous network.
-                            val switched = prev != null && underlying != null &&
-                                prev != underlying
-                            if (!validated) scheduleNetworkChanged()
-                            else if (switched) scheduleNetworkChanged(switched = true)
-                        }
+                    if (cm.activeNetwork == network) {
+                        val prev = underlying
+                        updateUnderlyingNetworks(cm)
+                        // Captive portal / temporary internet loss: VALIDATED is removed
+                        // without triggering onLost/onAvailable — detect and reconnect.
+                        val validated = networkCapabilities.hasCapability(
+                            NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                        // The network became the default only after onAvailable (LTE → Wi-Fi after
+                        // airplane mode): the core's sockets stayed on the previous network.
+                        val switched = prev != null && underlying != null &&
+                            prev != underlying
+                        if (!validated) scheduleNetworkChanged()
+                        else if (switched) scheduleNetworkChanged(switched = true)
                     }
                 }
             }
@@ -149,29 +146,27 @@ internal class NetworkWatcher(private val service: VpnService, private val host:
     }
 
     private fun updateUnderlyingNetworks(cm: ConnectivityManager) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val activeNetwork = cm.activeNetwork ?: run {
+        val activeNetwork = cm.activeNetwork ?: run {
+            service.setUnderlyingNetworks(null)
+            underlying = null
+            return
+        }
+
+        // Use findPhysicalNetwork to get WiFi/LTE (not VPN)
+        val physicalNetwork = physical()
+        if (physicalNetwork == null) {
+            if (underlying != null) {
                 service.setUnderlyingNetworks(null)
                 underlying = null
-                return
+                host.log("info", "All underlying networks lost")
             }
-
-            // Use findPhysicalNetwork to get WiFi/LTE (not VPN)
-            val physicalNetwork = physical()
-            if (physicalNetwork == null) {
-                if (underlying != null) {
-                    service.setUnderlyingNetworks(null)
-                    underlying = null
-                    host.log("info", "All underlying networks lost")
-                }
-                return
-            }
-
-            if (physicalNetwork == underlying) return
-            underlying = physicalNetwork
-            service.setUnderlyingNetworks(arrayOf(physicalNetwork))
-            host.log("info", "Underlying network set to physical: $physicalNetwork")
+            return
         }
+
+        if (physicalNetwork == underlying) return
+        underlying = physicalNetwork
+        service.setUnderlyingNetworks(arrayOf(physicalNetwork))
+        host.log("info", "Underlying network set to physical: $physicalNetwork")
     }
 
     /// [switched] — the physical network changed: before reconnecting compare with the network

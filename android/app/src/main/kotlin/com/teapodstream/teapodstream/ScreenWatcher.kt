@@ -4,7 +4,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.os.Build
 import android.os.PowerManager
 
 /// Screen and Doze state for the service's threads: the heartbeat and the stats poll slow down
@@ -53,9 +52,7 @@ internal class ScreenWatcher(
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF)
             addAction(Intent.ACTION_SCREEN_ON)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                addAction(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED)
-            }
+            addAction(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED)
         }
         context.registerReceiver(receiver, filter)
     }
@@ -65,5 +62,5 @@ internal class ScreenWatcher(
         receiver = null
     }
 
-    private fun idle(pm: PowerManager) = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) pm.isDeviceIdleMode else false
+    private fun idle(pm: PowerManager) = pm.isDeviceIdleMode
 }

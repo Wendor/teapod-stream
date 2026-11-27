@@ -96,7 +96,7 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
     final s = ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
     if (s == null) return;
     final enabled = !s.logsEnabled;
-    await ref.read(settingsProvider.notifier).save(s.copyWith(logsEnabled: enabled));
+    await ref.read(settingsProvider.notifier).edit((c) => c.copyWith(logsEnabled: enabled));
     await ref.read(nativeLogsProvider).setLogsEnabled(enabled);
   }
 

@@ -35,7 +35,18 @@ class _SubscriptionSettingsScreenState extends ConsumerState<SubscriptionSetting
     super.dispose();
   }
 
-  void _update(AppSettings s) => ref.read(settingsProvider.notifier).save(s);
+  /// Read in [initState]: the User-Agent field commits its last edit while the screen is being disposed.
+  late final ProviderContainer _container;
+
+  @override
+  void initState() {
+    super.initState();
+    _container = ProviderScope.containerOf(context, listen: false);
+  }
+
+  /// [change] applies to the settings current when it is written, not to the ones this build saw.
+  void _update(AppSettings Function(AppSettings current) change) =>
+      _container.read(settingsProvider.notifier).edit(change);
 
   @override
   Widget build(BuildContext context) {
@@ -87,7 +98,7 @@ class _SubscriptionSettingsScreenState extends ConsumerState<SubscriptionSetting
                         hint: context.l10n.subsAutoRefreshHint,
                         value: s.subAutoRefresh,
                         locked: locked,
-                        onChange: (v) => _update(s.copyWith(subAutoRefresh: v)),
+                        onChange: (v) => _update((c) => c.copyWith(subAutoRefresh: v)),
                       ),
                       if (s.subAutoRefresh)
                         SetInlineField(
@@ -101,7 +112,7 @@ class _SubscriptionSettingsScreenState extends ConsumerState<SubscriptionSetting
                               for (final h in const [1, 3, 6, 12, 24]) ('$h', context.l10n.unitHours(h)),
                             ],
                             locked: locked,
-                            onChanged: (v) => _update(s.copyWith(subAutoRefreshHours: int.parse(v))),
+                            onChanged: (v) => _update((c) => c.copyWith(subAutoRefreshHours: int.parse(v))),
                           ),
                         ),
                       SetSectionHeader(t: t, addr: '0x20', label: 'identity'),
@@ -111,40 +122,21 @@ class _SubscriptionSettingsScreenState extends ConsumerState<SubscriptionSetting
                         hint: context.l10n.subsHwidHint,
                         value: s.hwidEnabled,
                         locked: locked,
-                        onChange: (v) => _update(s.copyWith(hwidEnabled: v)),
+                        onChange: (v) => _update((c) => c.copyWith(hwidEnabled: v)),
                       ),
                       SetInlineField(
                         t: t,
                         label: 'User-Agent',
                         locked: locked,
-                        child: SizedBox(
+                        child: SetCredField(
+                          t: t,
+                          controller: _uaCtrl!,
+                          enabled: !locked,
+                          hint: context.l10n.commonDefaultLower,
                           width: 200,
-                          child: TextField(
-                            controller: _uaCtrl,
-                            enabled: !locked,
-                            keyboardType: TextInputType.text,
-                            onChanged: (v) => _update(s.copyWith(subUserAgent: v)),
-                            onEditingComplete: () => FocusScope.of(context).unfocus(),
-                            style: AppTheme.mono(size: 13, color: t.text),
-                            decoration: InputDecoration(
-                              hintText: context.l10n.commonDefaultLower,
-                              hintStyle: AppTheme.mono(size: 12, color: t.textMuted),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                              isDense: true,
-                              enabledBorder: OutlineInputBorder(
-                                borderSide: BorderSide(color: t.line),
-                                borderRadius: BorderRadius.zero,
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderSide: BorderSide(color: t.accent),
-                                borderRadius: BorderRadius.zero,
-                              ),
-                              disabledBorder: OutlineInputBorder(
-                                borderSide: BorderSide(color: t.lineSoft),
-                                borderRadius: BorderRadius.zero,
-                              ),
-                            ),
-                          ),
+                          fontSize: 13,
+                          textAlign: TextAlign.start,
+                          onCommit: (v) => _update((c) => c.copyWith(subUserAgent: v)),
                         ),
                       ),
                       const SizedBox(height: 24),

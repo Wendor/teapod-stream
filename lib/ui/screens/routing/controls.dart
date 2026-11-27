@@ -41,7 +41,7 @@ class _ModeSelector extends StatelessWidget {
   final TeapodTokens t;
   final RoutingSettings routing;
   final bool locked;
-  final void Function(RoutingSettings) onUpdate;
+  final void Function(RoutingSettings Function(RoutingSettings current)) onUpdate;
 
   const _ModeSelector({required this.t, required this.routing, required this.locked, required this.onUpdate});
 
@@ -68,7 +68,7 @@ class _ModeSelector extends StatelessWidget {
             final active = routing.direction == dir;
             return Expanded(
               child: GestureDetector(
-                onTap: locked ? null : () => onUpdate(routing.copyWith(direction: dir)),
+                onTap: locked ? null : () => onUpdate((r) => r.copyWith(direction: dir)),
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
                   decoration: BoxDecoration(

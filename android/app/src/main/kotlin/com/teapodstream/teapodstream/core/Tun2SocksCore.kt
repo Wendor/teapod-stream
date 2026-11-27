@@ -56,7 +56,7 @@ abstract class Tun2SocksCore : VpnCore {
         startEngine(config, filesDir)
         log("info", "$logTag started")
         val tunFd = params.tunFd ?: return
-        log("info", "Starting tun2socks: mode=${params.vpnMode} uids=${params.allowedUids.size} blockUnowned=${params.blockUnowned}")
+        log("info", "Starting tun2socks: mode=${params.vpnMode.id} uids=${params.allowedUids.size} blockUnowned=${params.blockUnowned}")
         val err = Teapodcore.startTun2Socks(
             tunFd.toLong(),
             params.mtu.toLong(),
@@ -93,9 +93,9 @@ abstract class Tun2SocksCore : VpnCore {
      * tethering and is blocked when there are exclusions unless tethering is allowed.
      * A flow whose owner lookup throws is treated as ownerless (TunOwnerPolicy).
      */
-    private fun buildTunValidator(allowedUids: Set<Int>, vpnMode: String, blockUnowned: Boolean): TunValidator? {
+    private fun buildTunValidator(allowedUids: Set<Int>, vpnMode: VpnMode, blockUnowned: Boolean): TunValidator? {
         val cm = connectivity ?: return null
-        val policy = TunOwnerPolicy(vpnMode == "onlySelected", allowedUids, blockUnowned, tunDnsServer, log)
+        val policy = TunOwnerPolicy(vpnMode == VpnMode.ONLY_SELECTED, allowedUids, blockUnowned, tunDnsServer, log)
         // "EXCEPT" without blocking ownerless flows rejects nobody: null —
         // tun2socks lets everything through itself, without binder IPC per connection.
         if (!policy.needsAdmission) return null

@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:teapodstream/core/models/subscription.dart';
 import 'package:teapodstream/core/services/log_service.dart';
 import 'package:teapodstream/providers/config_provider.dart';
+import 'package:teapodstream/core/models/app_settings.dart';
 import 'package:teapodstream/providers/settings_provider.dart';
 import 'package:teapodstream/ui/screens/add_config_screen.dart';
 import 'package:teapodstream/ui/screens/configs/configs_screen.dart';
@@ -157,6 +158,23 @@ void main() {
       for (final n in ['Alpha', 'eBay', 'Zoom']) tester.getTopLeft(find.text(n)).dy,
     ];
     expect(ys, orderedEquals([...ys]..sort()), reason: 'sorted ignoring case');
+    await unmount(tester, c);
+  });
+
+  testWidgets('an app tapped right after a mode switch goes to that mode\'s list', (tester) async {
+    final native = await setUpScreenTest(settings: const AppSettings(splitTunnelingEnabled: true));
+    native.apps = [
+      {'packageName': 'a.app', 'appName': 'Alpha'},
+    ];
+    final c = await pumpScreen(tester, const SplitTunnelScreen());
+    // No pump between the taps: the app row still renders the default "only selected" mode.
+    await tester.tap(find.text('EXCEPT').last);
+    await tester.tap(find.text('Alpha'));
+    await settle(tester);
+    final s = c.read(settingsProvider).value!;
+    expect(s.vpnMode, VpnMode.allExcept);
+    expect(s.excludedPackages, {'a.app'});
+    expect(s.includedPackages, isEmpty);
     await unmount(tester, c);
   });
 

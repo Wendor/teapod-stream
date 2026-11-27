@@ -1,5 +1,6 @@
 package com.teapodstream.teapodstream
 
+import com.teapodstream.teapodstream.core.CoreKind
 import java.io.File
 import org.json.JSONObject
 
@@ -17,7 +18,7 @@ internal data class StartRequest(
     val reconnect: Boolean,
     val configName: String? = null,
 ) {
-    override fun toString() = "StartRequest(engine=${params.engine}, attempt=$attempt, reconnect=$reconnect)"
+    override fun toString() = "StartRequest(engine=${params.engine.id}, attempt=$attempt, reconnect=$reconnect)"
 }
 
 /**
@@ -138,7 +139,7 @@ internal class QuickConnectStore(private val dir: File) {
      * The quick start from what is stored, or null without a config or parameters. The SOCKS login comes from the
      * stored one, else from the config ([socksFromConfig] reads it in the format of the session's core).
      */
-    fun quickStart(socksFromConfig: (config: String, engine: String) -> Pair<String, String>): StartRequest? {
+    fun quickStart(socksFromConfig: (config: String, engine: CoreKind) -> Pair<String, String>): StartRequest? {
         val stored = synchronized(LOCK) {
             val params = params() ?: return null
             val config = config() ?: return null

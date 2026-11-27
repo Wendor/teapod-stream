@@ -115,12 +115,14 @@ func TestCoreSlotStopRightAfterStartLeavesNothingOpen(t *testing.T) {
 	}
 }
 
-// A stop during the open waits for it and closes the instance it returns.
+// A stop during the open waits for it; the instance it returns is closed and the start reports
+// only the cancellation, never a 0 Kotlin would read as a started core.
 func TestCoreSlotStopDuringOpenClosesTheOpenedInstance(t *testing.T) {
 	var c counter
 	s := c.slot()
+	cb := &statusLog{}
 	entered, release := make(chan struct{}), make(chan struct{})
-	s.start(nil, func() (int32, error) {
+	s.start(cb, func() (int32, error) {
 		close(entered)
 		<-release
 		return c.open()
@@ -137,6 +139,9 @@ func TestCoreSlotStopDuringOpenClosesTheOpenedInstance(t *testing.T) {
 	<-stopped
 	if c.opened.Load() != 1 || c.closed.Load() != 1 {
 		t.Fatalf("opened %d, closed %d, want 1 and 1", c.opened.Load(), c.closed.Load())
+	}
+	if got := cb.statuses(); len(got) != 1 || got[0] != -1 {
+		t.Fatalf("statuses %v, want only the cancellation", got)
 	}
 }
 

@@ -120,6 +120,18 @@ func (s *coreSlot[T]) start(cb statusCallback, open func() (T, error)) {
 			}
 			return
 		}
+		if s.current() != run {
+			// Taken while it opened: its stopper waits for run.mu and finds it ended, so close it here
+			// and report the cancellation instead of a start Kotlin would trust.
+			run.ended = true
+			if err := s.close(inst); err != nil {
+				log.Printf("[%s] shutdown error: %v", s.name, err)
+			}
+			if cb != nil {
+				cb.OnStatus(-1, "start cancelled: core was stopped")
+			}
+			return
+		}
 		run.inst, run.open = inst, true
 		log.Printf("[%s] started successfully", s.name)
 		if cb != nil {

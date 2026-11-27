@@ -47,7 +47,8 @@ RustCore:          TUN fd → xray-rust → server
   opens only if its run is still current, so a hung close holds only that open and a stop meanwhile cancels it. A
   reader (`QueryXrayStats`, `Measure*Delay`) waits for an open in progress. Each start reports one outcome to its
   callback: 0 once running (and 0 again when it is closed), or a single -1 — a failed open, or cancelled before it
-  opened (never a 0, which Kotlin reads as a started core). A failed xray start closes the instance (`startXrayInstance`, also for `MeasureOutboundDelay`): xray starts
+  opened, also when the stop came during the open (the opened instance is closed at once; never a 0, which Kotlin
+  reads as a started core). A failed xray start closes the instance (`startXrayInstance`, also for `MeasureOutboundDelay`): xray starts
   features in order without rollback, so the inbounds already listening would keep the port.
 - Delay measurement: `http.Transport` over `core.Dial` (sing-box: the `proxy` outbound's dialer), 2 attempts with
   keep-alive (an attempt counts only when the whole body was read), both under one 12 s deadline (`probeTimeout`) for

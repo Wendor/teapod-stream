@@ -1,5 +1,6 @@
 import 'dart:isolate';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/models/app_settings.dart';
 import '../core/services/geodata_service.dart';
 import '../core/services/geosite_index.dart';
 import '../core/services/tunnel_socks.dart';
@@ -57,8 +58,18 @@ class GeoNotifier extends Notifier<GeoState> {
     }
   }
 
+  /// One download at a time: a second call while one runs (the button is still shown until the first await) returns
+  /// at once — both would write the same `.tmp` files.
   Future<void> download() async {
-    final settings = await ref.read(settingsProvider.future);
+    if (state is GeoDownloading) return;
+    state = GeoDownloading(downloaded: 0, total: -1);
+    final AppSettings settings;
+    try {
+      settings = await ref.read(settingsProvider.future);
+    } catch (e) {
+      state = GeoError(AppMessage.text('$e'));
+      return;
+    }
     final String dir;
     try {
       dir = await ref.read(platformServiceProvider).filesDir();
@@ -71,7 +82,6 @@ class GeoNotifier extends Notifier<GeoState> {
       return;
     }
 
-    state = GeoDownloading(downloaded: 0, total: -1);
     try {
       // GitHub CDN is often blocked — with the VPN connected we download through the tunnel (#150).
       final finished = await TunnelSocks.orDirect(

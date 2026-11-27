@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -107,8 +106,9 @@ class GeodataService {
   }
 
   /// The SHA-256 (lower-case hex) in `<url>.sha256sum` — `sha256sum` output, the hash first; null when the source
-  /// publishes none (404) or the file isn't in that form. Any other HTTP status is an error: the check must not be
-  /// skipped because the request failed.
+  /// publishes none (404, whatever the size of its error page) or the file doesn't start that way (only its first
+  /// bytes are read, as ASCII). Any other HTTP status is an error: the check must not be skipped because the request
+  /// failed.
   Future<String?> _publishedSha256(String url, TunnelSocks? socks) async {
     final uri = Uri.parse(url);
     final resp = await AppHttp.open(
@@ -116,18 +116,25 @@ class GeodataService {
       socks: socks,
       timeout: const Duration(seconds: 30),
       idleTimeout: const Duration(seconds: 30),
-      maxBytes: 4096,
     );
     try {
       final status = resp.statusCode;
       if (status == 404) return null;
       if (status != 200) throw ReasonException(AppMessage.l10n((l) => l.geoHttpStatus(status)));
-      final text = await utf8.decoder.bind(resp.body).join();
+      final head = <int>[];
+      await for (final chunk in resp.body) {
+        head.addAll(chunk);
+        if (head.length >= _sumPrefix) break;
+      }
+      final text = String.fromCharCodes(head.take(_sumPrefix));
       return RegExp(r'^\s*([0-9a-fA-F]{64})(\s|$)').firstMatch(text)?.group(1)!.toLowerCase();
     } finally {
       resp.close();
     }
   }
+
+  /// Enough of a `.sha256sum` file for the hash and the separator after it.
+  static const _sumPrefix = 256;
 
   static String _hex(List<int> bytes) => bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
 }

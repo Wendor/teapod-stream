@@ -175,6 +175,41 @@ void main() {
       expect(File('${dir.path}/geosite.dat').readAsStringSync(), 'SITEDATA!');
     });
 
+    test('a big 404 page or a non-UTF-8 body for the sum is not checked, not an error', () async {
+      server.handler = (r) async {
+        final path = r.uri.path;
+        if (path == '/ip.dat.sha256sum') {
+          r.response.statusCode = HttpStatus.notFound;
+          r.response.write('x' * 20000);
+        } else if (path == '/site.dat.sha256sum') {
+          r.response.add([0xff, 0xfe, 0x00, 0x80]);
+        } else if (r.method != 'HEAD') {
+          r.response.write('x');
+        }
+        await r.response.close();
+      };
+      await download();
+      expect(c.read(geoProvider), isA<GeoReady>());
+    });
+
+    test('a second download while one runs does nothing', () async {
+      final gets = <String>[];
+      server.handler = (r) async {
+        if (r.method == 'GET') gets.add(r.uri.path);
+        if (r.method != 'HEAD' && !r.uri.path.endsWith('.sha256sum')) r.response.write('x');
+        if (r.uri.path.endsWith('.sha256sum')) r.response.statusCode = HttpStatus.notFound;
+        await r.response.close();
+      };
+      await start();
+      final notifier = c.read(geoProvider.notifier);
+      await HttpOverrides.runWithHttpOverrides(
+        () => Future.wait([notifier.download(), notifier.download()]),
+        RedirectHttpOverrides(server.port),
+      );
+      expect(gets.where((p) => p == '/ip.dat'), hasLength(1));
+      expect(c.read(geoProvider), isA<GeoReady>());
+    });
+
     test('a failed sum request is an error, not a skipped check', () async {
       File('${dir.path}/geoip.dat').writeAsStringSync('old ip');
       server.handler = (r) async {

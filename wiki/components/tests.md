@@ -18,7 +18,7 @@ A fix comes with a test that fails without it; a logic change comes with tests o
 | Directory | What |
 |---|---|
 | `test/core/` | models, bundles, `AppSettings`/`SettingsService` (the per-key reader of the migration), storage, subscriptions, updates and release notes, `changelog/` files, deep links, logs, `DeviceService`, `AppMessage` (codes localized per language) |
-| `test/protocols/` | link parsers, Go/Rust/sing-box builders, `XrayEngine` (MethodChannel) |
+| `test/protocols/` | link parsers, Go/Rust/sing-box builders, `XrayEngine` (MethodChannel); `fuzz_parsers_test.dart` (below) |
 | `test/providers/` | `ConfigNotifier`, profiles/settings, `VpnNotifier`, update/geo/ipInfo and small providers |
 | `test/ui/` | smoke of every screen (empty / with data), interactions, deep link dialogs, settings |
 | `test/l10n/` | ARB key and placeholder parity |
@@ -49,6 +49,14 @@ A fix comes with a test that fails without it; a logic change comes with tests o
   a 600 px viewport to avoid false overflows. Config groups in `ConfigsScreen` start collapsed.
 - **HTTP progress:** `dart:io` buffers small chunks until the response ends — use ~64 KB chunks to observe progress.
 - **Kotlin:** `unitTests.isReturnDefaultValues = true` — stubs like `android.util.Log` don't throw.
+- **Fuzzing** (`test/protocols/fuzz_parsers_test.dart`): seeded random mutations of valid share links (each scheme,
+  a WireGuard `.conf`, the JSON inside `vmess://`), subscription bodies (`SubscriptionService.parseBody`: plain,
+  base64, managed JSON) and a managed xray config (`mergeWithRaw`). A parser returns a config, null or a
+  `ReasonException` — never another exception; a parsed config survives `toJson`/`fromJson`; a merged managed config
+  keeps only the allowed top-level keys, our single SOCKS inbound on loopback with a password, no balancer falling
+  back to a freedom outbound and no `allowInsecure`. CI runs a fixed seed (3000 cases per test); a long local run:
+  `FUZZ_SEED=7 FUZZ_CASES=300000 flutter test test/protocols/fuzz_parsers_test.dart`. A crash it finds gets a
+  regression test next to the parser's own tests.
 
 Not covered by unit tests: `QrScanScreen` (camera), `main.dart`, `XrayVpnService`, `MainActivity` and the channel handlers, and the cores running
 on Android with a real TUN (the Go engines have host unit tests; on-device behaviour needs the integration tests).

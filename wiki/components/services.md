@@ -8,7 +8,8 @@ read a service through it and never construct one, so a test swaps a service wit
 ## SubscriptionService
 
 `fetchSubscription(url, {pinnedCertDer, hwid, userAgent, socks})` → `SubscriptionFetchResult`
-(configs, `profileTitle`, usage info, `acceptedCertDer`).
+(configs, `profileTitle`, usage info, `acceptedCertDer`). The body is read by `parseBody` (static, never throws): a
+managed xray JSON config (an object or an array), a plain list of links, or that list in base64.
 
 - **Request** through [AppHttp](#apphttp) with its defaults (15 s timeouts, body limit 10 MB). User-Agent =
   `subUserAgent` or `AppConstants.subscriptionUserAgent`; HWID headers when enabled (below). Non-200 → error.

@@ -38,6 +38,7 @@ internal class PlatformChannelHandler(
             if (packageName == null) result.success(null) else work.answer(result) { appIcon(packageName) }
         },
         "getFilesDir" to { _, result -> result.success(activity.filesDir.absolutePath) },
+        "secureStorageMigrationPending" to { _, result -> work.answer(result) { SecureStorageMigration.pending(activity) } },
         "getAbi" to { _, result -> result.success(Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a") },
         // Country of an IP by the geoip.dat the cores route with; null when unknown. Reads the whole file.
         "countryForIp" to { call, result ->

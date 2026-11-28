@@ -128,6 +128,8 @@ void main() {
 
   setUp(() async {
     messenger.setMockStreamHandler(_events, MockStreamHandler.inline(onListen: (_, _) {}));
+    // Native answers at once (the profile load asks whether the secure-storage migration is pending).
+    messenger.setMockMethodCallHandler(const MethodChannel(AppConstants.methodChannel), (_) async => null);
     SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
     _log.clear();

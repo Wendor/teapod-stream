@@ -54,12 +54,17 @@ says how, and what counts.
 | Exported log | `cacheDir/teapod_log.txt` | masked, overwritten by the next export |
 
 flutter_secure_storage moves data written by its v9 (EncryptedSharedPreferences) to its own cipher key by key on
-first access. If that fails before any key moved, reads fail for that launch and the migration runs again on the next
-one. `StorageSecureService.androidOptions` (shared by every instance) sets `resetOnError: false` (the plugin's default
+first access, and sets its "migrated" flag only after the last key, so an interrupted move resumes on the next launch.
+`StorageSecureService.androidOptions` (shared by every instance) sets `resetOnError: false` (the plugin's default
 deletes the key on a read error, all keys on a `readAll` error) and leaves `migrateWithBackup` off (that path never
-migrates v9 data and reads a v9-only store as empty). Accepted risk: there is no progress marker, so a migration that
-stops after some keys moved (an error, or the process killed in those milliseconds of the first launch) leaves the keys
-not yet moved reading as missing (`null`).
+migrates v9 data and reads a v9-only store as empty). A move that fails midway makes the plugin read the old store for
+that launch, where the keys already moved read as missing: a write then would land in the old store and replace the
+moved value when the move resumes. Guard: native's `secureStorageMigrationPending` (`SecureStorageMigration.kt`: the
+flag unset and entries with v9's encrypted names left in the plugin's file) — while it is true `ProfileNotifier`
+doesn't write a default profile over missing ones but fails the load with `storageMigrationPending` ("restart the
+app"); configs and subscriptions are written only on a user's action. Accepted risk: the plugin persists each moved key
+with `apply()` to two files, so a process killed in those milliseconds of the first launch can lose a key (only the
+plugin can fix that).
 
 ## Rules for contributors
 

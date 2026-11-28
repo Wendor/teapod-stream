@@ -7,6 +7,7 @@ import '../core/models/app_message.dart';
 import '../core/models/import_review.dart';
 import '../core/services/bundle_loader.dart';
 import '../core/services/deeplink_router.dart';
+import '../core/services/platform_service.dart';
 import '../core/services/profile_storage_service.dart';
 import '../core/services/settings_service.dart';
 import '../core/models/app_settings.dart';
@@ -91,6 +92,12 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
     final legacy = await _legacy.migrated() ? null : await _legacy.load();
 
     if (profiles.isEmpty) {
+      // flutter_secure_storage's move of its v9 data stopped midway: this session reads the old store, where the
+      // profiles may already be gone. A default written now would land there and replace them when the next launch
+      // resumes the move — so nothing is written, the next launch loads them.
+      if (await ref.read(platformServiceProvider).secureStorageMigrationPending()) {
+        throw ReasonException(const AppMessage(MessageCode.storageMigrationPending));
+      }
       profiles = [Profile.initial(legacy ?? const AppSettings())];
       await _storage.saveProfiles(profiles);
       await _storage.saveActiveProfileId('default');
@@ -335,4 +342,8 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
   }
 }
 
-final profileProvider = AsyncNotifierProvider<ProfileNotifier, ProfileState>(ProfileNotifier.new);
+final profileProvider = AsyncNotifierProvider<ProfileNotifier, ProfileState>(
+  ProfileNotifier.new,
+  // An unfinished secure-storage migration lasts the whole launch: retrying only asks native again.
+  retry: (count, error) => error is ReasonException ? null : ProviderContainer.defaultRetry(count, error),
+);

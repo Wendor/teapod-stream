@@ -1598,6 +1598,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get profileDefaultName => 'По умолчанию';
 
   @override
+  String get storageMigrationPending =>
+      'Сохранённые данные ещё обновляются. Перезапустите приложение, чтобы закончить; ничего не потеряно.';
+
+  @override
   String get geoNoFilesDir => 'Не удалось получить путь к файлам';
 
   @override

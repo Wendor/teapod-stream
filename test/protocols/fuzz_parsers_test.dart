@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:teapodstream/core/constants/xray_defaults.dart';
 import 'package:teapodstream/core/interfaces/vpn_engine.dart';
 import 'package:teapodstream/core/models/app_message.dart';
+import 'package:teapodstream/core/models/protocol_settings.dart';
 import 'package:teapodstream/core/models/routing_settings.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/core/models/vpn_log_entry.dart' show LogLevel;
@@ -206,9 +207,10 @@ VpnConfig? _parse(String input) {
   }
 }
 
-/// The fields that make a connection, read from the config itself — not from its stored form, which would hide a
-/// field `toJson` drops.
-List<Object?> _connectionFields(VpnConfig c) => [
+/// Every field of the config, read from the object itself — not from its stored form, which would hide a field
+/// `toJson` drops; nested protocol settings field by field too. `expect` compares the lists deeply.
+List<Object?> _fields(VpnConfig c) => [
+  c.id,
   c.name,
   c.protocol,
   c.address,
@@ -230,25 +232,85 @@ List<Object?> _connectionFields(VpnConfig c) => [
   c.alterId,
   c.method,
   c.password,
+  c.createdAt,
   c.rawUri,
+  c.latencyMs,
+  c.lastPingedAt,
+  c.subscriptionId,
   c.ssPrefix,
   c.obfsPassword,
   c.hopPorts,
   c.allowInsecure,
+  c.pinSHA256,
   c.xhttpMode,
+  c.xhttpExtra,
+  c.finalmask,
   c.alpn,
   c.ech,
   c.rawXrayConfig,
-  c.headerType,
   c.core,
-  c.protocolSettings == null ? null : jsonEncode(c.protocolSettings!.toJson()),
+  c.headerType,
+  c.plugin,
+  c.mux,
+  c.obfs,
+  c.geckoPacketSize,
+  c.needsLinkFields,
+  ..._settingsFields(c.protocolSettings),
 ];
+
+List<Object?> _settingsFields(ProtocolSettings? s) => switch (s) {
+  null => const [null],
+  WireGuardSettings() => [
+    'wg',
+    s.privateKey,
+    s.addresses,
+    s.peerPublicKey,
+    s.presharedKey,
+    s.mtu,
+    s.reserved,
+    s.allowedIps,
+    s.keepalive,
+    ..._amneziaFields(s.amnezia),
+  ],
+  SshSettings() => ['ssh', s.user, s.password, s.privateKey, s.privateKeyPassphrase, s.hostKeys],
+  NaiveSettings() => ['naive', s.user, s.password, s.quic, s.extraHeaders],
+};
+
+List<Object?> _amneziaFields(AmneziaParams? a) => a == null
+    ? const [null]
+    : [
+        a.jc,
+        a.jmin,
+        a.jmax,
+        a.s1,
+        a.s2,
+        a.s3,
+        a.s4,
+        a.h1,
+        a.h2,
+        a.h3,
+        a.h4,
+        a.i1,
+        a.i2,
+        a.i3,
+        a.i4,
+        a.i5,
+        a.headerProtectionKey,
+        a.contentPaddingAddition,
+        a.rekeyAfterTime,
+        a.rekeyTimeout,
+        a.rejectAfterTime,
+        a.keepaliveTimeout,
+        a.maxHandshakeAttempts,
+        a.randomTrailers,
+        a.disableCookies,
+      ];
 
 void _expectRoundTrip(VpnConfig c, String input) {
   final json = jsonDecode(jsonEncode(c.toJson())) as Map<String, dynamic>;
   final reloaded = VpnConfig.fromJson(json);
   expect(jsonEncode(reloaded.toJson()), jsonEncode(json), reason: 'stored form of ${jsonEncode(input)} changed');
-  expect(_connectionFields(reloaded), _connectionFields(c), reason: 'a field of ${jsonEncode(input)} lost on reload');
+  expect(_fields(reloaded), _fields(c), reason: 'a field of ${jsonEncode(input)} lost on reload');
 }
 
 final _options = VpnEngineOptions(

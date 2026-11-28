@@ -20,18 +20,18 @@ class ConnectionParamsTest {
     fun legacyMetaWithoutEngineLoadsAsGo() {
         val dir = tempDir()
         meta(dir, minimal)
-        assertEquals(CoreKind.GO, QuickConnectStore(dir).params()!!.engine)
+        assertEquals(CoreKind.GO, QuickConnectStore(dir, TestStoreCipher).params()!!.engine)
     }
 
     @Test
     fun engineSurvivesSaveLoad() {
         val dir = tempDir()
-        QuickConnectStore(dir).saveParams(ConnectionParams(
+        QuickConnectStore(dir, TestStoreCipher).saveParams(ConnectionParams(
             socksPort = 1, excludedPackages = emptyList(), includedPackages = emptyList(),
             vpnMode = VpnMode.ALL_EXCEPT, ssPrefix = null, proxyOnly = false, showNotification = true,
             killSwitch = false, allowIcmp = false, blockQuic = false, engine = CoreKind.RUST,
         ))
-        assertEquals(CoreKind.RUST, QuickConnectStore(dir).params()!!.engine)
+        assertEquals(CoreKind.RUST, QuickConnectStore(dir, TestStoreCipher).params()!!.engine)
     }
 
     @Test
@@ -57,15 +57,15 @@ class ConnectionParamsTest {
             allowTethering = true,
             engine = CoreKind.RUST,
         )
-        QuickConnectStore(dir).saveParams(params)
-        assertEquals(params, QuickConnectStore(dir).params())
+        QuickConnectStore(dir, TestStoreCipher).saveParams(params)
+        assertEquals(params, QuickConnectStore(dir, TestStoreCipher).params())
     }
 
     @Test
     fun missingOptionalFieldsGetDefaults() {
         val dir = tempDir()
         meta(dir, minimal)
-        val p = QuickConnectStore(dir).params()!!
+        val p = QuickConnectStore(dir, TestStoreCipher).params()!!
         assertNull(p.ssPrefix)
         assertEquals(true, p.showNotification)
         assertEquals(false, p.killSwitch)
@@ -81,12 +81,12 @@ class ConnectionParamsTest {
     fun outOfRangeValuesAreClamped() {
         val dir = tempDir()
         meta(dir, """{"socksPort":1,"excludedPackages":[],"includedPackages":[],"mtu":100,"heartbeatThreshold":50}""")
-        val low = QuickConnectStore(dir).params()!!
+        val low = QuickConnectStore(dir, TestStoreCipher).params()!!
         assertEquals(576, low.mtu)
         assertEquals(10, low.heartbeatThreshold)
 
         meta(dir, """{"socksPort":1,"excludedPackages":[],"includedPackages":[],"mtu":65000,"heartbeatThreshold":0}""")
-        val high = QuickConnectStore(dir).params()!!
+        val high = QuickConnectStore(dir, TestStoreCipher).params()!!
         assertEquals(9000, high.mtu)
         assertEquals(1, high.heartbeatThreshold)
     }
@@ -95,7 +95,7 @@ class ConnectionParamsTest {
     fun emptyStringsFallBackToDefaults() {
         val dir = tempDir()
         meta(dir, """{"socksPort":1,"excludedPackages":[],"includedPackages":[],"ssPrefix":"","heartbeatUrl":"","engine":""}""")
-        val p = QuickConnectStore(dir).params()!!
+        val p = QuickConnectStore(dir, TestStoreCipher).params()!!
         assertNull(p.ssPrefix)
         assertEquals("http://cp.cloudflare.com/generate_204", p.heartbeatUrl)
         assertEquals(CoreKind.GO, p.engine)
@@ -124,11 +124,11 @@ class ConnectionParamsTest {
     @Test
     fun missingOrCorruptFileGivesNull() {
         val dir = tempDir()
-        assertNull(QuickConnectStore(dir).params())
+        assertNull(QuickConnectStore(dir, TestStoreCipher).params())
         meta(dir, "{not json")
-        assertNull(QuickConnectStore(dir).params())
+        assertNull(QuickConnectStore(dir, TestStoreCipher).params())
         meta(dir, """{"excludedPackages":[],"includedPackages":[]}""")
-        assertNull(QuickConnectStore(dir).params())
+        assertNull(QuickConnectStore(dir, TestStoreCipher).params())
     }
 
     @Test
@@ -139,7 +139,7 @@ class ConnectionParamsTest {
             vpnMode = VpnMode.ALL_EXCEPT, ssPrefix = null, proxyOnly = false, showNotification = true,
             killSwitch = false, allowIcmp = false, blockQuic = false,
         )
-        assertThrows(java.io.IOException::class.java) { QuickConnectStore(missing).saveParams(params) }
+        assertThrows(java.io.IOException::class.java) { QuickConnectStore(missing, TestStoreCipher).saveParams(params) }
     }
 
     private val full = ConnectionParams(
@@ -179,9 +179,9 @@ class ConnectionParamsTest {
     fun missingArgumentsGetTheSameDefaultsAsTheFile() {
         val dir = tempDir()
         meta(dir, minimal)
-        assertEquals(QuickConnectStore(dir).params(), ConnectionParams.fromArgs(emptyMap<String, Any?>()))
+        assertEquals(QuickConnectStore(dir, TestStoreCipher).params(), ConnectionParams.fromArgs(emptyMap<String, Any?>()))
         val nulls = mapOf("ssPrefix" to null, "heartbeatUrl" to "", "engine" to null)
-        assertEquals(QuickConnectStore(dir).params(), ConnectionParams.fromArgs(nulls))
+        assertEquals(QuickConnectStore(dir, TestStoreCipher).params(), ConnectionParams.fromArgs(nulls))
     }
 
     @Test

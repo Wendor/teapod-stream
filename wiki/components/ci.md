@@ -10,9 +10,12 @@ A cache saved by a PR run is visible only to later runs of that PR; one saved on
 
 Every third-party action is pinned by commit SHA, its release tag in a comment
 (`uses: actions/checkout@<sha> # v7.0.1`): a moved tag of an action the workflows name can't change what runs
-with the release secrets. Actions those call by tag inside are not pinned (`subosito/flutter-action` with
-`cache: true` runs `actions/cache@v5`). A newer release is reported by the monthly update check and bumped by hand
-(new SHA and comment).
+with the release secrets. An action nested inside another one by tag counts too — the runner downloads a composite's
+nested actions even when their steps are skipped — so Flutter is installed without a third-party action: the local
+`.github/actions/flutter` downloads the stable SDK archive of `FLUTTER_VERSION` from Google's release storage, checks
+it against the SHA-256 `releases_linux.json` lists, and caches the SDK (`runner.tool_cache`) and `~/.pub-cache` with
+`actions/cache` pinned by SHA. A newer release is reported by the monthly
+update check (it reads every `uses:` under `.github/`) and bumped by hand (new SHA and comment).
 
 ## `ci.yml` — checks
 

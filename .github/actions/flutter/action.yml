@@ -1,0 +1,58 @@
+name: Flutter
+description: >-
+  Installs the Flutter SDK of the given version from Google's release archive, checked against the SHA-256 that
+  `releases_linux.json` lists for it, and caches the SDK and the pub cache with actions/cache pinned by SHA. No
+  third-party setup action: subosito/flutter-action references actions/cache by a moving tag inside, and the runner
+  downloads nested actions of a composite even when their steps are skipped — code by a tag would reach every job
+  that installs Flutter, the signing job too.
+
+inputs:
+  flutter-version:
+    description: The Flutter version (stable channel)
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - id: sdk
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.tool_cache }}/flutter-${{ inputs.flutter-version }}
+        key: flutter-sdk-${{ runner.os }}-${{ runner.arch }}-${{ inputs.flutter-version }}
+
+    - if: steps.sdk.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        VERSION: ${{ inputs.flutter-version }}
+        DEST: ${{ runner.tool_cache }}/flutter-${{ inputs.flutter-version }}
+      run: |
+        base=https://storage.googleapis.com/flutter_infra_release/releases
+        release=$(curl -fsSL "$base/releases_linux.json" \
+          | jq -c --arg v "$VERSION" '[.releases[] | select(.version == $v and .channel == "stable")][0]')
+        archive=$(jq -r '.archive // empty' <<< "$release")
+        sum=$(jq -r '.sha256 // empty' <<< "$release")
+        [ -n "$archive" ] && [ -n "$sum" ] || { echo "::error::No stable Flutter $VERSION in releases_linux.json"; exit 1; }
+        tmp="$RUNNER_TEMP/flutter.tar.xz"
+        curl -fsSL -o "$tmp" "$base/$archive"
+        echo "$sum  $tmp" | sha256sum -c -
+        mkdir -p "$DEST"
+        tar -xJf "$tmp" -C "$DEST" --strip-components=1
+        rm "$tmp"
+
+    - shell: bash
+      env:
+        DEST: ${{ runner.tool_cache }}/flutter-${{ inputs.flutter-version }}
+      run: |
+        echo "FLUTTER_ROOT=$DEST" >> "$GITHUB_ENV"
+        echo "PUB_CACHE=$HOME/.pub-cache" >> "$GITHUB_ENV"
+        echo "$DEST/bin" >> "$GITHUB_PATH"
+        echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
+
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.pub-cache
+        key: pub-${{ runner.os }}-${{ hashFiles('**/pubspec.lock') }}
+        restore-keys: pub-${{ runner.os }}-
+
+    - shell: bash
+      run: flutter --version

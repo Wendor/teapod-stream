@@ -28,7 +28,7 @@ says how, and what counts.
 | Self-signed subscription servers | explicit user confirmation showing the SHA-256 fingerprint; the retry trusts only the certificate shown, only for the subscription host (TOFU pin) |
 | A corrupted or swapped geoip/geosite download changes routing | each file is checked against the `.sha256sum` its source publishes; a mismatch keeps both old files ([geo](components/geo_provider.md)). A source without sums (custom URL) is not checked |
 | A hashing bug weakens the certificate pin, the HWID or the geodata check | SHA-256 and HMAC-SHA256 live in one file, `lib/core/crypto/sha256.dart` (no dependency), tested against the FIPS 180-4 and RFC 4231 vectors (including a key longer than the block) |
-| A third-party action's moved tag runs in CI with the release signing secrets | every direct `uses:` in `.github/` names a commit SHA with its release tag in a comment; the monthly update check reports newer releases, bumped by hand ([CI](components/ci.md)). Actions those call by tag are not covered: `subosito/flutter-action` with `cache: true` runs `actions/cache@v5` in the signing job |
+| A third-party action's moved tag runs in CI with the release signing secrets | every `uses:` in `.github/` names a commit SHA with its release tag in a comment, and no action used there nests another one by tag (Flutter is installed by the local `.github/actions/flutter` from the release archive, checked by its published SHA-256); the monthly update check reports newer releases, bumped by hand ([CI](components/ci.md)) |
 
 ## Accepted risks
 

@@ -79,9 +79,10 @@ anyway ([profiles](profiles.md)).
 
 `lib/ui/theme/`: `AppTheme.build(brightness, accent)` with the `TeapodTokens` extension (`bg`, `bgElev`, `bgSunken`,
 `accent`, `accentSoft`, `text`, `textDim`, `textMuted`, `line`, `lineSoft`, `danger`); `AppTheme.mono` / `sans`
-text helpers (minimum 11 px). Text colours meet WCAG AA (4.5:1) on every background of their theme: the dark
-palette is chosen so, and `TeapodTokens.light` darkens the accent (hue kept) until it reaches 4.5:1 on `bgSunkenLight`,
-the darkest light background. Text follows the system font size: the app's `textScaler` is the system one (Android's font size and accessibility
+text helpers (minimum 11 px). `textMuted` and the accent meet WCAG AA (4.5:1) on every background of their theme
+(tested for every preset accent): the dark palette is chosen so, and `TeapodTokens.light` darkens the accent (hue
+kept) until it reaches 4.5:1 on `bgSunkenLight`, the darkest light background. `danger` is not covered: on light
+backgrounds it is about 3:1. Text follows the system font size: the app's `textScaler` is the system one (Android's font size and accessibility
 scaling) times the app's font setting (`fontScale`: 1.0 or 1.2), capped at 2.0 (`appTextScaler`,
 `theme/app_text_scaler.dart`). Layouts at large sizes are checked on a device: the test font is wider than the real ones.
 Where width is fixed, text gives way instead of breaking the layout: a short caption (tab label, `0x01` address, hero

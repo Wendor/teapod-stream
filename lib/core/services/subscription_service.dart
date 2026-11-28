@@ -157,10 +157,27 @@ class SubscriptionService {
       throw Exception('Failed to fetch subscription: ${response.statusCode}');
     }
     final responseHeaders = response.headers;
-    var body = response.body;
+    final body = response.body;
 
     final meta = _parseHeaders(responseHeaders);
 
+    return SubscriptionFetchResult(
+      configs: parseBody(body),
+      profileTitle: meta.profileTitle,
+      expireAt: meta.expireAt,
+      uploadBytes: meta.uploadBytes,
+      downloadBytes: meta.downloadBytes,
+      totalBytes: meta.totalBytes,
+      announce: meta.announce,
+      announceUrl: meta.announceUrl,
+      acceptedCertDer: acceptedCert,
+      hwidStatus: meta.hwidStatus,
+    );
+  }
+
+  /// The configs of a subscription body: a managed xray JSON config (an object or an array of them), a plain list
+  /// of links, or that list in base64. Lines the parser doesn't read or refuses are skipped; never throws.
+  static List<VpnConfig> parseBody(String body) {
     body = body.trim();
     List<String> lines;
     final configs = <VpnConfig>[];
@@ -213,20 +230,7 @@ class SubscriptionService {
             ),
           );
         }
-        if (configs.isNotEmpty) {
-          return SubscriptionFetchResult(
-            configs: configs,
-            profileTitle: meta.profileTitle,
-            expireAt: meta.expireAt,
-            uploadBytes: meta.uploadBytes,
-            downloadBytes: meta.downloadBytes,
-            totalBytes: meta.totalBytes,
-            announce: meta.announce,
-            announceUrl: meta.announceUrl,
-            acceptedCertDer: acceptedCert,
-            hwidStatus: meta.hwidStatus,
-          );
-        }
+        if (configs.isNotEmpty) return configs;
       } catch (_) {
         // Not valid JSON — fall through to standard URI parsing.
       }
@@ -260,18 +264,7 @@ class SubscriptionService {
       }
     }
 
-    return SubscriptionFetchResult(
-      configs: configs,
-      profileTitle: meta.profileTitle,
-      expireAt: meta.expireAt,
-      uploadBytes: meta.uploadBytes,
-      downloadBytes: meta.downloadBytes,
-      totalBytes: meta.totalBytes,
-      announce: meta.announce,
-      announceUrl: meta.announceUrl,
-      acceptedCertDer: acceptedCert,
-      hwidStatus: meta.hwidStatus,
-    );
+    return configs;
   }
 
   static List<String> _splitLines(String s) => s.split(RegExp(r'\r?\n')).where((l) => l.trim().isNotEmpty).toList();

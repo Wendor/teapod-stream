@@ -54,10 +54,12 @@ subscription get **new ids on every download**, so the refresh carries over:
 - the pinned core, by name + endpoint, or by an endpoint unique in the subscription;
 - the active config, by name + endpoint → endpoint → name (names inside a subscription aren't unique); none, or it
   vanished — the first fetched one; the subscription mode is left as it is;
-- the subscription name: `name ?? existing ?? profile-title ?? host` — a user rename survives auto-refresh.
+- the subscription name: `name ?? existing ?? profile-title ?? host` — a refresh passes no name, so a user rename
+  survives it, even one made during the download.
 
 The fresh state decides which subscription the download belongs to. A refresh or a `replaceId` update whose
-subscription was removed during the download applies nothing — a removed subscription doesn't come back; a
+subscription was removed during the download applies nothing — a removed subscription doesn't come back — and so
+does one whose subscription got another URL meanwhile (a refresh of the old URL can't undo a URL change); a
 `replaceId` of a subscription already gone returns without downloading. A new URL
 that was added meanwhile (another add, an import) is updated under that subscription's id — no duplicate. Unless
 that subscription registered the raw HWID: the download used the per-host id, so it is dropped and that
@@ -68,10 +70,15 @@ self-signed certificate raises `UntrustedCertificateException`; after the user c
 `pinnedCertDer` = the DER of the certificate shown, which is stored as the pin (trust on first use); on later
 refreshes an otherwise untrusted certificate passes only if it is that one ([services](services.md)).
 
-`refreshStaleSubscriptions(intervalHours)` refreshes subscriptions never fetched or older than the interval; one
-failure is logged and backed off for 1 h in memory (`_subFailedAt`) without stopping the others; `_refreshingSubs`
-prevents parallel runs. It is triggered from `refreshStaleIfDue()` on start and resume when
-`subAutoRefresh` is on — there is no background timer.
+A refresh addresses a subscription by id: `refreshSubscription(id)` reads it at call time and downloads its current
+URL as a `replaceId` update (gone → nothing). `refreshSubscriptions({staleAfter})` is the one refresh loop — all
+subscriptions ("refresh all" on the configs screen, which only shows the result) or those never fetched or older than
+`staleAfter`; it takes the ids up front and re-reads each at its turn, so one removed during an earlier download is
+skipped and one re-pointed is fetched at its new URL. A failure doesn't stop the others; it is returned (current name,
+error) and backed off for 1 h in memory (`_subFailedAt`), which the stale mode honours.
+`refreshStaleSubscriptions(intervalHours)` runs the stale mode and logs the failures; `_refreshingSubs` prevents
+parallel runs. It is triggered from `refreshStaleIfDue()` on start and resume when `subAutoRefresh` is on — there is
+no background timer.
 
 `removeSubscription` (`withoutSubscription`) removes its configs and pins, and clears the selection and auto mode if
 they pointed there.

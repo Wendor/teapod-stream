@@ -1045,6 +1045,77 @@ void main() {
         expect(await storage.loadConfigs(), isEmpty);
       });
 
+      /// `/a` and `/old` wait for [release]; any other path answers at once with `b.example`.
+      void holdOnly() {
+        arrived = Completer<void>();
+        release = Completer<void>();
+        server.handler = (r) async {
+          if (r.uri.path == '/a' || r.uri.path == '/old') {
+            if (!arrived.isCompleted) arrived.complete();
+            await release.future;
+            r.response.write(_trojan('a.example', 'A'));
+          } else {
+            r.response.write(_trojan('b.example', 'B'));
+          }
+          await r.response.close();
+        };
+      }
+
+      test('a refresh run skips a subscription removed meanwhile and keeps a rename', () async {
+        await boot(
+          subs: [
+            _sub('a', url: server.url('/a')),
+            _sub('b', url: server.url('/b')),
+          ],
+        );
+        holdOnly();
+        final run = n().refreshSubscriptions();
+        await arrived.future;
+        await n().removeSubscription('b');
+        await n().renameSubscription('a', 'Mine');
+        release.complete();
+        final (:total, :failed) = await run;
+        expect(total, 1);
+        expect(failed, isEmpty);
+        expect(server.paths, ['/a']);
+        expect(s().subscriptions.map((s) => (s.id, s.name)), [('a', 'Mine')]);
+        expect((await storage.loadSubscriptions()).map((s) => (s.id, s.name)), [('a', 'Mine')]);
+        expect(s().configs.map((c) => c.subscriptionId), ['a']);
+      });
+
+      test('a refresh run fetches a subscription re-pointed meanwhile at its new URL', () async {
+        await boot(
+          subs: [
+            _sub('a', url: server.url('/a')),
+            _sub('b', url: server.url('/b')),
+          ],
+        );
+        holdOnly();
+        final run = n().refreshSubscriptions();
+        await arrived.future;
+        await n().addSubscriptionFromUrl(server.url('/b2'), replaceId: 'b');
+        release.complete();
+        await run;
+        expect(server.paths, ['/a', '/b2', '/b2']);
+        expect(s().subscriptions.map((s) => (s.id, s.url)), [('a', server.url('/a')), ('b', server.url('/b2'))]);
+      });
+
+      test('a refresh of the old URL finishing after a URL change does not undo it', () async {
+        await boot(
+          configs: [_cfg('1', subId: 's')],
+          subs: [_sub('s', url: server.url('/old'))],
+        );
+        holdOnly();
+        final refresh = n().refreshSubscription('s');
+        await arrived.future;
+        await n().addSubscriptionFromUrl(server.url('/new'), replaceId: 's');
+        release.complete();
+        await refresh;
+        expect(s().subscriptions.single.url, server.url('/new'));
+        expect(s().configs.single.address, 'b.example');
+        expect((await storage.loadSubscriptions()).single.url, server.url('/new'));
+      });
+
       test('a replaceId update of a subscription removed meanwhile adds nothing', () async {
         await boot(subs: [_sub('s', url: 'https://old')]);
         hold(_trojan('a.example', 'A'));

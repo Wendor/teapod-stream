@@ -565,9 +565,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
       builder: (_) => const Center(child: CircularProgressIndicator()),
     );
     try {
-      await ref
-          .read(configProvider.notifier)
-          .addSubscriptionFromUrl(sub.url, name: sub.name, pinnedCertDer: pinnedCertDer);
+      await ref.read(configProvider.notifier).refreshSubscription(sub.id, pinnedCertDer: pinnedCertDer);
       if (context.mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.l10n.configsSubUpdated)));
@@ -634,7 +632,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
     if (ok == true && controller.text.trim().isNotEmpty) {
       final updatedUrl = controller.text.trim();
       try {
-        await ref.read(configProvider.notifier).addSubscriptionFromUrl(updatedUrl, name: sub.name, replaceId: sub.id);
+        await ref.read(configProvider.notifier).addSubscriptionFromUrl(updatedUrl, replaceId: sub.id);
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.l10n.configsSubUpdatedNewUrl)));
         }
@@ -667,18 +665,9 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
     if (_isRefreshingAll) return;
     setState(() => _isRefreshingAll = true);
     try {
-      final configState = ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
-      if (configState == null) return;
-      final failed = <String>[];
-      for (final sub in configState.subscriptions) {
-        try {
-          await ref.read(configProvider.notifier).addSubscriptionFromUrl(sub.url, name: sub.name);
-        } catch (e) {
-          failed.add('${sub.name}: ${e.toString().replaceFirst('Exception: ', '')}');
-        }
-      }
-      if (mounted) {
-        final total = configState.subscriptions.length;
+      final (:total, failed: errors) = await ref.read(configProvider.notifier).refreshSubscriptions();
+      final failed = [for (final (name, e) in errors) '$name: ${e.toString().replaceFirst('Exception: ', '')}'];
+      if (mounted && total > 0) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(

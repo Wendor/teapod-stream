@@ -11,6 +11,7 @@ import 'package:teapodstream/core/services/profile_storage_service.dart';
 import 'package:teapodstream/core/models/app_settings.dart';
 import 'package:teapodstream/core/services/update_service.dart';
 import 'package:teapodstream/providers/profile_provider.dart';
+import 'package:teapodstream/providers/geo_provider.dart';
 import 'package:teapodstream/providers/settings_provider.dart';
 import 'package:teapodstream/providers/update_provider.dart';
 import 'package:teapodstream/ui/screens/network_settings_screen.dart';
@@ -34,6 +35,18 @@ Future<void> _tapRow(WidgetTester tester, String title) async {
 }
 
 AppSettings _settings(ProviderContainer c) => c.read(settingsProvider).value!;
+
+class _FixedGeo extends GeoNotifier {
+  final GeoState fixed;
+  var trusted = 0;
+  _FixedGeo(this.fixed);
+
+  @override
+  GeoState build() => fixed;
+
+  @override
+  Future<void> trust() async => trusted++;
+}
 
 class _FixedUpdate extends UpdateNotifier {
   final UpdateState fixed;
@@ -303,6 +316,28 @@ void main() {
       c = await pumpScreen(tester, const RoutingScreen());
       await _tapRow(tester, 'Local networks');
       expect(_settings(c).routing.bypassLocal, isTrue);
+      await unmount(tester, c);
+    });
+
+    testWidgets('files of an unverified source are shown before they are trusted', (tester) async {
+      await setUpScreenTest();
+      final geo = _FixedGeo(GeoNeedsTrust(const {'https://geo.test/geosite.dat': 'ab12'}, changed: true));
+      final c = await pumpScreen(tester, const RoutingScreen(), overrides: [geoProvider.overrideWith(() => geo)]);
+      const label = 'The files changed since you trusted this source — review them before they are installed';
+      await tester.scrollUntilVisible(find.text(label), 200, scrollable: find.byType(Scrollable).first);
+      await tester.tap(find.text('REVIEW'));
+      await settle(tester);
+      expect(find.text('Trust these geo databases?'), findsOneWidget);
+      expect(find.text('https://geo.test/geosite.dat'), findsOneWidget);
+      expect(find.text('sha256 ab12'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await settle(tester);
+      expect(geo.trusted, 0);
+      await tester.tap(find.text('REVIEW'));
+      await settle(tester);
+      await tester.tap(find.text('Trust and install'));
+      await settle(tester);
+      expect(geo.trusted, 1);
       await unmount(tester, c);
     });
 

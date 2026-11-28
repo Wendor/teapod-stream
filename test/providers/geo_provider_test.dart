@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -107,6 +108,14 @@ void main() {
       );
     }
 
+    Future<void> pin(Map<String, String> pins) async =>
+        (await SharedPreferences.getInstance()).setString('geo_pins', jsonEncode(pins));
+
+    Future<void> trust() => HttpOverrides.runWithHttpOverrides(
+      () => c.read(geoProvider.notifier).trust(),
+      RedirectHttpOverrides(server.port),
+    );
+
     String hex(String s) => sha256(s.codeUnits).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
 
     /// Serves `IPDATA` / `SITEDATA!` and, next to them, the `.sha256sum` files from [sums] (404 when absent).
@@ -182,7 +191,7 @@ void main() {
       File('${dir.path}/geoip.dat').writeAsStringSync('old ip');
       // A non-empty directory in geosite.dat's place: the geoip rename succeeds, the geosite one fails.
       File('${dir.path}/geosite.dat/keep').createSync(recursive: true);
-      serveGeo({});
+      serveGeo({'/ip.dat.sha256sum': hex('IPDATA'), '/site.dat.sha256sum': hex('SITEDATA!')});
       await download();
       expect(c.read(geoProvider), isA<GeoError>());
       expect(File('${dir.path}/geoip.dat').readAsStringSync(), 'old ip');
@@ -190,11 +199,84 @@ void main() {
       expect(dir.listSync().where((f) => f.path.endsWith('.tmp') || f.path.endsWith('.bak')), isEmpty);
     });
 
-    test('a source without sums (404) or with something else in them is not checked', () async {
+    test('a source without sums (404, or something else in them) installs nothing until the user trusts it', () async {
+      File('${dir.path}/geosite.dat').writeAsStringSync('old site');
       serveGeo({'/site.dat.sha256sum': '<html>not found</html>'});
       await download();
+      final s = c.read(geoProvider) as GeoNeedsTrust;
+      expect(s.changed, isFalse);
+      expect(s.sha256ByUrl, {'https://g/ip.dat': hex('IPDATA'), 'https://g/site.dat': hex('SITEDATA!')});
+      expect(File('${dir.path}/geosite.dat').readAsStringSync(), 'old site');
+      expect(dir.listSync().where((f) => f.path.endsWith('.tmp')), isEmpty);
+
+      await trust();
       expect(c.read(geoProvider), isA<GeoReady>());
       expect(File('${dir.path}/geosite.dat').readAsStringSync(), 'SITEDATA!');
+      expect(await const GeodataService().pins(), s.sha256ByUrl);
+
+      // The same files again: the pins verify them, no question.
+      await download();
+      expect(c.read(geoProvider), isA<GeoReady>());
+    });
+
+    test('a pinned file that changed asks again and keeps the old files', () async {
+      await pin({'https://g/ip.dat': hex('IPDATA'), 'https://g/site.dat': hex('older')});
+      File('${dir.path}/geosite.dat').writeAsStringSync('old site');
+      serveGeo({});
+      await download();
+      final s = c.read(geoProvider) as GeoNeedsTrust;
+      expect(s.changed, isTrue);
+      expect(s.sha256ByUrl, {'https://g/site.dat': hex('SITEDATA!')});
+      expect(File('${dir.path}/geosite.dat').readAsStringSync(), 'old site');
+    });
+
+    test('trust installs only the files the user saw: content that changed after the review asks again', () async {
+      serveGeo({});
+      await download();
+      expect(c.read(geoProvider), isA<GeoNeedsTrust>());
+      server.handler = (r) async {
+        final path = r.uri.path;
+        final body = path.endsWith('.sha256sum') ? null : (path.endsWith('ip.dat') ? 'IPDATA' : 'SWAPPED');
+        if (body == null) r.response.statusCode = HttpStatus.notFound;
+        if (r.method != 'HEAD' && body != null) r.response.write(body);
+        await r.response.close();
+      };
+      await trust();
+      final s = c.read(geoProvider) as GeoNeedsTrust;
+      expect(s.sha256ByUrl, {'https://g/ip.dat': hex('IPDATA'), 'https://g/site.dat': hex('SWAPPED')});
+      expect(File('${dir.path}/geosite.dat').existsSync(), isFalse);
+      expect(await const GeodataService().pins(), isEmpty);
+    });
+
+    test('a file trusted with one that changed before the install is asked about again with it', () async {
+      serveGeo({});
+      await download();
+      expect((c.read(geoProvider) as GeoNeedsTrust).sha256ByUrl.keys, hasLength(2));
+      // geosite changes between the review and the trust; geoip stays the same.
+      var site = 'SWAPPED';
+      server.handler = (r) async {
+        final path = r.uri.path;
+        final body = path.endsWith('.sha256sum') ? null : (path.endsWith('ip.dat') ? 'IPDATA' : site);
+        if (body == null) r.response.statusCode = HttpStatus.notFound;
+        if (r.method != 'HEAD' && body != null) r.response.write(body);
+        await r.response.close();
+      };
+      await trust();
+      final again = c.read(geoProvider) as GeoNeedsTrust;
+      expect(again.sha256ByUrl, {'https://g/ip.dat': hex('IPDATA'), 'https://g/site.dat': hex('SWAPPED')});
+      expect(again.changed, isFalse);
+      // Trusting what was shown now installs both: no endless turns between the two files.
+      site = 'SWAPPED';
+      await trust();
+      expect(c.read(geoProvider), isA<GeoReady>());
+      expect(await const GeodataService().pins(), again.sha256ByUrl);
+    });
+
+    test('a published sum is checked even for a pinned URL', () async {
+      await pin({'https://g/site.dat': hex('SITEDATA!')});
+      serveGeo({'/ip.dat.sha256sum': hex('IPDATA'), '/site.dat.sha256sum': hex('tampered')});
+      await download();
+      expect(c.read(geoProvider), isA<GeoError>());
     });
 
     test('a big 404 page or a non-UTF-8 body for the sum is not checked, not an error', () async {
@@ -211,7 +293,7 @@ void main() {
         await r.response.close();
       };
       await download();
-      expect(c.read(geoProvider), isA<GeoReady>());
+      expect(c.read(geoProvider), isA<GeoNeedsTrust>());
     });
 
     test('a second download while one runs does nothing', () async {
@@ -229,7 +311,7 @@ void main() {
         RedirectHttpOverrides(server.port),
       );
       expect(gets.where((p) => p == '/ip.dat'), hasLength(1));
-      expect(c.read(geoProvider), isA<GeoReady>());
+      expect(c.read(geoProvider), isA<GeoNeedsTrust>());
     });
 
     test('a 404 sum declaring more than the default body limit is not checked', () async {
@@ -249,7 +331,7 @@ void main() {
         await r.response.close();
       };
       await download();
-      expect(c.read(geoProvider), isA<GeoReady>());
+      expect(c.read(geoProvider), isA<GeoNeedsTrust>());
     });
 
     test(
@@ -282,7 +364,7 @@ void main() {
         expect(states.whereType<GeoMissing>(), isEmpty);
         expect(gets.where((p) => p == '/ip.dat'), hasLength(1));
         expect(gets.where((p) => p == '/site.dat'), hasLength(1));
-        expect(c.read(geoProvider), isA<GeoReady>());
+        expect(c.read(geoProvider), isA<GeoNeedsTrust>());
       },
     );
 
@@ -314,7 +396,7 @@ void main() {
       };
       await download();
       expect(states.whereType<GeoDownloading>().last.total, 2 * big);
-      expect(c.read(geoProvider), isA<GeoReady>());
+      expect(c.read(geoProvider), isA<GeoNeedsTrust>());
     });
 
     test('unknown sizes still download', () async {
@@ -323,7 +405,7 @@ void main() {
         await r.response.close();
       };
       await download();
-      expect(c.read(geoProvider), isA<GeoReady>());
+      expect(c.read(geoProvider), isA<GeoNeedsTrust>());
     });
 
     test('no files dir is an error', () async {
@@ -354,6 +436,25 @@ void main() {
         [(0, -1), (0, -1), (5, 10), (10, 10)],
       );
       expect((c.read(geoProvider) as GeoReady).lastUpdated, _FakeGeodata.finished);
+    });
+
+    test('a source that needs trust is published; trust downloads again with the hashes shown', () async {
+      await start();
+      fake.error = const GeodataNeedsTrust({'https://g/site.dat': 'ab'}, changed: true);
+      await c.read(geoProvider.notifier).download();
+      final s = c.read(geoProvider) as GeoNeedsTrust;
+      expect(s.sha256ByUrl, {'https://g/site.dat': 'ab'});
+      expect(s.changed, isTrue);
+      fake.error = null;
+      await c.read(geoProvider.notifier).trust();
+      expect(fake.trustedCalls, [
+        <String, String>{},
+        {'https://g/site.dat': 'ab'},
+      ]);
+      expect(c.read(geoProvider), isA<GeoReady>());
+      // Nothing to trust: no download.
+      await c.read(geoProvider.notifier).trust();
+      expect(fake.trustedCalls, hasLength(2));
     });
 
     test('overlapping checks are one: the download waits for the extraction that runs', () async {
@@ -404,6 +505,7 @@ void main() {
 class _FakeGeodata extends GeodataService {
   static final finished = DateTime(2026, 11, 27);
   final calls = <(String, String, String, int?)>[];
+  final trustedCalls = <Map<String, String>>[];
   Exception? error;
   bool filesThere = false;
 
@@ -428,8 +530,10 @@ class _FakeGeodata extends GeodataService {
     required String geositeUrl,
     required TunnelSocks? socks,
     required void Function(int downloaded, int total) onProgress,
+    Map<String, String> trusted = const {},
   }) async {
     calls.add((dir, geoipUrl, geositeUrl, socks?.port));
+    trustedCalls.add(trusted);
     onProgress(0, -1);
     if (error case final e?) throw e;
     onProgress(5, 10);

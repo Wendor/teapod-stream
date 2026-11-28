@@ -314,6 +314,13 @@
       }
     }
   },
+  "geoUnverified": "This source publishes no checksums — review the files before they are installed",
+  "geoChanged": "The files changed since you trusted this source — review them before they are installed",
+  "geoReview": "REVIEW",
+  "geoTrustTitle": "Trust these geo databases?",
+  "geoTrustFirstBody": "The source publishes no checksums, so the app can't verify the files. Install them only if the SHA-256 below is what the source's owner publishes elsewhere. Later downloads must be the same files, or the app asks again.",
+  "geoTrustChangedBody": "These files differ from the ones you trusted before. Geo databases decide which traffic bypasses the VPN: install them only if you expected an update.",
+  "geoTrustButton": "Trust and install",
   "geoDownload": "DOWNLOAD",
   "geoLoaded": "Geo databases downloaded",
   "geoUpdate": "UPDATE",

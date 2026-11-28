@@ -8,6 +8,7 @@ import '../../../providers/geo_provider.dart';
 import '../../../core/models/app_settings.dart' show AppSettings, GeoPresets, VpnMode;
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/dialog_parts.dart';
 import '../../widgets/hero_panel.dart';
 import '../../widgets/pressable.dart';
 import '../../widgets/reconnect_banner.dart';

@@ -551,6 +551,29 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
+  String get geoUnverified => 'Источник не публикует контрольные суммы — проверьте файлы перед установкой';
+
+  @override
+  String get geoChanged => 'Файлы изменились с тех пор, как вы доверились источнику — проверьте их перед установкой';
+
+  @override
+  String get geoReview => 'ПРОВЕРИТЬ';
+
+  @override
+  String get geoTrustTitle => 'Доверять этим гео-базам?';
+
+  @override
+  String get geoTrustFirstBody =>
+      'Источник не публикует контрольные суммы, поэтому приложение не может проверить файлы. Устанавливайте их, только если SHA-256 ниже совпадает с тем, что владелец источника публикует в другом месте. Следующие загрузки должны дать те же файлы, иначе приложение спросит снова.';
+
+  @override
+  String get geoTrustChangedBody =>
+      'Эти файлы отличаются от тех, которым вы доверились раньше. Гео-базы решают, какой трафик идёт мимо VPN: устанавливайте их, только если ждали обновления.';
+
+  @override
+  String get geoTrustButton => 'Доверять и установить';
+
+  @override
   String get geoDownload => 'ЗАГРУЗИТЬ';
 
   @override

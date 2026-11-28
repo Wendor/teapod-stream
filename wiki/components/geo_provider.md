@@ -7,7 +7,7 @@
 `GeodataService` (`geodataServiceProvider`) does the I/O: whether both files are there, the last download time, the
 download. `GeoNotifier` holds the state and the progress, and picks the tunnel.
 
-State (sealed): `GeoMissing`, `GeoReady(lastUpdated)`, `GeoDownloading(downloaded, total)`, `GeoError(message)` (an `AppMessage`, [localization](localization.md)).
+State (sealed): `GeoMissing`, `GeoReady(lastUpdated)`, `GeoDownloading(downloaded, total)`, `GeoNeedsTrust(sha256ByUrl, changed)`, `GeoError(message)` (an `AppMessage`, [localization](localization.md)).
 
 - **`check()`** on app start: both files present → `GeoReady`. Missing → native `prepareBinaries` copies the
   fallback bundled in `assets/binaries/` (put there by `./build.sh binaries` from the Loyalsoldier release pinned in
@@ -18,8 +18,14 @@ State (sealed): `GeoMissing`, `GeoReady(lastUpdated)`, `GeoDownloading(downloade
   publishes next to it (`<url>.sha256sum`: Loyalsoldier, runetfreedom and v2fly do), then renamed over the old files
   only when both arrived and matched; the old files are copied to `*.bak` until both renames succeed and put back if one fails. A failure, mismatch (`geoChecksumMismatch`) or failed rename leaves both old files intact. No
   sum file (404, whatever its error page) or one whose first bytes aren't in `sha256sum` form (read as ASCII) — a
-  custom source — means no check; any other status for it is an
-  error, so a failed request never skips the check. `releases/latest` links resolve per request: a release published
+  custom source — means the file is checked against its **pin** instead: the SHA-256 the user trusted for that URL
+  (SharedPreferences `geo_pins`, URL → hash). A file with no pin, or not matching it, installs nothing:
+  `GeodataNeedsTrust` → `GeoNeedsTrust` (`changed` when the URL had a pin). The routing screen's geo row then says
+  so (`geoUnverified` / `geoChanged`) and its REVIEW dialog shows each URL with its SHA-256; trusting calls
+  `trust()`, which downloads again with those hashes as `trusted`: only files with exactly the hashes the user saw
+  are installed and become the pins; content that changed after the review asks again, together with the files
+  trusted in that round (so both get a pin in one step). Any other status for the sum
+  is an error, so a failed request never skips the check. `releases/latest` links resolve per request: a release published
   between the file and its sum gives a mismatch, and the next download succeeds. While connected the download goes through the
   tunnel (`TunnelSocks.orDirect`, [services](services.md#tunnelsocks)): the app is excluded from TUN and GitHub's CDN
   may be blocked. Requests go through [AppHttp](services.md#apphttp). Timeouts: 15 s for HEAD, 30 s for the response

@@ -45,6 +45,13 @@ class _GeoUpdateRow extends ConsumerWidget {
           ],
         ),
       ),
+      GeoNeedsTrust(:final changed) => _GeoActionRow(
+        t: t,
+        label: changed ? context.l10n.geoChanged : context.l10n.geoUnverified,
+        labelColor: t.warning,
+        btnLabel: context.l10n.geoReview,
+        onTap: () => _confirmTrust(context, ref, geoState),
+      ),
       GeoError(:final message) => _GeoActionRow(
         t: t,
         label: message.localize(context.l10n),
@@ -53,6 +60,39 @@ class _GeoUpdateRow extends ConsumerWidget {
         onTap: () => ref.read(geoProvider.notifier).download(),
       ),
     };
+  }
+
+  /// Shows the URL and SHA-256 of each unverified file; trusting downloads again and installs only these files.
+  Future<void> _confirmTrust(BuildContext context, WidgetRef ref, GeoNeedsTrust state) async {
+    final t = Theme.of(context).extension<TeapodTokens>()!;
+    final l = context.l10n;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l.geoTrustTitle),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(state.changed ? l.geoTrustChangedBody : l.geoTrustFirstBody),
+              for (final MapEntry(key: url, value: sha256) in state.sha256ByUrl.entries) ...[
+                const SizedBox(height: 12),
+                SelectableText(url, style: AppTheme.mono(size: 11, color: t.textDim)),
+                const SizedBox(height: 2),
+                SelectableText('sha256 $sha256', style: AppTheme.mono(size: 11, color: t.text)),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          const DialogCancel(result: false),
+          DialogAction(l.geoTrustButton, danger: true, onPressed: () => Navigator.pop(ctx, true)),
+        ],
+      ),
+    );
+    // The row may be gone with its `ref` while the dialog was open.
+    if (ok == true && context.mounted) await ref.read(geoProvider.notifier).trust();
   }
 
   String _daysAgo(AppLocalizations l, DateTime dt) {

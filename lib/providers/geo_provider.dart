@@ -24,6 +24,14 @@ class GeoDownloading extends GeoState {
   GeoDownloading({required this.downloaded, required this.total});
 }
 
+/// A source without published checksums served files the user hasn't trusted yet ([GeodataNeedsTrust]); the old
+/// files are kept. [GeoNotifier.trust] downloads again and installs only these files.
+class GeoNeedsTrust extends GeoState {
+  final Map<String, String> sha256ByUrl;
+  final bool changed;
+  GeoNeedsTrust(this.sha256ByUrl, {required this.changed});
+}
+
 class GeoError extends GeoState {
   final AppMessage message;
   GeoError(this.message);
@@ -86,20 +94,27 @@ class GeoNotifier extends Notifier<GeoState> {
   /// One download at a time: a second call while one runs (the button is still shown until the first await) returns
   /// at once — both would write the same `.tmp` files. A check running when it starts is finished first and
   /// discarded.
-  Future<void> download() async {
+  Future<void> download() => _start(const {});
+
+  /// Downloads again, installing files of an unverified source only if they are the ones the user was shown.
+  Future<void> trust() async {
+    if (state case GeoNeedsTrust(:final sha256ByUrl)) await _start(sha256ByUrl);
+  }
+
+  Future<void> _start(Map<String, String> trusted) async {
     if (_downloading) return;
     _downloading = true;
     _epoch++;
     state = GeoDownloading(downloaded: 0, total: -1);
     try {
       await _checking;
-      await _download();
+      await _download(trusted);
     } finally {
       _downloading = false;
     }
   }
 
-  Future<void> _download() async {
+  Future<void> _download(Map<String, String> trusted) async {
     final AppSettings settings;
     try {
       settings = await ref.read(settingsProvider.future);
@@ -129,10 +144,13 @@ class GeoNotifier extends Notifier<GeoState> {
           geositeUrl: settings.geositeUrl,
           socks: socks,
           onProgress: (downloaded, total) => state = GeoDownloading(downloaded: downloaded, total: total),
+          trusted: trusted,
         ),
       );
       ref.invalidate(geositeIndexProvider);
       state = GeoReady(lastUpdated: finished);
+    } on GeodataNeedsTrust catch (e) {
+      state = GeoNeedsTrust(e.sha256ByUrl, changed: e.changed);
     } on ReasonException catch (e) {
       state = GeoError(e.reason);
     } catch (e) {

@@ -1034,6 +1034,48 @@ abstract class AppLocalizations {
   /// **'{file} doesn\'t match the checksum published next to it; the old geo databases are kept'**
   String geoChecksumMismatch(String file);
 
+  /// No description provided for @geoUnverified.
+  ///
+  /// In en, this message translates to:
+  /// **'This source publishes no checksums — review the files before they are installed'**
+  String get geoUnverified;
+
+  /// No description provided for @geoChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'The files changed since you trusted this source — review them before they are installed'**
+  String get geoChanged;
+
+  /// No description provided for @geoReview.
+  ///
+  /// In en, this message translates to:
+  /// **'REVIEW'**
+  String get geoReview;
+
+  /// No description provided for @geoTrustTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Trust these geo databases?'**
+  String get geoTrustTitle;
+
+  /// No description provided for @geoTrustFirstBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The source publishes no checksums, so the app can\'t verify the files. Install them only if the SHA-256 below is what the source\'s owner publishes elsewhere. Later downloads must be the same files, or the app asks again.'**
+  String get geoTrustFirstBody;
+
+  /// No description provided for @geoTrustChangedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'These files differ from the ones you trusted before. Geo databases decide which traffic bypasses the VPN: install them only if you expected an update.'**
+  String get geoTrustChangedBody;
+
+  /// No description provided for @geoTrustButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Trust and install'**
+  String get geoTrustButton;
+
   /// No description provided for @geoDownload.
   ///
   /// In en, this message translates to:

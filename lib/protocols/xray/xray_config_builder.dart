@@ -822,7 +822,8 @@ class XrayConfigBuilder {
 
   /// The keys of a managed config the builder reads, in the spelling it reads them: xray decodes keys in any letter
   /// case, so `Tag` is a tag. Two spellings of one key in an object are refused (a [ReasonException]): which one xray
-  /// takes is not the builder's to guess, and a guess could put an injected freedom into a balancer.
+  /// takes is not the builder's to guess, and a guess could put an injected freedom into a balancer. Inbound and
+  /// outbound `protocol` values are lower-cased: xray looks the protocol up lower-cased, so `Freedom` is a freedom.
   static void _canonicalKeys(Map<String, dynamic> cfg) {
     void canonical(Map<String, dynamic> object, List<String> keys) {
       for (final key in keys) {
@@ -838,8 +839,11 @@ class XrayConfigBuilder {
       }
     }
 
-    for (final o in (cfg['outbounds'] as List<dynamic>? ?? const []).whereType<Map<String, dynamic>>()) {
-      canonical(o, const ['tag', 'protocol']);
+    for (final section in const ['inbounds', 'outbounds']) {
+      for (final o in (cfg[section] as List<dynamic>? ?? const []).whereType<Map<String, dynamic>>()) {
+        canonical(o, const ['tag', 'protocol']);
+        if (o['protocol'] case final String p) o['protocol'] = p.toLowerCase();
+      }
     }
     if (cfg['routing'] case final Map<String, dynamic> routing) {
       canonical(routing, const ['balancers']);

@@ -295,6 +295,44 @@ void main() {
       expect(merged.containsKey('FallbackTag'), isFalse);
     });
 
+    test('reads inbound and outbound protocols in any letter case, as xray does', () {
+      final raw = rawManaged();
+      final outbounds = raw['outbounds'] as List;
+      (outbounds[1] as Map)['protocol'] = 'Freedom';
+      (outbounds[2] as Map)['protocol'] = 'BLACKHOLE';
+      // A freedom/blackhole listed first under the selector's prefix is not a proxy for the fallback.
+      outbounds.insert(0, {'tag': 'c1-0', 'protocol': 'Freedom'});
+      (raw['inbounds'] as List).first = {'tag': 'in-socks', 'protocol': 'SOCKS', 'port': 1080};
+      // bypassLocal adds a direct rule, so the server's `direct` is looked up.
+      final cfg = merge(raw, _defaultOptions(routing: const RoutingSettings(bypassLocal: true)));
+      final balancer = ((cfg['routing'] as Map)['balancers'] as List).first as Map;
+      expect(balancer['fallbackTag'], 'c1-a');
+      expect(((cfg['inbounds'] as List).first as Map)['tag'], 'in-socks');
+      // The server's `direct` is a freedom: the app's direct rules use it, no second freedom is injected.
+      final merged = (cfg['outbounds'] as List).cast<Map<String, dynamic>>();
+      expect(merged.where((o) => o['protocol'] == 'freedom').map((o) => o['tag']), unorderedEquals(['c1-0', 'direct']));
+      expect(merged.any((o) => o['tag'] == XrayConfigBuilder.directTag), isFalse);
+      final private = ((cfg['routing'] as Map)['rules'] as List).cast<Map<String, dynamic>>().firstWhere(
+        (r) => (r['ip'] as List?)?.contains('geoip:private') ?? false,
+      );
+      expect(private['outboundTag'], 'direct');
+    });
+
+    test('the injected direct is matched by protocol in any letter case', () {
+      final raw = rawManaged();
+      final outbounds = raw['outbounds'] as List;
+      // The server's `direct` is no freedom; a `Freedom` under the app's own tag is one and is taken, not a variant.
+      (outbounds[1] as Map)['protocol'] = 'Blackhole';
+      outbounds.add({'tag': XrayConfigBuilder.directTag, 'protocol': 'Freedom'});
+      final cfg = merge(raw, _defaultOptions(routing: const RoutingSettings(bypassLocal: true)));
+      final private = ((cfg['routing'] as Map)['rules'] as List).cast<Map<String, dynamic>>().firstWhere(
+        (r) => (r['ip'] as List?)?.contains('geoip:private') ?? false,
+      );
+      expect(private['outboundTag'], XrayConfigBuilder.directTag);
+      final tags = (cfg['outbounds'] as List).cast<Map<String, dynamic>>().map((o) => o['tag']);
+      expect(tags.where((t) => '$t'.startsWith(XrayConfigBuilder.directTag)), [XrayConfigBuilder.directTag]);
+    });
+
     test('refuses a balancer or outbound with two spellings of a key it reads', () {
       final raw = rawManaged();
       (((raw['routing'] as Map)['balancers'] as List).first as Map)['Selector'] = ['t'];

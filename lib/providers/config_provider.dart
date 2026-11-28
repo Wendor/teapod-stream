@@ -321,12 +321,24 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
   /// [replaceId] — update the subscription with this id to the new [url] (URL change):
   /// on a load error the old subscription stays untouched. [pinnedCertDer] — the certificate the user has just
   /// accepted (`UntrustedCertificateException.der`); otherwise the subscription's stored pin applies.
-  Future<void> addSubscriptionFromUrl(String url, {String? name, String? pinnedCertDer, String? replaceId}) async {
-    bool isTarget(Subscription s) => replaceId != null ? s.id == replaceId : s.url == url;
+  Future<void> addSubscriptionFromUrl(String url, {String? name, String? pinnedCertDer, String? replaceId}) =>
+      _fetchSubscription(url, name: name, pinnedCertDer: pinnedCertDer, replaceId: replaceId);
+
+  /// [addSubscriptionFromUrl]; a null [requestedUrl] (with [replaceId]) is a refresh: the URL is the target's, read in
+  /// the same snapshot that finds the target.
+  Future<void> _fetchSubscription(
+    String? requestedUrl, {
+    String? name,
+    String? pinnedCertDer,
+    String? replaceId,
+  }) async {
+    assert(requestedUrl != null || replaceId != null);
+    bool isTarget(Subscription s) => replaceId != null ? s.id == replaceId : s.url == requestedUrl;
     final before = await _loaded();
     final target = before.subscriptions.where(isTarget).firstOrNull;
     // The subscription to replace is gone already: nothing to update, and the URL must not match another one.
     if (replaceId != null && target == null) return;
+    final url = requestedUrl ?? target!.url;
     final subId = target?.id ?? 'sub_${DateTime.now().millisecondsSinceEpoch}';
 
     final settings = ref.read(settingsProvider).value;
@@ -359,6 +371,8 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
           ? s.subscriptions.where((sub) => sub.id == subId).firstOrNull
           : s.subscriptions.where((sub) => sub.url == url).firstOrNull;
       if (target != null && existing == null) return null;
+      // Re-pointed meanwhile (an URL change, or a refresh of the old URL racing one): this download is stale.
+      if (target != null && existing!.url != target.url) return null;
       // A subscription that registered the raw id got this URL meanwhile: it is fetched with that id, not this one.
       if (target == null && existing != null && existing.rawHwid != rawHwid) return null;
       final id = existing?.id ?? subId;
@@ -421,35 +435,57 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
     await refreshStaleSubscriptions(intervalHours: settings.subAutoRefreshHours);
   }
 
+  /// Refreshes the subscriptions not fetched for [intervalHours]; one that failed within the hour is skipped, so a
+  /// broken subscription isn't retried on every resume. Failures go to the log. Runs once at a time.
   Future<void> refreshStaleSubscriptions({int intervalHours = 6}) async {
-    final current = state.maybeWhen(data: (d) => d, orElse: () => null);
-    if (current == null || current.subscriptions.isEmpty) return;
-    final threshold = Duration(hours: intervalHours);
-    final stale = current.subscriptions.where((s) {
-      if (s.lastFetchedAt == null) return true;
-      return DateTime.now().difference(s.lastFetchedAt!) > threshold;
-    }).toList();
     if (_refreshingSubs) return;
     _refreshingSubs = true;
     try {
-      for (final sub in stale) {
-        // A broken subscription doesn't block the others and isn't retried on every resume.
-        final failedAt = _subFailedAt[sub.id];
-        if (failedAt != null && DateTime.now().difference(failedAt) < const Duration(hours: 1)) {
-          continue;
-        }
-        try {
-          await addSubscriptionFromUrl(sub.url);
-          _subFailedAt.remove(sub.id);
-        } catch (e) {
-          _subFailedAt[sub.id] = DateTime.now();
-          ref.read(logServiceProvider.notifier).addError('Subscription auto-refresh "${sub.name}": $e');
-        }
+      final (:failed, total: _) = await refreshSubscriptions(staleAfter: Duration(hours: intervalHours));
+      for (final (name, e) in failed) {
+        ref.read(logServiceProvider.notifier).addError('Subscription auto-refresh "$name": $e');
       }
     } finally {
       _refreshingSubs = false;
     }
   }
+
+  /// Refreshes the subscriptions one by one — all of them, or with [staleAfter] those not fetched for that long — and
+  /// returns how many were fetched and the failed ones (current name, error). Each is addressed by id and read again at its turn: one removed
+  /// meanwhile is skipped, one re-pointed is fetched at its current URL, and its stored name stays.
+  Future<({int total, List<(String, Object)> failed})> refreshSubscriptions({Duration? staleAfter}) async {
+    final now = DateTime.now();
+    bool due(Subscription s) =>
+        staleAfter == null || s.lastFetchedAt == null || now.difference(s.lastFetchedAt!) > staleAfter;
+    final ids = [
+      for (final s in (await _loaded()).subscriptions)
+        if (due(s)) s.id,
+    ];
+    final failed = <(String, Object)>[];
+    var total = 0;
+    for (final id in ids) {
+      final sub = (await _loaded()).subscriptions.where((s) => s.id == id).firstOrNull;
+      if (sub == null) continue;
+      final failedAt = _subFailedAt[id];
+      if (staleAfter != null && failedAt != null && DateTime.now().difference(failedAt) < const Duration(hours: 1)) {
+        continue;
+      }
+      total++;
+      try {
+        await refreshSubscription(id);
+        _subFailedAt.remove(id);
+      } catch (e) {
+        _subFailedAt[id] = DateTime.now();
+        failed.add((sub.name, e));
+      }
+    }
+    return (total: total, failed: failed);
+  }
+
+  /// Fetches the subscription [id] again at its current URL; gone already → nothing happens. [pinnedCertDer] — as in
+  /// [addSubscriptionFromUrl].
+  Future<void> refreshSubscription(String id, {String? pinnedCertDer}) =>
+      _fetchSubscription(null, pinnedCertDer: pinnedCertDer, replaceId: id);
 
   bool _refreshingSubs = false;
   final _subFailedAt = <String, DateTime>{};

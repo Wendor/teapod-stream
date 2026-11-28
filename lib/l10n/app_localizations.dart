@@ -1166,6 +1166,24 @@ abstract class AppLocalizations {
   /// **'Notification'**
   String get settingsNotification;
 
+  /// No description provided for @settingsPingWhileConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Ping servers while connected'**
+  String get settingsPingWhileConnected;
+
+  /// No description provided for @settingsPingWhileConnectedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Pings go outside the VPN: the network sees every server in your list'**
+  String get settingsPingWhileConnectedHint;
+
+  /// No description provided for @configsPingWhileConnectedOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Pings go outside the VPN and would show the network your server list. Disconnect to ping, or allow it in Settings → Ping servers while connected.'**
+  String get configsPingWhileConnectedOff;
+
   /// No description provided for @settingsNotificationHint.
   ///
   /// In en, this message translates to:

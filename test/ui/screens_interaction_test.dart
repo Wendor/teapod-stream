@@ -111,6 +111,17 @@ void main() {
     });
   });
 
+  testWidgets('with the VPN up the ping button says why nothing is pinged', (tester) async {
+    final native = await setUpScreenTest(configs: [testConfig('1')], activeId: '1');
+    native.state = {'value': 'connected'};
+    final c = await pumpScreen(tester, const ConfigsScreen());
+    await tester.tap(find.text('ping'));
+    await settle(tester);
+    expect(find.textContaining('Pings go outside the VPN'), findsOneWidget);
+    expect(native.named('ping'), isEmpty);
+    await unmount(tester, c);
+  });
+
   testWidgets('configs screen lists standalone configs and subscriptions', (tester) async {
     await setUpScreenTest(
       configs: [

@@ -34,6 +34,7 @@ import 'package:teapodstream/core/services/tunnel_socks.dart';
 import 'package:teapodstream/core/models/subscription.dart';
 import 'package:teapodstream/core/models/app_message.dart';
 import 'package:teapodstream/core/models/app_settings.dart';
+import 'package:teapodstream/core/models/setting_field.dart';
 import 'package:teapodstream/protocols/xray/xray_engine.dart';
 import 'package:teapodstream/protocols/xray/xray_rust_backend.dart';
 import 'package:teapodstream/providers/config_provider.dart';
@@ -1488,6 +1489,30 @@ void main() {
       await boot(configs: [_cfg('fresh', pingedAt: DateTime.now())]);
       await c.read(pingProvider.notifier).pingStale();
       expect(native.named('ping'), isEmpty);
+    });
+    test('with the VPN up nothing is pinged unless pings while connected are on', () async {
+      native.pingMs = {'ha.example': 30};
+      await connected();
+      native.calls.clear();
+      expect(await c.read(pingProvider.notifier).pingAll(), isFalse);
+      await c.read(pingProvider.notifier).pingStale();
+      expect(native.named('ping'), isEmpty);
+
+      await c.read(settingsProvider.notifier).set(SettingFields.pingWhileConnected, true);
+      expect(await c.read(pingProvider.notifier).pingAll(), isTrue);
+      expect(native.named('ping').map((m) => (m.arguments as Map)['address']), ['ha.example']);
+    });
+
+    test('the kill switch holding traffic and a connect in progress count as up', () async {
+      await boot(configs: [_cfg('a')], activeId: 'a');
+      for (final value in ['blocked', 'connecting']) {
+        emit({'type': 'state', 'value': value});
+        await _settle();
+        expect(c.read(pingProvider.notifier).allowed, isFalse, reason: value);
+      }
+      emit({'type': 'state', 'value': 'disconnected'});
+      await _settle();
+      expect(c.read(pingProvider.notifier).allowed, isTrue);
     });
   });
 

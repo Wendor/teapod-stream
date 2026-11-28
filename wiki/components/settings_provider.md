@@ -56,7 +56,7 @@ keys are no longer read.
 | Reliability | `killSwitchEnabled`, `heartbeat`, `obsProbeIntervalSec` |
 | Cores | `coreOrder` (default xray Go → sing-box → xray-rust), `disabledCores` |
 | Subscriptions | `hwidEnabled` (default on: some panels return HTML without `X-Hwid`), `subAutoRefresh`, `subAutoRefreshHours`, `subUserAgent` (empty = `AppConstants.subscriptionUserAgent`) |
-| App | `autoConnect`, `autoStartOnBoot`, `automationEnabled` (Tasker broadcasts, off by default — [security](../security.md)), `showNotification`, `logLevel`, `logsEnabled`, `updateChannel`, `fontScale`, `geoipUrl`, `geositeUrl` |
+| App | `autoConnect`, `autoStartOnBoot`, `automationEnabled` (Tasker broadcasts, off by default — [security](../security.md)), `showNotification`, `logLevel`, `logsEnabled`, `pingWhileConnected` (off: no pings while the VPN is up, [security](../security.md)), `updateChannel`, `fontScale`, `geoipUrl`, `geositeUrl` |
 
 **Invariant** (`test/core/app_settings_test.dart`): every field survives `toJson/fromJson` (the profile's form), and
 an empty JSON or a fresh install gives the constructor defaults; the per-key reader of the migration keeps reading

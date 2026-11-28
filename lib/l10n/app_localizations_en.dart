@@ -601,6 +601,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsNotification => 'Notification';
 
   @override
+  String get settingsPingWhileConnected => 'Ping servers while connected';
+
+  @override
+  String get settingsPingWhileConnectedHint => 'Pings go outside the VPN: the network sees every server in your list';
+
+  @override
+  String get configsPingWhileConnectedOff =>
+      'Pings go outside the VPN and would show the network your server list. Disconnect to ping, or allow it in Settings → Ping servers while connected.';
+
+  @override
   String get settingsNotificationHint => 'Speed and a disconnect button in the shade';
 
   @override

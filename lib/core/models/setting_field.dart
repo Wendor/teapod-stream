@@ -63,6 +63,10 @@ abstract final class SettingFields {
     (s, UpdateChannel v) => s.copyWith(updateChannel: v),
   );
   static final logsEnabled = SettingField((s) => s.logsEnabled, (s, bool v) => s.copyWith(logsEnabled: v));
+  static final pingWhileConnected = SettingField(
+    (s) => s.pingWhileConnected,
+    (s, bool v) => s.copyWith(pingWhileConnected: v),
+  );
 
   // Subscriptions.
   static final subAutoRefresh = SettingField((s) => s.subAutoRefresh, (s, bool v) => s.copyWith(subAutoRefresh: v));

@@ -214,6 +214,14 @@ class _SettingsBody extends StatelessWidget {
               locked: locked,
               onChange: (v) => notifier.set(SettingFields.showNotification, v),
             ),
+            SetRowToggle(
+              t: t,
+              title: l.settingsPingWhileConnected,
+              hint: l.settingsPingWhileConnectedHint,
+              value: s.pingWhileConnected,
+              locked: locked,
+              onChange: (v) => notifier.set(SettingFields.pingWhileConnected, v),
+            ),
             SetRowChev(
               t: t,
               title: l.settingsSubscriptions,

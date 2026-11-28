@@ -126,6 +126,10 @@ class AppSettings {
   /// writes only warning/error.
   final bool logsEnabled;
 
+  /// Ping the configs' servers while the VPN is up. Pings go outside the tunnel (the app is excluded from it), so the
+  /// network sees every server in the list; off by default.
+  final bool pingWhileConnected;
+
   /// Cores in priority order: a profile runs on the first one that can run it.
   final List<CoreKind> coreOrder;
 
@@ -177,6 +181,7 @@ class AppSettings {
     this.mux = const MuxSettings(),
     this.heartbeat = const HeartbeatSettings(),
     this.logsEnabled = true,
+    this.pingWhileConnected = false,
     this.coreOrder = CoreKind.defaultOrder,
     this.disabledCores = const {},
   });
@@ -226,6 +231,7 @@ class AppSettings {
     MuxSettings? mux,
     HeartbeatSettings? heartbeat,
     bool? logsEnabled,
+    bool? pingWhileConnected,
     List<CoreKind>? coreOrder,
     Set<CoreKind>? disabledCores,
   }) {
@@ -274,6 +280,7 @@ class AppSettings {
       mux: mux ?? this.mux,
       heartbeat: heartbeat ?? this.heartbeat,
       logsEnabled: logsEnabled ?? this.logsEnabled,
+      pingWhileConnected: pingWhileConnected ?? this.pingWhileConnected,
       coreOrder: coreOrder ?? this.coreOrder,
       disabledCores: disabledCores ?? this.disabledCores,
     );
@@ -324,6 +331,7 @@ class AppSettings {
     'mux': mux.toJson(),
     'heartbeat': heartbeat.toJson(),
     'logsEnabled': logsEnabled,
+    'pingWhileConnected': pingWhileConnected,
     'coreOrder': [for (final k in coreOrder) k.name],
     'disabledCores': [for (final k in disabledCores) k.name],
   };
@@ -392,6 +400,7 @@ class AppSettings {
           ? HeartbeatSettings.fromJson(json['heartbeat'] as Map<String, dynamic>)
           : const HeartbeatSettings(),
       logsEnabled: json['logsEnabled'] as bool? ?? true,
+      pingWhileConnected: json['pingWhileConnected'] as bool? ?? false,
       coreOrder: CoreKind.parseOrder((json['coreOrder'] as List?)?.cast<String>(), first: json['core'] as String?),
       disabledCores: CoreKind.setOf((json['disabledCores'] as List?)?.cast<String>()),
     );

@@ -262,7 +262,8 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
 
   /// A foreign profile doesn't touch fields that expose the tunnel: SOCKS (port,
   /// credentials — an open proxy on localhost), proxy-only (traffic bypassing the VPN), heartbeat
-  /// probe URL (sees the server IP), HWID, automation and the geodata sources (routing decisions come from them).
+  /// probe URL (sees the server IP), HWID, automation, the geodata sources (routing decisions come from them) and
+  /// pings while connected (they show the network the server list).
   static AppSettings _keepLocalSecurity(AppSettings imported, AppSettings local) => imported.copyWith(
     socksPort: local.socksPort,
     randomPort: local.randomPort,
@@ -275,6 +276,7 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
     heartbeat: imported.heartbeat.copyWith(target: local.heartbeat.target, customUrl: local.heartbeat.customUrl),
     geoipUrl: local.geoipUrl,
     geositeUrl: local.geositeUrl,
+    pingWhileConnected: local.pingWhileConnected,
   );
 
   /// Downloads the profile from [url] and applies it. When it changes traffic settings or adds subscriptions,

@@ -72,6 +72,7 @@ class SettingsService {
   static const _muxKey = 'xray_mux';
   static const _heartbeatKey = 'heartbeat_settings';
   static const _logsEnabledKey = 'logs_enabled';
+  static const _pingWhileConnectedKey = 'ping_while_connected';
 
   /// Before priorities — a single selected core; read only for migration.
   static const _legacyCoreKey = 'core_kind';
@@ -158,6 +159,7 @@ class SettingsService {
       mux: _decodeOr(prefs.getString(_muxKey), MuxSettings.fromJson, const MuxSettings()),
       heartbeat: _decodeOr(prefs.getString(_heartbeatKey), HeartbeatSettings.fromJson, const HeartbeatSettings()),
       logsEnabled: prefs.getBool(_logsEnabledKey) ?? true,
+      pingWhileConnected: prefs.getBool(_pingWhileConnectedKey) ?? false,
       coreOrder: CoreKind.parseOrder(prefs.getStringList(_coreOrderKey), first: prefs.getString(_legacyCoreKey)),
       disabledCores: CoreKind.setOf(prefs.getStringList(_disabledCoresKey)),
     );
@@ -250,6 +252,7 @@ class SettingsService {
     await prefs.setString(_muxKey, jsonEncode(settings.mux.toJson()));
     await prefs.setString(_heartbeatKey, jsonEncode(settings.heartbeat.toJson()));
     await prefs.setBool(_logsEnabledKey, settings.logsEnabled);
+    await prefs.setBool(_pingWhileConnectedKey, settings.pingWhileConnected);
     await prefs.setStringList(_coreOrderKey, [for (final k in settings.coreOrder) k.name]);
     await prefs.setStringList(_disabledCoresKey, [for (final k in settings.disabledCores) k.name]);
     // SOCKS credentials go to encrypted storage

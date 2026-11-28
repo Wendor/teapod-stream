@@ -37,8 +37,9 @@ says how, and what counts.
 - **Direct pings.** Pinging configs (ICMP + TCP) goes outside the tunnel (the app is excluded from it), so the network
   sees the server list. With the VPN down that is the accepted cost of pinging; while it is up (connecting, connected,
   the kill switch holding traffic) `PingNotifier` pings nothing unless the user turned on *Ping servers while
-  connected* (`pingWhileConnected`, off by default) — the configs screen's ping button then says why. A ping through
-  the tunnel's SOCKS isn't an option: the core answers a SOCKS CONNECT before it reaches the server.
+  connected* (`pingWhileConnected`, off by default) — the configs screen's ping button then says why. Pinging through
+  the tunnel would measure the path from the current server to each one, not the latency a server is picked by, and
+  would mix with the direct results the subscription's auto mode compares.
 - **Debug signing key.** Releases are signed with the build machine's debug key ([CI](components/ci.md#signing)) —
   changing it would break updates for existing users.
 - **`xray_config.json`** with server credentials stays in `filesDir` between sessions (needed by the tile and

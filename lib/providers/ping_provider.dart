@@ -12,8 +12,8 @@ import 'vpn_provider.dart';
 ///
 /// The app is excluded from the tunnel, so a ping always goes outside it and shows the network every server of the
 /// list. While the VPN is up (connecting, connected, the kill switch holding traffic) nothing is pinged unless the user
-/// allowed it ([AppSettings.pingWhileConnected]). A ping through the tunnel's SOCKS would measure nothing: the core
-/// answers a SOCKS CONNECT before it reaches the server.
+/// allowed it ([AppSettings.pingWhileConnected]). Not through the tunnel: that would measure the path from the current
+/// server to each one, not the latency a server is picked by, and mix with the direct results the auto mode compares.
 class PingNotifier extends Notifier<bool> {
   @override
   bool build() => false;

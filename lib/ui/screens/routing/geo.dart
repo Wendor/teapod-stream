@@ -91,7 +91,8 @@ class _GeoUpdateRow extends ConsumerWidget {
         ],
       ),
     );
-    if (ok == true) await ref.read(geoProvider.notifier).trust();
+    // The row may be gone with its `ref` while the dialog was open.
+    if (ok == true && context.mounted) await ref.read(geoProvider.notifier).trust();
   }
 
   String _daysAgo(AppLocalizations l, DateTime dt) {

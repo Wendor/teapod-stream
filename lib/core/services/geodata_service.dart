@@ -80,20 +80,26 @@ class GeodataService {
     final pins = await this.pins();
     final newPins = <String, String>{};
     final untrusted = <String, String>{};
+    final shown = <String, String>{};
     try {
       for (final (i, url) in [geoipUrl, geositeUrl].indexed) {
         final hash = _hex(await _downloadFile(url, tmps[i], socks, (bytes) => onProgress(downloaded += bytes, total)));
         final published = await _publishedSha256(url, socks);
         if (published != null) {
           if (published != hash) throw ReasonException(AppMessage.l10n((l) => l.geoChecksumMismatch(files[i])));
-        } else if (pins[url] == hash || trusted[url] == hash) {
+        } else if (pins[url] == hash) {
           newPins[url] = hash;
+        } else if (trusted[url] == hash) {
+          newPins[url] = hash;
+          shown[url] = hash;
         } else {
           untrusted[url] = hash;
         }
       }
+      // A file trusted just now but not installed (the other one changed) is asked about again with it: trusting only
+      // the changed one would leave this one without a pin, and the two would be asked about in turn forever.
       if (untrusted.isNotEmpty) {
-        throw GeodataNeedsTrust(untrusted, changed: untrusted.keys.any(pins.containsKey));
+        throw GeodataNeedsTrust({...shown, ...untrusted}, changed: untrusted.keys.any(pins.containsKey));
       }
       await _install(dir, tmps);
     } finally {

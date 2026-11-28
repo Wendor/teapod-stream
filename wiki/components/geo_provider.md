@@ -23,7 +23,8 @@ State (sealed): `GeoMissing`, `GeoReady(lastUpdated)`, `GeoDownloading(downloade
   `GeodataNeedsTrust` → `GeoNeedsTrust` (`changed` when the URL had a pin). The routing screen's geo row then says
   so (`geoUnverified` / `geoChanged`) and its REVIEW dialog shows each URL with its SHA-256; trusting calls
   `trust()`, which downloads again with those hashes as `trusted`: only files with exactly the hashes the user saw
-  are installed and become the pins; content that changed after the review asks again. Any other status for the sum
+  are installed and become the pins; content that changed after the review asks again, together with the files
+  trusted in that round (so both get a pin in one step). Any other status for the sum
   is an error, so a failed request never skips the check. `releases/latest` links resolve per request: a release published
   between the file and its sum gives a mismatch, and the next download succeeds. While connected the download goes through the
   tunnel (`TunnelSocks.orDirect`, [services](services.md#tunnelsocks)): the app is excluded from TUN and GitHub's CDN

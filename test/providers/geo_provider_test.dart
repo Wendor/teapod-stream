@@ -243,9 +243,33 @@ void main() {
       };
       await trust();
       final s = c.read(geoProvider) as GeoNeedsTrust;
-      expect(s.sha256ByUrl, {'https://g/site.dat': hex('SWAPPED')});
+      expect(s.sha256ByUrl, {'https://g/ip.dat': hex('IPDATA'), 'https://g/site.dat': hex('SWAPPED')});
       expect(File('${dir.path}/geosite.dat').existsSync(), isFalse);
       expect(await const GeodataService().pins(), isEmpty);
+    });
+
+    test('a file trusted with one that changed before the install is asked about again with it', () async {
+      serveGeo({});
+      await download();
+      expect((c.read(geoProvider) as GeoNeedsTrust).sha256ByUrl.keys, hasLength(2));
+      // geosite changes between the review and the trust; geoip stays the same.
+      var site = 'SWAPPED';
+      server.handler = (r) async {
+        final path = r.uri.path;
+        final body = path.endsWith('.sha256sum') ? null : (path.endsWith('ip.dat') ? 'IPDATA' : site);
+        if (body == null) r.response.statusCode = HttpStatus.notFound;
+        if (r.method != 'HEAD' && body != null) r.response.write(body);
+        await r.response.close();
+      };
+      await trust();
+      final again = c.read(geoProvider) as GeoNeedsTrust;
+      expect(again.sha256ByUrl, {'https://g/ip.dat': hex('IPDATA'), 'https://g/site.dat': hex('SWAPPED')});
+      expect(again.changed, isFalse);
+      // Trusting what was shown now installs both: no endless turns between the two files.
+      site = 'SWAPPED';
+      await trust();
+      expect(c.read(geoProvider), isA<GeoReady>());
+      expect(await const GeodataService().pins(), again.sha256ByUrl);
     });
 
     test('a published sum is checked even for a pinned URL', () async {

@@ -13,6 +13,7 @@ import 'config_provider.dart';
 import 'core_provider.dart';
 import 'settings_provider.dart';
 import 'vpn_provider.dart';
+import 'vpn_switcher.dart';
 
 /// Switches the config on a dead tunnel (urltest): the native heartbeat ran out of attempts and sent `tunnel_dead`.
 /// Lives as long as the app shell reads it.
@@ -76,7 +77,7 @@ class AutoSwitch {
       final best = alive.first;
       log.addInfo('urltest: switching to "${best.config.name}" (${best.latency} ms)', source: 'urltest');
       await _ref
-          .read(vpnProvider.notifier)
+          .read(vpnSwitcherProvider.notifier)
           .switchDeadTunnel(dead: current, to: best.config, measured: {for (final r in probed) r.config.id: r.latency});
     } catch (e) {
       log.addError('urltest: switch error: $e');

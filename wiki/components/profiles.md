@@ -29,11 +29,11 @@ outgoing selection through the configs queue (`ConfigNotifier.currentSelection`)
 
 | Method | What it does |
 |---|---|
-| `switchProfile(id)` | remembers the outgoing profile's server, makes the profile active (its settings apply), then restores its server; false — nothing to switch. The app switches through `VpnNotifier.switchProfile(id)`, which runs it inside `duringProfileSwitch`: the VPN follows the final state (a live tunnel is rebuilt if the server or connection settings changed), also when restoring the server failed. (`ProfileNotifier` can't read `vpnProvider`: that one depends on the settings, which derive from profiles.) |
+| `switchProfile(id)` | remembers the outgoing profile's server, makes the profile active (its settings apply), then restores its server; false — nothing to switch. The app switches through `VpnSwitcher.switchProfile(id)`, which runs it inside `duringProfileSwitch`: the VPN follows the final state (a live tunnel is rebuilt if the server or connection settings changed), also when restoring the server failed. (`ProfileNotifier` can't read `vpnProvider`: that one depends on the settings, which derive from profiles.) |
 | `updateActiveSettings(change, {profileId})` | the only writer of the settings in force (`SettingsNotifier` calls it): queued, refused for a read-only profile, mirrors the native flags ([settings](settings_provider.md)) |
 | `refreshProfile(id, url, {confirm})` | downloads the profile again (`BundleLoader.fetch`); if it changes traffic settings or adds subscriptions, `confirm` is asked first; applies settings, imports its connections. Returns a `ProfileRefresh`: `ProfileRefreshed`, `ProfileRefreshDeclined` (nothing applied) or `ProfileRefreshFailed(reason)` — the download's reason, or `profileUpdateError` when the profile is gone |
 | `reviewImport(bundle)` | the `ImportReview` shown before `importBundle` (below) |
-| `importBundle(bundle, …)` | adds a profile and imports its connections through `ConfigNotifier.importBundle` (deduplicated by subscription URL / server); returns its id. The UI imports through `VpnNotifier.importProfile(bundle, {makeReadonly, sourceUrl, switchTo})`, which calls it and then switches to the profile (`switchTo`, default true) |
+| `importBundle(bundle, …)` | adds a profile and imports its connections through `ConfigNotifier.importBundle` (deduplicated by subscription URL / server); returns its id. The UI imports through `VpnSwitcher.importProfile(bundle, {makeReadonly, sourceUrl, switchTo})`, which calls it and then switches to the profile (`switchTo`, default true) |
 | `exportBundle` | a `ProfileBundle` for sharing |
 
 **Security fields stay local** (`_keepLocalSecurity`): an imported or refreshed profile never sets the SOCKS port and

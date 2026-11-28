@@ -16,6 +16,7 @@ import '../../../core/services/subscription_service.dart';
 import '../../../providers/config_provider.dart';
 import '../../../providers/theme_provider.dart';
 import '../../../providers/vpn_provider.dart';
+import '../../../providers/vpn_switcher.dart';
 import '../../../core/interfaces/vpn_engine.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
@@ -362,7 +363,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
   Future<void> _selectConfig(WidgetRef ref, VpnConfig config) async {
     final messenger = ScaffoldMessenger.of(context);
     final l = context.l10n;
-    final reason = await ref.read(vpnProvider.notifier).selectConfig(config);
+    final reason = await ref.read(vpnSwitcherProvider.notifier).selectConfig(config);
     if (reason != null) messenger.showSnackBar(SnackBar(content: Text(reason.localize(l))));
   }
 

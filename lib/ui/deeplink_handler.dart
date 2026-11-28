@@ -8,7 +8,7 @@ import '../core/models/connections_bundle.dart';
 import '../core/models/import_review.dart';
 import '../providers/profile_provider.dart';
 import '../providers/config_provider.dart';
-import '../providers/vpn_provider.dart';
+import '../providers/vpn_switcher.dart';
 import 'theme/app_theme.dart';
 import 'theme/app_colors.dart';
 import 'widgets/dialog_parts.dart';
@@ -71,7 +71,7 @@ class DeeplinkHandler {
       ],
       review: review,
       import: () async {
-        await ref.read(vpnProvider.notifier).importProfile(bundle, sourceUrl: sourceUrl);
+        await ref.read(vpnSwitcherProvider.notifier).importProfile(bundle, sourceUrl: sourceUrl);
         return context.mounted ? context.l10n.deeplinkProfileImported(bundle.profile.name) : null;
       },
     );

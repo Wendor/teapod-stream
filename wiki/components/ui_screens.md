@@ -98,7 +98,7 @@ still wider than its line (never scaling its 48 dp targets); a line of short met
 
 - Every visible string through `context.l10n` ([localization](localization.md)).
 - Widgets read providers and call notifier methods; no business logic in widgets (picking a config:
-  `VpnNotifier.selectConfig`, [vpn_provider](vpn_provider.md)).
+  `VpnSwitcher.selectConfig`, [vpn_provider](vpn_provider.md)).
 - A large screen is a folder `screens/<name>/`: the screen and its state in `<name>_screen.dart`, its sections as
   private widgets in `part` files next to it (`screens/configs/`: `header`, `groups`, `config_row`, `pinned`,
   `tiles`; `screens/routing/`: `controls`, `picker`, `geo`; `screens/settings/`:

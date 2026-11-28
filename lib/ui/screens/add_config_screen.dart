@@ -9,7 +9,7 @@ import '../../protocols/parsers/wireguard_parser.dart';
 import '../../protocols/xray/vless_parser.dart';
 import '../../core/models/vpn_config.dart';
 import '../../providers/config_provider.dart';
-import '../../providers/vpn_provider.dart';
+import '../../providers/vpn_switcher.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/breadcrumb_bar.dart';
@@ -279,7 +279,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
     final messenger = ScaffoldMessenger.of(context);
     final l = context.l10n;
     await ref.read(configProvider.notifier).addConfig(config);
-    final reason = await ref.read(vpnProvider.notifier).selectConfig(config);
+    final reason = await ref.read(vpnSwitcherProvider.notifier).selectConfig(config);
     if (reason != null) messenger.showSnackBar(SnackBar(content: Text(reason.localize(l))));
     if (mounted) Navigator.pop(context);
   }

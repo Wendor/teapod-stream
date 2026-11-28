@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'auto_switch_provider.dart';
 import 'config_provider.dart';
+import 'quick_connect_reconciler.dart';
 import 'geo_provider.dart';
 import 'native_logs_provider.dart';
 import 'ping_provider.dart';
@@ -33,6 +34,9 @@ class AppLifecycleNotifier extends Notifier<void> {
   @override
   void build() {
     ref.onDispose(() => _updateCheck?.cancel());
+    // Kept listened, not just read: Riverpod pauses an unlistened provider's own listeners. It keeps the saved
+    // quick-connect parameters following what would run from the app's start.
+    ref.listen(quickConnectReconcilerProvider, (_, _) {});
     // Configs that were added (an import, a subscription) are pinged like the stale ones at startup.
     ref.listen<AsyncValue<ConfigState>>(configProvider, (prev, next) {
       final prevIds = prev?.maybeWhen(data: (d) => d.configs.map((c) => c.id).toSet(), orElse: () => null);

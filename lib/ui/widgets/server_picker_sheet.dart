@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/vpn_config.dart';
 import '../../l10n/l10n.dart';
 import '../../providers/config_provider.dart';
-import '../../providers/vpn_provider.dart';
+import '../../providers/vpn_switcher.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import 'pressable.dart';
@@ -30,7 +30,7 @@ class _ServerPickerSheet extends ConsumerWidget {
     final messenger = ScaffoldMessenger.of(context);
     final route = ModalRoute.of(context);
     final l = context.l10n;
-    final reason = await ref.read(vpnProvider.notifier).selectConfig(c);
+    final reason = await ref.read(vpnSwitcherProvider.notifier).selectConfig(c);
     if (reason != null) {
       messenger.showSnackBar(SnackBar(content: Text(reason.localize(l))));
     } else if (context.mounted && (route?.isCurrent ?? false)) {

@@ -1,13 +1,24 @@
 # VpnProvider — connection lifecycle
 
-**Files:** `lib/providers/vpn_provider.dart`, `lib/providers/vpn_session.dart`, `lib/providers/core_provider.dart`,
+**Files:** `lib/providers/vpn_provider.dart`, `lib/providers/vpn_session.dart`, `lib/providers/vpn_switcher.dart`,
+`lib/providers/quick_connect_reconciler.dart`, `lib/providers/core_provider.dart`,
 `lib/core/cores/`; around the connection: `vpn_stats_provider.dart`, `auto_switch_provider.dart`, `ping_provider.dart`,
 `native_logs_provider.dart`
 
 `VpnNotifier` orchestrates the connection on the Flutter side: picks the config and the core, builds the options,
 calls the native service through [XrayEngine](xray_engine.md), and turns native events into state; it only connects,
 disconnects and mirrors the session (stats, the config switch, pings and native logs live in their own providers,
-below). Reconnects on
+below). Two units around it go through its public API only (`connect` via `reconnectWithNewConfig`,
+`reconnectIfStale`, `disconnect({reason})`, `runsConfig`, `runningConfig`, `engineOptionsFor`, `loadGeosite`) and
+it reads neither — Riverpod refuses a provider reading one that listens to it:
+
+| Unit | Job |
+|---|---|
+| `VpnNotifier` | the session: native events and polling, the attempt id, the connect deadline, `VpnStatus`; the only caller of the engine's `connect` / `disconnect` |
+| `VpnSwitcher` (`vpnSwitcherProvider`) | what is switched to — `selectConfig`, `switchDeadTunnel`, `switchProfile`, `importProfile`, `duringProfileSwitch` — one at a time through one queue; `profileSwitchingProvider` says a profile switch runs |
+| `QuickConnectReconciler` (`quickConnectReconcilerProvider`) | keeps native following what would run now (below); never during a profile switch, whose end calls `reconcileNow()`. Kept listened by `appLifecycleProvider`: a provider that is only read is paused with its listeners |
+
+Reconnects on
 network change and heartbeat failure happen **natively** ([android_native](android_native.md)); Flutter only mirrors
 them.
 
@@ -65,7 +76,7 @@ Mux would silently move configs to another core. `CoreResolution` carries `backe
 per-core `verdicts`, `pinned` and `reason`. Results are cached per `VpnConfig` instance (`Expando`): list rows call
 `resolve` on every rebuild.
 
-`activeCoreProvider` reports the core of the active config. The notifier listens to one derived value of what
+`activeCoreProvider` reports the core of the active config. The reconciler listens to one derived value of what
 would run now: the effective config (its ping results aside), the connection settings (`connectionFingerprint`) and
 that core. Whenever it changes, `coreSwitchAction` decides: while connected or connecting, a config no core can run
 anymore → disconnect with an error; otherwise the session keeps running what it started with (the reconnect banner
@@ -74,7 +85,8 @@ parameters, or clear them when no core runs the config or `validate()` refuses i
 effective config — a selection, a link edit, a subscription refresh, auto mode, a ping that changes the best
 config — and of the connection settings. They are built as a connect builds them (after the geosite index is
 loaded). A session that ends saves again (it may have run older settings); native refuses while a session runs, so
-native's own off report saves again too: a timed-out connect shows `error` before native stops.
+native's own off report (the reconciler reads `XrayEngine.events` for it) saves again too: a timed-out connect shows
+`error` before native stops.
 
 ## `connect({switching})`
 
@@ -106,13 +118,13 @@ a password-less SOCKS on localhost would be an open proxy for every app. In prox
 receives a normal `ACTION_CONNECT` and replaces the running or starting session ([android_native](android_native.md#session-lifecycle)),
 a running one without closing TUN, so there is no leak window with the kill switch. A failure before native is
 called keeps the old session running and shows the error. Used by the reconnect
-banner, the config switch below and `selectConfig(config)` — the one rule for a picked config (configs list, server
+banner, the config switch below and `VpnSwitcher.selectConfig(config)` — the one rule for a picked config (configs list, server
 picker): refused with the reason when no enabled core runs it; otherwise it becomes active, and a running or starting
 session switches to it unless it already runs it (with the VPN off the change reaches quick connect, above). Adding a
 config selects it the same way. That decision is queued with the profile switches below and taken
 when its turn comes, against what runs then, so overlapping selections end on the last one. `reconnectIfStale()` calls it only when needed: while
 `connecting`, or when `connected` and the effective config isn't the running one (`runsConfig`) or the settings
-fingerprint changed. A profile switch runs inside `duringProfileSwitch`: it changes settings and the server one
+fingerprint changed. A profile switch runs inside `VpnSwitcher.duringProfileSwitch`: it changes settings and the server one
 after the other, and what is resolved in between belongs to neither profile, so the listener above ignores changes
 while it runs. Profile switches (body and reconciliation) and selections' reconciliations go through one queue, so a later one
 never starts while the earlier one's connect is in flight; a selection's save itself isn't queued. After each switch the VPN follows the final state: a profile no core runs disconnects
@@ -145,7 +157,7 @@ can run (`supportedCandidates`). Each is measured in parallel on its own core wi
 core instance makes a real request to `heartbeat.url`, with the options a connect builds (`buildEngineOptions`).
 That is much stronger than the TCP ping, which reports "alive" for a server whose port is open but whose protocol is
 blocked. No live candidate → only a log entry; the service keeps reconnecting on its own cooldown. Otherwise
-`VpnNotifier.switchDeadTunnel` applies the switch in the queue of selections and profile switches; it is dropped when
+`VpnSwitcher.switchDeadTunnel` applies the switch in the queue of selections and profile switches; it is dropped when
 by then the session runs another config. In auto mode with the best candidate in the auto subscription,
 auto mode stays: the subscription's ping results become the measurement, by config (`setLatencies`) — a config that
 didn't answer or wasn't probed (the dead one, other configs with the `pinned` source) has none until the next ping —

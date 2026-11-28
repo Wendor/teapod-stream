@@ -8,7 +8,7 @@ import '../../core/models/app_message.dart';
 import '../../core/services/bundle_loader.dart';
 import '../../core/services/share_service.dart';
 import '../../providers/profile_provider.dart';
-import '../../providers/vpn_provider.dart';
+import '../../providers/vpn_switcher.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_colors.dart';
 import '../widgets/dialog_parts.dart';
@@ -149,7 +149,7 @@ class _ProfBody extends ConsumerWidget {
 
   void _onProfileTap(BuildContext context, WidgetRef ref, Profile profile, ProfileState state) {
     if (profile.id == state.activeProfileId) return;
-    ref.read(vpnProvider.notifier).switchProfile(profile.id);
+    ref.read(vpnSwitcherProvider.notifier).switchProfile(profile.id);
   }
 }
 
@@ -301,7 +301,7 @@ void _profShowImportDialog(BuildContext context, WidgetRef ref, TeapodTokens t) 
               if (!ctx.mounted || !await confirmImportReview(ctx, review) || !ctx.mounted) return;
               Navigator.pop(ctx);
               await ref
-                  .read(vpnProvider.notifier)
+                  .read(vpnSwitcherProvider.notifier)
                   .importProfile(
                     load.bundle,
                     makeReadonly: makeReadonly,
@@ -327,7 +327,7 @@ void _showActionsSheet(BuildContext context, WidgetRef ref, Profile profile, Pro
       t: t,
       onSwitch: () {
         Navigator.pop(ctx);
-        ref.read(vpnProvider.notifier).switchProfile(profile.id);
+        ref.read(vpnSwitcherProvider.notifier).switchProfile(profile.id);
       },
       onRename: () {
         Navigator.pop(ctx);

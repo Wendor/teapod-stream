@@ -134,7 +134,7 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
 
   /// Applies the profile's settings and its remembered server; false — nothing to switch. The selection is restored
   /// inside the queue: the next switch must see this profile's server, not the previous one's. With the VPN following
-  /// — `VpnNotifier.switchProfile` (this provider can't read the VPN one: that one depends on the settings, which
+  /// — `VpnSwitcher.switchProfile` (this provider can't read the VPN one: that one depends on the settings, which
   /// derive from this one).
   Future<bool> switchProfile(String id) => _serial(() async {
     final target = await _switch(id);
@@ -226,7 +226,7 @@ class ProfileNotifier extends AsyncNotifier<ProfileState> {
   );
 
   /// Adds [bundle]'s profile (and its connections); returns its id. Switching to it is the caller's
-  /// (`VpnNotifier.switchProfile`).
+  /// (`VpnSwitcher.switchProfile`).
   Future<String?> importBundle(ProfileBundle bundle, {bool makeReadonly = false, String? sourceUrl}) async {
     if (_current == null) return null;
 

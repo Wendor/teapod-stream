@@ -39,7 +39,9 @@ import 'package:teapodstream/protocols/xray/xray_rust_backend.dart';
 import 'package:teapodstream/providers/config_provider.dart';
 import 'package:teapodstream/providers/profile_provider.dart';
 import 'package:teapodstream/providers/settings_provider.dart';
+import 'package:teapodstream/providers/quick_connect_reconciler.dart';
 import 'package:teapodstream/providers/vpn_provider.dart';
+import 'package:teapodstream/providers/vpn_switcher.dart';
 import 'package:teapodstream/providers/vpn_stats_provider.dart';
 import 'package:teapodstream/core/models/vpn_stats.dart';
 import 'package:teapodstream/providers/ping_provider.dart';
@@ -204,6 +206,7 @@ void main() {
   late ProviderContainer c;
 
   VpnNotifier n() => c.read(vpnProvider.notifier);
+  VpnSwitcher sw() => c.read(vpnSwitcherProvider.notifier);
   VpnStats stats() => c.read(vpnStatsProvider);
   VpnStatus st() => c.read(vpnProvider);
   List<VpnLogEntry> logs() => c.read(logServiceProvider);
@@ -248,6 +251,7 @@ void main() {
     // What the app shell keeps alive.
     c.listen(vpnStatsProvider, (_, _) {});
     c.read(autoSwitchProvider);
+    c.listen(quickConnectReconcilerProvider, (_, _) {});
     await _settle();
   }
 
@@ -493,10 +497,10 @@ void main() {
 
     test('selectConfig switches a live tunnel to another config and leaves the running one alone', () async {
       await connected(configs: [_cfg('a'), _cfg('b')]);
-      expect(await n().selectConfig(c.read(configProvider).value!.configs.first), isNull);
+      expect(await sw().selectConfig(c.read(configProvider).value!.configs.first), isNull);
       await _settle();
       expect(native.named('connect'), hasLength(1), reason: 'the running config: no rebuild');
-      expect(await n().selectConfig(c.read(configProvider).value!.configs.last), isNull);
+      expect(await sw().selectConfig(c.read(configProvider).value!.configs.last), isNull);
       await _settle();
       expect(c.read(configProvider).value!.activeConfigId, 'b');
       expect(native.named('connect'), hasLength(2));
@@ -507,8 +511,8 @@ void main() {
       await connected(configs: [_cfg('a'), _cfg('b')]);
       final configs = c.read(configProvider).value!.configs;
       // b, then back to a before b's save and reconnect are done.
-      final toB = n().selectConfig(configs.last);
-      final toA = n().selectConfig(configs.first);
+      final toB = sw().selectConfig(configs.last);
+      final toA = sw().selectConfig(configs.first);
       expect(await toB, isNull);
       expect(await toA, isNull);
       // The native side answers: each connect ends connected, each disconnect disconnected.
@@ -530,14 +534,14 @@ void main() {
         activeId: 'a',
         settings: _settings.copyWith(proxyOnly: true, disabledCores: {CoreKind.xrayGo, CoreKind.singBox}),
       );
-      final reason = await n().selectConfig(c.read(configProvider).value!.configs.last);
+      final reason = await sw().selectConfig(c.read(configProvider).value!.configs.last);
       expect(reason, const XrayRustBackend().unavailableReason(CoreFeature.proxyOnly));
       expect(c.read(configProvider).value!.activeConfigId, 'a');
     });
 
     test('selectConfig while disconnected only selects', () async {
       await boot(configs: [_cfg('a'), _cfg('b')], activeId: 'a');
-      expect(await n().selectConfig(c.read(configProvider).value!.configs.last), isNull);
+      expect(await sw().selectConfig(c.read(configProvider).value!.configs.last), isNull);
       await _settle();
       expect(c.read(configProvider).value!.activeConfigId, 'b');
       expect(native.named('connect'), isEmpty);
@@ -578,12 +582,12 @@ void main() {
         profile: Profile(id: 'x', name: 'Imported', settings: _settings, createdAt: DateTime(2026)),
       );
       final kept = c.read(profileProvider).value!.activeProfileId;
-      final quiet = await c.read(vpnProvider.notifier).importProfile(bundle, switchTo: false, sourceUrl: 'https://s');
+      final quiet = await sw().importProfile(bundle, switchTo: false, sourceUrl: 'https://s');
       expect(c.read(profileProvider).value!.activeProfileId, kept);
       final p = c.read(profileProvider).value!.profiles.singleWhere((p) => p.id == quiet);
       expect((p.name, p.sourceUrl, p.readonly), ('Imported', 'https://s', false));
 
-      final id = await c.read(vpnProvider.notifier).importProfile(bundle, makeReadonly: true);
+      final id = await sw().importProfile(bundle, makeReadonly: true);
       expect(c.read(profileProvider).value!.activeProfileId, id);
       expect(c.read(profileProvider).value!.activeProfile!.readonly, isTrue);
     });
@@ -597,14 +601,14 @@ void main() {
       final bId = c.read(profileProvider).value!.profiles.last.id;
 
       // same server, same settings — the tunnel stays
-      await c.read(vpnProvider.notifier).switchProfile(bId);
+      await sw().switchProfile(bId);
       await c.read(configProvider.notifier).setActiveConfig('b');
-      await c.read(vpnProvider.notifier).switchProfile(defaultId);
+      await sw().switchProfile(defaultId);
       await _settle();
       expect(native.named('connect'), hasLength(1));
 
       // B remembered server b
-      await c.read(vpnProvider.notifier).switchProfile(bId);
+      await sw().switchProfile(bId);
       await _settle();
       expect(native.named('connect'), hasLength(2));
       expect(native.lastConnect()['xrayConfig'], contains('hb.example'));
@@ -617,15 +621,15 @@ void main() {
       await profiles.createProfile('B');
       final defaultId = c.read(profileProvider).value!.activeProfileId;
       final bId = c.read(profileProvider).value!.profiles.last.id;
-      await c.read(vpnProvider.notifier).switchProfile(bId); // B remembers the current server
+      await sw().switchProfile(bId); // B remembers the current server
       await c.read(settingsProvider.notifier).save(_settings.copyWith(mtu: 1400));
-      await c.read(vpnProvider.notifier).switchProfile(defaultId);
+      await sw().switchProfile(defaultId);
       await _settle();
       final before = native.named('connect').length;
 
       _FailingSelection.fail = true;
       addTearDown(() => _FailingSelection.fail = false);
-      await expectLater(c.read(vpnProvider.notifier).switchProfile(bId), throwsA(isA<StateError>()));
+      await expectLater(sw().switchProfile(bId), throwsA(isA<StateError>()));
       await _settle();
       expect(native.named('connect'), hasLength(before + 1));
       expect(native.lastConnect()['mtu'], 1400);
@@ -647,16 +651,16 @@ void main() {
       final boxId = c.read(profileProvider).value!.activeProfileId;
       final bId = c.read(profileProvider).value!.profiles.last.id;
       // B: Go enabled, raw xray server
-      await c.read(vpnProvider.notifier).switchProfile(bId);
+      await sw().switchProfile(bId);
       await c.read(settingsProvider.notifier).save(_settings);
       await c.read(configProvider.notifier).setActiveConfig('r');
       await _settle();
 
       // in between, sing-box settings with the raw config (or the reverse) can't run
-      await c.read(vpnProvider.notifier).switchProfile(boxId);
+      await sw().switchProfile(boxId);
       await _settle();
       expect(native.lastConnect()['engine'], 'box');
-      await c.read(vpnProvider.notifier).switchProfile(bId);
+      await sw().switchProfile(bId);
       await _settle();
       expect(native.named('disconnect'), isEmpty);
       expect(st().error, isNull);
@@ -687,10 +691,7 @@ void main() {
       await c.read(profileProvider.future);
       confirmConnects();
 
-      await Future.wait([
-        c.read(vpnProvider.notifier).switchProfile('W'),
-        c.read(vpnProvider.notifier).switchProfile('Y'),
-      ]);
+      await Future.wait([sw().switchProfile('W'), sw().switchProfile('Y')]);
       await _settle();
       expect(native.named('disconnect'), isEmpty);
       expect(st().error, isNull);
@@ -724,7 +725,7 @@ void main() {
       c.invalidate(profileProvider);
       await c.read(profileProvider.future);
 
-      await c.read(vpnProvider.notifier).switchProfile('B');
+      await sw().switchProfile('B');
       await _settle();
       expect(native.named('disconnect'), hasLength(1));
       expect(st().error, isNotNull);
@@ -757,10 +758,7 @@ void main() {
       final gate = Completer<void>();
       confirmConnects(gate.future);
 
-      final switches = Future.wait([
-        c.read(vpnProvider.notifier).switchProfile('W'),
-        c.read(vpnProvider.notifier).switchProfile('Y'),
-      ]);
+      final switches = Future.wait([sw().switchProfile('W'), sw().switchProfile('Y')]);
       await _settle();
       expect(native.named('connect'), hasLength(before + 1)); // W's connect is still in flight
       gate.complete();
@@ -775,7 +773,7 @@ void main() {
       await connected(configs: [_cfg('r', rawXray: _visionRaw)]);
       await c.read(profileProvider.future);
       // nothing runs the raw config any more while a (no-op) switch is in flight
-      await n().duringProfileSwitch(() async {
+      await sw().duringProfileSwitch(() async {
         await c
             .read(settingsProvider.notifier)
             .save(_settings.copyWith(disabledCores: {CoreKind.xrayGo, CoreKind.singBox}));
@@ -1355,7 +1353,7 @@ void main() {
     test('a switch found during a profile switch runs after it', () async {
       native.outboundMs = {'hc.example': 80};
       await connected(configs: subConfigs, settings: switchOn);
-      await n().duringProfileSwitch(() async {
+      await sw().duringProfileSwitch(() async {
         emit({'type': 'tunnel_dead', 'failures': 3});
         await _settle();
         expect(native.named('measureOutbound'), isNotEmpty);
@@ -1372,7 +1370,7 @@ void main() {
       final probe = Completer<void>();
       native.outboundGate = probe.future;
       await connected(configs: subConfigs, settings: switchOn);
-      await n().duringProfileSwitch(() async {
+      await sw().duringProfileSwitch(() async {
         emit({'type': 'tunnel_dead', 'failures': 3});
         await _settle();
         expect(native.named('measureOutbound'), isNotEmpty); // the failed config is taken: the probes wait
@@ -1535,13 +1533,13 @@ void main() {
       final defaultId = c.read(profileProvider).value!.activeProfileId;
       await profiles.createProfile('B');
       final bId = c.read(profileProvider).value!.profiles.last.id;
-      await n().switchProfile(bId);
+      await sw().switchProfile(bId);
       await c.read(settingsProvider.notifier).save(_settings.copyWith(killSwitchEnabled: true));
       await _settle();
       expect((native.named('saveQuickConnect').last.arguments as Map)['killSwitch'], isTrue);
 
       native.calls.clear();
-      await n().switchProfile(defaultId);
+      await sw().switchProfile(defaultId);
       await _settle();
       expect(native.named("saveQuickConnect").map((c) => (c.arguments as Map)["killSwitch"]), [false]);
     });
@@ -1550,7 +1548,7 @@ void main() {
       await boot(configs: [_cfg('a'), _cfg('b')], activeId: 'a');
       await _settle();
       native.calls.clear();
-      await n().selectConfig(c.read(configProvider).value!.configs.last);
+      await sw().selectConfig(c.read(configProvider).value!.configs.last);
       await _settle();
       expect(native.named('saveQuickConnect').map((c) => (c.arguments as Map)['xrayConfig'] as String), [
         contains('hb.example'),
@@ -1647,7 +1645,7 @@ void main() {
         overrides: [geositeIndexProvider.overrideWith((ref) => index.future)],
       );
       native.calls.clear();
-      await n().selectConfig(c.read(configProvider).value!.configs.last);
+      await sw().selectConfig(c.read(configProvider).value!.configs.last);
       await _settle();
       expect(native.named('saveQuickConnect'), isEmpty);
       index.complete(const GeositeIndex({}));
@@ -1667,7 +1665,7 @@ void main() {
       await _settle();
       native.calls.clear();
       var savedDuringSwitch = -1;
-      await n().duringProfileSwitch(() async {
+      await sw().duringProfileSwitch(() async {
         index.complete(const GeositeIndex({}));
         await _settle();
         savedDuringSwitch = native.named('saveQuickConnect').length;

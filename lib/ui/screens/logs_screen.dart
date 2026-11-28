@@ -5,6 +5,7 @@ import '../../core/models/vpn_log_entry.dart';
 import '../../core/services/log_service.dart';
 import '../../core/services/share_service.dart';
 import '../../providers/config_provider.dart';
+import '../../core/models/setting_field.dart';
 import '../../providers/settings_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
@@ -96,7 +97,7 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
     final s = ref.read(settingsProvider).maybeWhen(data: (d) => d, orElse: () => null);
     if (s == null) return;
     final enabled = !s.logsEnabled;
-    await ref.read(settingsProvider.notifier).edit((c) => c.copyWith(logsEnabled: enabled));
+    await ref.read(settingsProvider.notifier).set(SettingFields.logsEnabled, enabled);
     await ref.read(nativeLogsProvider).setLogsEnabled(enabled);
   }
 

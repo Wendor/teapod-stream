@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/app_settings.dart';
+import '../../core/models/setting_field.dart';
 import '../../providers/profile_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../theme/app_colors.dart';
@@ -44,9 +45,7 @@ class _SubscriptionSettingsScreenState extends ConsumerState<SubscriptionSetting
     _container = ProviderScope.containerOf(context, listen: false);
   }
 
-  /// [change] applies to the settings current when it is written, not to the ones this build saw.
-  void _update(AppSettings Function(AppSettings current) change) =>
-      _container.read(settingsProvider.notifier).edit(change);
+  void _set<T>(SettingField<T> field, T value) => _container.read(settingsProvider.notifier).set(field, value);
 
   @override
   Widget build(BuildContext context) {
@@ -98,7 +97,7 @@ class _SubscriptionSettingsScreenState extends ConsumerState<SubscriptionSetting
                         hint: context.l10n.subsAutoRefreshHint,
                         value: s.subAutoRefresh,
                         locked: locked,
-                        onChange: (v) => _update((c) => c.copyWith(subAutoRefresh: v)),
+                        onChange: (v) => _set(SettingFields.subAutoRefresh, v),
                       ),
                       if (s.subAutoRefresh)
                         SetInlineField(
@@ -112,7 +111,7 @@ class _SubscriptionSettingsScreenState extends ConsumerState<SubscriptionSetting
                               for (final h in const [1, 3, 6, 12, 24]) ('$h', context.l10n.unitHours(h)),
                             ],
                             locked: locked,
-                            onChanged: (v) => _update((c) => c.copyWith(subAutoRefreshHours: int.parse(v))),
+                            onChanged: (v) => _set(SettingFields.subAutoRefreshHours, int.parse(v)),
                           ),
                         ),
                       SetSectionHeader(t: t, addr: '0x20', label: 'identity'),
@@ -122,7 +121,7 @@ class _SubscriptionSettingsScreenState extends ConsumerState<SubscriptionSetting
                         hint: context.l10n.subsHwidHint,
                         value: s.hwidEnabled,
                         locked: locked,
-                        onChange: (v) => _update((c) => c.copyWith(hwidEnabled: v)),
+                        onChange: (v) => _set(SettingFields.hwidEnabled, v),
                       ),
                       SetInlineField(
                         t: t,
@@ -136,7 +135,7 @@ class _SubscriptionSettingsScreenState extends ConsumerState<SubscriptionSetting
                           width: 200,
                           fontSize: 13,
                           textAlign: TextAlign.start,
-                          onCommit: (v) => _update((c) => c.copyWith(subUserAgent: v)),
+                          onCommit: (v) => _set(SettingFields.subUserAgent, v),
                         ),
                       ),
                       const SizedBox(height: 24),

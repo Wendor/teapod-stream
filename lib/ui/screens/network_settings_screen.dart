@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/heartbeat_settings.dart';
 import '../../core/models/xray_tuning.dart';
 import '../../core/models/app_settings.dart';
-import '../../core/models/setting_limits.dart';
+import '../../core/models/setting_field.dart';
 import '../../providers/profile_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../theme/app_colors.dart';
@@ -88,21 +88,15 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
     _container = ProviderScope.containerOf(context, listen: false);
   }
 
-  /// [change] applies to the settings current when it is written, not to the ones this build saw.
-  void _update(AppSettings Function(AppSettings current) change) =>
-      _container.read(settingsProvider.notifier).edit(change);
+  SettingsNotifier get _settings => _container.read(settingsProvider.notifier);
+
+  void _set<T>(SettingField<T> field, T value) => _settings.set(field, value);
 
   /// Login and password are saved together: the text of both fields now (the change may run after they are gone).
   void _updateSocksCredentials() {
     final user = _socksUserCtrl!.text;
     final password = _socksPasswordCtrl!.text;
-    _update((c) => c.copyWith(socksUser: user, socksPassword: password));
-  }
-
-  /// A numeric field's commit: an empty or unparsable value changes nothing; the value is clamped to [limits].
-  void _updateInt(String text, SettingLimits limits, AppSettings Function(AppSettings current, int value) change) {
-    final value = int.tryParse(text);
-    if (value != null) _update((c) => change(c, limits.clamp(value)));
+    _settings.setSocksCredentials(user, password);
   }
 
   static String _fpLabel(TlsFingerprint fp) => fp == TlsFingerprint.defaultFp ? 'DEFAULT' : fp.name.toUpperCase();
@@ -190,7 +184,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
             for (final fp in TlsFingerprint.values)
               InkWell(
                 onTap: () {
-                  _update((c) => c.copyWith(tlsFingerprint: fp));
+                  _set(SettingFields.tlsFingerprint, fp);
                   Navigator.pop(ctx);
                 },
                 child: Container(
@@ -271,7 +265,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                         hint: l.networkRandomPortHint,
                         value: s.randomPort,
                         locked: locked,
-                        onChange: (v) => _update((c) => c.copyWith(randomPort: v)),
+                        onChange: (v) => _set(SettingFields.randomPort, v),
                       ),
                       if (!s.randomPort)
                         SetInlineField(
@@ -283,8 +277,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             controller: _socksPortCtrl!,
                             enabled: !locked,
                             hint: '10808',
-                            onCommit: (v) =>
-                                _updateInt(v, AppSettings.socksPortLimits, (c, n) => c.copyWith(socksPort: n)),
+                            onCommit: (v) => _settings.commitInt(SettingFields.socksPort, v),
                           ),
                         ),
                       SetRowToggle(
@@ -293,7 +286,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                         hint: l.networkRandomCredsHint,
                         value: s.randomCredentials,
                         locked: locked,
-                        onChange: (v) => _update((c) => c.copyWith(randomCredentials: v)),
+                        onChange: (v) => _set(SettingFields.randomCredentials, v),
                       ),
                       if (!s.randomCredentials) ...[
                         SetInlineField(
@@ -330,7 +323,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                           hint: l.networkProxyOnlyHint,
                           value: s.proxyOnly,
                           locked: locked,
-                          onChange: (v) => _update((c) => c.copyWith(proxyOnly: v)),
+                          onChange: (v) => _set(SettingFields.proxyOnly, v),
                         ),
                       ),
                       SetSectionHeader(t: t, addr: '0x32', label: 'traffic'),
@@ -340,7 +333,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                         hint: l.networkUdpHint,
                         value: s.enableUdp,
                         locked: locked,
-                        onChange: (v) => _update((c) => c.copyWith(enableUdp: v)),
+                        onChange: (v) => _set(SettingFields.enableUdp, v),
                       ),
                       FeatureGate(
                         feature: CoreFeature.icmpToggle,
@@ -350,7 +343,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                           hint: l.networkIcmpHint,
                           value: s.allowIcmp,
                           locked: locked,
-                          onChange: (v) => _update((c) => c.copyWith(allowIcmp: v)),
+                          onChange: (v) => _set(SettingFields.allowIcmp, v),
                         ),
                       ),
                       SetRowToggle(
@@ -359,7 +352,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                         hint: l.networkBlockQuicHint,
                         value: s.blockQuic,
                         locked: locked,
-                        onChange: (v) => _update((c) => c.copyWith(blockQuic: v)),
+                        onChange: (v) => _set(SettingFields.blockQuic, v),
                       ),
                       // TLS fingerprint (uTLS) override
                       Container(
@@ -412,7 +405,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                           hint: l.networkIpv6Hint,
                           value: s.ipv6Enabled,
                           locked: locked,
-                          onChange: (v) => _update((c) => c.copyWith(ipv6Enabled: v)),
+                          onChange: (v) => _set(SettingFields.ipv6Enabled, v),
                         ),
                       if (!s.proxyOnly)
                         FeatureGate(
@@ -426,7 +419,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                               controller: _mtuCtrl!,
                               enabled: !locked,
                               hint: '1500',
-                              onCommit: (v) => _updateInt(v, AppSettings.mtuLimits, (c, n) => c.copyWith(mtu: n)),
+                              onCommit: (v) => _settings.commitInt(SettingFields.mtu, v),
                             ),
                           ),
                         ),
@@ -441,11 +434,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             controller: _obsCtrl!,
                             enabled: !locked,
                             hint: '600',
-                            onCommit: (v) => _updateInt(
-                              v,
-                              AppSettings.obsProbeIntervalLimits,
-                              (c, n) => c.copyWith(obsProbeIntervalSec: n),
-                            ),
+                            onCommit: (v) => _settings.commitInt(SettingFields.obsProbeIntervalSec, v),
                           ),
                         ),
                       ),
@@ -456,7 +445,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                         hint: l.networkFragmentHint,
                         value: s.fragment.enabled,
                         locked: locked,
-                        onChange: (v) => _update((c) => c.copyWith(fragment: c.fragment.copyWith(enabled: v))),
+                        onChange: (v) => _set(SettingFields.fragmentEnabled, v),
                       ),
                       if (s.fragment.enabled) ...[
                         SetInlineField(
@@ -468,8 +457,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             controller: _fragPacketsCtrl!,
                             enabled: !locked,
                             hint: 'tlshello',
-                            onCommit: (v) =>
-                                _update((c) => c.copyWith(fragment: c.fragment.copyWith(packets: v.trim()))),
+                            onCommit: (v) => _set(SettingFields.fragmentPackets, v.trim()),
                           ),
                         ),
                         SetInlineField(
@@ -481,8 +469,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             controller: _fragLengthCtrl!,
                             enabled: !locked,
                             hint: '100-200',
-                            onCommit: (v) =>
-                                _update((c) => c.copyWith(fragment: c.fragment.copyWith(length: v.trim()))),
+                            onCommit: (v) => _set(SettingFields.fragmentLength, v.trim()),
                           ),
                         ),
                         SetInlineField(
@@ -494,8 +481,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             controller: _fragIntervalCtrl!,
                             enabled: !locked,
                             hint: '10-20',
-                            onCommit: (v) =>
-                                _update((c) => c.copyWith(fragment: c.fragment.copyWith(interval: v.trim()))),
+                            onCommit: (v) => _set(SettingFields.fragmentInterval, v.trim()),
                           ),
                         ),
                       ],
@@ -507,7 +493,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                         hint: l.networkNoiseHint,
                         value: s.noise.enabled,
                         locked: locked,
-                        onChange: (v) => _update((c) => c.copyWith(noise: c.noise.copyWith(enabled: v))),
+                        onChange: (v) => _set(SettingFields.noiseEnabled, v),
                       ),
                       if (s.noise.enabled) ...[
                         _PickerRow(
@@ -522,7 +508,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             values: NoiseType.values,
                             current: s.noise.type,
                             labelOf: (v) => v.name.toUpperCase(),
-                            onPick: (v) => _update((c) => c.copyWith(noise: c.noise.copyWith(type: v))),
+                            onPick: (v) => _set(SettingFields.noiseType, v),
                           ),
                         ),
                         SetInlineField(
@@ -534,7 +520,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             controller: _noisePacketCtrl!,
                             enabled: !locked,
                             hint: s.noise.type == NoiseType.rand ? '50-100' : l.networkNoiseContent,
-                            onCommit: (v) => _update((c) => c.copyWith(noise: c.noise.copyWith(packet: v.trim()))),
+                            onCommit: (v) => _set(SettingFields.noisePacket, v.trim()),
                           ),
                         ),
                         SetInlineField(
@@ -546,7 +532,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             controller: _noiseDelayCtrl!,
                             enabled: !locked,
                             hint: '10-20',
-                            onCommit: (v) => _update((c) => c.copyWith(noise: c.noise.copyWith(delay: v.trim()))),
+                            onCommit: (v) => _set(SettingFields.noiseDelay, v.trim()),
                           ),
                         ),
                         if (!s.noise.isValid)
@@ -566,7 +552,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                           hint: l.networkMuxHint,
                           value: s.mux.enabled,
                           locked: locked,
-                          onChange: (v) => _update((c) => c.copyWith(mux: c.mux.copyWith(enabled: v))),
+                          onChange: (v) => _set(SettingFields.muxEnabled, v),
                         ),
                       ),
                       if (s.mux.enabled) ...[
@@ -579,11 +565,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             controller: _muxConcCtrl!,
                             enabled: !locked,
                             hint: '8',
-                            onCommit: (v) => _updateInt(
-                              v,
-                              MuxSettings.concurrencyLimits,
-                              (c, n) => c.copyWith(mux: c.mux.copyWith(concurrency: n)),
-                            ),
+                            onCommit: (v) => _settings.commitInt(SettingFields.muxConcurrency, v),
                           ),
                         ),
                         SetInlineField(
@@ -595,11 +577,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             controller: _muxXudpCtrl!,
                             enabled: !locked,
                             hint: '16',
-                            onCommit: (v) => _updateInt(
-                              v,
-                              MuxSettings.concurrencyLimits,
-                              (c, n) => c.copyWith(mux: c.mux.copyWith(xudpConcurrency: n)),
-                            ),
+                            onCommit: (v) => _settings.commitInt(SettingFields.muxXudpConcurrency, v),
                           ),
                         ),
                         _PickerRow(
@@ -614,7 +592,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             values: XudpUdp443.values,
                             current: s.mux.xudpProxyUDP443,
                             labelOf: (v) => v.name.toUpperCase(),
-                            onPick: (v) => _update((c) => c.copyWith(mux: c.mux.copyWith(xudpProxyUDP443: v))),
+                            onPick: (v) => _set(SettingFields.muxXudpProxyUdp443, v),
                           ),
                         ),
                       ],
@@ -631,7 +609,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                           values: HeartbeatProbe.values,
                           current: s.heartbeat.probe,
                           labelOf: (v) => v.name.toUpperCase(),
-                          onPick: (v) => _update((c) => c.copyWith(heartbeat: c.heartbeat.copyWith(probe: v))),
+                          onPick: (v) => _set(SettingFields.heartbeatProbe, v),
                         ),
                       ),
                       if (s.heartbeat.probe != HeartbeatProbe.passive) ...[
@@ -647,7 +625,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             values: HeartbeatTarget.values,
                             current: s.heartbeat.target,
                             labelOf: (v) => v.name.toUpperCase(),
-                            onPick: (v) => _update((c) => c.copyWith(heartbeat: c.heartbeat.copyWith(target: v))),
+                            onPick: (v) => _set(SettingFields.heartbeatTarget, v),
                           ),
                         ),
                         if (s.heartbeat.target == HeartbeatTarget.custom)
@@ -660,8 +638,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                               controller: _hbUrlCtrl!,
                               enabled: !locked,
                               hint: 'http://…/generate_204',
-                              onCommit: (v) =>
-                                  _update((c) => c.copyWith(heartbeat: c.heartbeat.copyWith(customUrl: v.trim()))),
+                              onCommit: (v) => _set(SettingFields.heartbeatCustomUrl, v.trim()),
                             ),
                           ),
                       ],
@@ -674,11 +651,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                           controller: _hbThresholdCtrl!,
                           enabled: !locked,
                           hint: '3',
-                          onCommit: (v) => _updateInt(
-                            v,
-                            HeartbeatSettings.failureThresholdLimits,
-                            (c, n) => c.copyWith(heartbeat: c.heartbeat.copyWith(failureThreshold: n)),
-                          ),
+                          onCommit: (v) => _settings.commitInt(SettingFields.heartbeatFailureThreshold, v),
                         ),
                       ),
                       _PickerRow(
@@ -693,7 +666,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                           values: HeartbeatFailAction.values,
                           current: s.heartbeat.failAction,
                           labelOf: (v) => v.name.toUpperCase(),
-                          onPick: (v) => _update((c) => c.copyWith(heartbeat: c.heartbeat.copyWith(failAction: v))),
+                          onPick: (v) => _set(SettingFields.heartbeatFailAction, v),
                         ),
                       ),
                       if (s.heartbeat.failAction == HeartbeatFailAction.switchConfig)
@@ -709,7 +682,7 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
                             values: SwitchSource.values,
                             current: s.heartbeat.switchSource,
                             labelOf: (v) => v.name.toUpperCase(),
-                            onPick: (v) => _update((c) => c.copyWith(heartbeat: c.heartbeat.copyWith(switchSource: v))),
+                            onPick: (v) => _set(SettingFields.heartbeatSwitchSource, v),
                           ),
                         ),
                       const SizedBox(height: 32),

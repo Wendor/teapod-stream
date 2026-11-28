@@ -8,6 +8,11 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:teapodstream/core/models/config_selection.dart';
+import 'package:teapodstream/core/models/core_kind.dart';
+import 'package:teapodstream/core/models/dns_config.dart';
+import 'package:teapodstream/core/models/routing_settings.dart';
+import 'package:teapodstream/core/models/setting_field.dart';
+import 'package:teapodstream/core/models/xray_tuning.dart';
 import 'package:teapodstream/core/models/heartbeat_settings.dart';
 import 'package:teapodstream/core/models/import_review.dart';
 import 'package:teapodstream/core/models/pinned_ref.dart';
@@ -149,9 +154,9 @@ void main() {
     test('two quick saves both land', () async {
       await boot(stored: [profile('a')], activeId: 'a');
       final notifier = c.read(settingsProvider.notifier);
-      await Future.wait([notifier.toggleExcludedPackage('x.one'), notifier.toggleExcludedPackage('x.two')]);
-      expect((await settings()).excludedPackages, {'x.one', 'x.two'});
-      expect((await storedSettings()).excludedPackages, {'x.one', 'x.two'});
+      await Future.wait([notifier.togglePackage('x.one'), notifier.togglePackage('x.two')]);
+      expect((await settings()).includedPackages, {'x.one', 'x.two'});
+      expect((await storedSettings()).includedPackages, {'x.one', 'x.two'});
     });
 
     test('a readonly profile refuses a save', () async {
@@ -493,19 +498,146 @@ void main() {
       expect((await storedSettings()).mtu, 1500);
     });
 
-    test('toggleExcludedPackage and cleanGhostPackages', () async {
+    test('togglePackage toggles the list of the mode current at write time; cleanGhostPackages', () async {
       await boot();
       final sn = c.read(settingsProvider.notifier);
       await sn.save(_local.copyWith(includedPackages: {'in.a', 'in.gone'}, excludedPackages: {'ex.a'}));
-      await sn.toggleExcludedPackage('ex.b');
-      await sn.toggleExcludedPackage('ex.a');
+      // The mode switch is queued first: both toggles go to the excluded list.
+      await Future.wait([
+        sn.set(SettingFields.vpnMode, VpnMode.allExcept),
+        sn.togglePackage('ex.b'),
+        sn.togglePackage('ex.a'),
+      ]);
       expect((await settings()).excludedPackages, {'ex.b'});
+      expect((await settings()).includedPackages, {'in.a', 'in.gone'});
 
       await sn.cleanGhostPackages({'in.a', 'ex.b'});
       final cleaned = await settings();
       expect(cleaned.includedPackages, {'in.a'});
       expect(cleaned.excludedPackages, {'ex.b'});
       expect((await storedSettings()).includedPackages, {'in.a'});
+    });
+  });
+
+  group('settings field operations', () {
+    test('set writes nested fields and leaves the rest of the section', () async {
+      await boot();
+      final sn = c.read(settingsProvider.notifier);
+      await sn.set(SettingFields.heartbeatTarget, HeartbeatTarget.custom);
+      await sn.set(SettingFields.heartbeatCustomUrl, 'https://probe.example/');
+      await sn.set(SettingFields.muxEnabled, true);
+      await sn.set(SettingFields.noiseType, NoiseType.str);
+      await sn.set(SettingFields.fragmentPackets, '1-3');
+      await sn.set(SettingFields.bypassLocal, false);
+      final st = await storedSettings();
+      expect(st.heartbeat.target, HeartbeatTarget.custom);
+      expect(st.heartbeat.customUrl, 'https://probe.example/');
+      expect(st.heartbeat.failureThreshold, const HeartbeatSettings().failureThreshold);
+      expect(st.mux.enabled, isTrue);
+      expect(st.mux.concurrency, const MuxSettings().concurrency);
+      expect(st.noise.type, NoiseType.str);
+      expect(st.fragment.packets, '1-3');
+      expect(st.routing.bypassLocal, isFalse);
+      expect(st.routing.direction, const RoutingSettings().direction);
+    });
+
+    test('every field reads back what it wrote', () async {
+      await boot();
+      final sn = c.read(settingsProvider.notifier);
+      await sn.set(SettingFields.geoCodes, ['ru', 'by']);
+      await sn.set(SettingFields.subUserAgent, 'ua');
+      await sn.set(SettingFields.tlsFingerprint, TlsFingerprint.firefox);
+      final st = await settings();
+      expect(SettingFields.geoCodes.read(st), ['ru', 'by']);
+      expect(SettingFields.subUserAgent.read(st), 'ua');
+      expect(SettingFields.tlsFingerprint.read(st), TlsFingerprint.firefox);
+    });
+
+    test('commitInt clamps to the field limits and ignores text that is not a number', () async {
+      await boot();
+      final sn = c.read(settingsProvider.notifier);
+      await sn.commitInt(SettingFields.mtu, '100');
+      await sn.commitInt(SettingFields.socksPort, ' 99999 ');
+      await sn.commitInt(SettingFields.muxConcurrency, '0');
+      await sn.commitInt(SettingFields.heartbeatFailureThreshold, '50');
+      await sn.commitInt(SettingFields.obsProbeIntervalSec, '');
+      await sn.commitInt(SettingFields.muxXudpConcurrency, 'abc');
+      final st = await storedSettings();
+      expect(st.mtu, AppSettings.mtuLimits.min);
+      expect(st.socksPort, AppSettings.socksPortLimits.max);
+      expect(st.mux.concurrency, MuxSettings.concurrencyLimits.min);
+      expect(st.heartbeat.failureThreshold, HeartbeatSettings.failureThresholdLimits.max);
+      expect(st.obsProbeIntervalSec, const AppSettings().obsProbeIntervalSec);
+      expect(st.mux.xudpConcurrency, const MuxSettings().xudpConcurrency);
+    });
+
+    test('queued list removals each apply to the list the previous one left', () async {
+      await boot();
+      final sn = c.read(settingsProvider.notifier);
+      await sn.set(SettingFields.sites, ['a.com', 'b.com', 'c.com']);
+      await Future.wait([
+        sn.modify(SettingFields.sites, (l) => l.where((s) => s != 'a.com').toList()),
+        sn.modify(SettingFields.sites, (l) => l.where((s) => s != 'c.com').toList()),
+      ]);
+      expect((await storedSettings()).routing.sites, ['b.com']);
+    });
+
+    test('a field write in a readonly profile changes nothing', () async {
+      await boot(
+        stored: [profile('ro', settings: _local).copyWith(readonly: true)],
+        activeId: 'ro',
+      );
+      final sn = c.read(settingsProvider.notifier);
+      await sn.set(SettingFields.enableUdp, !_local.enableUdp);
+      await sn.commitInt(SettingFields.mtu, '1300');
+      final st = await storedSettings();
+      expect((st.enableUdp, st.mtu), (_local.enableUdp, _local.mtu));
+    });
+
+    test('setSocksCredentials, setGeoSources and setDns write their fields together', () async {
+      await boot();
+      final sn = c.read(settingsProvider.notifier);
+      await sn.setSocksCredentials('user', 'pass');
+      await sn.setGeoSources('https://ip.example/geoip.dat', 'https://site.example/geosite.dat');
+      await sn.setDns(
+        mode: DnsMode.direct,
+        preset: 'custom',
+        customAddress: '  ',
+        customType: DnsType.doh,
+        strategy: DnsQueryStrategy.auto,
+      );
+      final st = await storedSettings();
+      expect((st.socksUser, st.socksPassword), ('user', 'pass'));
+      expect((st.geoipUrl, st.geositeUrl), ('https://ip.example/geoip.dat', 'https://site.example/geosite.dat'));
+      expect(st.dnsMode, DnsMode.direct);
+      expect(st.dnsPreset, 'custom');
+      expect(st.customDnsAddress, '1.1.1.1');
+      expect(st.customDnsType, 'doh');
+      expect(st.dnsQueryStrategy, DnsQueryStrategy.auto);
+    });
+
+    test('setCoreEnabled keeps one available core enabled, also for queued taps', () async {
+      await boot();
+      final sn = c.read(settingsProvider.notifier);
+      final available = {CoreKind.xrayGo, CoreKind.singBox};
+      await Future.wait([
+        sn.setCoreEnabled(CoreKind.xrayGo, false, available: available),
+        sn.setCoreEnabled(CoreKind.singBox, false, available: available),
+      ]);
+      expect((await storedSettings()).disabledCores, {CoreKind.xrayGo});
+      await sn.setCoreEnabled(CoreKind.xrayGo, true, available: available);
+      expect((await storedSettings()).disabledCores, isEmpty);
+    });
+
+    test('moveCoreUp moves from the order the previous tap left; the first stays', () async {
+      await boot();
+      final sn = c.read(settingsProvider.notifier);
+      final last = CoreKind.defaultOrder.last;
+      await Future.wait([sn.moveCoreUp(last), sn.moveCoreUp(last)]);
+      final order = (await storedSettings()).coreOrder;
+      expect(order.first, last);
+      await sn.moveCoreUp(last);
+      expect((await storedSettings()).coreOrder, order);
     });
   });
 

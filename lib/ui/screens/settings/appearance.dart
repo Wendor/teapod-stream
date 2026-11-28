@@ -96,7 +96,7 @@ class _AppearanceRows extends ConsumerWidget {
                   locked: false,
                   onChanged: (v) {
                     final scale = v == 'large' ? FontScale.large : FontScale.normal;
-                    ref.read(settingsProvider.notifier).edit((c) => c.copyWith(fontScale: scale));
+                    ref.read(settingsProvider.notifier).set(SettingFields.fontScale, scale);
                   },
                 ),
             ],

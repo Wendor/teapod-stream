@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/models/app_settings.dart' show AppSettings;
+import '../../core/models/setting_field.dart';
 import '../../providers/profile_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../theme/app_colors.dart';
@@ -11,12 +11,14 @@ import 'pressable.dart';
 import 'tap_target.dart';
 import '../../l10n/l10n.dart';
 
-/// Applies [change] to the settings from a screen ([SettingsNotifier.edit]): in a read-only profile shows a snackbar
-/// instead of a silent no-op.
-void saveSettings(BuildContext context, WidgetRef ref, AppSettings Function(AppSettings current) change) {
+/// Runs a settings write from a screen: in a read-only profile shows a snackbar instead of a silent no-op.
+void writeSettings(BuildContext context, WidgetRef ref, void Function(SettingsNotifier settings) write) {
   if (ref.read(profileProvider).value?.isReadonly == true) return showReadonlySnack(context);
-  ref.read(settingsProvider.notifier).edit(change);
+  write(ref.read(settingsProvider.notifier));
 }
+
+/// Writes a setting from its value current when the write runs (a section widget gets one from its screen).
+typedef SettingModify = void Function<T>(SettingField<T> field, T Function(T current) change);
 
 /// The "profile is read-only" snackbar — shared by all locked rows.
 void showReadonlySnack(BuildContext context) {

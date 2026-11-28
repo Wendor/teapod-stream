@@ -10,6 +10,7 @@ import '../../../providers/update_provider.dart';
 import '../../../core/models/dns_config.dart';
 import '../../../core/services/update_service.dart' show UpdateInfo;
 import '../../../core/models/app_settings.dart';
+import '../../../core/models/setting_field.dart';
 import '../logs_screen.dart';
 import '../network_settings_screen.dart';
 import '../profiles_screen.dart';
@@ -106,7 +107,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   hasUpdate: hasUpdate,
                   version: version,
                   coreVersions: _coreVersions,
-                  onUpdate: (change) => ref.read(settingsProvider.notifier).edit(change),
+                  notifier: ref.read(settingsProvider.notifier),
                 ),
               ),
             ),
@@ -128,8 +129,7 @@ class _SettingsBody extends StatelessWidget {
   /// Core versions by `CoreKind.versionKey`; null — not loaded yet.
   final Map<String, String>? coreVersions;
 
-  /// A change to the settings current when it is written.
-  final void Function(AppSettings Function(AppSettings current)) onUpdate;
+  final SettingsNotifier notifier;
 
   const _SettingsBody({
     required this.settings,
@@ -137,7 +137,7 @@ class _SettingsBody extends StatelessWidget {
     required this.hasUpdate,
     required this.version,
     required this.coreVersions,
-    required this.onUpdate,
+    required this.notifier,
   });
 
   @override
@@ -188,7 +188,7 @@ class _SettingsBody extends StatelessWidget {
               hint: l.settingsAutoConnectHint,
               value: s.autoConnect,
               locked: locked,
-              onChange: (v) => onUpdate((c) => c.copyWith(autoConnect: v)),
+              onChange: (v) => notifier.set(SettingFields.autoConnect, v),
             ),
             SetRowToggle(
               t: t,
@@ -196,7 +196,7 @@ class _SettingsBody extends StatelessWidget {
               hint: l.settingsStartOnBootHint,
               value: s.autoStartOnBoot,
               locked: locked,
-              onChange: (v) => onUpdate((c) => c.copyWith(autoStartOnBoot: v)),
+              onChange: (v) => notifier.set(SettingFields.autoStartOnBoot, v),
             ),
             SetRowToggle(
               t: t,
@@ -204,7 +204,7 @@ class _SettingsBody extends StatelessWidget {
               hint: l.settingsAutomationHint,
               value: s.automationEnabled,
               locked: locked,
-              onChange: (v) => onUpdate((c) => c.copyWith(automationEnabled: v)),
+              onChange: (v) => notifier.set(SettingFields.automationEnabled, v),
             ),
             SetRowToggle(
               t: t,
@@ -212,7 +212,7 @@ class _SettingsBody extends StatelessWidget {
               hint: l.settingsNotificationHint,
               value: s.showNotification,
               locked: locked,
-              onChange: (v) => onUpdate((c) => c.copyWith(showNotification: v)),
+              onChange: (v) => notifier.set(SettingFields.showNotification, v),
             ),
             SetRowChev(
               t: t,
@@ -227,7 +227,7 @@ class _SettingsBody extends StatelessWidget {
 
             // ── 0x40 NETWORK ──────────────────────────────────────
             SetSectionHeader(t: t, addr: '0x40', label: 'network'),
-            _CoreOrderList(t: t, settings: s, versions: coreVersions, locked: locked, onUpdate: onUpdate),
+            _CoreOrderList(t: t, settings: s, versions: coreVersions, locked: locked, notifier: notifier),
             SetRowChev(
               t: t,
               title: l.settingsNetwork,

@@ -321,12 +321,24 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
   /// [replaceId] — update the subscription with this id to the new [url] (URL change):
   /// on a load error the old subscription stays untouched. [pinnedCertDer] — the certificate the user has just
   /// accepted (`UntrustedCertificateException.der`); otherwise the subscription's stored pin applies.
-  Future<void> addSubscriptionFromUrl(String url, {String? name, String? pinnedCertDer, String? replaceId}) async {
-    bool isTarget(Subscription s) => replaceId != null ? s.id == replaceId : s.url == url;
+  Future<void> addSubscriptionFromUrl(String url, {String? name, String? pinnedCertDer, String? replaceId}) =>
+      _fetchSubscription(url, name: name, pinnedCertDer: pinnedCertDer, replaceId: replaceId);
+
+  /// [addSubscriptionFromUrl]; a null [requestedUrl] (with [replaceId]) is a refresh: the URL is the target's, read in
+  /// the same snapshot that finds the target.
+  Future<void> _fetchSubscription(
+    String? requestedUrl, {
+    String? name,
+    String? pinnedCertDer,
+    String? replaceId,
+  }) async {
+    assert(requestedUrl != null || replaceId != null);
+    bool isTarget(Subscription s) => replaceId != null ? s.id == replaceId : s.url == requestedUrl;
     final before = await _loaded();
     final target = before.subscriptions.where(isTarget).firstOrNull;
     // The subscription to replace is gone already: nothing to update, and the URL must not match another one.
     if (replaceId != null && target == null) return;
+    final url = requestedUrl ?? target!.url;
     final subId = target?.id ?? 'sub_${DateTime.now().millisecondsSinceEpoch}';
 
     final settings = ref.read(settingsProvider).value;
@@ -472,11 +484,8 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
 
   /// Fetches the subscription [id] again at its current URL; gone already → nothing happens. [pinnedCertDer] — as in
   /// [addSubscriptionFromUrl].
-  Future<void> refreshSubscription(String id, {String? pinnedCertDer}) async {
-    final sub = (await _loaded()).subscriptions.where((s) => s.id == id).firstOrNull;
-    if (sub == null) return;
-    await addSubscriptionFromUrl(sub.url, pinnedCertDer: pinnedCertDer, replaceId: id);
-  }
+  Future<void> refreshSubscription(String id, {String? pinnedCertDer}) =>
+      _fetchSubscription(null, pinnedCertDer: pinnedCertDer, replaceId: id);
 
   bool _refreshingSubs = false;
   final _subFailedAt = <String, DateTime>{};

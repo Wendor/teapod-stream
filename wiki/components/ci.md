@@ -65,6 +65,19 @@ table of versions, or rewrites the body of the one already open. The maintainer 
 issue lets the next run open a new one. The script runs locally the same way (needs `gh`, `go`, `flutter`, and
 `core/build.sh prepare` first).
 
+## `vulns.yml` — vulnerability check
+
+Monthly (the 1st, after the update check), on demand, and on a pull request that changes the workflow. A finding
+fails the job; it is triaged in an issue (update, or why it doesn't apply).
+
+| Job | Steps |
+|---|---|
+| `go` | `core/build.sh prepare`, then `govulncheck ./...` in `core/`: vulnerabilities of the Go modules (the patched xray-core, sing-box, tun2socks and the rest) that the code can reach |
+| `app` | `flutter build apk --debug --config-only`, a Gradle lockfile written for the run (an init script locks every configuration, `:app:dependencies --write-locks`), then OSV-Scanner on `pubspec.lock` and `android/app/gradle.lockfile` |
+
+Both tools run with `go run module@version` (versions in the workflow's `env`): the Go checksum database fixes what
+runs, as a SHA does for an action. The OSV-Scanner action is not used: it pulls its Docker image by tag.
+
 ## `release.yml` — release
 
 Manual (`workflow_dispatch`): Actions → Release → Run workflow, or

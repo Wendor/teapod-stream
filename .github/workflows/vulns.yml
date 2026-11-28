@@ -1,0 +1,78 @@
+name: Vulnerability check
+
+# Monthly and on demand: known vulnerabilities in the Go modules of core/ (govulncheck — only the ones its code can
+# reach), and in pubspec.lock and the Gradle dependencies of the app (OSV-Scanner). A finding fails the job; it is
+# triaged in an issue. Both tools run as Go modules at fixed versions: the Go checksum database pins what runs, like
+# the SHA of an action (the OSV-Scanner action would pull its Docker image by tag).
+on:
+  schedule:
+    - cron: "0 7 1 * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/vulns.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vulns-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: 3.50.0   # as in ci.yml
+  GOVULNCHECK: golang.org/x/vuln/cmd/govulncheck@v1.10.0
+  OSV_SCANNER: github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.7.1
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: core
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: core/go.mod
+          cache-dependency-path: core/go.sum
+      # The patched xray-core the module replaces its dependency with
+      - run: ./build.sh prepare
+      - run: go run "$GOVULNCHECK" ./...
+
+  app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: ./.github/actions/gradle-cache
+
+      - uses: ./.github/actions/flutter
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: core/go.mod
+          cache: false
+
+      # The app has no Gradle lockfile: one is written for this run only, by an init script that locks every
+      # configuration, so OSV-Scanner sees the resolved versions (the AAR from core/ is a local file, not resolved).
+      - name: Gradle lockfile
+        run: |
+          mkdir -p assets/binaries
+          flutter pub get
+          flutter build apk --debug --config-only
+          init="$RUNNER_TEMP/lock-all.gradle"
+          echo 'allprojects { dependencyLocking { lockAllConfigurations() } }' > "$init"
+          cd android && ./gradlew --init-script "$init" :app:dependencies --write-locks > /dev/null
+
+      - name: OSV-Scanner
+        run: go run "$OSV_SCANNER" scan source --lockfile pubspec.lock --lockfile android/app/gradle.lockfile

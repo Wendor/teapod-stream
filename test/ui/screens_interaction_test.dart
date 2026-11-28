@@ -64,13 +64,20 @@ void main() {
       'disconnected': ({'value': 'disconnected'}, ['Not connected', 'tap to connect']),
       'error': (
         {'value': 'error', 'error': 'handshake timed out'},
-        ['Connection failed', 'handshake timed out\ntap to retry'],
+        ['Connection failed', 'handshake timed out', 'tap to retry'],
       ),
+      // A long reason is bounded on its own: the retry prompt stays a line of its own.
+      'error with a long reason': (
+        {'value': 'error', 'error': 'one\ntwo\nthree\nfour'},
+        ['Connection failed', 'one\ntwo\nthree\nfour', 'tap to retry'],
+      ),
+      'error without a reason': ({'value': 'error'}, ['Connection failed', 'tap to retry']),
       'blocked': (
-        {'value': 'blocked'},
+        {'value': 'blocked', 'error': 'tunnel lost'},
         [
           'Traffic blocked',
           'The kill switch holds traffic until the VPN connects. Disconnect to go online without the VPN.',
+          'tunnel lost',
         ],
       ),
     };

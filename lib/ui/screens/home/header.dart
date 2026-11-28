@@ -144,11 +144,16 @@ class _StateInfo extends ConsumerWidget {
         : (isConnecting ? l.homeStateConnecting : (isDisconnecting ? l.homeStateDisconnecting : l.homeStateOff));
     final stateColor = isBlocked || isError ? t.danger : (isConn ? t.accent : t.textDim);
 
-    String subtitle;
+    // The detail is bounded; the note under it (the error under the kill switch explanation, the retry prompt under
+    // the error) has its own lines, so a long detail can't push it out of sight.
+    String? detail;
+    String? note;
     if (isBlocked) {
-      subtitle = '${l.homeKillSwitchBlocked}${error != null ? '\n$error' : ''}';
+      detail = l.homeKillSwitchBlocked;
+      note = error;
     } else if (isError) {
-      subtitle = [?error, l.homeTapToRetry].join('\n');
+      detail = error;
+      note = l.homeTapToRetry;
     } else if (isConn) {
       // Loading: placeholders; the chain gave up: say so; no country from the service: the IP alone.
       final ipText = switch (ipAsync) {
@@ -156,16 +161,17 @@ class _StateInfo extends ConsumerWidget {
         AsyncData() || AsyncError() => l.homeIpUnknown,
         _ => '— · —',
       };
-      subtitle = '${VpnStats.formatDuration(connectedFor)} · $ipText';
+      detail = '${VpnStats.formatDuration(connectedFor)} · $ipText';
     } else if (isConnecting) {
-      subtitle = l.homeConnecting;
+      detail = l.homeConnecting;
     } else if (isDisconnecting) {
-      subtitle = l.homeDisconnecting;
+      detail = l.homeDisconnecting;
     } else if (!hasConfig) {
-      subtitle = l.homeNoConfigAdd;
+      detail = l.homeNoConfigAdd;
     } else {
-      subtitle = l.homeTapToConnect;
+      detail = l.homeTapToConnect;
     }
+    final detailStyle = AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -177,14 +183,10 @@ class _StateInfo extends ConsumerWidget {
             style: AppTheme.sans(size: 28, weight: FontWeight.w500, color: stateColor, letterSpacing: -1, height: 1),
           ),
         ),
-        const SizedBox(height: 6),
-        Text(
-          subtitle,
-          textAlign: TextAlign.center,
-          maxLines: 3,
-          overflow: TextOverflow.ellipsis,
-          style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5),
-        ),
+        for (final text in [?detail, ?note]) ...[
+          const SizedBox(height: 6),
+          Text(text, textAlign: TextAlign.center, maxLines: 3, overflow: TextOverflow.ellipsis, style: detailStyle),
+        ],
         if (isBlocked) ...[
           const SizedBox(height: 10),
           TapTarget(

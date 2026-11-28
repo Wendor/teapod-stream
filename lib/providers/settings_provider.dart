@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/models/app_message.dart';
 import '../core/models/app_settings.dart';
 import '../core/models/core_kind.dart';
 import '../core/models/dns_config.dart';
@@ -114,4 +115,8 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
       ref.read(profileProvider.notifier).updateActiveSettings(change);
 }
 
-final settingsProvider = AsyncNotifierProvider<SettingsNotifier, AppSettings>(SettingsNotifier.new);
+final settingsProvider = AsyncNotifierProvider<SettingsNotifier, AppSettings>(
+  SettingsNotifier.new,
+  // The profiles' load error (an unfinished secure-storage migration) lasts the launch, as there.
+  retry: (count, error) => error is ReasonException ? null : ProviderContainer.defaultRetry(count, error),
+);

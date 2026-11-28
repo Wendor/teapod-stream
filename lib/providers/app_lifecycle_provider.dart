@@ -1,3 +1,4 @@
+import '../core/models/app_settings.dart';
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -81,7 +82,12 @@ class AppLifecycleNotifier extends Notifier<void> {
 
   /// With `autoConnect` on and a config to run, connects unless the VPN is already up or coming up.
   Future<void> _autoConnect() async {
-    final settings = await ref.read(settingsProvider.future);
+    final AppSettings settings;
+    try {
+      settings = await ref.read(settingsProvider.future);
+    } catch (_) {
+      return; // the settings didn't load (Home shows why): nothing to connect with
+    }
     if (!ref.mounted || !settings.autoConnect) return;
     await ref.read(configProvider.future);
     if (!ref.mounted || ref.read(effectiveConfigProvider) == null) return;

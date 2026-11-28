@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../../core/models/app_message.dart';
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import '../../../core/models/core_kind.dart';
@@ -99,7 +100,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               child: settingsAsync.when(
                 loading: () => Center(child: CircularProgressIndicator(color: t.accent, strokeWidth: 1.5)),
                 error: (e, _) => Center(
-                  child: Text(context.l10n.commonErrorWith('$e'), style: AppTheme.mono(size: 12, color: t.danger)),
+                  child: Text(
+                    context.l10n.commonErrorWith(ReasonException.ofError(e).localize(context.l10n)),
+                    style: AppTheme.mono(size: 12, color: t.danger),
+                  ),
                 ),
                 data: (settings) => _SettingsBody(
                   settings: settings,

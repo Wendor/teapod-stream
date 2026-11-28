@@ -130,7 +130,8 @@ profiles and profile refreshes ([AppHttp](#apphttp)); `DeeplinkHandler.handleUri
 
 Typed wrappers for the native calls on `com.teapodstream/vpn` that aren't about the tunnel: `binaryVersions`,
 `availableEngines`, `installedApps`, `appIcon`, `filesDir`, `prepareBinaries`, `countryForIp`, `abi`, `installApk`, `openBatteryOptimizationSettings`, `deviceId`,
-`deviceInfo`. Channel errors reach the caller, which keeps its own fallback. Providers read it through
+`deviceInfo`, `secureStorageMigrationPending`. Channel errors reach the caller, which keeps its own fallback —
+except `secureStorageMigrationPending`, which answers false on an error (unknown = the behaviour without the check). Providers read it through
 `platformServiceProvider`, so tests override the service instead of mocking the channel; `main.dart` uses a
 `const PlatformService()`.
 

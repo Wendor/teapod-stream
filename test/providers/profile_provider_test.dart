@@ -21,6 +21,7 @@ import 'package:teapodstream/core/models/profile_bundle.dart';
 import 'package:teapodstream/core/models/vpn_config.dart';
 import 'package:teapodstream/core/services/config_storage_service.dart';
 import 'package:teapodstream/core/models/subscription.dart';
+import 'package:teapodstream/core/services/platform_service.dart';
 import 'package:teapodstream/core/services/profile_storage_service.dart';
 import 'package:teapodstream/core/services/settings_service.dart';
 import 'package:teapodstream/core/models/app_message.dart';
@@ -468,6 +469,27 @@ void main() {
     });
   });
 
+  group('secure storage migration', () {
+    test('profiles missing while the migration is unfinished are not replaced by a default', () async {
+      SharedPreferences.setMockInitialValues({});
+      FlutterSecureStorage.setMockInitialValues({});
+      await SettingsService().markMigrated();
+      c = ProviderContainer(overrides: [platformServiceProvider.overrideWithValue(const _Platform(pending: true))]);
+      addTearDown(c.dispose);
+      await expectLater(c.read(profileProvider.future), throwsA(isA<ReasonException>()));
+      expect(await profiles.loadProfiles(), isEmpty);
+    });
+
+    test('a finished migration and an empty store give the default profile', () async {
+      SharedPreferences.setMockInitialValues({});
+      FlutterSecureStorage.setMockInitialValues({});
+      c = ProviderContainer(overrides: [platformServiceProvider.overrideWithValue(const _Platform(pending: false))]);
+      addTearDown(c.dispose);
+      await c.read(profileProvider.future);
+      expect((await profiles.loadProfiles()).single.id, 'default');
+    });
+  });
+
   group('settingsProvider', () {
     test('save persists and syncs the active profile', () async {
       await boot();
@@ -837,4 +859,12 @@ void main() {
 class _FailingSelection extends ConfigNotifier {
   @override
   Future<void> applySelection(ConfigSelection selection) async => throw StateError('storage write failed');
+}
+
+class _Platform extends PlatformService {
+  final bool pending;
+  const _Platform({required this.pending});
+
+  @override
+  Future<bool> secureStorageMigrationPending() async => pending;
 }

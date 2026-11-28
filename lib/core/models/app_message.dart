@@ -7,6 +7,7 @@ enum MessageCode {
   vpnNoConfigSelected,
   geositeMissing,
   geoNoFilesDir,
+  storageMigrationPending,
   updateUnsupportedDevice,
   updateNoReleaseInfo,
   updateCheckError,
@@ -44,6 +45,7 @@ final class AppMessage implements Exception {
     MessageCode.vpnNoConfigSelected => l.vpnNoConfigSelected,
     MessageCode.geositeMissing => l.geositeMissing(arg!),
     MessageCode.geoNoFilesDir => l.geoNoFilesDir,
+    MessageCode.storageMigrationPending => l.storageMigrationPending,
     MessageCode.updateUnsupportedDevice => l.updateUnsupportedDevice(arg!),
     MessageCode.updateNoReleaseInfo => l.updateNoReleaseInfo,
     MessageCode.updateCheckError => l.updateCheckError(arg!),
@@ -80,4 +82,7 @@ final class ReasonException extends FormatException {
 
   /// The reason of [e]: its [reason] when it is one, else its message as text.
   static AppMessage of(FormatException e) => e is ReasonException ? e.reason : AppMessage.text(e.message);
+
+  /// What a screen shows for a provider's error [e]: a [ReasonException]'s reason (localized where shown), else `'$e'`.
+  static AppMessage ofError(Object e) => e is ReasonException ? e.reason : AppMessage.text('$e');
 }

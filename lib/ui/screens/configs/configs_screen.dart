@@ -1,5 +1,6 @@
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
+import '../../../core/models/app_message.dart';
 import '../../widgets/core_support_gate.dart';
 import '../../widgets/core_sheet.dart';
 import '../../widgets/dialog_parts.dart';
@@ -122,7 +123,10 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
               child: configStateAsync.when(
                 loading: () => Center(child: CircularProgressIndicator(color: t.accent, strokeWidth: 1.5)),
                 error: (e, _) => Center(
-                  child: Text(context.l10n.commonErrorWith('$e'), style: AppTheme.mono(size: 12, color: t.danger)),
+                  child: Text(
+                    context.l10n.commonErrorWith(ReasonException.ofError(e).localize(context.l10n)),
+                    style: AppTheme.mono(size: 12, color: t.danger),
+                  ),
                 ),
                 data: (cs) => _buildBody(context, cs, vpnState, t),
               ),

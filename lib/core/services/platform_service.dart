@@ -36,6 +36,16 @@ class PlatformService {
   /// The app's files directory, where the cores read geodata; '' when unknown.
   Future<String> filesDir() async => await _channel.invokeMethod<String>('getFilesDir') ?? '';
 
+  /// flutter_secure_storage still has data of its v9 store to move (a migration that stopped midway): keys already
+  /// moved read as missing until the next launch resumes it. False when unknown.
+  Future<bool> secureStorageMigrationPending() async {
+    try {
+      return await _channel.invokeMethod<bool>('secureStorageMigrationPending') ?? false;
+    } on Object {
+      return false;
+    }
+  }
+
   /// Extracts the bundled binaries and fallback geodata into [filesDir].
   Future<void> prepareBinaries() => _channel.invokeMethod<void>('prepareBinaries');
 

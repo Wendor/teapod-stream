@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/models/app_settings.dart';
 import '../core/models/vpn_config.dart';
 import '../core/models/pinned_ref.dart';
 import '../core/models/config_selection.dart';
@@ -428,7 +429,12 @@ class ConfigNotifier extends AsyncNotifier<ConfigState> {
   /// before it a VPN started from the tile isn't known yet, and the download would bypass the tunnel.
   /// The settings and the configs may still be loading at startup: it waits for both.
   Future<void> refreshStaleIfDue() async {
-    final settings = await ref.read(settingsProvider.future);
+    final AppSettings settings;
+    try {
+      settings = await ref.read(settingsProvider.future);
+    } catch (_) {
+      return; // the settings didn't load: no auto-refresh setting to follow
+    }
     if (!ref.mounted || !settings.subAutoRefresh) return;
     await future;
     if (!ref.mounted) return;

@@ -964,6 +964,7 @@
     }
   },
   "profileDefaultName": "Default",
+  "storageMigrationPending": "Stored data is still being upgraded. Restart the app to finish; nothing is lost.",
   "geoNoFilesDir": "Couldn't get the files directory",
   "subHwidLimit": "Subscription device limit reached (HWID)",
   "subEmpty": "The subscription returned no configurations",

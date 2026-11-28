@@ -128,6 +128,8 @@ void main() {
 
   setUp(() async {
     messenger.setMockStreamHandler(_events, MockStreamHandler.inline(onListen: (_, _) {}));
+    // Native answers at once (the profile load asks whether the secure-storage migration is pending).
+    messenger.setMockMethodCallHandler(const MethodChannel(AppConstants.methodChannel), (_) async => null);
     SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
     _log.clear();
@@ -177,6 +179,18 @@ void main() {
       _restored.completeError(StateError('channel'));
       await started;
       expect(_log, contains('refresh'));
+    });
+
+    test('settings that fail to load (an unfinished storage upgrade) end the start without a connect', () async {
+      messenger.setMockMethodCallHandler(
+        const MethodChannel(AppConstants.methodChannel),
+        (call) async => call.method == 'secureStorageMigrationPending' ? true : null,
+      );
+      FlutterSecureStorage.setMockInitialValues({});
+      _synced.complete();
+      _restored.complete();
+      await c.read(appLifecycleProvider.notifier).start();
+      expect(_log, isNot(contains('connect')));
     });
 
     test('runs once', () async {

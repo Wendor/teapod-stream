@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import '../../core/models/app_message.dart';
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -206,7 +207,10 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
               child: appsAsync.when(
                 loading: () => Center(child: CircularProgressIndicator(color: t.accent, strokeWidth: 1.5)),
                 error: (e, _) => Center(
-                  child: Text(context.l10n.commonErrorWith('$e'), style: AppTheme.mono(size: 12, color: t.danger)),
+                  child: Text(
+                    context.l10n.commonErrorWith(ReasonException.ofError(e).localize(context.l10n)),
+                    style: AppTheme.mono(size: 12, color: t.danger),
+                  ),
                 ),
                 data: (apps) {
                   if (!_ghostsCleaned) {

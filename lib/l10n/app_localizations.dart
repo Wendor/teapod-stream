@@ -2840,6 +2840,12 @@ abstract class AppLocalizations {
   /// **'Default'**
   String get profileDefaultName;
 
+  /// No description provided for @storageMigrationPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Stored data is still being upgraded. Restart the app to finish; nothing is lost.'**
+  String get storageMigrationPending;
+
   /// No description provided for @geoNoFilesDir.
   ///
   /// In en, this message translates to:

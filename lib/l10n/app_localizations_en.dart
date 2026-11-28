@@ -1575,6 +1575,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileDefaultName => 'Default';
 
   @override
+  String get storageMigrationPending =>
+      'Stored data is still being upgraded. Restart the app to finish; nothing is lost.';
+
+  @override
   String get geoNoFilesDir => 'Couldn\'t get the files directory';
 
   @override

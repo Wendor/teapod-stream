@@ -10,6 +10,8 @@ import '../../../providers/config_provider.dart';
 import '../../../providers/ip_info_provider.dart';
 import '../../../providers/app_info_provider.dart';
 import '../../../providers/settings_provider.dart';
+import '../../../providers/profile_provider.dart';
+import '../../../core/models/app_message.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../../providers/app_lifecycle_provider.dart';
@@ -66,6 +68,17 @@ class HomeScreen extends ConsumerWidget {
             children: [
               _HeaderStrip(t: t, version: version),
               const ReconnectBanner(),
+              // The profiles didn't load (an unfinished storage upgrade): what to do, before anything else.
+              if (ref.watch(profileProvider) case AsyncError(:final error))
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  color: t.danger.withAlpha(TeapodTokens.dangerSoftAlpha),
+                  child: Text(
+                    ReasonException.ofError(error).localize(context.l10n),
+                    style: AppTheme.sans(size: 13, color: t.danger),
+                  ),
+                ),
               _HeroPanel(
                 t: t,
                 vpnState: vpnState,

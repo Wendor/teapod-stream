@@ -1,5 +1,6 @@
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
+import '../../../core/models/app_message.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/routing_settings.dart';
 import '../../../core/models/setting_field.dart';
@@ -51,7 +52,10 @@ class RoutingScreen extends ConsumerWidget {
           error: (e, _) {
             final t = Theme.of(context).extension<TeapodTokens>()!;
             return Center(
-              child: Text(context.l10n.commonErrorWith('$e'), style: AppTheme.mono(size: 12, color: t.danger)),
+              child: Text(
+                context.l10n.commonErrorWith(ReasonException.ofError(e).localize(context.l10n)),
+                style: AppTheme.mono(size: 12, color: t.danger),
+              ),
             );
           },
           data: (settings) => _RoutingBody(

@@ -181,6 +181,18 @@ void main() {
       expect(_log, contains('refresh'));
     });
 
+    test('settings that fail to load (an unfinished storage upgrade) end the start without a connect', () async {
+      messenger.setMockMethodCallHandler(
+        const MethodChannel(AppConstants.methodChannel),
+        (call) async => call.method == 'secureStorageMigrationPending' ? true : null,
+      );
+      FlutterSecureStorage.setMockInitialValues({});
+      _synced.complete();
+      _restored.complete();
+      await c.read(appLifecycleProvider.notifier).start();
+      expect(_log, isNot(contains('connect')));
+    });
+
     test('runs once', () async {
       _synced.complete();
       _restored.complete();

@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:teapodstream/core/models/app_message.dart';
+import 'package:teapodstream/providers/profile_provider.dart';
 import 'package:teapodstream/core/models/subscription.dart';
 import 'package:teapodstream/core/services/log_service.dart';
 import 'package:teapodstream/providers/config_provider.dart';
@@ -109,6 +111,20 @@ void main() {
       expect(find.text('peak ↓ 0.0 Mbit/s'), findsOneWidget);
       await unmount(tester, c);
     });
+  });
+
+  testWidgets('home says when the stored data are still being upgraded', (tester) async {
+    await setUpScreenTest(configs: [testConfig('1')], activeId: '1');
+    final c = await pumpScreen(
+      tester,
+      const HomeScreen(),
+      overrides: [profileProvider.overrideWith(_UpgradingProfiles.new)],
+    );
+    expect(
+      find.text('Stored data is still being upgraded. Restart the app to finish; nothing is lost.'),
+      findsOneWidget,
+    );
+    await unmount(tester, c);
   });
 
   testWidgets('configs screen lists standalone configs and subscriptions', (tester) async {
@@ -240,4 +256,9 @@ void main() {
     expect(find.text('ACTIVE'), findsOneWidget);
     await unmount(tester, c);
   });
+}
+
+class _UpgradingProfiles extends ProfileNotifier {
+  @override
+  Future<ProfileState> build() async => throw ReasonException(const AppMessage(MessageCode.storageMigrationPending));
 }

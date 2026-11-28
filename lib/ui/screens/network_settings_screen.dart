@@ -1,5 +1,6 @@
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
+import '../../core/models/app_message.dart';
 import '../../core/cores/core_backend.dart';
 import '../widgets/feature_gate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -226,7 +227,10 @@ class _NetworkSettingsScreenState extends ConsumerState<NetworkSettingsScreen> {
         child: settingsAsync.when(
           loading: () => Center(child: CircularProgressIndicator(color: t.accent, strokeWidth: 1.5)),
           error: (e, _) => Center(
-            child: Text(l.commonErrorWith('$e'), style: AppTheme.mono(size: 12, color: t.danger)),
+            child: Text(
+              l.commonErrorWith(ReasonException.ofError(e).localize(l)),
+              style: AppTheme.mono(size: 12, color: t.danger),
+            ),
           ),
           data: (s) {
             _ensureControllers(s);

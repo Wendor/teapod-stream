@@ -1,5 +1,17 @@
 # English
 
+## 1.9.1
+
+- Text follows Android's system font size; the "Large" setting enlarges it on top of the system one
+- Buttons and rows are at least 48 dp, react to a press and are labelled for TalkBack
+- All dialogs share one style; the QR scan screen uses the theme colours, without double shading
+- Quick connect (tile, autostart) follows every change of the selected config; switching away from a dead server keeps auto mode
+- Links with an unknown security, transport or obfs are refused instead of connecting with wrong parameters; core refusal reasons are shown in the app's language
+- xray: WebSocket `host` is honoured; the app's direct rules work in managed configs
+- Downloaded geodata is checked against the published SHA-256
+- Settings fields save once per edit, not on every key
+- Refactoring and stability: VPN start, session and cores are covered by tests
+
 ## 1.9.0
 
 - A dead server is no longer taken for a live one: the heartbeat sees that apps get no answers and reconnects or switches the config (#301)

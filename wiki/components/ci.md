@@ -99,16 +99,28 @@ image lacks costs ~30 s per job.
 
 ## Signing
 
-Releases are signed with the **debug key** (`signingConfigs.debug` in `android/app/build.gradle.kts`): every published
-APK has it, and another key would break updates over installed versions. On CI the key is restored from a secret into
-`~/.android/debug.keystore` with `ANDROID_USER_HOME=~/.android` (otherwise AGP on the runner silently generates a new
-key); its fingerprint is checked right after decoding, and "Verify signature" checks every APK (`apksigner`) against
-`CERT_SHA256` before publishing.
+Releases are signed with the **release key** through APK Signature Scheme v3 key rotation. The original key is the
+build machine's debug key (`CERT_SHA256`; every release before the rotation has it), so a plain switch would break
+updates; `.github/signing/teapod.lineage` (made by `apksigner rotate`, public — certificates only) proves the release
+key (`RELEASE_CERT_SHA256`) succeeds it, and Android 9+ (the app's `minSdk` is 29) accepts the update.
+
+On CI Gradle still signs with the debug key (`signingConfigs.debug` in `android/app/build.gradle.kts`): it is restored
+from a secret into `~/.android/debug.keystore` with `ANDROID_USER_HOME=~/.android` (otherwise AGP on the runner
+silently generates a new key) and its fingerprint is checked. The release key is decoded to `$RUNNER_TEMP` and checked
+against `RELEASE_CERT_SHA256`; "Sign with the release key" re-signs each APK (`apksigner sign --ks <debug>
+--next-signer --ks <release> --lineage … --rotation-min-sdk-version 28`) and deletes the key; "Verify signature"
+requires a v3 signature by the release key and a lineage original → release before publishing.
+
+Both keys are needed forever: the release key signs every release, the debug key extends the lineage if the key is
+ever rotated again. The maintainer keeps both, with the lineage and the password, outside the repository (and a backup
+copy); losing the release key means installed versions can never be updated.
 
 ## Secrets
 
 | Secret | What | How |
 |---|---|---|
-| `DEBUG_KEYSTORE_BASE64` | `~/.android/debug.keystore` in base64 | `base64 -i ~/.android/debug.keystore \| gh secret set DEBUG_KEYSTORE_BASE64 -R Wendor/teapod-stream` |
+| `DEBUG_KEYSTORE_BASE64` | `~/.android/debug.keystore` in base64 (the original key) | `base64 -i ~/.android/debug.keystore \| gh secret set DEBUG_KEYSTORE_BASE64 -R Wendor/teapod-stream` |
+| `RELEASE_KEYSTORE_BASE64` | the release key (PKCS12, alias `teapod`) in base64 | `base64 -i teapod-release.jks \| gh secret set RELEASE_KEYSTORE_BASE64 -R Wendor/teapod-stream` |
+| `RELEASE_KEYSTORE_PASSWORD` | its password | `gh secret set RELEASE_KEYSTORE_PASSWORD -R Wendor/teapod-stream < password.txt` |
 
 It is checked at the start of the job, before the long build.

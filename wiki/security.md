@@ -21,6 +21,7 @@ says how, and what counts.
 | Apps' DNS queries leave outside the tunnel | the TUN's DNS address is the only resolver apps get; tun2socks hands port 53 to the core (xray `dns-out`, sing-box `hijack-dns`), which resolves with the configured server through the tunnel ([xray](components/xray_config_builder.md#dns), [sing-box](components/singbox_config_builder.md)); a server-made xray config keeps the server's DNS |
 | Traffic leaks during reconnect | TUN is kept as a sink during reconnects and hot switches; kill switch keeps it after a failure |
 | QUIC leaking when blocked | answered locally with ICMP in tun2socks, never routed `direct` |
+| A leaked or weak signing key lets someone ship an "update" | releases are signed with a dedicated RSA-4096 release key through v3 key rotation from the original debug key (the lineage in `.github/signing/`), CI checks both certificates before publishing ([CI](components/ci.md#signing)) |
 | Backups / device transfer copy secrets | `allowBackup=false`, `dataExtractionRules` exclude everything |
 | Browsing history on disk | core access logs only at `debug`; sing-box `info` mapped to `warn` |
 | A shared log reveals servers or credentials | "share" on the logs screen sends a masked copy (`ShareService.shareLog`, `maskLog` in `log_service.dart`): hosts, UUIDs, passwords and share links of saved configs, subscription URLs and hosts, SOCKS credentials, any UUID, `user=`/`pass=`-like values and public IPv4/IPv6 become `<hidden>` / `<uuid>` / `<ip>`; loopback, private and link-local addresses stay. One copy, `teapod_log.txt` in the cache dir, overwritten on every export. The prefix-proxy line doesn't name the server |
@@ -35,8 +36,6 @@ says how, and what counts.
 - **Loopback SOCKS fingerprint.** A password-protected SOCKS on localhost answers `05 FF`: a scanner sees "a proxy
   on loopback". The Rust core keeps its SOCKS inbound only for heartbeat and the IP check.
 - **Direct pings.** Pinging configs (ICMP + TCP) goes outside the tunnel, so the provider sees the server list.
-- **Debug signing key.** Releases are signed with the build machine's debug key ([CI](components/ci.md#signing)) —
-  changing it would break updates for existing users.
 - **`xray_config.json`** with server credentials stays in `filesDir` between sessions (needed by the tile and
   auto-start). `filesDir` is process-private and excluded from backups.
 

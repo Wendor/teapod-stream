@@ -131,7 +131,7 @@ class SetToggleRow extends StatelessWidget {
     child: Semantics(
       toggled: checkbox ? null : value,
       checked: checkbox ? value : null,
-      child: Pressable(onTap: onTap, child: child),
+      child: Pressable(onTap: onTap, button: false, child: child),
     ),
   );
 }

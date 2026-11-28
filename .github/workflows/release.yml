@@ -21,8 +21,11 @@ permissions:
 env:
   FLUTTER_VERSION: 3.50.0
   NDK_VERSION: 30.0.16248370
-  # SHA-256 of the signing certificate of all released APKs: another key would break updates for users
+  # SHA-256 of the original signing certificate (the debug key Gradle signs with; every release before the rotation)
   CERT_SHA256: 1a9d47fabd88aacda435d2ae0098cf3f0666358113da858a974b2483fdd5eaaf
+  # SHA-256 of the release key the APKs are signed with since the v3 key rotation (.github/signing/teapod.lineage
+  # proves it succeeds the one above, so installed versions update)
+  RELEASE_CERT_SHA256: cbfb34bc6830f055d17782b050039ba23d8e1d0cb79b3bc5924cba0dbadf818a
 
 jobs:
   apk:
@@ -52,6 +55,20 @@ jobs:
           fp=$(keytool -list -v -keystore "$dir/debug.keystore" -storepass android -alias androiddebugkey \
             | awk '/SHA256:/{print $2}' | tr -d ':' | tr 'A-F' 'a-f')
           [ "$fp" = "$CERT_SHA256" ] || { echo "::error::DEBUG_KEYSTORE_BASE64 — wrong key: '$fp'"; exit 1; }
+
+      - name: Release key
+        env:
+          KEYSTORE: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+        run: |
+          [ -n "$KEYSTORE" ] && [ -n "$RELEASE_KEYSTORE_PASSWORD" ] \
+            || { echo "::error::Missing secret RELEASE_KEYSTORE_BASE64 or RELEASE_KEYSTORE_PASSWORD"; exit 1; }
+          ks="$RUNNER_TEMP/release.jks"
+          echo "$KEYSTORE" | base64 -d > "$ks"
+          echo "RELEASE_KEYSTORE=$ks" >> "$GITHUB_ENV"
+          fp=$(keytool -list -v -keystore "$ks" -storepass:env RELEASE_KEYSTORE_PASSWORD -alias teapod \
+            | awk '/SHA256:/{print $2}' | tr -d ':' | tr 'A-F' 'a-f')
+          [ "$fp" = "$RELEASE_CERT_SHA256" ] || { echo "::error::RELEASE_KEYSTORE_BASE64 — wrong key: '$fp'"; exit 1; }
 
       - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
@@ -83,16 +100,40 @@ jobs:
           ./build.sh binaries
           ./build.sh release
 
+      # Gradle signs with the original key; the APK is signed again with the rotation: v3 by the release key with the
+      # lineage (original → release), which Android 9+ (minSdk is 29) accepts as an update of the original signature
+      - name: Sign with the release key
+        env:
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+        run: |
+          signer="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
+          apks=(build/app/outputs/flutter-apk/teapod-stream-${{ matrix.abi }}-release-*.apk)
+          [ -f "${apks[0]}" ] || { echo "::error::No ${{ matrix.abi }} APK"; exit 1; }
+          for apk in "${apks[@]}"; do
+            "$signer" sign \
+              --ks "$HOME/.android/debug.keystore" --ks-pass pass:android --ks-key-alias androiddebugkey \
+              --next-signer --ks "$RELEASE_KEYSTORE" --ks-pass env:RELEASE_KEYSTORE_PASSWORD --ks-key-alias teapod \
+              --lineage .github/signing/teapod.lineage --rotation-min-sdk-version 28 \
+              --out "$apk.signed" "$apk"
+            mv "$apk.signed" "$apk"
+          done
+          rm -f "$RELEASE_KEYSTORE"
+
       - name: Verify signature
         run: |
           signer="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
           apks=(build/app/outputs/flutter-apk/teapod-stream-${{ matrix.abi }}-release-*.apk)
           [ -f "${apks[0]}" ] || { echo "::error::No ${{ matrix.abi }} APK"; exit 1; }
           for apk in "${apks[@]}"; do
-            out=$("$signer" verify --print-certs "$apk")
-            grep -q "SHA-256 digest: $CERT_SHA256" <<< "$out" || {
-              echo "$out"; find "$HOME" -name debug.keystore -not -path '*/.pub-cache/*' 2>/dev/null
-              echo "::error::$apk is signed with the wrong key"; exit 1
+            # Signed by the release key, and its lineage starts with the original certificate
+            out=$("$signer" verify -v --print-certs "$apk")
+            lineage=$("$signer" lineage --in "$apk" --print-certs)
+            grep -q "Verified using v3 scheme (APK Signature Scheme v3): true" <<< "$out" \
+              && grep -q "Signer #1 certificate SHA-256 digest: $RELEASE_CERT_SHA256" <<< "$out" \
+              && grep -q "Signer #1 in lineage certificate SHA-256 digest: $CERT_SHA256" <<< "$lineage" \
+              && grep -q "Signer #2 in lineage certificate SHA-256 digest: $RELEASE_CERT_SHA256" <<< "$lineage" || {
+              echo "$out"; echo "$lineage"
+              echo "::error::$apk is not signed with the release key and its lineage"; exit 1
             }
           done
 

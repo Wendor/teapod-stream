@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 
 /// GestureDetector with a background highlight on press (console style, no ripple). A row with [onTap] is announced as
-/// a button.
+/// a button unless [button] is false (a row with another role: a switch, a checkbox, a link).
 class Pressable extends StatefulWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
@@ -12,7 +12,17 @@ class Pressable extends StatefulWidget {
   final Color? pressedColor;
   final Widget child;
 
-  const Pressable({super.key, this.onTap, this.onLongPress, this.pressedColor, required this.child});
+  /// Announce the row as a button when it has [onTap].
+  final bool button;
+
+  const Pressable({
+    super.key,
+    this.onTap,
+    this.onLongPress,
+    this.pressedColor,
+    this.button = true,
+    required this.child,
+  });
 
   @override
   State<Pressable> createState() => _PressableState();
@@ -31,7 +41,7 @@ class _PressableState extends State<Pressable> {
     final color = widget.pressedColor ?? t.accentFade;
     final interactive = widget.onTap != null || widget.onLongPress != null;
     return Semantics(
-      button: widget.onTap != null,
+      button: widget.button && widget.onTap != null,
       child: GestureDetector(
         onTap: widget.onTap,
         onLongPress: widget.onLongPress,

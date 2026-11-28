@@ -20,6 +20,7 @@ import 'package:teapodstream/ui/theme/app_colors.dart';
 import 'package:teapodstream/ui/theme/app_theme.dart';
 import 'package:teapodstream/ui/widgets/breadcrumb_bar.dart';
 import 'package:teapodstream/ui/widgets/pressable.dart';
+import 'package:teapodstream/ui/widgets/settings_shared.dart';
 
 import '../helpers/ui_harness.dart';
 
@@ -110,6 +111,8 @@ void main() {
           children: [
             Pressable(onTap: () {}, child: const Text('tappable')),
             const Pressable(child: Text('static')),
+            SetToggleRow(value: true, onTap: () {}, child: const Text('switch')),
+            SetToggleRow(value: false, checkbox: true, onTap: () {}, child: const Text('box')),
           ],
         ),
       ),
@@ -119,6 +122,15 @@ void main() {
       matchesSemantics(label: 'tappable', isButton: true, hasTapAction: true),
     );
     expect(tester.getSemantics(find.text('static')), matchesSemantics(label: 'static'));
+    // A row with another role keeps it alone: not also a button.
+    expect(
+      tester.getSemantics(find.text('switch')),
+      matchesSemantics(label: 'switch', hasToggledState: true, isToggled: true, hasTapAction: true),
+    );
+    expect(
+      tester.getSemantics(find.text('box')),
+      matchesSemantics(label: 'box', hasCheckedState: true, hasTapAction: true),
+    );
     handle.dispose();
   });
 

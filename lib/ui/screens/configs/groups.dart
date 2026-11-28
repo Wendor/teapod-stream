@@ -299,6 +299,7 @@ class _SubGroup extends StatelessWidget {
                   Semantics(
                     link: sub.announceUrl != null,
                     child: Pressable(
+                      button: false,
                       onTap: sub.announceUrl == null
                           ? null
                           : () => launchUrl(Uri.parse(sub.announceUrl!), mode: LaunchMode.externalApplication).ignore(),

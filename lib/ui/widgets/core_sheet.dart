@@ -165,7 +165,7 @@ class _VerdictRow extends StatelessWidget {
               Text(status, style: AppTheme.mono(size: 10, color: active ? t.accent : t.textMuted, letterSpacing: 0.3)),
               for (final w in warnings) ...[
                 const SizedBox(height: 3),
-                Text('⚠ $w', style: AppTheme.mono(size: 10, color: AppColors.accentOrange, letterSpacing: 0.3)),
+                Text('⚠ $w', style: AppTheme.mono(size: 10, color: t.warning, letterSpacing: 0.3)),
               ],
             ],
           ),

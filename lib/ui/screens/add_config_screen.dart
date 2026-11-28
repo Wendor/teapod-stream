@@ -188,7 +188,7 @@ class _AddConfigScreenState extends ConsumerState<AddConfigScreen> {
                           const SizedBox(height: 10),
                           Container(
                             padding: const EdgeInsets.all(10),
-                            color: t.danger.withAlpha(0x1A),
+                            color: t.danger.withAlpha(TeapodTokens.dangerSoftAlpha),
                             child: Text(_error!, style: AppTheme.mono(size: 11, color: t.danger, letterSpacing: 0.5)),
                           ),
                         ],

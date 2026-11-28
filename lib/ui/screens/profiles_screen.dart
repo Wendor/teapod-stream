@@ -515,6 +515,8 @@ class _ProfileCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final borderColor = isActive ? t.accent : t.line;
+    // Secondary text: textMuted is below AA on the highlight of the active row.
+    final secondary = isActive ? t.textDim : t.textMuted;
     final hexAddr = '0x${addr.toString().padLeft(2, '0')}';
 
     return Pressable(
@@ -533,7 +535,7 @@ class _ProfileCard extends StatelessWidget {
           children: [
             SizedBox(
               width: 32,
-              child: Text(hexAddr, style: AppTheme.mono(size: 10, color: t.textMuted)),
+              child: Text(hexAddr, style: AppTheme.mono(size: 10, color: secondary)),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -555,18 +557,16 @@ class _ProfileCard extends StatelessWidget {
                       if (isActive)
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: t.accent),
-                            color: t.accentSoft,
-                          ),
+                          // Only a frame: the row is highlighted already, a second highlight would darken the text's ground.
+                          decoration: BoxDecoration(border: Border.all(color: t.accent)),
                           child: Text('ACTIVE', style: AppTheme.mono(size: 9, color: t.accent, letterSpacing: 1)),
                         ),
                       if (profile.readonly) ...[
                         const SizedBox(width: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(border: Border.all(color: t.textMuted)),
-                          child: Text('RO', style: AppTheme.mono(size: 9, color: t.textMuted, letterSpacing: 1)),
+                          decoration: BoxDecoration(border: Border.all(color: secondary)),
+                          child: Text('RO', style: AppTheme.mono(size: 9, color: secondary, letterSpacing: 1)),
                         ),
                       ],
                     ],
@@ -574,7 +574,7 @@ class _ProfileCard extends StatelessWidget {
                   const SizedBox(height: 3),
                   Text(
                     '${profile.id}  ·  ${_formatDate(profile.createdAt)}',
-                    style: AppTheme.mono(size: 9, color: t.textMuted, letterSpacing: 0.5),
+                    style: AppTheme.mono(size: 9, color: secondary, letterSpacing: 0.5),
                   ),
                 ],
               ),

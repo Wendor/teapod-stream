@@ -94,7 +94,12 @@ class _ModeSelector extends StatelessWidget {
                             const SizedBox(height: 3),
                             Text(
                               sub,
-                              style: AppTheme.mono(size: 9, color: t.textMuted, letterSpacing: 0.5),
+                              // textMuted is below AA on the highlight.
+                              style: AppTheme.mono(
+                                size: 9,
+                                color: active ? t.textDim : t.textMuted,
+                                letterSpacing: 0.5,
+                              ),
                               textAlign: TextAlign.center,
                             ),
                           ],

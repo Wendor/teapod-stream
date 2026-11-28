@@ -30,8 +30,6 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
   // empty = all
   final Set<LogLevel> _filters = {};
 
-  static const Color _warn = AppColors.accentGold;
-
   @override
   void initState() {
     super.initState();
@@ -77,7 +75,7 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
 
   Color _lvlColor(LogLevel lvl, TeapodTokens t) => switch (lvl) {
     LogLevel.error => t.danger,
-    LogLevel.warning => _warn,
+    LogLevel.warning => t.warning,
     LogLevel.info => t.accent,
     LogLevel.debug => t.textMuted,
   };
@@ -220,7 +218,7 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
                       label: 'WRN',
                       count: wrnCount,
                       active: _filters.contains(LogLevel.warning),
-                      color: _warn,
+                      color: t.warning,
                       last: false,
                       onTap: () => setState(
                         () => _filters.contains(LogLevel.warning)
@@ -246,7 +244,8 @@ class _LogsScreenState extends ConsumerState<LogsScreen> {
                       label: 'DBG',
                       count: dbgCount,
                       active: _filters.contains(LogLevel.debug),
-                      color: t.textMuted,
+                      // textMuted is below AA on its own tint.
+                      color: t.textDim,
                       last: true,
                       onTap: () => setState(
                         () => _filters.contains(LogLevel.debug)
@@ -381,7 +380,7 @@ class _FilterTab extends StatelessWidget {
             constraints: const BoxConstraints(minHeight: kMinInteractiveDimension),
             padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: BoxDecoration(
-              color: active ? color.withAlpha(0x14) : Colors.transparent,
+              color: active ? color.withAlpha(TeapodTokens.tintAlpha) : Colors.transparent,
               border: Border(
                 right: last ? BorderSide.none : BorderSide(color: t.line),
                 bottom: active

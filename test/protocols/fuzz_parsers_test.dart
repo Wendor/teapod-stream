@@ -206,10 +206,49 @@ VpnConfig? _parse(String input) {
   }
 }
 
+/// The fields that make a connection, read from the config itself — not from its stored form, which would hide a
+/// field `toJson` drops.
+List<Object?> _connectionFields(VpnConfig c) => [
+  c.name,
+  c.protocol,
+  c.address,
+  c.port,
+  c.uuid,
+  c.security,
+  c.transport,
+  c.sni,
+  c.wsPath,
+  c.wsHost,
+  c.grpcServiceName,
+  c.fingerprint,
+  c.publicKey,
+  c.shortId,
+  c.spiderX,
+  c.postQuantumKey,
+  c.flow,
+  c.encryption,
+  c.alterId,
+  c.method,
+  c.password,
+  c.rawUri,
+  c.ssPrefix,
+  c.obfsPassword,
+  c.hopPorts,
+  c.allowInsecure,
+  c.xhttpMode,
+  c.alpn,
+  c.ech,
+  c.rawXrayConfig,
+  c.headerType,
+  c.core,
+  c.protocolSettings == null ? null : jsonEncode(c.protocolSettings!.toJson()),
+];
+
 void _expectRoundTrip(VpnConfig c, String input) {
   final json = jsonDecode(jsonEncode(c.toJson())) as Map<String, dynamic>;
-  final again = VpnConfig.fromJson(json).toJson();
-  expect(jsonEncode(again), jsonEncode(json), reason: 'stored form of ${jsonEncode(input)} changed after a reload');
+  final reloaded = VpnConfig.fromJson(json);
+  expect(jsonEncode(reloaded.toJson()), jsonEncode(json), reason: 'stored form of ${jsonEncode(input)} changed');
+  expect(_connectionFields(reloaded), _connectionFields(c), reason: 'a field of ${jsonEncode(input)} lost on reload');
 }
 
 final _options = VpnEngineOptions(

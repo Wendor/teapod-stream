@@ -56,6 +56,61 @@ void main() {
     await unmount(tester, c);
   });
 
+  group('home says the session state in words', () {
+    final cases = <String, (Map<String, Object?>, List<Pattern>)>{
+      'connected': ({'value': 'connected'}, ['Connected', RegExp(r'^\d\d:\d\d:\d\d · ')]),
+      'connecting': ({'value': 'connecting'}, ['Connecting', 'establishing connection…']),
+      'disconnecting': ({'value': 'disconnecting'}, ['Disconnecting', 'closing session…']),
+      'disconnected': ({'value': 'disconnected'}, ['Not connected', 'tap to connect']),
+      'error': (
+        {'value': 'error', 'error': 'handshake timed out'},
+        ['Connection failed', 'handshake timed out', 'tap to retry'],
+      ),
+      // A long reason is bounded on its own: the retry prompt stays a line of its own.
+      'error with a long reason': (
+        {'value': 'error', 'error': 'one\ntwo\nthree\nfour'},
+        ['Connection failed', 'one\ntwo\nthree\nfour', 'tap to retry'],
+      ),
+      'error without a reason': ({'value': 'error'}, ['Connection failed', 'tap to retry']),
+      'blocked': (
+        {'value': 'blocked', 'error': 'tunnel lost'},
+        [
+          'Traffic blocked',
+          'The kill switch holds traffic until the VPN connects. Disconnect to go online without the VPN.',
+          'tunnel lost',
+        ],
+      ),
+    };
+    for (final MapEntry(key: name, value: (state, texts)) in cases.entries) {
+      testWidgets(name, (tester) async {
+        final native = await setUpScreenTest(configs: [testConfig('1')], activeId: '1');
+        native.state = state;
+        final c = await pumpScreen(tester, const HomeScreen());
+        for (final text in texts) {
+          expect(
+            text is RegExp ? find.textContaining(text) : find.text(text as String),
+            findsOneWidget,
+            reason: '$text',
+          );
+        }
+        // No status codes on Home.
+        expect(find.textContaining('sys.state'), findsNothing);
+        expect(find.textContaining(RegExp('ONLINE|OFFLINE|HANDSHAKE|SHUTDOWN|BLOCKED')), findsNothing);
+        if (name == 'blocked') expect(find.text('DISCONNECT'), findsOneWidget);
+        await unmount(tester, c);
+      });
+    }
+
+    testWidgets('ping and traffic say what they measure', (tester) async {
+      await setUpScreenTest(configs: [testConfig('1', latency: 42)], activeId: '1');
+      final c = await pumpScreen(tester, const HomeScreen());
+      expect(find.text('PING TO SERVER'), findsOneWidget);
+      expect(find.text('TRAFFIC — THIS SESSION'), findsOneWidget);
+      expect(find.text('peak ↓ 0.0 Mbit/s'), findsOneWidget);
+      await unmount(tester, c);
+    });
+  });
+
   testWidgets('configs screen lists standalone configs and subscriptions', (tester) async {
     await setUpScreenTest(
       configs: [

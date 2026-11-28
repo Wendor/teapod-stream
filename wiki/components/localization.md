@@ -7,7 +7,7 @@ Languages: **English** (template and fallback) and **Russian**. Only what the us
 exceptions in native code and tool output are English.
 
 Exception: the terminal-style captions of the console look stay English in both languages by design — status
-tags (`ONLINE`, `OFFLINE`, `HANDSHAKE`, `LOCKED`), section and key labels (`CONFIG`, `version`, `changelog`,
+tags (`LOCKED`), section and key labels (`CONFIG`, `version`, `changelog`,
 `licenses`, `source`), bracketed tags (`[core]`). They are part of the visual style, like a monospace font. In the
 Flutter UI, sentences, buttons, hints, errors, dialogs and values the user has to read go through ARB; native text
 (notification, tile) through `values*/strings.xml`; text from outside the app (a server, a core) rides as

@@ -216,7 +216,7 @@ void main() {
       const HomeScreen(),
       overrides: [ipInfoProvider.overrideWith(() => _FixedIp(const IpInfo(ip: '203.0.113.9')))],
     );
-    expect(find.text('203.0.113.9'), findsOneWidget);
+    expect(find.textContaining(RegExp(r'^\d\d:\d\d:\d\d · 203\.0\.113\.9$')), findsOneWidget);
     await unmount(tester, c);
   });
 

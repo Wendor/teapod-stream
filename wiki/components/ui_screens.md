@@ -36,7 +36,7 @@ share one confirmation dialog in `DeeplinkHandler` (`_showImportDialog`).
 
 | Screen | What's on it |
 |---|---|
-| `HomeScreen` | hero panel: power button (`_PowerCore`), state with the error reason for FAILED/BLOCKED, server, exit IP, core line (`[core] xray-core ›`, tap → core sheet), speeds and the live chart; server picker sheet; warning for managed configs |
+| `HomeScreen` | hero panel: power button (`_PowerCore`), the state in words (connected / connecting / not connected / failed / traffic blocked) with its detail — session time and exit IP, the error and "tap to retry", what the kill switch block means and how to leave it (DISCONNECT); server, ping *to server*, core line (`[core] xray-core ›`, tap → core sheet), speeds, the chart with the session totals and the download peak in Mbit/s; server picker sheet; warning for managed configs |
 | `ConfigsScreen` | groups: pinned → local → subscriptions (collapsible, drag to reorder in sort mode); flat mode and sort-by-ping (`configsViewProvider`); auto-select per subscription; context menus (pin, core, copy/QR, edit, rename, refresh, delete); export of all connections as a compact `teapod://import/connections` link |
 | `AddConfigScreen` | one input for links, subscription URLs (`http(s)://`), WireGuard `.conf` text, `vpn://` keys and `teapod://import/connections`; QR scan |
 | `RoutingScreen` | direction (global / bypass / only selected), kill switch, split tunneling entry, sniffing, geo data (source, download), domain zones, sites, geosite/geoip codes, Russian services, ad block |

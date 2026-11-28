@@ -15,8 +15,13 @@
       }
     }
   },
-  "homeKillSwitchBlocked": "kill switch · traffic blocked",
-  "homeConnectError": "connection error",
+  "homeStateConnected": "Connected",
+  "homeStateConnecting": "Connecting",
+  "homeStateDisconnecting": "Disconnecting",
+  "homeStateOff": "Not connected",
+  "homeStateFailed": "Connection failed",
+  "homeStateBlocked": "Traffic blocked",
+  "homeKillSwitchBlocked": "The kill switch holds traffic until the VPN connects. Disconnect to go online without the VPN.",
   "homeTapToRetry": "tap to retry",
   "homeConnecting": "establishing connection…",
   "homeDisconnecting": "closing session…",
@@ -30,15 +35,15 @@
   "homeActionConnect": "connect",
   "homeChangeServer": "change server",
   "homeServer": "Server",
-  "homePing": "Ping",
+  "homePing": "Ping to server",
   "homeUpload": "Upload",
   "homeDownload": "Download",
   "homeCoreEnableHint": "enable a core in settings or switch the config",
   "homeCorePinned": "pinned",
   "homeManagedOnlySelected": "domain \"Only\" mode and DNS settings don't apply · routing is controlled by the server",
   "homeManagedDns": "DNS settings don't apply · routing is controlled by the server",
-  "homeTrafficLive": "TRAFFIC — LIVE",
-  "homePeak": "peak {value}",
+  "homeTrafficLive": "TRAFFIC — THIS SESSION",
+  "homePeak": "peak ↓ {value} Mbit/s",
   "@homePeak": {
     "placeholders": {
       "value": {

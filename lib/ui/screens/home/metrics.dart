@@ -41,7 +41,8 @@ class _MetricsGrid extends StatelessWidget {
     final downSpeed = isConnected ? stats.downloadSpeedBps : 0;
 
     final sparkSamples = history.map((s) => s.downloadSpeed / (1024.0 * 1024.0)).toList();
-    final peakDown = sparkSamples.fold<double>(0, (m, v) => v > m ? v : m);
+    // The samples are MB/s (the sparkline's scale); the peak is shown in Mbit/s, as the speed cells.
+    final peakDown = sparkSamples.fold<double>(0, (m, v) => v > m ? v : m) * 8;
 
     final pingStr = pingMs != null ? '$pingMs' : '—';
 
@@ -283,7 +284,7 @@ class _SparklineRow extends StatelessWidget {
     final upTotal = VpnStats.formatBytes(stats.uploadBytes);
     final downTotal = VpnStats.formatBytes(stats.downloadBytes);
     final duration = VpnStats.formatDuration(stats.connectedDuration);
-    final peakStr = peakMbps >= 0.01 ? '${peakMbps.toStringAsFixed(1)}M' : '0.0M';
+    final peakStr = peakMbps.toStringAsFixed(1);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 10),

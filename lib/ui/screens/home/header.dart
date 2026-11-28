@@ -2,9 +2,8 @@ part of 'home_screen.dart';
 
 class _HeaderStrip extends StatelessWidget {
   final TeapodTokens t;
-  final String stateCode;
   final String version;
-  const _HeaderStrip({required this.t, required this.stateCode, required this.version});
+  const _HeaderStrip({required this.t, required this.version});
 
   @override
   Widget build(BuildContext context) {
@@ -16,7 +15,7 @@ class _HeaderStrip extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // The caption gives way: the state and the 48 dp logs target keep their width on a narrow screen.
+          // The caption gives way: the 48 dp logs target keeps its width on a narrow screen.
           Flexible(
             child: Text(
               'teapod.stream // $version',
@@ -26,26 +25,19 @@ class _HeaderStrip extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('sys.state [$stateCode]', style: AppTheme.mono(size: 10, color: t.textMuted, letterSpacing: 1)),
-              const SizedBox(width: 12),
-              TapTarget(
-                label: context.l10n.homeLogs,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(builder: (_) => const LogsScreen(breadcrumbParent: 'home')),
-                ),
-                child: Container(
-                  width: 28,
-                  height: 28,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(border: Border.all(color: t.line)),
-                  child: Icon(Icons.receipt_long_outlined, size: 14, color: t.textDim),
-                ),
-              ),
-            ],
+          TapTarget(
+            label: context.l10n.homeLogs,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(builder: (_) => const LogsScreen(breadcrumbParent: 'home')),
+            ),
+            child: Container(
+              width: 28,
+              height: 28,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(border: Border.all(color: t.line)),
+              child: Icon(Icons.receipt_long_outlined, size: 14, color: t.textDim),
+            ),
           ),
         ],
       ),
@@ -59,7 +51,7 @@ class _HeroPanel extends StatelessWidget {
   final TeapodTokens t;
   final VpnStatus vpnState;
   final String protoLabel;
-  final int? pingMs;
+  final Duration connectedFor;
   final bool canToggle;
   final String disabledLabel;
   final VoidCallback onToggle;
@@ -70,7 +62,7 @@ class _HeroPanel extends StatelessWidget {
     required this.t,
     required this.vpnState,
     required this.protoLabel,
-    required this.pingMs,
+    required this.connectedFor,
     required this.canToggle,
     required this.disabledLabel,
     required this.onToggle,
@@ -111,7 +103,7 @@ class _HeroPanel extends StatelessWidget {
                   onTap: canToggle ? onToggle : onDisabledTap,
                 ),
                 const SizedBox(height: 16),
-                _StateInfo(t: t, vpnState: vpnState, pingMs: pingMs),
+                _StateInfo(t: t, vpnState: vpnState, connectedFor: connectedFor),
                 ?coreLine,
               ],
             ),
@@ -127,9 +119,9 @@ class _HeroPanel extends StatelessWidget {
 class _StateInfo extends ConsumerWidget {
   final TeapodTokens t;
   final VpnStatus vpnState;
-  final int? pingMs;
+  final Duration connectedFor;
 
-  const _StateInfo({required this.t, required this.vpnState, this.pingMs});
+  const _StateInfo({required this.t, required this.vpnState, required this.connectedFor});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -144,19 +136,24 @@ class _StateInfo extends ConsumerWidget {
     final hasConfig = ref.watch(effectiveConfigProvider) != null;
 
     final stateWord = isBlocked
-        ? 'BLOCKED'
+        ? l.homeStateBlocked
         : isConn
-        ? 'ONLINE'
+        ? l.homeStateConnected
         : isError
-        ? 'FAILED'
-        : (isConnecting ? 'HANDSHAKE' : (isDisconnecting ? 'SHUTDOWN' : 'OFFLINE'));
+        ? l.homeStateFailed
+        : (isConnecting ? l.homeStateConnecting : (isDisconnecting ? l.homeStateDisconnecting : l.homeStateOff));
     final stateColor = isBlocked || isError ? t.danger : (isConn ? t.accent : t.textDim);
 
-    String subtitle;
+    // The detail is bounded; the note under it (the error under the kill switch explanation, the retry prompt under
+    // the error) has its own lines, so a long detail can't push it out of sight.
+    String? detail;
+    String? note;
     if (isBlocked) {
-      subtitle = '${l.homeKillSwitchBlocked}${error != null ? '\n$error' : ''}';
+      detail = l.homeKillSwitchBlocked;
+      note = error;
     } else if (isError) {
-      subtitle = '${error ?? l.homeConnectError}\n${l.homeTapToRetry}';
+      detail = error;
+      note = l.homeTapToRetry;
     } else if (isConn) {
       // Loading: placeholders; the chain gave up: say so; no country from the service: the IP alone.
       final ipText = switch (ipAsync) {
@@ -164,32 +161,32 @@ class _StateInfo extends ConsumerWidget {
         AsyncData() || AsyncError() => l.homeIpUnknown,
         _ => '— · —',
       };
-      subtitle = pingMs != null ? '${pingMs}ms · $ipText' : ipText;
+      detail = '${VpnStats.formatDuration(connectedFor)} · $ipText';
     } else if (isConnecting) {
-      subtitle = l.homeConnecting;
+      detail = l.homeConnecting;
     } else if (isDisconnecting) {
-      subtitle = l.homeDisconnecting;
+      detail = l.homeDisconnecting;
     } else if (!hasConfig) {
-      subtitle = l.homeNoConfigAdd;
+      detail = l.homeNoConfigAdd;
     } else {
-      subtitle = l.homeTapToConnect;
+      detail = l.homeTapToConnect;
     }
+    final detailStyle = AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(
-          stateWord,
-          style: AppTheme.sans(size: 28, weight: FontWeight.w500, color: stateColor, letterSpacing: -1, height: 1),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            stateWord,
+            style: AppTheme.sans(size: 28, weight: FontWeight.w500, color: stateColor, letterSpacing: -1, height: 1),
+          ),
         ),
-        const SizedBox(height: 6),
-        Text(
-          subtitle,
-          textAlign: TextAlign.center,
-          maxLines: 3,
-          overflow: TextOverflow.ellipsis,
-          style: AppTheme.mono(size: 11, color: t.textDim, letterSpacing: 0.5),
-        ),
+        for (final text in [?detail, ?note]) ...[
+          const SizedBox(height: 6),
+          Text(text, textAlign: TextAlign.center, maxLines: 3, overflow: TextOverflow.ellipsis, style: detailStyle),
+        ],
         if (isBlocked) ...[
           const SizedBox(height: 10),
           TapTarget(

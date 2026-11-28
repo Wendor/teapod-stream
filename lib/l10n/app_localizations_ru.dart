@@ -35,10 +35,26 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String get homeKillSwitchBlocked => 'kill switch · трафик заблокирован';
+  String get homeStateConnected => 'Подключено';
 
   @override
-  String get homeConnectError => 'ошибка подключения';
+  String get homeStateConnecting => 'Подключение';
+
+  @override
+  String get homeStateDisconnecting => 'Отключение';
+
+  @override
+  String get homeStateOff => 'Не подключено';
+
+  @override
+  String get homeStateFailed => 'Ошибка подключения';
+
+  @override
+  String get homeStateBlocked => 'Трафик заблокирован';
+
+  @override
+  String get homeKillSwitchBlocked =>
+      'Kill switch держит трафик, пока VPN не подключится. Отключите, чтобы выйти в сеть без VPN.';
 
   @override
   String get homeTapToRetry => 'нажмите для повтора';
@@ -80,7 +96,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get homeServer => 'Сервер';
 
   @override
-  String get homePing => 'Пинг';
+  String get homePing => 'Пинг до сервера';
 
   @override
   String get homeUpload => 'Отдача';
@@ -102,11 +118,11 @@ class AppLocalizationsRu extends AppLocalizations {
   String get homeManagedDns => 'DNS-настройки не применяются · роутинг управляется сервером';
 
   @override
-  String get homeTrafficLive => 'ТРАФИК — LIVE';
+  String get homeTrafficLive => 'ТРАФИК — ЗА СЕССИЮ';
 
   @override
   String homePeak(String value) {
-    return 'пик $value';
+    return 'пик ↓ $value Мбит/с';
   }
 
   @override

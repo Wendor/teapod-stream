@@ -140,17 +140,47 @@ abstract class AppLocalizations {
   /// **'TUNNEL · {proto}'**
   String homeTunnel(String proto);
 
+  /// No description provided for @homeStateConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected'**
+  String get homeStateConnected;
+
+  /// No description provided for @homeStateConnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting'**
+  String get homeStateConnecting;
+
+  /// No description provided for @homeStateDisconnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnecting'**
+  String get homeStateDisconnecting;
+
+  /// No description provided for @homeStateOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Not connected'**
+  String get homeStateOff;
+
+  /// No description provided for @homeStateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection failed'**
+  String get homeStateFailed;
+
+  /// No description provided for @homeStateBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Traffic blocked'**
+  String get homeStateBlocked;
+
   /// No description provided for @homeKillSwitchBlocked.
   ///
   /// In en, this message translates to:
-  /// **'kill switch · traffic blocked'**
+  /// **'The kill switch holds traffic until the VPN connects. Disconnect to go online without the VPN.'**
   String get homeKillSwitchBlocked;
-
-  /// No description provided for @homeConnectError.
-  ///
-  /// In en, this message translates to:
-  /// **'connection error'**
-  String get homeConnectError;
 
   /// No description provided for @homeTapToRetry.
   ///
@@ -233,7 +263,7 @@ abstract class AppLocalizations {
   /// No description provided for @homePing.
   ///
   /// In en, this message translates to:
-  /// **'Ping'**
+  /// **'Ping to server'**
   String get homePing;
 
   /// No description provided for @homeUpload.
@@ -275,13 +305,13 @@ abstract class AppLocalizations {
   /// No description provided for @homeTrafficLive.
   ///
   /// In en, this message translates to:
-  /// **'TRAFFIC — LIVE'**
+  /// **'TRAFFIC — THIS SESSION'**
   String get homeTrafficLive;
 
   /// No description provided for @homePeak.
   ///
   /// In en, this message translates to:
-  /// **'peak {value}'**
+  /// **'peak ↓ {value} Mbit/s'**
   String homePeak(String value);
 
   /// No description provided for @commonErrorWith.

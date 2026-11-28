@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,15 +9,30 @@ import '../models/app_message.dart';
 import 'app_http.dart';
 import 'tunnel_socks.dart';
 
+/// A source without published checksums (a custom URL) served files the user hasn't trusted: the first download from
+/// it, or a file that differs from the one trusted before ([changed]). Nothing was installed. [sha256ByUrl] — the
+/// SHA-256 of each such file; a download with them as `trusted` installs exactly these files.
+class GeodataNeedsTrust implements Exception {
+  final Map<String, String> sha256ByUrl;
+  final bool changed;
+
+  const GeodataNeedsTrust(this.sha256ByUrl, {required this.changed});
+
+  @override
+  String toString() => 'GeodataNeedsTrust(${sha256ByUrl.keys.join(', ')}, changed: $changed)';
+}
+
 /// `geoip.dat` / `geosite.dat` in the app's files directory: whether they are there, when they were last downloaded,
 /// and the download itself. Both files go to `.tmp` files first and replace the old ones only when both arrived and
-/// match the SHA-256 their source publishes next to them (`<url>.sha256sum`, as the default sources do): a failed or
-/// mismatched download, or a failed rename, keeps both old files.
+/// each is verified: it matches the SHA-256 its source publishes next to it (`<url>.sha256sum`, as the default sources
+/// do), or — for a source that publishes none — the SHA-256 the user trusted for that URL (the pin, kept per URL).
+/// A failed, mismatched or untrusted download, or a failed rename, keeps both old files.
 class GeodataService {
   const GeodataService();
 
   static const files = ['geoip.dat', 'geosite.dat'];
   static const _kLastUpdated = 'geo_last_updated';
+  static const _kPins = 'geo_pins';
   static const _maxFileBytes = 200 * 1024 * 1024;
 
   /// Both files are in [dir].
@@ -28,16 +44,29 @@ class GeodataService {
     return ts == null ? null : DateTime.fromMillisecondsSinceEpoch(ts);
   }
 
+  /// The SHA-256 the user trusted per URL of a source without published checksums.
+  Future<Map<String, String>> pins() async {
+    final raw = (await SharedPreferences.getInstance()).getString(_kPins);
+    if (raw == null) return {};
+    try {
+      return (jsonDecode(raw) as Map<String, dynamic>).map((k, v) => MapEntry(k, v as String));
+    } on Object {
+      return {};
+    }
+  }
+
   /// Downloads [geoipUrl] and [geositeUrl] into [dir] through [socks] (direct when null). [onProgress] gets the bytes
-  /// so far and the total from the HEAD sizes (-1 — unknown). Returns the time it finished, which [lastUpdated]
-  /// reports from then on. Throws on a failed request, or a [ReasonException] on an HTTP status other than 200 or
-  /// a file that doesn't match its published checksum.
+  /// so far and the total from the HEAD sizes (-1 — unknown). A file without a published checksum is installed when
+  /// it matches the pin of its URL or its hash in [trusted] (which then becomes the pin). Returns the time it
+  /// finished, which [lastUpdated] reports from then on. Throws on a failed request, a [ReasonException] on an HTTP
+  /// status other than 200 or a file that doesn't match its published checksum, or [GeodataNeedsTrust].
   Future<DateTime> download({
     required String dir,
     required String geoipUrl,
     required String geositeUrl,
     required TunnelSocks? socks,
     required void Function(int downloaded, int total) onProgress,
+    Map<String, String> trusted = const {},
   }) async {
     var total = -1;
     try {
@@ -48,13 +77,23 @@ class GeodataService {
     var downloaded = 0;
     onProgress(0, total);
     final tmps = [for (final name in files) File('$dir/$name.tmp')];
+    final pins = await this.pins();
+    final newPins = <String, String>{};
+    final untrusted = <String, String>{};
     try {
       for (final (i, url) in [geoipUrl, geositeUrl].indexed) {
-        final hash = await _downloadFile(url, tmps[i], socks, (bytes) => onProgress(downloaded += bytes, total));
+        final hash = _hex(await _downloadFile(url, tmps[i], socks, (bytes) => onProgress(downloaded += bytes, total)));
         final published = await _publishedSha256(url, socks);
-        if (published != null && published != _hex(hash)) {
-          throw ReasonException(AppMessage.l10n((l) => l.geoChecksumMismatch(files[i])));
+        if (published != null) {
+          if (published != hash) throw ReasonException(AppMessage.l10n((l) => l.geoChecksumMismatch(files[i])));
+        } else if (pins[url] == hash || trusted[url] == hash) {
+          newPins[url] = hash;
+        } else {
+          untrusted[url] = hash;
         }
+      }
+      if (untrusted.isNotEmpty) {
+        throw GeodataNeedsTrust(untrusted, changed: untrusted.keys.any(pins.containsKey));
       }
       await _install(dir, tmps);
     } finally {
@@ -63,7 +102,9 @@ class GeodataService {
       }
     }
     final now = DateTime.now();
-    await (await SharedPreferences.getInstance()).setInt(_kLastUpdated, now.millisecondsSinceEpoch);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kLastUpdated, now.millisecondsSinceEpoch);
+    if (newPins.isNotEmpty) await prefs.setString(_kPins, jsonEncode({...pins, ...newPins}));
     return now;
   }
 

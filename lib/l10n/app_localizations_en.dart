@@ -514,6 +514,29 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get geoUnverified => 'This source publishes no checksums — review the files before they are installed';
+
+  @override
+  String get geoChanged => 'The files changed since you trusted this source — review them before they are installed';
+
+  @override
+  String get geoReview => 'REVIEW';
+
+  @override
+  String get geoTrustTitle => 'Trust these geo databases?';
+
+  @override
+  String get geoTrustFirstBody =>
+      'The source publishes no checksums, so the app can\'t verify the files. Install them only if the SHA-256 below is what the source\'s owner publishes elsewhere. Later downloads must be the same files, or the app asks again.';
+
+  @override
+  String get geoTrustChangedBody =>
+      'These files differ from the ones you trusted before. Geo databases decide which traffic bypasses the VPN: install them only if you expected an update.';
+
+  @override
+  String get geoTrustButton => 'Trust and install';
+
+  @override
   String get geoDownload => 'DOWNLOAD';
 
   @override

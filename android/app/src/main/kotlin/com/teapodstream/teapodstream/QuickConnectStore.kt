@@ -28,8 +28,13 @@ internal data class StartRequest(
  * a quick start never pairs one session's config with another's params. The tile, boot, the notification, a system restart and
  * `reconnectInternal` start from it without Flutter. The only reader and writer of these files; every write goes
  * through a temp file and a rename, so a reader never sees half a file.
+ *
+ * The config, its params and the tile name are encrypted by [cipher] ([KeystoreCipher] in the app): `MAGIC`, then the
+ * cipher's output, the file name as associated data. A file that doesn't decrypt (a lost key, a swapped or corrupt
+ * file) reads as missing and is removed — the next connect from the app saves a new one. A plain file of an older
+ * version is read once and stored encrypted; if that write fails it stays plain and is retried on the next read.
  */
-internal class QuickConnectStore(private val dir: File) {
+internal class QuickConnectStore(private val dir: File, private val cipher: StoreCipher) {
 
     fun config(): String? = synchronized(LOCK) { read(CONFIG) }
 
@@ -116,26 +121,50 @@ internal class QuickConnectStore(private val dir: File) {
         return stored.copy(socksUser = user, socksPassword = password)
     }
 
-    /** Null when missing or unreadable (also removed between the check and the read). */
-    private fun read(name: String): String? = try {
-        File(dir, name).takeIf { it.exists() }?.readText()
-    } catch (_: java.io.IOException) {
-        null
+    /** Null when missing, unreadable or undecryptable (also removed between the check and the read). Under [LOCK]. */
+    private fun read(name: String): String? {
+        val file = File(dir, name)
+        val bytes = try {
+            file.takeIf { it.exists() }?.readBytes()
+        } catch (_: java.io.IOException) {
+            null
+        } ?: return null
+        if (!bytes.startsWith(MAGIC)) {
+            // Plain, from an older version: stored encrypted from now on (a failed write keeps it for the next read).
+            val text = String(bytes, Charsets.UTF_8)
+            try {
+                write(name, text)
+            } catch (_: Exception) {
+            }
+            return text
+        }
+        return try {
+            String(cipher.decrypt(bytes.copyOfRange(MAGIC.size, bytes.size), name.toByteArray()), Charsets.UTF_8)
+        } catch (_: Exception) {
+            file.delete()
+            null
+        }
     }
 
     private fun write(name: String, text: String) {
+        val data = MAGIC + cipher.encrypt(text.toByteArray(Charsets.UTF_8), name.toByteArray())
         // A temp file of its own per write: the activity and the service may write the same file at once.
         val tmp = File.createTempFile("$name.", ".tmp", dir)
         try {
-            tmp.writeText(text)
+            tmp.writeBytes(data)
             if (!tmp.renameTo(File(dir, name))) throw java.io.IOException("rename failed: $name")
         } finally {
             tmp.delete() // after a rename there is nothing under the temp name
         }
     }
 
+    private fun ByteArray.startsWith(prefix: ByteArray) =
+        size >= prefix.size && prefix.indices.all { this[it] == prefix[it] }
+
     companion object {
         private val LOCK = Any()
+        /** Marks an encrypted file; a plain one starts with `{` (JSON) or a name. */
+        private val MAGIC = byteArrayOf(0, 'T'.code.toByte(), 'Q'.code.toByte(), 1)
         const val CONFIG = "xray_config.json"
         const val PARAMS = "last_connection_meta.json"
         /** Older versions kept the login here too; removed by [save] and [clear]. */

@@ -21,6 +21,7 @@ says how, and what counts.
 | Apps' DNS queries leave outside the tunnel | the TUN's DNS address is the only resolver apps get; tun2socks hands port 53 to the core (xray `dns-out`, sing-box `hijack-dns`), which resolves with the configured server through the tunnel ([xray](components/xray_config_builder.md#dns), [sing-box](components/singbox_config_builder.md)); a server-made xray config keeps the server's DNS |
 | Traffic leaks during reconnect | TUN is kept as a sink during reconnects and hot switches; kill switch keeps it after a failure |
 | QUIC leaking when blocked | answered locally with ICMP in tun2socks, never routed `direct` |
+| The stored core config (server credentials) is read from `filesDir` | `QuickConnectStore` encrypts the config, its parameters and the tile name with AES-256-GCM under a non-exportable Android Keystore key (`KeystoreCipher`), the file name as associated data; a file that doesn't decrypt (a lost key, a swapped file) reads as nothing saved and is removed; a plain file of an older version is stored encrypted on its first read ([android_native](components/android_native.md)) |
 | Backups / device transfer copy secrets | `allowBackup=false`, `dataExtractionRules` exclude everything |
 | Browsing history on disk | core access logs only at `debug`; sing-box `info` mapped to `warn` |
 | A shared log reveals servers or credentials | "share" on the logs screen sends a masked copy (`ShareService.shareLog`, `maskLog` in `log_service.dart`): hosts, UUIDs, passwords and share links of saved configs, subscription URLs and hosts, SOCKS credentials, any UUID, `user=`/`pass=`-like values and public IPv4/IPv6 become `<hidden>` / `<uuid>` / `<ip>`; loopback, private and link-local addresses stay. One copy, `teapod_log.txt` in the cache dir, overwritten on every export. The prefix-proxy line doesn't name the server |
@@ -37,8 +38,6 @@ says how, and what counts.
 - **Direct pings.** Pinging configs (ICMP + TCP) goes outside the tunnel, so the provider sees the server list.
 - **Debug signing key.** Releases are signed with the build machine's debug key ([CI](components/ci.md#signing)) —
   changing it would break updates for existing users.
-- **`xray_config.json`** with server credentials stays in `filesDir` between sessions (needed by the tile and
-  auto-start). `filesDir` is process-private and excluded from backups.
 
 ## Data classification and storage
 
@@ -48,8 +47,8 @@ says how, and what counts.
 | SOCKS user / password | in the profile's settings (encrypted); `socks_user_v2`, `socks_password_v2` (encrypted) only read by the settings migration | SENSITIVE |
 | HWID cache | `cached_device_id`, `cached_device_info` (encrypted) | SENSITIVE |
 | Settings (ports, DNS, split tunneling, kill switch, …) | in the active profile (`profiles_v1`, encrypted); `auto_start_on_boot` and `automation_enabled` mirrored to SharedPreferences for native code; the per-key SharedPreferences of before are only read by the migration | PUBLIC |
-| Core config | `filesDir/xray_config.json` through `QuickConnectStore`; carries the session's SOCKS login, the only place a quick start reads it from (a manual login is also kept in the profile settings) | SECRET, process-private |
-| Quick-reconnect parameters | `filesDir/last_connection_meta.json` (no SOCKS credentials), `tile_config_name.txt` (the config name the tile shows), `user_disconnected.flag` — all through `QuickConnectStore` | SENSITIVE, process-private |
+| Core config | `filesDir/xray_config.json` through `QuickConnectStore`, encrypted (Keystore AES-GCM); carries the session's SOCKS login, the only place a quick start reads it from (a manual login is also kept in the profile settings) | SECRET, process-private |
+| Quick-reconnect parameters | `filesDir/last_connection_meta.json` (no SOCKS credentials), `tile_config_name.txt` (the config name the tile shows) — both encrypted like the config — and `user_disconnected.flag`, all through `QuickConnectStore` | SENSITIVE, process-private |
 | Logs | `filesDir/vpn_log.txt` (+ `.prev`) | SENSITIVE: core warnings and errors carry server and destination addresses, `debug` adds access lines; masked on export |
 | Exported log | `cacheDir/teapod_log.txt` | masked, overwritten by the next export |
 

@@ -189,7 +189,7 @@ class XrayVpnService : VpnService() {
     private var lastStartId = 0
     /** Set in onDestroy (main thread): reports posted later belong to a stopped instance. */
     private var destroyed = false
-    private val store by lazy { QuickConnectStore(filesDir) }
+    private val store by lazy { QuickConnectStore(filesDir, KeystoreCipher) }
     /** The parameters [tunInterface] was built with: a reconnect reuses the fd only for the same ones. */
     @Volatile private var tunParams: ConnectionParams? = null
 

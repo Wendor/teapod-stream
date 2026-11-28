@@ -20,7 +20,7 @@ internal class VpnChannelHandler(
 ) {
     private val pendingVpnStart = PendingVpnStart()
     private val quickConnect = QuickConnectRequests(
-        QuickConnectStore(activity.filesDir),
+        QuickConnectStore(activity.filesDir, KeystoreCipher),
         XrayVpnService.sessionStarts::get,
     ) { VpnTileService.configNameChanged(activity.applicationContext) }
     private val filesDir: File get() = activity.filesDir

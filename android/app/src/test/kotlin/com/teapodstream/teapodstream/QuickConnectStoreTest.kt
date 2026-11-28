@@ -12,7 +12,7 @@ import org.junit.Test
 
 class QuickConnectStoreTest {
     private val dir: File = Files.createTempDirectory("qc").toFile()
-    private val store = QuickConnectStore(dir)
+    private val store = QuickConnectStore(dir, TestStoreCipher)
     private val params = ConnectionParams(
         socksPort = 2080, excludedPackages = listOf("a.b"), includedPackages = emptyList(),
         vpnMode = VpnMode.ALL_EXCEPT, ssPrefix = null, proxyOnly = false, showNotification = true,
@@ -26,6 +26,49 @@ class QuickConnectStoreTest {
         assertEquals("{config}", store.config())
         assertEquals(params, store.params())
         assertTrue(dir.listFiles()!!.none { it.name.endsWith(".tmp") })
+    }
+
+    @Test
+    fun storedFilesHoldNoPlainText() {
+        store.save("""{"outbounds":[{"password":"server-secret"}]}""", params, tileName = "Oslo")
+        for (name in listOf(QuickConnectStore.CONFIG, QuickConnectStore.PARAMS, QuickConnectStore.TILE_NAME)) {
+            val text = String(File(dir, name).readBytes(), Charsets.ISO_8859_1)
+            assertFalse(name, text.contains("server-secret") || text.contains("Oslo") || text.contains("socksPort"))
+        }
+    }
+
+    @Test
+    fun aPlainFileOfAnOlderVersionIsReadAndStoredEncrypted() {
+        File(dir, QuickConnectStore.CONFIG).writeText("{plain}")
+        File(dir, QuickConnectStore.PARAMS).writeText(params.toJson().toString())
+        assertEquals("{plain}", store.config())
+        assertEquals(params, store.params())
+        assertFalse(String(File(dir, QuickConnectStore.CONFIG).readBytes(), Charsets.ISO_8859_1).contains("{plain}"))
+        assertEquals("{plain}", QuickConnectStore(dir, TestStoreCipher).config())
+    }
+
+    @Test
+    fun aFileThatDoesNotDecryptReadsAsNothingSavedAndIsRemoved() {
+        store.save("{config}", params)
+        TestStoreCipher.rotate() // the key is gone
+        try {
+            assertNull(store.quickStart(fromConfig))
+            assertNull(store.config())
+            assertFalse(File(dir, QuickConnectStore.CONFIG).exists())
+            assertFalse(File(dir, QuickConnectStore.PARAMS).exists())
+            // The next save works with the new key.
+            store.save("{new}", params)
+            assertEquals("{new}", store.config())
+        } finally {
+            TestStoreCipher.rotate()
+        }
+    }
+
+    @Test
+    fun aFileSwappedForAnotherOneDoesNotDecrypt() {
+        store.save("{config}", params)
+        File(dir, QuickConnectStore.PARAMS).copyTo(File(dir, QuickConnectStore.CONFIG), overwrite = true)
+        assertNull(store.config())
     }
 
     @Test
@@ -89,7 +132,7 @@ class QuickConnectStoreTest {
         val writers = (1..2).map { w ->
             Thread {
                 // A store of its own per writer, as the activity and the service have.
-                val own = QuickConnectStore(dir)
+                val own = QuickConnectStore(dir, TestStoreCipher)
                 go.await()
                 try {
                     repeat(500) { i ->
@@ -106,7 +149,7 @@ class QuickConnectStoreTest {
         var checked = 0
         val failures = java.util.Collections.synchronizedList(mutableListOf<Throwable>())
         val reader = Thread {
-            val own = QuickConnectStore(dir)
+            val own = QuickConnectStore(dir, TestStoreCipher)
             go.await()
             // Reads for as long as the writers write, so every read overlaps a replacement.
             while (writing.get() > 0) {

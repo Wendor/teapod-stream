@@ -14,7 +14,7 @@ class BootReceiver : BroadcastReceiver() {
         if (!prefs.getBoolean("flutter.auto_start_on_boot", false)) return
 
         // Not after the user turned the VPN off, and not without a saved connection.
-        val store = QuickConnectStore(context.filesDir)
+        val store = QuickConnectStore(context.filesDir, KeystoreCipher)
         if (store.userOff() || store.params() == null || store.config() == null) return
 
         context.startForegroundService(

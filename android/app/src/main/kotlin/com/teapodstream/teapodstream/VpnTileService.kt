@@ -37,7 +37,7 @@ class VpnTileService : TileService() {
         fun migrateLegacyConfigName(context: Context) {
             val prefs = context.getSharedPreferences(XrayVpnService.PREFS_NAME, Context.MODE_PRIVATE)
             if (!prefs.contains(LEGACY_PREF_CONFIG_NAME)) return
-            val store = QuickConnectStore(context.filesDir)
+            val store = QuickConnectStore(context.filesDir, KeystoreCipher)
             store.locked {
                 store.adoptLegacyTileName(prefs.getString(LEGACY_PREF_CONFIG_NAME, null))
                 prefs.edit().remove(LEGACY_PREF_CONFIG_NAME).commit()
@@ -124,7 +124,7 @@ class VpnTileService : TileService() {
 
     private fun configName(): String? {
         migrateLegacyConfigName(this)
-        return QuickConnectStore(filesDir).tileName()
+        return QuickConnectStore(filesDir, KeystoreCipher).tileName()
     }
 
     /** [active] — VPN is on or transitioning: the title is the config name, otherwise "TeapodStream". */

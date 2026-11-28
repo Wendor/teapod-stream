@@ -34,7 +34,7 @@ class ServiceNotifications(private val service: Service, private val log: (Strin
 
         fun enabled(context: Context): Boolean =
             enabledFlag
-                ?: (QuickConnectStore(context.filesDir).params()?.showNotification ?: true).also { enabledFlag = it }
+                ?: (QuickConnectStore(context.filesDir, KeystoreCipher).params()?.showNotification ?: true).also { enabledFlag = it }
 
         /** The session's `showNotification` (set with its parameters). */
         fun setEnabled(value: Boolean) {

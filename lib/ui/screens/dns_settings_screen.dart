@@ -47,17 +47,14 @@ class _DnsSettingsScreenState extends ConsumerState<DnsSettingsScreen> {
   }
 
   void _save() {
-    final custom = _customCtrl.text.trim();
     ref
         .read(settingsProvider.notifier)
-        .edit(
-          (c) => c.copyWith(
-            dnsPreset: _selectedPreset,
-            customDnsAddress: custom.isEmpty ? '1.1.1.1' : custom,
-            customDnsType: _customType.name,
-            dnsMode: _dnsMode,
-            dnsQueryStrategy: _strategy,
-          ),
+        .setDns(
+          mode: _dnsMode,
+          preset: _selectedPreset,
+          customAddress: _customCtrl.text,
+          customType: _customType,
+          strategy: _strategy,
         );
     Navigator.pop(context);
   }

@@ -1,27 +1,37 @@
 # SettingsProvider — app settings
 
 **Files:** `lib/providers/settings_provider.dart`, `lib/core/models/app_settings.dart` (`AppSettings`, its enums,
-`GeoPresets`), `lib/core/services/settings_service.dart` (`SettingsService`),
+`GeoPresets`), `lib/core/models/setting_field.dart` (`SettingField`, `SettingFields`), `lib/core/services/settings_service.dart` (`SettingsService`),
 `lib/core/models/xray_tuning.dart`, `lib/core/models/heartbeat_settings.dart`, `lib/core/models/routing_settings.dart`
 
 The settings in force are the active profile's ([profiles](profiles.md)): stored once, inside the profile.
 `SettingsNotifier` (`AsyncNotifier<AppSettings>`) derives them from `profileProvider` (synchronously once it is
 loaded, so a reader right after a save sees the saved value) and writes through
 `ProfileNotifier.updateActiveSettings`: one queue with the other profile writes, a read-only profile refuses there.
-Widgets send a change, not settings: `edit((s) => s.copyWith(...))` applies it to the settings current when the write
-runs, so a write queued in between (another field, `cleanGhostPackages`) survives; it goes to the profile active when
-it was called. Screens go through `saveSettings(context, ref, change)` (`settings_shared.dart`: a read-only profile
-shows a snackbar) or `edit`; nested settings pass a change of their part (`RoutingSettings Function(RoutingSettings)`).
-`save(settings)` replaces them whole, for flows that built all of them (the itest agent).
-`toggleExcludedPackage` and `cleanGhostPackages` (drops uninstalled apps from the split tunneling lists) are changes
-too, so two quick ones both land.
+Every write is a change applied to the settings current when it runs, so a write queued in between (another
+field, `cleanGhostPackages`) survives; it goes to the profile active when it was called. Screens name *which* setting
+changes and never build settings objects:
+
+- `set(field, value)` / `modify(field, change)` — one field of `SettingFields`, a `SettingField<T>` that reads and
+  writes it, nested sections (`routing`, `heartbeat`, `mux`, `fragment`, `noise`) included. `modify` gets the field's
+  current value: removing one item of a list keeps a removal queued before it.
+- `commitInt(field, text)` — a numeric text field: unparsable or empty text changes nothing; an `IntSettingField`
+  clamps to its limits.
+- Writes of several fields or with a rule: `setSocksCredentials`, `setGeoSources`, `setDns` (an empty custom address
+  becomes `1.1.1.1`), `togglePackage` (the list of the mode current at write time), `setCoreEnabled` (refuses to
+  disable the last available core, checked on the settings it writes to), `moveCoreUp`, `cleanGhostPackages`.
+
+Screens call these through `writeSettings(context, ref, write)` (`settings_shared.dart`: a read-only profile shows a
+snackbar) or the notifier directly; a section widget gets a `SettingModify` callback from its screen. `edit(change)`
+takes a raw change and `save(settings)` replaces them whole, for flows that built all of them (the itest agent).
+Two quick writes both land.
 
 **Text fields** (`SetNumField`, `SetCredField` in `settings_shared.dart`: network settings, the subscription User-Agent) save once per edit — on submit, on focus loss
 and when the screen closes with the field focused — not per key: every write stores the whole profile list and mirrors
 the native flags. **Limits** are named in the models (`SettingLimits`): `AppSettings.socksPortLimits` (1024–65535),
 `mtuLimits` (576–9000, as native `ConnectionParams`), `obsProbeIntervalLimits` (0–86400 s),
-`MuxSettings.concurrencyLimits` (1–1024), `HeartbeatSettings.failureThresholdLimits` (1–10); the screens clamp a typed
-value to them and `fromJson` clamps a stored or imported one — except a Mux concurrency below 1, an xray sentinel
+`MuxSettings.concurrencyLimits` (1–1024), `HeartbeatSettings.failureThresholdLimits` (1–10); their fields clamp a
+typed value to them and `fromJson` clamps a stored or imported one — except a Mux concurrency below 1, an xray sentinel
 (negative: Mux off for TCP / UDP; `xudpConcurrency: 0`: UDP the TCP way), which is kept as stored.
 
 **Native flags.** `BootReceiver` reads `flutter.auto_start_on_boot`, `XrayVpnService` `flutter.automation_enabled`

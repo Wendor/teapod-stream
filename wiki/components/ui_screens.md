@@ -72,7 +72,7 @@ Configs), `import_review.dart` (`ImportReviewDetails`, `confirmImportReview`: wh
 
 ## Read-only profiles
 
-On a read-only profile settings rows are locked and a tap explains why; `SettingsNotifier.save` ignores changes
+On a read-only profile settings rows are locked and a tap explains why; `SettingsNotifier` ignores changes
 anyway ([profiles](profiles.md)).
 
 ## Theme

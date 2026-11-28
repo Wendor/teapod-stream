@@ -9,14 +9,14 @@ class _CoreOrderList extends ConsumerStatefulWidget {
   final bool locked;
 
   /// A change to the settings current when it is written.
-  final void Function(AppSettings Function(AppSettings current)) onUpdate;
+  final SettingsNotifier notifier;
 
   const _CoreOrderList({
     required this.t,
     required this.settings,
     required this.versions,
     required this.locked,
-    required this.onUpdate,
+    required this.notifier,
   });
 
   @override
@@ -50,25 +50,12 @@ class _CoreOrderListState extends ConsumerState<_CoreOrderList> {
           ..showSnackBar(SnackBar(content: Text(context.l10n.settingsCoreLastEnabled)));
         return;
       }
-      widget.onUpdate((c) {
-        if (on) return c.copyWith(disabledCores: {...c.disabledCores}..remove(k));
-        final disabled = {...c.disabledCores, k};
-        // Checked again on the settings it writes to: taps queued before a rebuild must not disable every core.
-        if (!c.coreOrder.any((o) => available.contains(o) && !disabled.contains(o))) return c;
-        return c.copyWith(disabledCores: disabled);
-      });
+      widget.notifier.setCoreEnabled(k, on, available: available);
     }
 
     void moveUp(int i) {
       final k = order[i];
-      // Moved within the order it writes to: taps queued before a rebuild each move from the previous result.
-      widget.onUpdate((c) {
-        final j = c.coreOrder.indexOf(k);
-        if (j <= 0) return c;
-        final next = [...c.coreOrder]..insert(j - 1, k);
-        next.removeAt(j + 1);
-        return c.copyWith(coreOrder: List.unmodifiable(next));
-      });
+      widget.notifier.moveCoreUp(k);
       setState(() => _moved = k);
       _movedTimer?.cancel();
       _movedTimer = Timer(const Duration(milliseconds: 700), () {

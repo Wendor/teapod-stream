@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/app_info.dart';
 import '../../core/models/app_settings.dart';
+import '../../core/models/setting_field.dart';
 import '../../providers/app_icon_provider.dart';
 import '../../providers/apps_provider.dart';
 import '../../providers/settings_provider.dart';
@@ -27,14 +28,9 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
   bool _hideSystemApps = true;
   bool _ghostsCleaned = false;
 
-  /// Toggles [pkg] in the list the mode uses — both as they are when the write runs, so a tap before the settings
-  /// load (or before a mode change shows) goes to the right list.
-  void _togglePackage(String pkg) => saveSettings(context, ref, (c) {
-    Set<String> toggled(Set<String> set) => set.contains(pkg) ? ({...set}..remove(pkg)) : {...set, pkg};
-    return c.vpnMode == VpnMode.onlySelected
-        ? c.copyWith(includedPackages: toggled(c.includedPackages))
-        : c.copyWith(excludedPackages: toggled(c.excludedPackages));
-  });
+  void _togglePackage(String pkg) => writeSettings(context, ref, (s) => s.togglePackage(pkg));
+
+  void _set<T>(SettingField<T> field, T value) => writeSettings(context, ref, (s) => s.set(field, value));
 
   Future<bool> _confirmTethering(TeapodTokens t) async {
     final ok = await showDialog<bool>(
@@ -106,7 +102,7 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
               value: settings?.splitTunnelingEnabled ?? false,
               onChange: (v) {
                 if (settings != null) {
-                  saveSettings(context, ref, (c) => c.copyWith(splitTunnelingEnabled: v));
+                  _set(SettingFields.splitTunnelingEnabled, v);
                 }
               },
             ),
@@ -134,7 +130,7 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
                     onChanged: (v) {
                       if (settings == null) return;
                       final mode = VpnMode.values.byName(v);
-                      saveSettings(context, ref, (c) => c.copyWith(vpnMode: mode));
+                      _set(SettingFields.vpnMode, mode);
                     },
                   ),
                 ],
@@ -149,7 +145,7 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
                 onChange: (v) async {
                   if (v && !await _confirmTethering(t)) return;
                   if (!context.mounted) return;
-                  saveSettings(context, ref, (c) => c.copyWith(allowTethering: v));
+                  _set(SettingFields.allowTethering, v);
                 },
               ),
               if (settings.allowTethering)

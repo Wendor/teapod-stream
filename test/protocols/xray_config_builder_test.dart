@@ -295,6 +295,24 @@ void main() {
       expect(merged.containsKey('FallbackTag'), isFalse);
     });
 
+    test('reads inbound and outbound protocols in any letter case, as xray does', () {
+      final raw = rawManaged();
+      final outbounds = raw['outbounds'] as List;
+      (outbounds[1] as Map)['protocol'] = 'Freedom';
+      (outbounds[2] as Map)['protocol'] = 'BLACKHOLE';
+      // A freedom/blackhole listed first under the selector's prefix is not a proxy for the fallback.
+      outbounds.insert(0, {'tag': 'c1-0', 'protocol': 'Freedom'});
+      (raw['inbounds'] as List).first = {'tag': 'in-socks', 'protocol': 'SOCKS', 'port': 1080};
+      final cfg = merge(raw);
+      final balancer = ((cfg['routing'] as Map)['balancers'] as List).first as Map;
+      expect(balancer['fallbackTag'], 'c1-a');
+      expect(((cfg['inbounds'] as List).first as Map)['tag'], 'in-socks');
+      // The server's `direct` is a freedom: the app's direct rules use it, no second freedom is injected.
+      final merged = (cfg['outbounds'] as List).cast<Map<String, dynamic>>();
+      expect(merged.where((o) => o['protocol'] == 'freedom').map((o) => o['tag']), unorderedEquals(['c1-0', 'direct']));
+      expect(merged.any((o) => o['tag'] == XrayConfigBuilder.directTag), isFalse);
+    });
+
     test('refuses a balancer or outbound with two spellings of a key it reads', () {
       final raw = rawManaged();
       (((raw['routing'] as Map)['balancers'] as List).first as Map)['Selector'] = ['t'];

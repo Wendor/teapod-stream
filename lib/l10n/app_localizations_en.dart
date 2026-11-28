@@ -35,10 +35,26 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get homeKillSwitchBlocked => 'kill switch · traffic blocked';
+  String get homeStateConnected => 'Connected';
 
   @override
-  String get homeConnectError => 'connection error';
+  String get homeStateConnecting => 'Connecting';
+
+  @override
+  String get homeStateDisconnecting => 'Disconnecting';
+
+  @override
+  String get homeStateOff => 'Not connected';
+
+  @override
+  String get homeStateFailed => 'Connection failed';
+
+  @override
+  String get homeStateBlocked => 'Traffic blocked';
+
+  @override
+  String get homeKillSwitchBlocked =>
+      'The kill switch holds traffic until the VPN connects. Disconnect to go online without the VPN.';
 
   @override
   String get homeTapToRetry => 'tap to retry';
@@ -80,7 +96,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homeServer => 'Server';
 
   @override
-  String get homePing => 'Ping';
+  String get homePing => 'Ping to server';
 
   @override
   String get homeUpload => 'Upload';
@@ -102,11 +118,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homeManagedDns => 'DNS settings don\'t apply · routing is controlled by the server';
 
   @override
-  String get homeTrafficLive => 'TRAFFIC — LIVE';
+  String get homeTrafficLive => 'TRAFFIC — THIS SESSION';
 
   @override
   String homePeak(String value) {
-    return 'peak $value';
+    return 'peak ↓ $value Mbit/s';
   }
 
   @override

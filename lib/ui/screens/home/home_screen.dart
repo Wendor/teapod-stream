@@ -46,8 +46,6 @@ class HomeScreen extends ConsumerWidget {
     final pingMs = effectiveConfig?.latencyMs;
 
     final isConn = vpnState.isConnected;
-    final isBusy = vpnState.isBusy;
-    final stateCode = isConn ? '01' : (isBusy ? '02' : '00');
 
     final protoLabel = effectiveConfig != null ? effectiveConfig.protoTag : '—';
     final serverHint = effectiveConfig != null ? '${effectiveConfig.address}:${effectiveConfig.port}' : '—';
@@ -66,13 +64,13 @@ class HomeScreen extends ConsumerWidget {
         child: SingleChildScrollView(
           child: Column(
             children: [
-              _HeaderStrip(t: t, stateCode: stateCode, version: version),
+              _HeaderStrip(t: t, version: version),
               const ReconnectBanner(),
               _HeroPanel(
                 t: t,
                 vpnState: vpnState,
                 protoLabel: protoLabel,
-                pingMs: pingMs,
+                connectedFor: stats.connectedDuration,
                 canToggle: canToggle,
                 disabledLabel: effectiveConfig == null ? context.l10n.homeNoConfigShort : context.l10n.homeUnsupported,
                 onToggle: () => ref.read(vpnProvider.notifier).toggle(),

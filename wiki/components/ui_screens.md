@@ -100,9 +100,13 @@ still wider than its line (never scaling its 48 dp targets); a line of short met
 - Widgets read providers and call notifier methods; no business logic in widgets (picking a config:
   `VpnNotifier.selectConfig`, [vpn_provider](vpn_provider.md)).
 - A large screen is a folder `screens/<name>/`: the screen and its state in `<name>_screen.dart`, its sections as
-  private widgets in `part` files next to it (`screens/configs/`: `header`, `groups`, `config_row`, `pinned`,
-  `tiles`; `screens/routing/`: `controls`, `picker`, `geo`; `screens/settings/`:
-  `header`, `rows`, `core_order`, `appearance`, `update`; `screens/home/`: `header`, `power`, `ticks`, `metrics`).
+  private widgets in `part` files next to it — or, for a section that uses the screen's state (controllers, write
+  helpers), as a private extension on that state returning the section's rows.
+  `screens/configs/`: `header`, `groups`, `config_row`, `pinned`, `tiles`; `screens/routing/`: `controls`, `picker`,
+  `rule_pickers`, `geo`; `screens/network/` (`network_settings_screen.dart`): `connection` (SOCKS, traffic, TUN),
+  `tuning` (fragment, noise, Mux), `heartbeat`, `pickers`; `screens/profiles/`: `card`, `actions`, `dialogs`;
+  `screens/settings/`: `header`, `rows`, `core_order`, `appearance`, `update`; `screens/home/`: `header`, `power`,
+  `ticks`, `metrics`.
 - Every tap target is at least 48 dp on each side and an icon-only one has a label: `TapTarget`
   (`widgets/tap_target.dart`) puts a transparent 48 dp area around a smaller visual, dims it while pressed and
   carries the TalkBack label; a row that toggles as a whole is one target announced as a switch (`SetToggleRow`; its

@@ -12,7 +12,7 @@ import 'package:teapodstream/ui/screens/configs/configs_screen.dart';
 import 'package:teapodstream/ui/screens/dns_settings_screen.dart';
 import 'package:teapodstream/ui/screens/home/home_screen.dart';
 import 'package:teapodstream/ui/screens/logs_screen.dart';
-import 'package:teapodstream/ui/screens/profiles_screen.dart';
+import 'package:teapodstream/ui/screens/profiles/profiles_screen.dart';
 import 'package:teapodstream/ui/screens/split_tunnel_screen.dart';
 
 import '../helpers/ui_harness.dart';

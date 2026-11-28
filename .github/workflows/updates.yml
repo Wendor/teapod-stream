@@ -28,11 +28,9 @@ jobs:
         with:
           go-version-file: core/go.mod
           cache-dependency-path: core/go.sum
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+      - uses: ./.github/actions/flutter
         with:
-          channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
       # The directory is declared in pubspec
       - run: mkdir -p assets/binaries
       - name: Prepare xray-core

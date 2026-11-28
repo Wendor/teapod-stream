@@ -1,5 +1,11 @@
 # English
 
+## 1.9.2
+
+- Muted text in the dark theme and accent text in the light theme are easier to read (WCAG AA contrast); TalkBack announces tappable rows as buttons
+- Subscription refresh no longer brings back a subscription removed or re-pointed meanwhile, and keeps a rename made during it (#360)
+- xray managed configs: outbound protocols are matched in any letter case, as xray reads them, so a balancer never falls back outside the VPN (#361)
+
 ## 1.9.1
 
 - Text follows Android's system font size; the "Large" setting enlarges it on top of the system one

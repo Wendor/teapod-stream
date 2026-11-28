@@ -101,8 +101,13 @@ Future<FakeNative> setUpScreenTest({
   return native;
 }
 
-/// Renders [screen] in the app theme. Returns the container for state checks.
-Future<ProviderContainer> pumpScreen(WidgetTester tester, Widget screen, {List<Override> overrides = const []}) async {
+/// Renders [screen] in the app theme ([brightness]: dark, the default theme). Returns the container for state checks.
+Future<ProviderContainer> pumpScreen(
+  WidgetTester tester,
+  Widget screen, {
+  List<Override> overrides = const [],
+  Brightness brightness = Brightness.dark,
+}) async {
   // The test font is wider than the real one: on a narrow screen overflows would be false positives.
   tester.view.physicalSize = const Size(1500, 3000);
   tester.view.devicePixelRatio = 2.5;
@@ -113,7 +118,7 @@ Future<ProviderContainer> pumpScreen(WidgetTester tester, Widget screen, {List<O
       container: container,
       child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
-        theme: AppTheme.build(Brightness.dark, AppColors.accentCyan),
+        theme: AppTheme.build(brightness, AppColors.accentCyan),
         home: screen,
       ),
     ),

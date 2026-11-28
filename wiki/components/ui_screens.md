@@ -79,7 +79,9 @@ anyway ([profiles](profiles.md)).
 
 `lib/ui/theme/`: `AppTheme.build(brightness, accent)` with the `TeapodTokens` extension (`bg`, `bgElev`, `bgSunken`,
 `accent`, `accentSoft`, `text`, `textDim`, `textMuted`, `line`, `lineSoft`, `danger`); `AppTheme.mono` / `sans`
-text helpers (minimum 11 px). Text follows the system font size: the app's `textScaler` is the system one (Android's font size and accessibility
+text helpers (minimum 11 px). Text colours meet WCAG AA (4.5:1) on every background of their theme: the dark
+palette is chosen so, and `TeapodTokens.light` darkens the accent (hue kept) until it reaches 4.5:1 on `bgSunkenLight`,
+the darkest light background. Text follows the system font size: the app's `textScaler` is the system one (Android's font size and accessibility
 scaling) times the app's font setting (`fontScale`: 1.0 or 1.2), capped at 2.0 (`appTextScaler`,
 `theme/app_text_scaler.dart`). Layouts at large sizes are checked on a device: the test font is wider than the real ones.
 Where width is fixed, text gives way instead of breaking the layout: a short caption (tab label, `0x01` address, hero
@@ -100,14 +102,15 @@ still wider than its line (never scaling its 48 dp targets); a line of short met
   (`widgets/tap_target.dart`) puts a transparent 48 dp area around a smaller visual, dims it while pressed and
   carries the TalkBack label; a row that toggles as a whole is one target announced as a switch (`SetToggleRow`; its
   `SetSquareSwitch` is then only the visual) or, with `checkbox: true`, as a checkbox. A full-width row is a
-  `Pressable` at least 48 dp high; a segment of a full-width selector is a `Pressable` marked `selected`. No bare
+  `Pressable` at least 48 dp high, announced as a button when it has `onTap`; a segment of a full-width selector is a `Pressable` marked `selected`. No bare
   `GestureDetector` for a tap target outside these widgets. A dense `TextField` in a dialog or a sheet gets
   `InputDecoration.constraints` of 48 dp.
 - Every dialog is a plain `AlertDialog` without its own colours: `dialogTheme` and `textButtonTheme` in `AppTheme`
   give the frame, title, body text and buttons; `widgets/dialog_parts.dart` adds what the theme can't —
   `DialogCancel` (muted), `DialogAction` (accent, or `danger` for deleting and lowering security) and
   `dialogField` / `dialogFieldStyle` for a text field. `test/ui/accessibility_test.dart` checks the main screens, a subscription
-  group, the profile dialog and the server sheet with `androidTapTargetGuideline` and `labeledTapTargetGuideline`.
+  group, the profile dialog and the server sheet with `androidTapTargetGuideline` and `labeledTapTargetGuideline`,
+  home and configs with `textContrastGuideline` in both themes, and the tokens' contrast for every preset accent.
 - UI tests: `test/ui/` — smoke of every screen, interactions ([tests](tests.md)).
 
 ## Related

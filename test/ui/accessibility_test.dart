@@ -1,3 +1,5 @@
+import 'dart:math';
+
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,6 +16,8 @@ import 'package:teapodstream/ui/screens/routing/routing_screen.dart';
 import 'package:teapodstream/ui/screens/settings/settings_screen.dart';
 import 'package:teapodstream/ui/screens/split_tunnel_screen.dart';
 import 'package:teapodstream/ui/screens/subscription_settings_screen.dart';
+import 'package:teapodstream/ui/theme/app_colors.dart';
+import 'package:teapodstream/ui/theme/app_theme.dart';
 import 'package:teapodstream/ui/widgets/breadcrumb_bar.dart';
 import 'package:teapodstream/ui/widgets/pressable.dart';
 
@@ -59,6 +63,64 @@ void main() {
       handle.dispose();
     });
   }
+
+  for (final brightness in Brightness.values) {
+    for (final e in {'home': screens['home']!, 'configs': screens['configs']!}.entries) {
+      testWidgets('${e.key}: text meets the AA contrast in the ${brightness.name} theme', (tester) async {
+        final handle = tester.ensureSemantics();
+        await setUpScreenTest(
+          configs: [
+            testConfig('1', latency: 40),
+            testConfig('2', subId: 's'),
+          ],
+          activeId: '1',
+        );
+        final c = await pumpScreen(tester, e.value(), brightness: brightness);
+        await expectLater(tester, meetsGuideline(textContrastGuideline));
+        await unmount(tester, c);
+        handle.dispose();
+      });
+    }
+  }
+
+  test('muted text and every preset accent reach 4.5:1 on each background of their theme', () {
+    double contrast(Color a, Color b) {
+      final (la, lb) = (a.computeLuminance(), b.computeLuminance());
+      return (max(la, lb) + 0.05) / (min(la, lb) + 0.05);
+    }
+
+    for (final accent in AppColors.accentPresets) {
+      for (final t in [TeapodTokens.dark(accent), TeapodTokens.light(accent)]) {
+        for (final bg in [t.bg, t.bgElev, t.bgSunken]) {
+          for (final fg in [t.textMuted, t.accent]) {
+            expect(contrast(fg, bg), greaterThanOrEqualTo(4.5), reason: 'fg $fg on bg $bg');
+          }
+        }
+      }
+    }
+  });
+
+  testWidgets('a row with onTap is announced as a button', (tester) async {
+    final handle = tester.ensureSemantics();
+    await setUpScreenTest();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.build(Brightness.dark, AppColors.accentCyan),
+        home: Column(
+          children: [
+            Pressable(onTap: () {}, child: const Text('tappable')),
+            const Pressable(child: Text('static')),
+          ],
+        ),
+      ),
+    );
+    expect(
+      tester.getSemantics(find.text('tappable')),
+      matchesSemantics(label: 'tappable', isButton: true, hasTapAction: true),
+    );
+    expect(tester.getSemantics(find.text('static')), matchesSemantics(label: 'static'));
+    handle.dispose();
+  });
 
   Future<void> expectGuidelines(WidgetTester tester) async {
     await expectLater(tester, meetsGuideline(androidTapTargetGuideline));

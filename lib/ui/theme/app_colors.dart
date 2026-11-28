@@ -1,3 +1,5 @@
+import 'dart:math';
+
 // ignore: deprecated_member_use
 import 'package:flutter/material.dart';
 
@@ -10,7 +12,7 @@ class AppColors {
   static const lineSoftDark = Color(0xFF12171A);
   static const textDark = Color(0xFFE8ECEE);
   static const textDimDark = Color(0xFF8A969D);
-  static const textMutedDark = Color(0xFF667178);
+  static const textMutedDark = Color(0xFF768188); // ≥4.5:1 on every dark background (WCAG AA)
 
   // ── Light palette ─────────────────────────────────────────────
   static const bgLight = Color(0xFFF2F4F5);
@@ -148,25 +150,20 @@ class TeapodTokens extends ThemeExtension<TeapodTokens> {
     );
   }
 
-  /// Forces accent into a readable range for light backgrounds.
-  /// Preserves hue; targets lightness ~0.40–0.48 (softer darkening).
+  /// Darkens [c], hue and saturation kept, until text in it has the WCAG AA contrast (4.5:1) on every light
+  /// background; an accent already that dark is left as is.
   static Color _darkenAccentForLight(Color c) {
-    final hsl = HSLColor.fromColor(c);
-    final l = hsl.lightness;
-
-    // Raised threshold: if the color is already darker than 0.48, leave it alone (was 0.40)
-    if (l <= 0.48) return c;
-
-    // Near-gray / mono — keep low saturation, but make it less intensely dark
-    // Raised gray lightness from a very dark 0.28 to a softer 0.38
-    if (hsl.saturation < 0.18) {
-      return hsl.withLightness(0.38).withSaturation((hsl.saturation * 0.6).clamp(0.0, 1.0)).toColor();
+    double contrast(Color fg, Color bg) {
+      final (a, b) = (fg.computeLuminance(), bg.computeLuminance());
+      return (max(a, b) + 0.05) / (min(a, b) + 0.05);
     }
 
-    // Chromatic: target lightness 0.40 + small bonus for high-saturation colours
-    // Raised base lightness from 0.32 to 0.40 and moved the upper bound to 0.48
-    final target = (0.40 + hsl.saturation * 0.08).clamp(0.0, 0.48);
-    return hsl.withLightness(target).toColor();
+    // bgSunkenLight is the darkest light background.
+    var hsl = HSLColor.fromColor(c);
+    while (hsl.lightness > 0 && contrast(hsl.toColor(), AppColors.bgSunkenLight) < 4.5) {
+      hsl = hsl.withLightness(max(0, hsl.lightness - 0.01));
+    }
+    return hsl.toColor();
   }
 
   @override

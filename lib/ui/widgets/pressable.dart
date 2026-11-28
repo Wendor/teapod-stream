@@ -2,7 +2,8 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 
-/// GestureDetector with a background highlight on press (console style, no ripple).
+/// GestureDetector with a background highlight on press (console style, no ripple). A row with [onTap] is announced as
+/// a button.
 class Pressable extends StatefulWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
@@ -29,17 +30,20 @@ class _PressableState extends State<Pressable> {
     final t = Theme.of(context).extension<TeapodTokens>()!;
     final color = widget.pressedColor ?? t.accentFade;
     final interactive = widget.onTap != null || widget.onLongPress != null;
-    return GestureDetector(
-      onTap: widget.onTap,
-      onLongPress: widget.onLongPress,
-      onTapDown: interactive ? (_) => _set(true) : null,
-      onTapUp: interactive ? (_) => _set(false) : null,
-      onTapCancel: interactive ? () => _set(false) : null,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 90),
-        color: _pressed ? color : Colors.transparent,
-        child: widget.child,
+    return Semantics(
+      button: widget.onTap != null,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        onLongPress: widget.onLongPress,
+        onTapDown: interactive ? (_) => _set(true) : null,
+        onTapUp: interactive ? (_) => _set(false) : null,
+        onTapCancel: interactive ? () => _set(false) : null,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 90),
+          color: _pressed ? color : Colors.transparent,
+          child: widget.child,
+        ),
       ),
     );
   }

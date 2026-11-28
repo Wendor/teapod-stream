@@ -304,7 +304,11 @@ void main() {
       expect(inbounds, hasLength(1), reason: raw);
       final inbound = inbounds.single as Map<String, dynamic>;
       expect((inbound['protocol'], inbound['listen'], inbound['port']), ('socks', XrayDefaults.socksListen, 10808));
-      expect((inbound['settings'] as Map<String, dynamic>)['auth'], 'password', reason: raw);
+      final settings = inbound['settings'] as Map<String, dynamic>;
+      expect(settings['auth'], 'password', reason: raw);
+      expect(settings['accounts'], [
+        {'user': 'u', 'pass': 'p'},
+      ], reason: raw);
 
       final outbounds = (cfg['outbounds'] as List<dynamic>? ?? const []).whereType<Map<String, dynamic>>();
       final freedom = {

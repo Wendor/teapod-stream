@@ -33,7 +33,12 @@ says how, and what counts.
 ## Accepted risks
 
 - **Loopback SOCKS fingerprint.** A password-protected SOCKS on localhost answers `05 FF`: a scanner sees "a proxy
-  on loopback". The Rust core keeps its SOCKS inbound only for heartbeat and the IP check.
+  on loopback" (random port and credentials per session). Kept by decision: besides tun2socks (xray Go, sing-box) it
+  carries the app's own requests through the tunnel (`TunnelSocks`: subscriptions, geodata, updates, bundles, the IP
+  lookup — the app is excluded from TUN so they work when the tunnel is broken) and the default heartbeat probe, for
+  every core (xray-rust reads TUN itself and keeps it only for those). An in-process path for TUN alone (xray's
+  `core.Dial`, sing-box's own TUN inbound) would leave the listener in place, so it wouldn't change what a scanner
+  sees.
 - **Direct pings.** Pinging configs (ICMP + TCP) goes outside the tunnel, so the provider sees the server list.
 - **Debug signing key.** Releases are signed with the build machine's debug key ([CI](components/ci.md#signing)) —
   changing it would break updates for existing users.

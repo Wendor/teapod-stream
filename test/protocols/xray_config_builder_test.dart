@@ -303,7 +303,8 @@ void main() {
       // A freedom/blackhole listed first under the selector's prefix is not a proxy for the fallback.
       outbounds.insert(0, {'tag': 'c1-0', 'protocol': 'Freedom'});
       (raw['inbounds'] as List).first = {'tag': 'in-socks', 'protocol': 'SOCKS', 'port': 1080};
-      final cfg = merge(raw);
+      // bypassLocal adds a direct rule, so the server's `direct` is looked up.
+      final cfg = merge(raw, _defaultOptions(routing: const RoutingSettings(bypassLocal: true)));
       final balancer = ((cfg['routing'] as Map)['balancers'] as List).first as Map;
       expect(balancer['fallbackTag'], 'c1-a');
       expect(((cfg['inbounds'] as List).first as Map)['tag'], 'in-socks');
@@ -311,6 +312,10 @@ void main() {
       final merged = (cfg['outbounds'] as List).cast<Map<String, dynamic>>();
       expect(merged.where((o) => o['protocol'] == 'freedom').map((o) => o['tag']), unorderedEquals(['c1-0', 'direct']));
       expect(merged.any((o) => o['tag'] == XrayConfigBuilder.directTag), isFalse);
+      final private = ((cfg['routing'] as Map)['rules'] as List).cast<Map<String, dynamic>>().firstWhere(
+        (r) => (r['ip'] as List?)?.contains('geoip:private') ?? false,
+      );
+      expect(private['outboundTag'], 'direct');
     });
 
     test('refuses a balancer or outbound with two spellings of a key it reads', () {

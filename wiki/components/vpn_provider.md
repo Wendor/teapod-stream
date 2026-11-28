@@ -179,7 +179,10 @@ buffer (at most 300 points); `statsHistory` events go the same way.
 `pingProvider` (its state: a ping is running; one at a time): `pingAll()` (the configs screen's button) and
 `pingStale()` (on start and after configs are added; never pinged or older than 1 h) ping each `address:port` once
 (`XrayEngine.pingConfig`: ICMP, then TCP) and store the results in one batch (`batchUpdatePingResults`). Pings go
-directly, not through the tunnel.
+directly, not through the tunnel, so they run only when `allowed`: after `VpnNotifier.synced` (a tunnel started by the
+tile or at boot counts), the session disconnected or failed — or the user turned on `pingWhileConnected`
+([security](../security.md)). Refused, `pingAll()` returns false (the configs screen shows why) and `pingStale()`
+does nothing.
 
 ## Native logs
 

@@ -32,7 +32,9 @@ class PingNotifier extends Notifier<bool> {
   }
 
   Future<bool> _ping({required bool stale}) async {
-    if (!allowed) return false;
+    // The state native reports, not the initial "disconnected": a tunnel started by the tile or at boot is already up.
+    await ref.read(vpnProvider.notifier).synced;
+    if (!ref.mounted || !allowed) return false;
     if (state) return true;
     final configState = ref.read(configProvider).maybeWhen(data: (d) => d, orElse: () => null);
     if (configState == null) return true;

@@ -38,8 +38,9 @@ outgoing selection through the configs queue (`ConfigNotifier.currentSelection`)
 
 **Security fields stay local** (`_keepLocalSecurity`): an imported or refreshed profile never sets the SOCKS port and
 credentials, `randomPort`/`randomCredentials`, `proxyOnly`, `hwidEnabled`, `automationEnabled`, the heartbeat
-target or the geodata sources (`geoipUrl`/`geositeUrl`) — otherwise one tap on a link could open an unauthenticated
-proxy, send probes to an attacker's URL or take routing decisions from a foreign file.
+target, the geodata sources (`geoipUrl`/`geositeUrl`) or `pingWhileConnected` — otherwise one tap on a link could open an unauthenticated
+proxy, send probes to an attacker's URL, take routing decisions from a foreign file or ping the server list past
+the tunnel.
 Export strips the SOCKS credentials and the custom heartbeat URL.
 
 **Shown before applying.** The other settings are the point of a profile and are applied, but the user sees first

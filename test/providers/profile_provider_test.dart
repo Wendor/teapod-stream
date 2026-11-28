@@ -57,6 +57,7 @@ const _foreign = AppSettings(
   heartbeat: HeartbeatSettings(failureThreshold: 8, target: HeartbeatTarget.custom, customUrl: 'http://attacker/log'),
   geoipUrl: 'https://attacker/geoip.dat',
   geositeUrl: 'https://attacker/geosite.dat',
+  pingWhileConnected: true,
 );
 
 VpnConfig _cfg(String id, {String? name, String? subId, String? address}) => VpnConfig(
@@ -667,6 +668,7 @@ void main() {
       expect(applied.heartbeat.customUrl, '');
       expect(applied.geoipUrl, GeoPresets.defaultGeoipUrl);
       expect(applied.geositeUrl, GeoPresets.defaultGeositeUrl);
+      expect(applied.pingWhileConnected, isFalse);
     });
 
     test('review lists the traffic settings it changes and the new subscription hosts', () async {

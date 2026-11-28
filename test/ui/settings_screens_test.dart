@@ -338,6 +338,8 @@ void main() {
       expect(_settings(c).automationEnabled, isTrue);
       await _tapRow(tester, 'Notification');
       expect(_settings(c).showNotification, isFalse);
+      await _tapRow(tester, 'Ping servers while connected');
+      expect(_settings(c).pingWhileConnected, isTrue);
       await unmount(tester, c);
     });
 

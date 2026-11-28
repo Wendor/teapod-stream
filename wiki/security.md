@@ -34,7 +34,11 @@ says how, and what counts.
 
 - **Loopback SOCKS fingerprint.** A password-protected SOCKS on localhost answers `05 FF`: a scanner sees "a proxy
   on loopback". The Rust core keeps its SOCKS inbound only for heartbeat and the IP check.
-- **Direct pings.** Pinging configs (ICMP + TCP) goes outside the tunnel, so the provider sees the server list.
+- **Direct pings.** Pinging configs (ICMP + TCP) goes outside the tunnel (the app is excluded from it), so the network
+  sees the server list. With the VPN down that is the accepted cost of pinging; while it is up (connecting, connected,
+  the kill switch holding traffic) `PingNotifier` pings nothing unless the user turned on *Ping servers while
+  connected* (`pingWhileConnected`, off by default) — the configs screen's ping button then says why. A ping through
+  the tunnel's SOCKS isn't an option: the core answers a SOCKS CONNECT before it reaches the server.
 - **Debug signing key.** Releases are signed with the build machine's debug key ([CI](components/ci.md#signing)) —
   changing it would break updates for existing users.
 - **`xray_config.json`** with server credentials stays in `filesDir` between sessions (needed by the tile and

@@ -48,6 +48,12 @@ void main() {
     testWidgets('lists cores by priority with versions; ↑ and switches are saved', (tester) async {
       await setUpScreenTest();
       final c = await pumpScreen(tester, const SettingsScreen());
+      // The rows above push the core list below the fold.
+      await tester.scrollUntilVisible(
+        find.text(CoreKind.xrayRust.displayName),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       for (final kind in CoreKind.values) {
         expect(find.text(kind.displayName), findsOneWidget, reason: kind.name);
       }
@@ -79,6 +85,11 @@ void main() {
     testWidgets('taps before a rebuild each apply to the current order and switches', (tester) async {
       await setUpScreenTest();
       final c = await pumpScreen(tester, const SettingsScreen());
+      await tester.scrollUntilVisible(
+        find.text(CoreKind.xrayRust.displayName),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.ensureVisible(find.bySemanticsLabel('move sing-box up'));
       await settle(tester);
       // No pump between the taps: both still see the rendered order [Go, sing-box, Rust].

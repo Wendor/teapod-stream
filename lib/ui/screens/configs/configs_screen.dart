@@ -96,7 +96,7 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
               ),
               isPinging: ref.watch(pingProvider),
               onPing: configStateAsync.maybeWhen(
-                data: (s) => s.configs.isNotEmpty ? () => ref.read(pingProvider.notifier).pingAll() : null,
+                data: (s) => s.configs.isNotEmpty ? () => _ping(context) : null,
                 orElse: () => null,
               ),
             ),
@@ -681,6 +681,14 @@ class _ConfigsScreenState extends ConsumerState<ConfigsScreen> {
     } finally {
       if (mounted) setState(() => _isRefreshingAll = false);
     }
+  }
+
+  /// Pings every config; with the VPN up and pings while connected off, says why nothing was pinged.
+  Future<void> _ping(BuildContext context) async {
+    if (await ref.read(pingProvider.notifier).pingAll() || !context.mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(context.l10n.configsPingWhileConnectedOff)));
   }
 
   void _openAddConfig(BuildContext context) {

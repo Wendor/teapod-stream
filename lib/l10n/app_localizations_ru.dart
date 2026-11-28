@@ -622,6 +622,16 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsNotification => 'Уведомление';
 
   @override
+  String get settingsPingWhileConnected => 'Пинговать серверы при подключении';
+
+  @override
+  String get settingsPingWhileConnectedHint => 'Пинги идут мимо VPN: сеть видит все серверы из вашего списка';
+
+  @override
+  String get configsPingWhileConnectedOff =>
+      'Пинги идут мимо VPN и показали бы сети список ваших серверов. Отключитесь, чтобы пинговать, или разрешите это в Настройки → Пинговать серверы при подключении.';
+
+  @override
   String get settingsNotificationHint => 'Скорость и кнопка отключения в шторке';
 
   @override

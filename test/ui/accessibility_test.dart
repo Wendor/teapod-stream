@@ -85,7 +85,7 @@ void main() {
     }
   }
 
-  test('text tokens reach 4.5:1 on each background of their theme and on the selection highlight', () {
+  test('text tokens reach 4.5:1 on each background of their theme, on the selection highlight and on tints', () {
     double contrast(Color a, Color b) {
       final (la, lb) = (a.computeLuminance(), b.computeLuminance());
       return (max(la, lb) + 0.05) / (min(la, lb) + 0.05);
@@ -94,9 +94,17 @@ void main() {
     for (final accent in AppColors.accentPresets) {
       for (final t in [TeapodTokens.dark(accent), TeapodTokens.light(accent)]) {
         for (final bg in [t.bg, t.bgElev, t.bgSunken]) {
-          for (final fg in [t.textMuted, t.accent, t.danger]) {
+          for (final fg in [t.textMuted, t.accent, t.danger, t.warning]) {
             expect(contrast(fg, bg), greaterThanOrEqualTo(4.5), reason: 'fg $fg on bg $bg');
           }
+          // The logs level filter tints a selected tab in its own colour.
+          for (final fg in [t.text, t.textDim, t.accent, t.danger, t.warning]) {
+            final tint = Color.alphaBlend(fg.withAlpha(TeapodTokens.tintAlpha), bg);
+            expect(contrast(fg, tint), greaterThanOrEqualTo(4.5), reason: 'fg $fg on its tint over $bg');
+          }
+          // An error or warning banner: danger text on a danger tint.
+          final banner = Color.alphaBlend(t.danger.withAlpha(TeapodTokens.dangerSoftAlpha), bg);
+          expect(contrast(t.danger, banner), greaterThanOrEqualTo(4.5), reason: 'danger on its banner over $bg');
           // A selected item: accentSoft over the background. textMuted isn't used there (textDim instead).
           final highlight = Color.alphaBlend(t.accentSoft, bg);
           for (final fg in [t.text, t.textDim, t.accent]) {

@@ -156,7 +156,7 @@ class _SplitTunnelScreenState extends ConsumerState<SplitTunnelScreen> {
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-                  color: t.danger.withAlpha(0x1A),
+                  color: t.danger.withAlpha(TeapodTokens.dangerSoftAlpha),
                   child: Text(
                     '⚠ ${context.l10n.splitTetheringWeakened}',
                     style: AppTheme.mono(size: 11, color: t.danger, letterSpacing: 0.5),

@@ -48,13 +48,11 @@ class _SetHeroPanel extends StatelessWidget {
     required this.profileReadonly,
   });
 
-  static const Color _gold = AppColors.accentGold;
-
   @override
   Widget build(BuildContext context) {
-    final wordColor = locked ? _gold : t.text;
-    final lockColor = locked ? _gold : t.textDim;
-    final borderColor = locked ? _gold : t.line;
+    final wordColor = locked ? t.warning : t.text;
+    final lockColor = locked ? t.warning : t.textDim;
+    final borderColor = locked ? t.warning : t.line;
 
     return Container(
       decoration: BoxDecoration(
@@ -62,7 +60,7 @@ class _SetHeroPanel extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          SetCornerTicks(t: t, color: locked ? _gold : t.textMuted),
+          SetCornerTicks(t: t, color: locked ? t.warning : t.textMuted),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
             child: Row(
@@ -105,8 +103,8 @@ class _SetHeroPanel extends StatelessWidget {
                     child: Stack(
                       children: [
                         if (locked) ...[
-                          Positioned(top: -1, left: -1, child: _LockCorner(color: _gold, isTop: true)),
-                          Positioned(bottom: -1, right: -1, child: _LockCorner(color: _gold, isTop: false)),
+                          Positioned(top: -1, left: -1, child: _LockCorner(color: t.warning, isTop: true)),
+                          Positioned(bottom: -1, right: -1, child: _LockCorner(color: t.warning, isTop: false)),
                         ],
                         Center(
                           child: Column(

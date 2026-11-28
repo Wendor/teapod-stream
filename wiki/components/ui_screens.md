@@ -78,13 +78,15 @@ anyway ([profiles](profiles.md)).
 ## Theme
 
 `lib/ui/theme/`: `AppTheme.build(brightness, accent)` with the `TeapodTokens` extension (`bg`, `bgElev`, `bgSunken`,
-`accent`, `accentSoft`, `text`, `textDim`, `textMuted`, `line`, `lineSoft`, `danger`); `AppTheme.mono` / `sans`
+`accent`, `accentSoft`, `text`, `textDim`, `textMuted`, `line`, `lineSoft`, `danger`, `warning`); `AppTheme.mono` / `sans`
 text helpers (minimum 11 px). Text tokens meet WCAG AA (4.5:1), tested for every preset accent: `textMuted`, the
-accent and `danger` on every background of their theme; `text`, `textDim` and the accent on the selection highlight
-(`accentSoft` laid over a background). The dark palette is chosen so; `TeapodTokens.light` darkens the accent (hue
-kept) until it reaches 4.5:1 on `bgSunkenLight`, the darkest light background, and on the highlight over it, and uses
-`AppColors.dangerLight`. `textMuted` is below AA on the highlight: a highlighted row draws its secondary text in
-`textDim`, and nothing inside a highlighted row is highlighted again. Text follows the system font size: the app's `textScaler` is the system one (Android's font size and accessibility
+accent, `danger` and `warning` on every background of their theme; `text`, `textDim` and the accent on the selection
+highlight (`accentSoft` laid over a background); `danger` on its banner tint (`dangerSoftAlpha`); `text`, `textDim`,
+the accent, `danger` and `warning` on their own tab tint (`tintAlpha`, the logs level filter). The dark palette is
+chosen so; `TeapodTokens.light` darkens the accent and `warning` (hue kept) until they reach 4.5:1 on
+`bgSunkenLight`, the darkest light background, and on the highlight over it, and uses `AppColors.dangerLight`.
+`textMuted` is below AA on a highlight or a tint: a highlighted row draws its secondary text in `textDim`, and nothing
+inside a highlighted row is highlighted again. No fixed palette colour (`AppColors.accent*`) is used for text. Text follows the system font size: the app's `textScaler` is the system one (Android's font size and accessibility
 scaling) times the app's font setting (`fontScale`: 1.0 or 1.2), capped at 2.0 (`appTextScaler`,
 `theme/app_text_scaler.dart`). Layouts at large sizes are checked on a device: the test font is wider than the real ones.
 Where width is fixed, text gives way instead of breaking the layout: a short caption (tab label, `0x01` address, hero

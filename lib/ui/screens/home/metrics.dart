@@ -141,11 +141,7 @@ class _CoreLine extends StatelessWidget {
               children: [
                 TextSpan(
                   text: '[core] ',
-                  style: AppTheme.mono(
-                    size: 10,
-                    color: kind == null ? AppColors.accentOrange : t.accent,
-                    letterSpacing: 0.5,
-                  ),
+                  style: AppTheme.mono(size: 10, color: kind == null ? t.warning : t.accent, letterSpacing: 0.5),
                 ),
                 TextSpan(
                   text: kind == null
@@ -184,7 +180,7 @@ class _ManagedWarning extends StatelessWidget {
           children: [
             TextSpan(
               text: '[managed] ',
-              style: AppTheme.mono(size: 10, color: AppColors.accentOrange, letterSpacing: 0.5),
+              style: AppTheme.mono(size: 10, color: t.warning, letterSpacing: 0.5),
             ),
             TextSpan(text: detail),
           ],

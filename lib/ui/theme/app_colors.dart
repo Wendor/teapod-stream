@@ -26,8 +26,8 @@ class AppColors {
 
   static const danger = Color(0xFFFF5A5F);
 
-  /// [danger] for light backgrounds: ≥4.5:1 on each of them (WCAG AA).
-  static const dangerLight = Color(0xFFC62828);
+  /// [danger] for light backgrounds: ≥4.5:1 on each of them, also under its own tint (WCAG AA).
+  static const dangerLight = Color(0xFFB71C1C);
 
   // ── Accent presets ────────────────────────────────────────────
   static const accentCyan = Color(0xFF6AD8E6);
@@ -103,6 +103,15 @@ class TeapodTokens extends ThemeExtension<TeapodTokens> {
   final Color accentFade;
   final Color danger;
 
+  /// Warning text (log warnings, read-only lock, core warnings).
+  final Color warning;
+
+  /// Alpha of a danger-tinted banner behind [danger] text.
+  static const dangerSoftAlpha = 0x1A;
+
+  /// Alpha of a selected tab tinted in its own text colour (the logs level filter).
+  static const tintAlpha = 0x14;
+
   const TeapodTokens({
     required this.bg,
     required this.bgElev,
@@ -116,6 +125,7 @@ class TeapodTokens extends ThemeExtension<TeapodTokens> {
     required this.accentSoft,
     required this.accentFade,
     required this.danger,
+    required this.warning,
   });
 
   factory TeapodTokens.dark(Color accent) => TeapodTokens(
@@ -131,6 +141,7 @@ class TeapodTokens extends ThemeExtension<TeapodTokens> {
     accentSoft: accent.withAlpha(0x22),
     accentFade: accent.withAlpha(0x0F),
     danger: AppColors.danger,
+    warning: AppColors.accentOrange,
   );
 
   factory TeapodTokens.light(Color accent) {
@@ -150,6 +161,7 @@ class TeapodTokens extends ThemeExtension<TeapodTokens> {
       accentSoft: a.withAlpha(_lightSoftAlpha),
       accentFade: a.withAlpha(0x14),
       danger: AppColors.dangerLight,
+      warning: _darkenAccentForLight(AppColors.accentOrange),
     );
   }
 
@@ -191,6 +203,7 @@ class TeapodTokens extends ThemeExtension<TeapodTokens> {
     Color? accentSoft,
     Color? accentFade,
     Color? danger,
+    Color? warning,
   }) => TeapodTokens(
     bg: bg ?? this.bg,
     bgElev: bgElev ?? this.bgElev,
@@ -204,6 +217,7 @@ class TeapodTokens extends ThemeExtension<TeapodTokens> {
     accentSoft: accentSoft ?? this.accentSoft,
     accentFade: accentFade ?? this.accentFade,
     danger: danger ?? this.danger,
+    warning: warning ?? this.warning,
   );
 
   @override
@@ -222,6 +236,7 @@ class TeapodTokens extends ThemeExtension<TeapodTokens> {
       accentSoft: Color.lerp(accentSoft, other.accentSoft, t)!,
       accentFade: Color.lerp(accentFade, other.accentFade, t)!,
       danger: Color.lerp(danger, other.danger, t)!,
+      warning: Color.lerp(warning, other.warning, t)!,
     );
   }
 }

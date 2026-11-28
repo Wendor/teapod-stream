@@ -21,10 +21,13 @@ class AppColors {
   static const lineLight = Color(0xFFCDD1D5);
   static const lineSoftLight = Color(0xFFDADEE2);
   static const textLight = Color(0xFF0A0D10);
-  static const textDimLight = Color(0xFF3E4A52); // was #5B6369, darkened for contrast
-  static const textMutedLight = Color(0xFF5E6874); // was #8A9197, ~4.6:1 on white
+  static const textDimLight = Color(0xFF3E4A52);
+  static const textMutedLight = Color(0xFF5E6874);
 
   static const danger = Color(0xFFFF5A5F);
+
+  /// [danger] for light backgrounds: ≥4.5:1 on each of them (WCAG AA).
+  static const dangerLight = Color(0xFFC62828);
 
   // ── Accent presets ────────────────────────────────────────────
   static const accentCyan = Color(0xFF6AD8E6);
@@ -144,23 +147,31 @@ class TeapodTokens extends ThemeExtension<TeapodTokens> {
       textDim: AppColors.textDimLight,
       textMuted: AppColors.textMutedLight,
       accent: a,
-      accentSoft: a.withAlpha(0x28),
+      accentSoft: a.withAlpha(_lightSoftAlpha),
       accentFade: a.withAlpha(0x14),
-      danger: AppColors.danger,
+      danger: AppColors.dangerLight,
     );
   }
 
+  static const _lightSoftAlpha = 0x28;
+
   /// Darkens [c], hue and saturation kept, until text in it has the WCAG AA contrast (4.5:1) on every light
-  /// background; an accent already that dark is left as is.
+  /// background, also under the selection highlight (`accentSoft` laid over it); an accent already that dark is left
+  /// as is.
   static Color _darkenAccentForLight(Color c) {
     double contrast(Color fg, Color bg) {
       final (a, b) = (fg.computeLuminance(), bg.computeLuminance());
       return (max(a, b) + 0.05) / (min(a, b) + 0.05);
     }
 
-    // bgSunkenLight is the darkest light background.
+    // bgSunkenLight is the darkest light background; the highlight over it is darker still.
+    bool readable(Color a) {
+      final highlight = Color.alphaBlend(a.withAlpha(_lightSoftAlpha), AppColors.bgSunkenLight);
+      return contrast(a, AppColors.bgSunkenLight) >= 4.5 && contrast(a, highlight) >= 4.5;
+    }
+
     var hsl = HSLColor.fromColor(c);
-    while (hsl.lightness > 0 && contrast(hsl.toColor(), AppColors.bgSunkenLight) < 4.5) {
+    while (hsl.lightness > 0 && !readable(hsl.toColor())) {
       hsl = hsl.withLightness(max(0, hsl.lightness - 0.01));
     }
     return hsl.toColor();

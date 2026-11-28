@@ -533,7 +533,8 @@ class _ProfileCard extends StatelessWidget {
           children: [
             SizedBox(
               width: 32,
-              child: Text(hexAddr, style: AppTheme.mono(size: 10, color: t.textMuted)),
+              // textMuted is below AA on the highlight.
+              child: Text(hexAddr, style: AppTheme.mono(size: 10, color: isActive ? t.textDim : t.textMuted)),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -555,10 +556,8 @@ class _ProfileCard extends StatelessWidget {
                       if (isActive)
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: t.accent),
-                            color: t.accentSoft,
-                          ),
+                          // Only a frame: the row is highlighted already, a second highlight would darken the text's ground.
+                          decoration: BoxDecoration(border: Border.all(color: t.accent)),
                           child: Text('ACTIVE', style: AppTheme.mono(size: 9, color: t.accent, letterSpacing: 1)),
                         ),
                       if (profile.readonly) ...[

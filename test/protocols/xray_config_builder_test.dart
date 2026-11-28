@@ -318,6 +318,21 @@ void main() {
       expect(private['outboundTag'], 'direct');
     });
 
+    test('the injected direct is matched by protocol in any letter case', () {
+      final raw = rawManaged();
+      final outbounds = raw['outbounds'] as List;
+      // The server's `direct` is no freedom; a `Freedom` under the app's own tag is one and is taken, not a variant.
+      (outbounds[1] as Map)['protocol'] = 'Blackhole';
+      outbounds.add({'tag': XrayConfigBuilder.directTag, 'protocol': 'Freedom'});
+      final cfg = merge(raw, _defaultOptions(routing: const RoutingSettings(bypassLocal: true)));
+      final private = ((cfg['routing'] as Map)['rules'] as List).cast<Map<String, dynamic>>().firstWhere(
+        (r) => (r['ip'] as List?)?.contains('geoip:private') ?? false,
+      );
+      expect(private['outboundTag'], XrayConfigBuilder.directTag);
+      final tags = (cfg['outbounds'] as List).cast<Map<String, dynamic>>().map((o) => o['tag']);
+      expect(tags.where((t) => '$t'.startsWith(XrayConfigBuilder.directTag)), [XrayConfigBuilder.directTag]);
+    });
+
     test('refuses a balancer or outbound with two spellings of a key it reads', () {
       final raw = rawManaged();
       (((raw['routing'] as Map)['balancers'] as List).first as Map)['Selector'] = ['t'];
